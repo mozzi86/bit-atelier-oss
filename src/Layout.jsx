@@ -11,7 +11,7 @@ import { huellenZustand, istPortfolioRoute, bueroAnzeige } from "./huellenZustan
 import { navFlach } from "./navigation";
 // 80-01: own lines as well (see the note above) — personnel gate of the menu and
 // the confirmation dialog provider.
-import { navSichtbar } from "./navigation";
+import { navSichtbar, seitenBreite } from "./navigation";
 import { personalZugang } from "./lib/people/zugang";
 import { BestaetigungProvider } from "@core/lib/useBestaetigung";
 import FeedbackDialog from "@core/components/common/FeedbackDialog";
@@ -575,7 +575,7 @@ function LayoutInner({ children }) {
 
           {/* tabIndex -1: focus target of the skip link and of every route
               change (Seitenwechsel), not a tab stop of its own. */}
-          <main id="hauptinhalt" role="main" tabIndex={-1} className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-950 focus:outline-none">
+          <main id="hauptinhalt" role="main" tabIndex={-1} data-breite={seitenBreite(location.pathname)} className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-950 focus:outline-none">
             {/* 72-10 (N-06): tab title, focus and announcement on route changes,
                 skip-link handling — for every route and every shell state.
                 First in <main>: the "Weiter mit" bar stays directly before the

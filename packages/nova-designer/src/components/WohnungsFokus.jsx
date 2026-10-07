@@ -23,6 +23,7 @@ import { polygonAreaM } from "@core/lib/useBuildingProgram";
 import { kurzRaumname, lodFuer, labelKollision } from "@designer/lib/massstab";
 import { CSS_PX_JE_M } from "@designer/lib/isoKamera";
 import BimPlan2D from "./BimPlan2D";
+import { usePlanHoehe } from "@designer/lib/usePlanHoehe";
 import MoebelSchicht from "./MoebelSchicht";
 import Masskette from "./Masskette";
 import { seiteVon } from "@designer/lib/masskette";
@@ -59,8 +60,9 @@ const WT_STATUS = {
   offen: { color: "bg-slate-100 text-slate-600", dot: "bg-slate-400", label: "offen" },
 };
 
-// [ASSUMED] plan height in CSS px: 560 in fixed-scale mode (visible window
-// ≈ 6.6 m at 1:50 — enough to read a room), 420 in Auto mode (today's value).
+// [ASSUMED] minimum plan height in CSS px: 560 in fixed-scale mode (visible
+// window ≈ 6.6 m at 1:50 — enough to read a room), 420 in Auto mode. 75-16:
+// both grow with the window via usePlanHoehe; these are the lower bounds.
 const HOEHE_1_50 = 560;
 const HOEHE_AUTO = 420;
 // Referentially-stable empty list for MassingView3D's required `setbacks` prop
@@ -115,6 +117,8 @@ export default function WohnungsFokus({
   balkonAktiv, onBalkonToggle,
 }) {
   const { t } = useI18n();
+  const hoeheAuto = usePlanHoehe({ min: HOEHE_AUTO });
+  const hoehe150 = usePlanHoehe({ min: HOEHE_1_50 });
   const fokusNonce = useRef(0);
 
   // ---- 75-14: door swings over the undo stack --------------------------------
@@ -536,8 +540,12 @@ export default function WohnungsFokus({
             </span>
           </div>
         )}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2">
+        {/* 75-16: plan flexible, side panel fixed 320 px — side by side only from
+            2xl (1536 px): the focus already sits in the workshop's plan column, so a
+            second fixed column squeezed the plan to ~250 px at 1280 px (75-17
+            finding). Below 2xl the panel goes under the plan. */}
+        <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_20rem] gap-4">
+          <div className="min-w-0">
             {/* Keyboard wrapper (tabIndex) — Task 6 binds R/Del/arrows here
                 (React onKeyDown ONLY, no window/document listeners). */}
             <div tabIndex={0} onKeyDown={onPlanKeyDown} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 rounded">
@@ -553,7 +561,8 @@ export default function WohnungsFokus({
                 unit={plan.unit}
                 focus={focus}
                 massstab={massstab}
-                height={massstab ? HOEHE_1_50 : HOEHE_AUTO}
+                height={massstab ? hoehe150 : hoeheAuto}
+                fuellen
                 overlay={({ X, Z, SCALE, zoom, px, pxJeM, sicht, rawMeters, bounds }) => {
                   // 75-09 Task 5 (MSB-12): ONE label source — two lines (short
                   // name via kurzRaumname, area in m²), sizes in REAL screen px

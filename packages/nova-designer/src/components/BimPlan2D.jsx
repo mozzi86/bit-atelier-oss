@@ -113,7 +113,7 @@ function polyHit(pts, r, crossing) {
 }
 
 // =====================  GRUNDRISS  =========================================
-function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, overlay, overlayBounds, maxSvgH = 460, readOnly = false, massstab = null }) {
+function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, overlay, overlayBounds, maxSvgH = 460, readOnly = false, massstab = null, fuellen = false }) {
   const svgRef = useRef(null);
   const L = layerVis || {};
   const show = (id) => L[id] !== false;
@@ -150,7 +150,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
   // 75-09: im Maßstabsmodus höhere Zoom-Grenze (1:50 auch für große Modelle
   // erreichbar); ohne `massstab`-Prop bleibt maxZoom undefined ⇒ Hook-Default 12
   // ⇒ Verhalten für alle Bestandsaufrufer byte-gleich.
-  const vp = usePlanViewport({ svgRef, W, H, maxZoom: massstab ? MASSSTAB_MAX_ZOOM : undefined }); // Defaults: Zoom 0,3–12, Faktor 1,15 (wie bisher)
+  const vp = usePlanViewport({ svgRef, W, H, maxZoom: massstab ? MASSSTAB_MAX_ZOOM : undefined, fuellen }); // Defaults: Zoom 0,3–12, Faktor 1,15 (wie bisher)
   const { viewT } = vp;
   // 75-11 Task 4 (MSB-5): screen pixels → viewBox units — labels use px() so
   // they measure the same on screen at every zoom (75-01/05 pattern from
@@ -331,9 +331,12 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
 
   return (
     <div className="relative w-full flex items-center justify-center">
-    <svg ref={svgRef} viewBox={vp.viewBox} className="w-full" style={{ maxHeight: maxSvgH, cursor }}
+    {/* 75-16: fill mode — fixed SVG height, the viewBox takes the box aspect (usePlanViewport fuellen). */}
+    <svg ref={svgRef} viewBox={vp.viewBox} className="w-full" style={fuellen ? { height: maxSvgH, cursor } : { maxHeight: maxSvgH, cursor }}
       onMouseDown={handleDown} onClick={handleClick} onMouseMove={handleMove} onDoubleClick={handleDbl} onMouseUp={endDrag} onMouseLeave={endDrag}>
-      <rect x="0" y="0" width={W} height={H} fill="#f8fafc" />
+      {fuellen
+        ? <rect x={vp.sicht.x} y={vp.sicht.y} width={vp.sicht.w} height={vp.sicht.h} fill="#f8fafc" />
+        : <rect x="0" y="0" width={W} height={H} fill="#f8fafc" />}
 
       {/* ---- Räume/Zonen (Polygon-Füllung + Name + Fläche) ----
           75-11 Task 4 (MSB-5/MSB-12): labels in SCREEN PIXELS via px() (was
@@ -345,8 +348,9 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
       {show("zones") && (() => {
         const zonesLevel = (customZones || []).filter((z) => z.level === level);
         if (!zonesLevel.length) return null;
-        // Screen px per viewBox unit (75-05 formula): renderedW · zoom / W.
-        const bildPxProU = ((vp.renderedW || W) * viewT.zoom) / W;
+        // Screen px per viewBox unit = 1 / px(1) (75-16: fill-mode aware; outside
+        // fill mode identical to the 75-05 formula renderedW · zoom / W).
+        const bildPxProU = 1 / px(1);
         const fontPx = 11;
         const flaecheVon = (z) => Math.abs(z.points.reduce((a, p, k) => { const q = z.points[(k + 1) % z.points.length]; return a + (p.x * q.z - q.x * p.z); }, 0) / 2);
         const kandidaten = zonesLevel.map((z, i) => {
@@ -354,13 +358,14 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           const area = ok ? flaecheVon(z) : 0;
           return { z, i, ok, area };
         }).filter((k) => k.ok);
-        // Priority: bigger area first (collision input order = priority).
-        const sortiert = [...kandidaten].sort((a, b) => b.area - a.area);
+        // Priority: bigger area first (collision input order = priority). 75-17:
+        // zones flagged ohneLabel (the caller labels them itself) take no part.
+        const sortiert = kandidaten.filter((k) => !k.z.ohneLabel).sort((a, b) => b.area - a.area);
         const rects = sortiert.map((k) => {
           const cxm = k.z.points.reduce((s, p) => s + p.x, 0) / k.z.points.length;
           const czm = k.z.points.reduce((s, p) => s + p.z, 0) / k.z.points.length;
           const zeilen = [kurzRaumname(k.z.name), `${Math.round(k.area).toLocaleString("de-DE")} m²`];
-          const sx = (X(cxm) - viewT.x) * bildPxProU, sy = (Z(czm) - viewT.y) * bildPxProU;
+          const sx = (X(cxm) - vp.sicht.x) * bildPxProU, sy = (Z(czm) - vp.sicht.y) * bildPxProU;
           const w = 0.6 * fontPx * Math.max(...zeilen.map((s) => s.length));
           const h = fontPx * 2;
           return { x0: sx - w / 2, y0: sy - h / 2, x1: sx + w / 2, y1: sy + h / 2 };
@@ -688,7 +693,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
             // massstab = gesetzter Maßstabs-Nenner (null = kein Maßstabsmodus);
             // sicht = aktueller ViewBox-Ausschnitt in viewBox-Einheiten.
             px: vp.pxBild, pxJeM: bildschirmPxJeM, massstab,
-            sicht: { x: viewT.x, y: viewT.y, w: W / viewT.zoom, h: H / viewT.zoom },
+            sicht: vp.sicht,
           })}
         </g>
       )}
@@ -874,6 +879,11 @@ function NorthArrow({ x, y }) {
  * @param height Container-Höhe in px (Default 520 wie bisher). Der SVG-Deckel
  *   folgt gekoppelt (height − 60 — beim Default exakt der alte Wert 460),
  *   damit die Prop den Plan wirklich skaliert und kleine Höhen nicht überlaufen.
+ * @param fuellen 75-16: true ⇒ der Plan füllt die ganze Fläche (Breite ×
+ *   height − 60 px): die viewBox übernimmt das Seitenverhältnis der Fläche,
+ *   der Maßstab bleibt (1:50 exakt), nur der sichtbare Ausschnitt wächst —
+ *   statt Leerstreifen neben/über einem breitengebundenen Grundriss.
+ *   Default false ⇒ byte-gleich.
  * @param massstab 75-09: Maßstabsmodus (Detailgrad-Nenner; 50 ⇒ 1:50 =
  *   pxJeMeter(50) ≈ 75,59 Bildschirm-px je Meter, 75-08-Konvention). Der Plan
  *   fährt beim Setzen/Zurückkehren (focus.nonce) den Zielzoom an und zentriert
@@ -890,7 +900,7 @@ function NorthArrow({ x, y }) {
  * darunter; interaktive Overlay-Elemente (z.B. Sketch-Handles) dürfen Events
  * bewusst behalten.
  */
-export default function BimPlan2D({ model, mode, level = 0, storeyHeight = 3, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, readOnly = false, overlay, overlayBounds, height = 520, elements, massstab = null }) {
+export default function BimPlan2D({ model, mode, level = 0, storeyHeight = 3, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, readOnly = false, overlay, overlayBounds, height = 520, elements, massstab = null, fuellen = false }) {
   const lvl = useMemo(() => Math.min(level, (model?.storeys?.length || 1) - 1), [level, model]);
   if (!model) return null;
   // readOnly: kein Werkzeug, keine Hit-Tests — aber die gezeichneten Innenwände/Stützen/
@@ -904,7 +914,7 @@ export default function BimPlan2D({ model, mode, level = 0, storeyHeight = 3, ed
     <div className="w-full bg-slate-50 flex items-center justify-center overflow-hidden" style={{ height }}>
       {mode === "schnitt"
         ? <Schnitt model={model} storeyHeight={storeyHeight} layerVis={layerVis} unit={unit} maxSvgH={maxSvgH} />
-        : <Grundriss model={model} level={lvl} edit={editEff} layerVis={layerVis} envOpenings={envOpenings} customZones={customZones} customSlabs={customSlabs} customRoofs={customRoofs} unit={unit} focus={focus} overlay={overlay} overlayBounds={overlayBounds} maxSvgH={maxSvgH} readOnly={readOnly} massstab={massstab} />}
+        : <Grundriss model={model} level={lvl} edit={editEff} layerVis={layerVis} envOpenings={envOpenings} customZones={customZones} customSlabs={customSlabs} customRoofs={customRoofs} unit={unit} focus={focus} overlay={overlay} overlayBounds={overlayBounds} maxSvgH={maxSvgH} readOnly={readOnly} massstab={massstab} fuellen={fuellen} />}
     </div>
   );
 }

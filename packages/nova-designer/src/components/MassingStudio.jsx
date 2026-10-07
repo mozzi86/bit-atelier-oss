@@ -27,7 +27,7 @@ import { konvexeHuelle, flaecheAusserhalb, istKonvex, clipSutherlandHodgman, lae
 import { useFachlayer } from "@designer/lib/useFachlayer";
 import { WERKSTATT_DEFAULT, einheitenAnreichern } from "@designer/lib/werkstattDefaults";
 // 75-13: escape-route paths (red line) come from the SAME solver as the workshop.
-import { tesseliere } from "@designer/lib/tesselierung";
+import { tesseliere, RETTUNGSWEG_INNEN_NAEHERUNG } from "@designer/lib/tesselierung";
 import { nordwinkelFuer } from "@designer/lib/nordwinkel";
 import { useI18n } from "@core/lib/i18n";
 // 75-08 Task 5 (MSB-1): the app's ONE solar formula — the local copy lived
@@ -35,11 +35,12 @@ import { useI18n } from "@core/lib/i18n";
 // conversion (geographic = plan + north angle) for shadow and north arrow.
 import { sunPosition, SONNEN_PRESETS, planAzimut } from "@designer/lib/sonnenstand";
 
+// 75-16: compact tile (p-2, text-base) for the fixed 280–320 px key-figure column.
 const KPI = ({ icon: Icon, label, value, sub, tint, testid }) => (
-  <div className="rounded-lg bg-slate-50 p-3" data-testid={testid}>
-    <div className="flex items-center gap-2 text-slate-500 text-xs mb-1"><Icon className={`w-3.5 h-3.5 ${tint}`} /> {label}</div>
-    <div className="text-xl font-bold text-slate-800">{value}</div>
-    {sub && <div className="text-[11px] text-slate-400">{sub}</div>}
+  <div className="rounded-lg bg-slate-50 px-2 py-1.5 min-w-0" data-testid={testid}>
+    <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-0.5"><Icon className={`w-3 h-3 shrink-0 ${tint}`} /> <span className="truncate">{label}</span></div>
+    <div className="text-base font-bold text-slate-800 leading-tight break-words">{value}</div>
+    {sub && <div className="text-[10px] leading-snug text-slate-400">{sub}</div>}
   </div>
 );
 
@@ -330,7 +331,10 @@ export default function MassingStudio({
   // Zoom/Pan über den gemeinsamen Plan-Werkstatt-Viewport (Phase 34, PW-02b) —
   // vorher hatte der Lageplan gar kein Zoom. attachKey: der 2D/3D-Umschalter
   // remountet das <svg>, sonst hinge der Wheel-Listener am alten Element.
-  const vp = usePlanViewport({ svgRef, W: CANVAS_W, H: CANVAS_H, minZoom: 1, maxZoom: 8, attachKey: viewMode });
+  // 75-16: fill mode outside split view — the plan fills the column at a
+  // window-high height; the viewBox follows the box aspect (no side bands).
+  const fuellen = viewMode !== "split";
+  const vp = usePlanViewport({ svgRef, W: CANVAS_W, H: CANVAS_H, minZoom: 1, maxZoom: 8, attachKey: viewMode, fuellen });
   // 75-01 (MS-01): screen pixels → viewBox units. Handles, hit areas, strokes
   // and labels use px() so they measure the same on screen at every zoom.
   const px = vp.px;
@@ -346,8 +350,9 @@ export default function MassingStudio({
   // ignorierte gerenderte Breite (w-full!) und Zoom — der Griff lief dem
   // Cursor davon bzw. hinterher. Faktor: px → viewBox-Einheiten → Meter.
   const deltaToMeters = (dxPx, dyPx) => {
-    const rect = svgRef.current?.getBoundingClientRect();
-    const f = ((CANVAS_W / vp.viewT.zoom) / ((rect?.width || CANVAS_W))) / scale;
+    // 75-16: vp.px(1) = viewBox units per screen px (fill-mode aware; outside
+    // fill mode identical to the old CANVAS_W / zoom / renderedW).
+    const f = vp.px(1) / scale;
     return { dxm: dxPx * f, dym: dyPx * f };
   };
 
@@ -770,7 +775,12 @@ export default function MassingStudio({
     // any: the escape-route fields (rettungsweg_*) are only present while the rule is on.
     return /** @type {Array<any>} */ (r.weListe)
       .filter((w) => w.level === 0 && Array.isArray(w.rettungsweg_pfad) && w.rettungsweg_pfad.length >= 2)
-      .map((w) => ({ we: w.we, laenge_m: w.rettungsweg_m, pfad: w.rettungsweg_pfad, warn: warnJeWe.has(w.we), naeherung: w.rettungsweg_naeherung === true }));
+      .map((w) => ({
+        we: w.we, laenge_m: w.rettungsweg_m, pfad: w.rettungsweg_pfad, warn: warnJeWe.has(w.we), naeherung: w.rettungsweg_naeherung === true,
+        // 75-17: door sequence of the inner leg + why it is an approximation (if it is).
+        tuerpunkte: Array.isArray(w.rettungsweg_tuerpunkte) ? w.rettungsweg_tuerpunkte : [],
+        innenArt: w.rettungsweg_innen_art, innenNaeherung: w.rettungsweg_innen_naeherung === true,
+      }));
   }, [rettungswegAktiv, wtLayer, store.footprintM, store.storeys, store.storeyHeight]);
   // Footprint-Mittelpunkt im Lageplan (Site-Meter) — Zonenpunkte sind um den Ursprung zentriert.
   const cxM = foot.x + foot.w / 2;
@@ -840,11 +850,11 @@ export default function MassingStudio({
   const paletteZeilen = paletteZeilenBerechnen();
 
   // 75-05: unit labels — one per group, collision-checked in SCREEN pixels (not world units).
-  // Screen px per viewBox unit = renderedW · zoom / W; label box ≈ 0.6 · font · chars × font.
+  // Screen px per viewBox unit = 1 / vp.px(1) (75-16: fill-mode aware); label box ≈ 0.6 · font · chars × font.
   const weLabels = (() => {
     if (!lod.weLabel) return [];
     const gruppen = [...weGruppen(zones).entries()].filter(([k]) => k !== null);
-    const pxProU = ((vp.renderedW || CANVAS_W) * vp.viewT.zoom) / CANVAS_W;
+    const pxProU = 1 / vp.px(1);
     const fontPx = 11;
     const kandidaten = gruppen.map(([we, g]) => {
       // Two short lines ("WE 3" / "78 m²") instead of one long one: eight units on a
@@ -852,7 +862,7 @@ export default function MassingStudio({
       const zeilen = weLabelZeilen(g, t);
       const text = weLabelText(g, t);
       const x = mx(cxM + g.mitte.x), y = my(cyM + g.mitte.z);
-      const sx = (x - vp.viewT.x) * pxProU, sy = (y - vp.viewT.y) * pxProU;
+      const sx = (x - vp.sicht.x) * pxProU, sy = (y - vp.sicht.y) * pxProU;
       const w = 0.6 * fontPx * Math.max(...zeilen.map((z) => z.length)), h = fontPx * zeilen.length;
       return { we, typ: g.typ, text, zeilen, x, y, rect: { x0: sx - w / 2, y0: sy - h / 2, x1: sx + w / 2, y1: sy + h / 2 } };
     }); // input order = priority for the collision check
@@ -879,9 +889,11 @@ export default function MassingStudio({
   };
 
   return (
-    <div className="grid lg:grid-cols-3 gap-4">
+    // 75-16: plan column flexible, key-figure column fixed 280/320 px
+    // (was 2/3 : 1/3 — the figures took a third of every wide screen).
+    <div className="grid lg:grid-cols-[minmax(0,1fr)_17.5rem] 2xl:grid-cols-[minmax(0,1fr)_20rem] gap-4">
       {/* Plan + sun */}
-      <div className="lg:col-span-2 space-y-4">
+      <div className="min-w-0 space-y-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex flex-wrap items-center gap-2 text-base">
@@ -1026,7 +1038,12 @@ export default function MassingStudio({
                 <button type="button" onClick={() => navigate("/ComplexDesigner?tab=werkstatt")} className="rounded bg-amber-700 px-2 py-0.5 text-white">{t("Werkstatt oeffnen")}</button>
               </div>
             )}
-            <svg ref={svgRef} viewBox={vp.viewBox} className="w-full h-auto bg-slate-50 rounded-lg border select-none" style={{ touchAction: "none" }}
+            {/* 75-16: fill mode — full column width; height from the content aspect
+                CANVAS_W : CANVAS_H, capped by the window (min. the old 430 px). On a
+                flat window the cap bites and the viewBox widens (no side bands); on
+                a tall one the plan never grows taller than the content needs. */}
+            <svg ref={svgRef} viewBox={vp.viewBox} className={`w-full ${fuellen ? "" : "h-auto "}bg-slate-50 rounded-lg border select-none`}
+              style={fuellen ? { touchAction: "none", aspectRatio: `${CANVAS_W} / ${CANVAS_H}`, minHeight: CANVAS_H, maxHeight: `max(${CANVAS_H}px, calc(100vh - 160px))` } : { touchAction: "none" }}
               onPointerDown={(e) => { if (e.button === 1) { e.preventDefault(); vp.beginPan(e); } }}
               onPointerMove={(e) => vp.panMove(e)}
               onPointerUp={vp.endPan}
@@ -1230,8 +1247,12 @@ export default function MassingStudio({
                     const e = r.pfad[r.pfad.length - 1];
                     return (
                       <g key={`rw-${r.we}`} data-rettungsweg={r.we} data-laenge={r.laenge_m} data-warn={r.warn ? "1" : "0"}>
-                        <path d={d} fill="none" stroke="#dc2626" strokeWidth={r.warn ? 1.6 : 1} strokeDasharray={r.naeherung ? "3 2" : undefined} vectorEffect="non-scaling-stroke" />
+                        <path d={d} fill="none" stroke="#dc2626" strokeWidth={r.warn ? 1.6 : 1} strokeDasharray={r.naeherung || r.innenNaeherung ? "3 2" : undefined} vectorEffect="non-scaling-stroke" />
                         <circle cx={mx(cxM + r.pfad[0].x)} cy={my(cyM + r.pfad[0].z)} r={px(2)} fill="#dc2626" />
+                        {/* 75-17: the doors the line passes (room door … apartment door) as open rings. */}
+                        {r.tuerpunkte.map((q, qi) => (
+                          <circle key={qi} data-rettungsweg-tuer cx={mx(cxM + q.x)} cy={my(cyM + q.z)} r={px(2.5)} fill="#fff" stroke="#dc2626" strokeWidth={px(1)} />
+                        ))}
                         {r.warn && <text x={mx(cxM + e.x)} y={my(cyM + e.z) - px(3)} fontSize={px(8)} fill="#b91c1c" textAnchor="middle" fontWeight="600">{`${r.we} ${String(r.laenge_m).replace(".", ",")} m`}</text>}
                       </g>
                     );
@@ -1423,7 +1444,7 @@ export default function MassingStudio({
               <div className="border-t pt-2 mt-1 space-y-3">
                 {/* 75-13: escape-route paths from the workshop solver — only meaningful
                     while the workshop rule "Rettungsweg" is on (the label says so). */}
-                <label className="flex items-center gap-2 text-xs font-medium text-slate-600" title={t("Lauflinie vom tiefsten Punkt jeder WE bis zur Treppenraum-Tür (MBO §35 Abs. 2); rot gestrichelt = Näherung ohne Flurweg")}>
+                <label className="flex items-center gap-2 text-xs font-medium text-slate-600" title={t("Lauflinie vom tiefsten Punkt jeder WE durch Zimmertür und Diele bis zur Treppenraum-Tür (MBO §35 Abs. 2); Ringe = Türen; rot gestrichelt = Näherung")}>
                   <input type="checkbox" checked={showRettungsweg} onChange={(e) => setShowRettungsweg(e.target.checked)} className="accent-red-600" data-testid="ms-rettungsweg" />
                   {t("Rettungsweg zeigen")}
                   {showRettungsweg && wtLayer?.regeln?.rettungsweg !== true && (
@@ -1433,6 +1454,15 @@ export default function MassingStudio({
                     <span className="text-[11px] font-normal text-red-700" data-testid="ms-rettungsweg-warn">{rettungswege.filter((r) => r.warn).length} × &gt; 35 m</span>
                   )}
                 </label>
+                {/* 75-17: plain-text reason when the inner leg is not walked through real doors. */}
+                {rettungswegAktiv && (() => {
+                  const art = rettungswege.find((r) => r.innenNaeherung)?.innenArt;
+                  return art && RETTUNGSWEG_INNEN_NAEHERUNG[art] ? (
+                    <div className="text-[11px] text-amber-800" data-testid="ms-rettungsweg-naeherung">
+                      {t("Näherung innen")}: {t(RETTUNGSWEG_INNEN_NAEHERUNG[art])}
+                    </div>
+                  ) : null;
+                })()}
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
                     <input type="checkbox" checked={showAbstand} onChange={(e) => setShowAbstand(e.target.checked)} className="accent-emerald-600" />
@@ -1568,7 +1598,7 @@ export default function MassingStudio({
       <div className="space-y-4">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Building2 className="w-4 h-4" /> Kennzahlen <span className="text-xs font-normal text-slate-400 ml-auto">[{store.unit}]</span></CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
+          <CardContent className="grid grid-cols-2 gap-1.5">
             <KPI icon={Maximize2} label="Grundstück" value={`${Math.round(siteArea).toLocaleString("de-DE")} m²`} sub={flaechenQuelleText} tint="text-slate-500" testid="ms-kpi-grundstueck" />
             <KPI icon={Building2} label="Bebaut (BF)" value={`${Math.round(footArea).toLocaleString("de-DE")} m²`} tint="text-blue-500" />
             <KPI icon={Layers} label="GRZ" value={grz.toFixed(2)} sub={`${grz > 0.4 ? "über Regelwert 0,4" : "≤ 0,4 ok"} · auf ${flaechenQuelleText}`} tint="text-violet-500" />

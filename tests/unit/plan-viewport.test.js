@@ -3,7 +3,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { zoomedAt, zoomedAroundCenter, zoomedToBBox, screenUnits, bildPxJeEinheit, zoomFuerPxJeEinheit, zoomedCentered } from "@core/lib/usePlanViewport";
+import { zoomedAt, zoomedAroundCenter, zoomedToBBox, screenUnits, bildPxJeEinheit, zoomFuerPxJeEinheit, zoomedCentered, fuellSicht } from "@core/lib/usePlanViewport";
 
 const nah = (ist, soll, eps = 1e-9, msg) =>
   assert.ok(Math.abs(ist - soll) < eps, `${msg || ""}: ${ist} ≠ ${soll}`);
@@ -156,5 +156,27 @@ describe("usePlanViewport — zoomedCentered (75-09)", () => {
   it("Zoom klemmt auf maxZoom (und minZoom)", () => {
     assert.equal(zoomedCentered(999, { x: 0, y: 0 }, 500, 360, 0.3, 48).zoom, 48);
     assert.equal(zoomedCentered(0.01, { x: 0, y: 0 }, 500, 360, 0.3, 48).zoom, 0.3);
+  });
+});
+
+describe("usePlanViewport — fuellSicht (75-16: Plan füllt die Fläche)", () => {
+  it("Handrechnung: W 500 × H 100 in 1000 × 400 px → 500 × 200, y′ = −50", () => {
+    const s = fuellSicht({ zoom: 1, x: 0, y: 0 }, 500, 100, 1000, 400);
+    nah(s.x, 0); nah(s.y, -50); nah(s.w, 500); nah(s.h, 200);
+  });
+  it("Maßstab bleibt: px je Einheit = bildPxJeEinheit (1:50 exakt)", () => {
+    const v = { zoom: 2.5, x: 40, y: 10 };
+    const s = fuellSicht(v, 488.6, 360, 1300, 700);
+    nah(1300 / s.w, bildPxJeEinheit(v.zoom, 488.6, 360, 1300, 700), 1e-9, "x");
+    nah(700 / s.h, bildPxJeEinheit(v.zoom, 488.6, 360, 1300, 700), 1e-9, "y");
+  });
+  it("Mitte bleibt die Mitte ohne Füllen (Zoom/Pan unverändert gültig)", () => {
+    const v = { zoom: 3, x: 120, y: 80 };
+    const s = fuellSicht(v, 560, 430, 1350, 860);
+    nah(s.x + s.w / 2, v.x + 560 / 3 / 2);
+    nah(s.y + s.h / 2, v.y + 430 / 3 / 2);
+  });
+  it("ungemessen (0 px) → alte viewBox", () => {
+    assert.deepEqual(fuellSicht({ zoom: 2, x: 5, y: 6 }, 560, 430, 0, 0), { x: 5, y: 6, w: 280, h: 215 });
   });
 });

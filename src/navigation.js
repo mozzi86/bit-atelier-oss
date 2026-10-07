@@ -55,6 +55,8 @@ const seite = (name) => '/' + name;
  * entry without them is a module of the active project.
  * `zugang: 'personal'` (80-01): the entry is shown only with personnel access
  * (src/lib/people/zugang.js) — see navSichtbar().
+ * `breite: 'voll'` (75-16): a drawing page — the shell lifts the 1280 px
+ * page cap (max-w-7xl) for it with ONE css rule, see seitenBreite().
  *
  * @typedef {{
  *   title: string,
@@ -64,6 +66,7 @@ const seite = (name) => '/' + name;
  *   projektfrei?: true,
  *   umfang?: 'portfolio',
  *   zugang?: 'personal',
+ *   breite?: 'voll',
  * }} NavEintrag
  * @typedef {{label: string, items: NavEintrag[], collapsible?: boolean}} NavGruppe
  */
@@ -88,14 +91,14 @@ export const navGroups = [
       // /EnergyAnalysis redirects there (App.jsx). Feasibility comes first
       // because it precedes the design in the project flow.
       { title: 'Machbarkeit', url: seite('RealEstateFeasibility'), icon: Calculator },
-      { title: 'Komplex-Designer', url: seite('ComplexDesigner'), icon: PencilRuler },
+      { title: 'Komplex-Designer', url: seite('ComplexDesigner'), icon: PencilRuler, breite: 'voll' },
     ],
   },
   {
     label: 'Modell & Prüfung',
     items: [
-      { title: 'Prüf-Suite', url: seite('ModelCheck'), icon: ShieldCheck, projektfrei: true },
-      { title: 'BIM-Viewer & Tickets', url: seite('BimViewer'), icon: Box },
+      { title: 'Prüf-Suite', url: seite('ModelCheck'), icon: ShieldCheck, projektfrei: true, breite: 'voll' },
+      { title: 'BIM-Viewer & Tickets', url: seite('BimViewer'), icon: Box, breite: 'voll' },
       { title: 'IFC-Viewer (LV-gekoppelt)', url: seite('IfcViewer'), icon: Boxes, projektfrei: true },
       // KRITIK-14: the page stores nine key figures per stage and restores
       // nothing, so it must not promise "versions" or "commits".
@@ -143,7 +146,7 @@ export const navGroups = [
       // 72-02 (Befund N-16): a constraint sketcher in the FreeCAD mould, not a
       // freehand tool. It calls itself "(Labor)" since 72-02, so it sits here.
       { title: 'Constraint-Zeichner', url: seite('SketchStudio'), icon: PenTool, projektfrei: true },
-      { title: 'Baustellen-Leitstand', url: seite('SiteControl'), icon: Radio },
+      { title: 'Baustellen-Leitstand', url: seite('SiteControl'), icon: Radio, breite: 'voll' },
       { title: 'Investment', url: seite('InvestmentPlatform'), icon: Coins, umfang: 'portfolio' },
       { title: 'PDF & Ablage', url: seite('BitAegis'), icon: Cloud, projektfrei: true },
       { title: 'Portfolio (Projektentwicklung)', url: seite('AtelierDeveloper'), icon: Briefcase, umfang: 'portfolio' },
@@ -174,3 +177,14 @@ export function navSichtbar(eintrag, { personalZugang } = {}) {
 export const navFlach = navGroups.flatMap((g) =>
   g.items.map((i) => ({ ...i, gruppe: g.label })),
 );
+
+/**
+ * Page width class of a route (75-16): 'voll' for drawing pages, else
+ * undefined. The shell writes it to <main data-breite>; index.css lifts the
+ * max-w-7xl cap there — one rule instead of a fix per page.
+ * @param {string} pathname location.pathname
+ * @returns {'voll'|undefined}
+ */
+export function seitenBreite(pathname) {
+  return navFlach.find((i) => i.url === pathname)?.breite;
+}

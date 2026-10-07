@@ -19,7 +19,7 @@
 // Koordinatensystem: zentrierte Meter wie footprintM (Ursprung = Footprint-
 // Mittelpunkt); Zonen passen 1:1 in useBuildingProgram().zones.
 
-import { rettungsweg as lauflinie, punktInPolygon } from "./rettungsweg.js";
+import { rettungsweg as lauflinie, punktInPolygon, innenwegUeberTueren } from "./rettungsweg.js";
 // 75-13: ONE source for the lift duty numbers (import-free module, as rettungsweg.js).
 import { aufzugPflicht, AUFZUG_GESCHOSS_GRENZE, AUFZUG_OKF_GRENZE } from "./accessibility.js";
 
@@ -214,6 +214,17 @@ export const TUERBREITEN = { zimmer: 0.885, bad: 0.985, wohnung: 0.985 };
 
 /** Distance jamb → adjacent wall in metres [ASSUMED 0,15 — plaster + frame]. */
 export const TUER_ANSCHLAG_ABSTAND = 0.15;
+
+/**
+ * 75-17: plain-text reason why the inner escape-route leg is an approximation
+ * (keyed by rettungsweg_innen_art; "tueren" = real door records, no entry).
+ * Shown in the warning text and in the Werkstatt / Massing route legend.
+ */
+export const RETTUNGSWEG_INNEN_NAEHERUNG = {
+  wandstuecke: "ohne Türdaten (Regel „Wohnungsgrundriss“ aus) — Tür je Raum in der Mitte der gemeinsamen Wand ≥ 1,185 m zum Flur angenommen",
+  durchgang: "ein Raum hat keine Tür zum Flur — Weg durch den Nachbarraum gerechnet (Durchgangszimmer sind ausgeschlossen, D-P75-14-C)",
+  luftlinie: "kein Weg über Türen gefunden — Luftlinie im offenen Grundriss",
+};
 
 /**
  * Hall behind the apartment door [ASSUMED 3–6 m², ≥ 1,20 m wide]: target 4 m²; the
@@ -1959,8 +1970,9 @@ export function tesseliere(opts) {
   // door (75-14 hall door when present, else the middle of the corridor edge), to
   // the nearest stair door (middle of the core edge facing the corridor; with an
   // extension the T30-RS door at its end). Obstacles = rooms of OTHER units + core
-  // + shaft of the same storey; the own unit is walked open-plan [ASSUMED, see
-  // rettungsweg.js header]. Without a core (Mittelflur/Laubengang) the targets are
+  // + shaft of the same storey; inside the own unit the line runs through the
+  // room door and the hall (75-17 door graph, rettungsweg.innenwegUeberTueren;
+  // open-plan only as a flagged fallback). Without a core (Mittelflur/Laubengang) the targets are
   // the corridor ends [ASSUMED as 75-07]. Reihenhaus/EFH: own exit → 0.
   // > max → WARN (rettungswegWarnungen, stufe "warn") with the extension needed.
   const rettungswegWarnungen = [];
@@ -2071,13 +2083,31 @@ export function tesseliere(opts) {
       if (tuerImTreppenraum) {
         tuer = achseX ? { x: tuer.x, z: flurKante - nachAussen.z * 0.05 } : { x: flurKante - nachAussen.x * 0.05, z: tuer.z };
       }
-      const rw = lauflinie({ kandidaten, tuer, ziele, hindernisse, tuerImTreppenraum });
+      // 75-17 (D-P75-13-C): inner leg through the room door, the hall and the
+      // apartment door (door graph, rettungsweg.innenwegUeberTueren) instead of
+      // the open-plan line; the outer leg runs from the apartment door as before.
+      // Fallback when no door path exists: the 75-13 open-plan line, flagged.
+      const innen = innenwegUeberTueren({ zonen: eigene, ausgang: tuer, minOeffnung_m: TUERBREITEN.zimmer + 2 * TUER_ANSCHLAG_ABSTAND });
+      let rw, innenArt;
+      if (innen) {
+        const aussen = lauflinie({ kandidaten: [], tuer, ziele, hindernisse, tuerImTreppenraum });
+        rw = { laenge_m: innen.laenge_m + aussen.flur_m, innen_m: innen.laenge_m, flur_m: aussen.flur_m, pfad: [...innen.pfad, ...aussen.pfad.slice(1)], erreichbar: aussen.erreichbar };
+        innenArt = innen.art;
+      } else {
+        rw = lauflinie({ kandidaten, tuer, ziele, hindernisse, tuerImTreppenraum });
+        innenArt = "luftlinie";
+      }
       const laenge = Math.round(rw.laenge_m * 10) / 10;
       const ww = /** @type {any} */ (w);
       ww.rettungsweg_m = laenge;
       ww.rettungsweg_innen_m = Math.round(rw.innen_m * 10) / 10;
       ww.rettungsweg_flur_m = Math.round(rw.flur_m * 10) / 10;
       ww.rettungsweg_pfad = rw.pfad.map((p) => ({ x: r2(p.x), z: r2(p.z) }));
+      // "tueren" = real door records (rule Wohnungsgrundriss on); every other
+      // kind is an approximation the UI names in plain text (75-17).
+      ww.rettungsweg_innen_art = innenArt;
+      if (innenArt !== "tueren") ww.rettungsweg_innen_naeherung = true;
+      if (innen) ww.rettungsweg_tuerpunkte = innen.tuerpunkte.map((p) => ({ x: r2(p.x), z: r2(p.z) }));
       if (!rw.erreichbar) ww.rettungsweg_naeherung = true;
       if (laenge > maxL) {
         // Extension needed = exceedance, rounded UP to 0,5 m (plan 75-13). Conservative
@@ -2091,7 +2121,7 @@ export function tesseliere(opts) {
         if (typ !== "mfh") abhilfe = "Kern näher setzen oder zweiten Treppenraum vorsehen (Treppenraum-Erweiterung nur beim Mehrfamilienhaus mit Flur)";
         else if (gesamtErw > TREPPENRAUM.erweiterungMax_m + 1e-9) abhilfe = `zweiten Treppenraum vorsehen — eine Treppenraum-Erweiterung bis ${TREPPENRAUM.erweiterungMax_m} m je Seite reicht nicht`;
         else abhilfe = `Treppenraum-Erweiterung ${kern.erweiterung_m > 0 ? "um weitere" : "um"} ${fmt(vorschlag)} m je Seite${kern.aktiv ? "" : " (Schalter „Notwendiger Treppenraum“)"} oder zweiten Treppenraum vorsehen`;
-        const text = `${w.we}: Rettungsweg ${fmt(laenge)} m > ${maxL} m (MBO §35 Abs. 2, Lauflänge vom tiefsten Raum bis zum notwendigen Treppenraum) — ${abhilfe}${rw.erreichbar ? "" : " [Näherung: kein Flurweg gefunden, Luftlinie]"}`;
+        const text = `${w.we}: Rettungsweg ${fmt(laenge)} m > ${maxL} m (MBO §35 Abs. 2, Lauflänge vom tiefsten Raum bis zum notwendigen Treppenraum) — ${abhilfe}${rw.erreichbar ? "" : " [Näherung: kein Flurweg gefunden, Luftlinie]"}${innenArt === "tueren" ? "" : ` [Näherung innen: ${RETTUNGSWEG_INNEN_NAEHERUNG[innenArt]}]`}`;
         warnungen.push({ we: w.we, level: lvl, stufe: "warn", laenge_m: laenge, max_m: maxL, ueber_m: Math.round((laenge - maxL) * 10) / 10, vorschlag_m: vorschlag, text });
       }
     }

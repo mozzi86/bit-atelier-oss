@@ -40,6 +40,7 @@ export const EN = {
   "Gebäudehöhe": "building height",
   "Geschosse": "storeys",
   "Treppenraum-Erweiterung": "Stair-enclosure extension",
+  "Treppenraum-Erweiterung je Seite (m)": "Stair-enclosure extension per side (m)",
   "je Seite": "per side",
   "Treppenraum wächst entlang des Flurs; Grenze = Brandwand mit T30-RS-Tür, Messung endet dort (MBO §35 Abs. 4–6)": "The enclosure grows along the corridor; boundary = fire wall with T30-RS door, the measurement ends there (MBO §35 Abs. 4–6)",
   "Außenliegende Räume": "Outer rooms",
@@ -50,5 +51,9 @@ export const EN = {
   "1,5 m tief, 0,5 m Rand": "1.5 m deep, 0.5 m margin",
   "Rettungsweg zeigen": "Show escape route",
   "Werkstatt-Regel „Rettungsweg“ ist aus": "workshop rule “escape route” is off",
-  "Lauflinie vom tiefsten Punkt jeder WE bis zur Treppenraum-Tür (MBO §35 Abs. 2); rot gestrichelt = Näherung ohne Flurweg": "Walked line from the deepest point of every unit to the stair door (MBO §35 Abs. 2); dashed red = approximation without corridor path",
+  "Lauflinie vom tiefsten Punkt jeder WE durch Zimmertür und Diele bis zur Treppenraum-Tür (MBO §35 Abs. 2); Ringe = Türen; rot gestrichelt = Näherung": "Walked line from the deepest point of every unit through the room door and the hall to the stair door (MBO §35 Abs. 2); rings = doors; dashed red = approximation",
+  "Näherung innen": "Approximation inside the unit",
+  "ohne Türdaten (Regel „Wohnungsgrundriss“ aus) — Tür je Raum in der Mitte der gemeinsamen Wand ≥ 1,185 m zum Flur angenommen": "no door data (rule “Apartment layout” off) — one door per room assumed in the middle of its shared wall ≥ 1.185 m to the hall",
+  "ein Raum hat keine Tür zum Flur — Weg durch den Nachbarraum gerechnet (Durchgangszimmer sind ausgeschlossen, D-P75-14-C)": "a room has no door to the hall — route counted through the neighbouring room (walk-through rooms are excluded, D-P75-14-C)",
+  "kein Weg über Türen gefunden — Luftlinie im offenen Grundriss": "no route through doors found — straight line through the open plan",
 };

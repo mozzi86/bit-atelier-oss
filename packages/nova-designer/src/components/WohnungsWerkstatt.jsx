@@ -34,6 +34,7 @@ import KatalogPanel from "./KatalogPanel";
 import WohnungsFokus from "./WohnungsFokus";
 import KellerabteilPlaner from "./KellerabteilPlaner";
 import BimPlan2D from "./BimPlan2D";
+import { usePlanHoehe } from "@designer/lib/usePlanHoehe";
 // 75-09 Task 6: occupant count for the focus auto-furnishing (pure lib read).
 import { personenFuerTyp } from "@designer/lib/wohnMoebel";
 // 75-14: room-quality checks per unit (hall/doors/access, 10 m², ratio, wardrobe
@@ -100,6 +101,8 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
   const store = useBuildingProgram();
   const zones = Array.isArray(store.zones) ? store.zones : [];
   const [layer, setLayer] = useFachlayer(project?.id, "werkstatt_layer", WERKSTATT_DEFAULT);
+  // 75-16: floor-plan height follows the window (≥ the old fixed 420 px).
+  const planHoehe = usePlanHoehe();
   const [level, setLevel] = useState(0);
   const [selIdx, setSelIdx] = useState(0);
   const [offenIdx, setOffenIdx] = useState(null); // aufgeklappte Check-Card (WE-Index)
@@ -641,9 +644,11 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
         </span>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+      {/* 75-16: control column fixed (20/22 rem ≈ the old ¼ at 1280 px), the
+          plan column takes the rest — it used to stop at ¾ of a 1280 px page. */}
+      <div className="grid grid-cols-1 xl:grid-cols-[20rem_minmax(0,1fr)] 2xl:grid-cols-[22rem_minmax(0,1fr)] gap-4">
         {/* Linke Spalte: Katalog + Steuerung + Typen-Editor */}
-        <div className="space-y-4 xl:col-span-1">
+        <div className="space-y-4 min-w-0">
           <KatalogPanel
             titel={t("Typen-Katalog")}
             katalog={katalog}
@@ -729,7 +734,10 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                     <label className="flex items-center gap-2" title={t("Treppenraum wächst entlang des Flurs; Grenze = Brandwand mit T30-RS-Tür, Messung endet dort (MBO §35 Abs. 4–6)")}>
                       {t("Treppenraum-Erweiterung")}
                       <input type="range" min={0} max={TREPPENRAUM.erweiterungMax_m} step={0.5} value={kernInfo.erweiterung_m}
-                        onChange={(e) => setRegel("treppenraumErweiterung_m", Number(e.target.value))} className="w-28 accent-red-700" data-testid="wt-treppenraum-erweiterung" />
+                        onChange={(e) => setRegel("treppenraumErweiterung_m", Number(e.target.value))} className="w-28 accent-red-700" data-testid="wt-treppenraum-erweiterung"
+                        // 75-16: explicit name + spoken value — the browser pane read the slider without a name (Sichtprüfung 07.10.).
+                        aria-label={t("Treppenraum-Erweiterung je Seite (m)")}
+                        aria-valuetext={`${kernInfo.erweiterung_m.toLocaleString("de-DE", { minimumFractionDigits: 1 })} m ${t("je Seite")}`} />
                       <span className="tabular-nums" data-testid="wt-treppenraum-erweiterung-wert">{kernInfo.erweiterung_m.toLocaleString("de-DE", { minimumFractionDigits: 1 })} m {t("je Seite")}</span>
                     </label>
                   </div>
@@ -1006,7 +1014,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
         </div>
 
         {/* Rechte Spalte: Sub-Tabs Geschosse | Kellerabteile (61-06) */}
-        <div className="xl:col-span-3 space-y-4">
+        <div className="min-w-0 space-y-4">
           <Tabs value={ansicht} onValueChange={setAnsicht}>
             <TabsList>
               <TabsTrigger value="geschosse" data-testid="wt-tab-geschosse">{t("Geschosse")}</TabsTrigger>
@@ -1095,12 +1103,16 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                   level={lvl}
                   storeyHeight={plan.storeyHeight}
                   readOnly
-                  /* 75-13: balcony zones are drawn by the overlay (outline + hatch), not as rooms. */
-                  customZones={plan.zones.filter((z) => z.raumart !== "balkon")}
+                  /* 75-13: balcony zones are drawn by the overlay (outline + hatch), not as rooms.
+                     75-17: the lift shaft keeps its fill but gets the overlay's plan symbol
+                     + label instead of a collision-checked room label (it lost every
+                     collision against the bigger stair enclosure next to it). */
+                  customZones={plan.zones.filter((z) => z.raumart !== "balkon").map((z) => (z.raumart === "aufzug" ? { ...z, ohneLabel: true } : z))}
                   envOpenings={plan.envOpenings}
                   unit={plan.unit}
-                  height={420}
-                  overlay={({ X, Z, SCALE, level: overlayLevel, toMeters }) => {
+                  height={planHoehe}
+                  fuellen
+                  overlay={({ X, Z, SCALE, level: overlayLevel, toMeters, px: pxOv }) => {
                     toMetersRef.current = toMeters;
                     const beschriftungen = zones.filter((z) => z.we && (z.level ?? 0) === overlayLevel);
                     const grenzen = grenzenImLevel.filter((g) => g.level === overlayLevel);
@@ -1121,6 +1133,9 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                       .filter((z) => z.level === overlayLevel && Array.isArray(z.brandwaende) && z.brandwaende.length)
                       .flatMap((z) => z.brandwaende.map((bi) => ({ a: z.points[bi], b: z.points[(bi + 1) % z.points.length] })))
                       .filter((s) => s.a && s.b);
+                    // 75-17: lift shafts with the usual plan symbol (diagonal cross) and a label.
+                    const aufzuege = ergebnis.zonen.filter((z) => z.raumart === "aufzug" && z.level === overlayLevel && Array.isArray(z.points) && z.points.length >= 3);
+                    const bildPx = (n) => (pxOv ? pxOv(n) : n); // screen px → viewBox units
                     return (
                       <g>
                         <defs>
@@ -1137,6 +1152,24 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                           <line key={`bw-${i}`} x1={X(s.a.x)} y1={Z(s.a.z)} x2={X(s.b.x)} y2={Z(s.b.z)}
                             stroke="#b91c1c" strokeWidth={Math.max(2, 0.24 * pxJeM)} strokeLinecap="square" pointerEvents="none" data-testid="wt-brandwand" />
                         ))}
+                        {aufzuege.map((z, i) => {
+                          const xs = z.points.map((p) => p.x), zs = z.points.map((p) => p.z);
+                          const x0 = X(Math.min(...xs)), x1 = X(Math.max(...xs)), y0 = Z(Math.min(...zs)), y1 = Z(Math.max(...zs));
+                          const fs = bildPx(10);
+                          // Rotate the label when the shaft is narrower on screen than the word (~0,6 · font · 6 chars).
+                          const hoch = Math.abs(x1 - x0) < fs * 0.6 * 6 + bildPx(4) && Math.abs(y1 - y0) > Math.abs(x1 - x0);
+                          const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+                          return (
+                            <g key={`az-${i}`} pointerEvents="none" data-testid="wt-aufzug" data-name={z.name}>
+                              <line x1={x0} y1={y0} x2={x1} y2={y1} stroke="#475569" strokeWidth={bildPx(0.8)} />
+                              <line x1={x0} y1={y1} x2={x1} y2={y0} stroke="#475569" strokeWidth={bildPx(0.8)} />
+                              <text x={cx} y={cy} dy={fs * 0.35} fontSize={fs} fontWeight="600" textAnchor="middle" fill="#1e293b"
+                                stroke="#f8fafc" strokeWidth={bildPx(3)} paintOrder="stroke" transform={hoch ? `rotate(-90 ${cx} ${cy})` : undefined}>
+                                {t("Aufzug")}
+                              </text>
+                            </g>
+                          );
+                        })}
                         {waende.map((w, i) => (
                           <line key={`wd-${i}`} x1={X(w.a.x)} y1={Z(w.a.z)} x2={X(w.b.x)} y2={Z(w.b.z)}
                             stroke={w.klasse === "leicht" ? "#64748b" : "#1e293b"} strokeWidth={Math.max(0.6, w.staerke * pxJeM)}

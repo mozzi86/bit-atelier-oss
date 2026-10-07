@@ -250,3 +250,8 @@
   .app-huelle { height: auto; overflow: visible; }
   #hauptinhalt { overflow: visible; }
 }
+
+/* 75-16: drawing pages (navigation.js `breite: 'voll'` → <main data-breite>)
+ * lift the 1280 px page cap. One rule for every drawing page instead of a
+ * per-page fix; 2400 px only keeps lines readable on ultra-wide monitors. */
+#hauptinhalt[data-breite="voll"] .max-w-7xl { max-width: 2400px; }

@@ -106,6 +106,37 @@ export function zoomedCentered(zoom, zentrum, W, H, minZoom, maxZoom) {
 }
 
 /**
+ * Fill mode (75-16): the visible viewBox for a view state when the SVG box
+ * has its OWN aspect ratio (rendered rw × rh) instead of the content's W × H.
+ * The content keeps its scale s = min(rw/W, rh/H) (identical to the "meet"
+ * letterbox — bildPxJeEinheit and the 1:50 scale stay exact); only the
+ * visible area grows to the box, centred on the same point as without fill.
+ * Centre invariant: x′ + w′/2 = viewT.x + W/zoom/2 (same for y).
+ * Hand check: (zoom 1, x 0, y 0, W 500, H 100, rw 1000, rh 400):
+ * s = min(2, 4) = 2 → w′ = 500, h′ = 200, x′ = 0, y′ = −50.
+ * @param {{zoom:number, x:number, y:number}} viewT view state (viewBox units)
+ * @param {number} W content width, SVG units
+ * @param {number} H content height, SVG units
+ * @param {number} renderedW rendered SVG width, CSS px (0 = not measured)
+ * @param {number} renderedH rendered SVG height, CSS px (0 = not measured)
+ * @returns {{x:number, y:number, w:number, h:number}} visible viewBox
+ */
+export function fuellSicht(viewT, W, H, renderedW, renderedH) {
+  const z = viewT.zoom > 0 ? viewT.zoom : 1;
+  if (!(W > 0) || !(H > 0) || !(renderedW > 0) || !(renderedH > 0)) {
+    return { x: viewT.x, y: viewT.y, w: W / z, h: H / z };
+  }
+  const s = Math.min(renderedW / W, renderedH / H);
+  const we = renderedW / s, he = renderedH / s;
+  return {
+    x: viewT.x + (W - we) / (2 * z),
+    y: viewT.y + (H - he) / (2 * z),
+    w: we / z,
+    h: he / z,
+  };
+}
+
+/**
  * Zoom um einen Anker in SVG-Einheiten (Wheel-Zoom auf den Cursor).
  * Invariante: der Punkt unter dem Anker bleibt exakt unter dem Anker —
  * (loc − x′)·zoom′ = (loc − x)·zoom.
@@ -149,7 +180,12 @@ export function zoomedToBBox(box, W, H, padU, minZoom, maxZoom) {
  *               der Listener am alten, entsorgten Element.
  * Rückgabe: { viewT, viewBox, clientToLocal, zoomBy, resetView, zoomToBBox,
  *             beginPan, panMove, endPan, isPanning, px, renderedW,
- *             renderedH, pxBild, zoomZentriert }   (75-09: die letzten drei additiv)
+ *             renderedH, pxBild, zoomZentriert, sicht }   (75-09: die drei vor sicht additiv)
+ * fuellen (75-16, opt-in): die viewBox übernimmt das gemessene Seitenverhältnis
+ *   des <svg> (fuellSicht) — kein Letterbox-Leerstreifen mehr, Maßstab
+ *   unverändert; px() ist dann letterbox-korrekt (= pxBild). Der Aufrufer
+ *   gibt dem <svg> eine feste Höhe. Default false ⇒ byte-gleich.
+ * sicht (75-16): sichtbare viewBox {x, y, w, h} — mit und ohne fuellen.
  * px(n) (75-01): n Bildschirm-Pixel → viewBox-Einheiten bei aktuellem Zoom
  * und gerenderter Breite (siehe screenUnits).
  * pxBild(n) (75-09): dasselbe LETTERBOX-korrekt (n Bildschirm-Pixel →
@@ -159,7 +195,7 @@ export function zoomedToBBox(box, W, H, padU, minZoom, maxZoom) {
  * Pan-Vertrag (Mitteltaste): down → beginPan(e); move → if (panMove(e)) return;
  * up/leave → endPan().
  */
-export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, wheelFactor = 1.15, attachKey }) {
+export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, wheelFactor = 1.15, attachKey, fuellen = false }) {
   const [viewT, setViewT] = useState({ zoom: 1, x: 0, y: 0 });
   // Rendered <svg> width in CSS px (75-01): needed to express handle sizes in
   // screen pixels — the SVG is `w-full`, so W ≠ rendered width.
@@ -247,13 +283,16 @@ export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, whe
     if (!svg) return true;
     const rect = svg.getBoundingClientRect();
     const d = dims.current;
+    // 75-16: in fill mode one screen px spans sicht.w / rect.width units.
+    const fw = d.fuellen ? d.sichtW * d.zoom : d.W;
+    const fh = d.fuellen ? d.sichtH * d.zoom : d.H;
     // Deltas VOR dem setState festhalten — panRef wird gleich überschrieben.
     const dx = e.clientX - panRef.current.x;
     const dy = e.clientY - panRef.current.y;
     setViewT((v) => ({
       ...v,
-      x: v.x - (dx * (d.W / v.zoom)) / (rect.width || 1),
-      y: v.y - (dy * (d.H / v.zoom)) / (rect.height || 1),
+      x: v.x - (dx * (fw / v.zoom)) / (rect.width || 1),
+      y: v.y - (dy * (fh / v.zoom)) / (rect.height || 1),
     }));
     panRef.current = { x: e.clientX, y: e.clientY };
     return true;
@@ -265,9 +304,24 @@ export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, whe
   };
   const isPanning = () => !!panRef.current;
 
+  const sicht = fuellen
+    ? fuellSicht(viewT, W, H, renderedW, renderedH)
+    : { x: viewT.x, y: viewT.y, w: W / viewT.zoom, h: H / viewT.zoom };
+  dims.current.fuellen = fuellen;
+  dims.current.sichtW = sicht.w;
+  dims.current.sichtH = sicht.h;
+  dims.current.zoom = viewT.zoom;
+  const pxBild = (n) => {
+    const s = bildPxJeEinheit(viewT.zoom, W, H, renderedW, renderedH);
+    return s > 0 ? n / s : screenUnits(n, viewT.zoom, W, renderedW);
+  };
+
   return {
     viewT,
-    viewBox: `${viewT.x} ${viewT.y} ${W / viewT.zoom} ${H / viewT.zoom}`,
+    viewBox: fuellen
+      ? `${sicht.x} ${sicht.y} ${sicht.w} ${sicht.h}`
+      : `${viewT.x} ${viewT.y} ${W / viewT.zoom} ${H / viewT.zoom}`,
+    sicht,
     clientToLocal,
     zoomBy,
     resetView,
@@ -277,15 +331,12 @@ export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, whe
     endPan,
     isPanning,
     // 75-01: screen-pixel sizes for handles/strokes/hit areas.
-    px: (n) => screenUnits(n, viewT.zoom, W, renderedW),
+    px: fuellen ? pxBild : (n) => screenUnits(n, viewT.zoom, W, renderedW),
     renderedW,
     // 75-09 (MSB-16): rendered SVG height in CSS px (0 until measured) +
     // letterbox-correct screen-pixel → viewBox conversion + centred zoom set.
     renderedH,
-    pxBild: (n) => {
-      const s = bildPxJeEinheit(viewT.zoom, W, H, renderedW, renderedH);
-      return s > 0 ? n / s : screenUnits(n, viewT.zoom, W, renderedW);
-    },
+    pxBild,
     zoomZentriert: (zoom, zentrum) =>
       setViewT(() => {
         const d = dims.current;

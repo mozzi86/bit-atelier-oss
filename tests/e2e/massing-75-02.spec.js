@@ -13,7 +13,9 @@ const ERLAUBT_OFFLINE = /(ERR_|net::|Failed to fetch|timeout|aborted|404|503|til
 /** Footprint bbox in metres + screen px per metre, read from the live SVG. */
 async function messen(page) {
   return page.evaluate(() => {
-    const svg = document.querySelector("svg[viewBox]");
+    // 75-16: the PLAN svg — the first svg[viewBox] on the page is an icon (24/24 → 1 px per unit),
+    // which only matched while the plan happened to render ~560 px wide.
+    const svg = document.querySelector('polygon[data-griff="flaeche"]').ownerSVGElement;
     const poly = document.querySelector('polygon[data-griff="flaeche"]');
     const grid = [...document.querySelectorAll('svg line[stroke="#e2e8f0"]')].map((l) => Number(l.getAttribute("x1")));
     const xs = [...new Set(grid)].sort((a, b) => a - b);

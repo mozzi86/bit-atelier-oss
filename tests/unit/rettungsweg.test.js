@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 
 import {
   KNOTEN_VERSATZ_M, punktInPolygon, sichtbar, eckKnoten, lauflaenge, tiefsterPunkt, rettungsweg,
+  sichtbarInnen, wegImRaum, gemeinsamesWandstueck, innenwegUeberTueren,
 } from "@designer/lib/rettungsweg";
 import { tesseliere, RETTUNGSWEG_MAX } from "@designer/lib/tesselierung";
 import { WERKSTATT_TYPEN } from "@designer/lib/wohnungsTypen";
@@ -165,5 +166,92 @@ describe("tesselierung.js — Rettungsweg als Lauflinie (75-13 Task 1)", () => {
     const r = tesseliere({ ...basis, typ: "mittelflur", regeln: { rettungsweg: true } });
     assert.ok(r.weListe.every((w) => w.rettungsweg_m > 0));
     assert.ok(r.hinweise.some((h) => /kein Treppenraum im Skelett/.test(h)));
+  });
+});
+
+// 75-17 (D-P75-13-C): inner leg through doors and the hall, not through walls.
+describe("75-17 innenwegUeberTueren — Tür-/Raumgraph", () => {
+  const nah = (ist, soll, eps = 0.01) => assert.ok(Math.abs(ist - soll) < eps, `${ist} ≠ ${soll}`);
+  // Room R 4 × 4 m, hall H 2 × 6 m to its right; R's door sits at the FAR end of the
+  // shared wall (z 0…0,885), the apartment door on H's right wall at z 5…5,885.
+  const R = { name: "Zimmer", art: "aufenthalt", fensterpflicht: true, points: [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 4 }, { x: 0, z: 4 }], tueren: [{ wand: 1, u_m: 0, breite_m: 0.885, nach: "Diele" }] };
+  const H = { name: "Diele", art: "flur", points: [{ x: 4, z: 0 }, { x: 6, z: 0 }, { x: 6, z: 6 }, { x: 4, z: 6 }], tueren: [{ wand: 1, u_m: 5, breite_m: 0.885, nach: null }] };
+  const ausgang = { x: 6.05, z: 5.4425 };
+
+  it("Handrechnung: tiefste Ecke → Zimmertür → Wohnungstür (nicht die Luftlinie)", () => {
+    const r = innenwegUeberTueren({ zonen: [R, H], ausgang });
+    assert.ok(r);
+    assert.equal(r.art, "tueren");
+    assert.equal(r.naeherung, false);
+    // deepest corner (0|4) pulled 5 cm diagonally to the centre = (0,0354 | 3,9646)
+    // → door middle (4 | 0,4425) → exit (6 | 5,4425) → 5 cm out
+    const e = 0.05 / Math.SQRT2;
+    const soll = Math.hypot(4 - e, 4 - e - 0.4425) + Math.hypot(2, 5) + 0.05;
+    nah(r.laenge_m, soll);
+    assert.ok(r.laenge_m > Math.hypot(6, 5.4425 - 3.95) + 3, "deutlich länger als die Luftlinie");
+    assert.deepEqual(r.tuerpunkte.map((p) => [+p.x.toFixed(4), +p.z.toFixed(4)]), [[4, 0.4425], [6, 5.4425]]);
+    assert.ok(r.pfad.some((p) => Math.abs(p.x - 4) < 1e-9 && Math.abs(p.z - 0.4425) < 1e-9), "Pfad führt durch die Zimmertür");
+  });
+
+  it("wegImRaum: L-Diele — Weg knickt an der einspringenden Ecke", () => {
+    const L = [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 1 }, { x: 1, z: 1 }, { x: 1, z: 4 }, { x: 0, z: 4 }];
+    assert.equal(sichtbarInnen({ x: 3.5, z: 0.5 }, { x: 0.5, z: 3.5 }, L), false);
+    const w = wegImRaum({ x: 3.5, z: 0.5 }, { x: 0.5, z: 3.5 }, L);
+    nah(w.laenge_m, 2 * Math.hypot(2.5, 0.5));
+    assert.deepEqual(w.pfad[1], { x: 1, z: 1 });
+  });
+
+  it("gemeinsamesWandstueck: Überlappung der Wände in Metern", () => {
+    const s = gemeinsamesWandstueck(R.points, H.points);
+    nah(s.laenge, 4);
+  });
+
+  it("ohne Türdaten: Öffnung in der Mitte der Wand ≥ 1,185 m zum Flur → Näherung wandstuecke", () => {
+    const r = innenwegUeberTueren({ zonen: [{ ...R, tueren: undefined }, { ...H, tueren: undefined }], ausgang });
+    assert.equal(r.art, "wandstuecke");
+    assert.equal(r.naeherung, true);
+    nah(r.tuerpunkte[0].x, 4); nah(r.tuerpunkte[0].z, 2);
+  });
+
+  it("Raum ohne Wand zum Flur → Durchgang durch den Nachbarraum, als Näherung markiert", () => {
+    const C = { name: "Kind", art: "aufenthalt", fensterpflicht: true, points: [{ x: 0, z: 4 }, { x: 4, z: 4 }, { x: 4, z: 8 }, { x: 0, z: 8 }] };
+    const H2 = { ...H, points: [{ x: 4, z: 0 }, { x: 6, z: 0 }, { x: 6, z: 4 }, { x: 4, z: 4 }], tueren: undefined };
+    const r = innenwegUeberTueren({ zonen: [{ ...R, tueren: undefined }, H2, C], ausgang: { x: 6.05, z: 2 } });
+    assert.equal(r.art, "durchgang");
+    assert.equal(r.naeherung, true);
+  });
+
+  it("leer → null (Aufrufer fällt auf die markierte Luftlinie zurück)", () => {
+    assert.equal(innenwegUeberTueren({ zonen: [], ausgang }), null);
+  });
+
+  it("Tesselierung mit Wohnungsgrundriss: jede WE über Türen, Pfad bleibt in den eigenen Räumen", () => {
+    const r = tesseliere({ footprintM: FP30, storeys: 1, typ: "mittelflur", einheiten: STD, raumzonen: true, regeln: { rettungsweg: true, wohnungsgrundriss: true } });
+    assert.ok(r.weListe.length > 0);
+    for (const w of r.weListe) {
+      assert.equal(w.rettungsweg_innen_art, "tueren", w.we);
+      assert.equal("rettungsweg_innen_naeherung" in w, false);
+      assert.ok(w.rettungsweg_tuerpunkte.length >= 2, "Zimmertür + Wohnungstür");
+      const eigene = r.zonen.filter((z) => z.we === w.we && z.level === w.level);
+      // Inner part of the path (up to the apartment door point): every point lies in or on an own room.
+      const n = w.rettungsweg_pfad.findIndex((p) => Math.abs(p.x - w.rettungsweg_tuerpunkte.at(-1).x) < 0.02 && Math.abs(p.z - w.rettungsweg_tuerpunkte.at(-1).z) < 0.02);
+      assert.ok(n > 0, "Wohnungstür liegt auf dem Pfad");
+      for (const p of w.rettungsweg_pfad.slice(0, n + 1)) {
+        const drin = eigene.some((z) => punktInPolygon(p, z.points) || z.points.some((a, i) => {
+          const b = z.points[(i + 1) % z.points.length];
+          const l = Math.hypot(b.x - a.x, b.z - a.z), d = Math.abs((p.x - a.x) * (b.z - a.z) - (p.z - a.z) * (b.x - a.x)) / (l || 1);
+          return d < 0.02 && (p.x - a.x) * (b.x - a.x) + (p.z - a.z) * (b.z - a.z) >= -0.02 && (p.x - b.x) * (a.x - b.x) + (p.z - b.z) * (a.z - b.z) >= -0.02;
+        }));
+        assert.ok(drin, `${w.we}: Pfadpunkt ${p.x}|${p.z} außerhalb der eigenen Räume`);
+      }
+    }
+  });
+
+  it("Tesselierung ohne Türdaten: Näherung ist markiert und steht im Warnungstext", () => {
+    const FP70 = [{ x: -35, z: -8 }, { x: 35, z: -8 }, { x: 35, z: 8 }, { x: -35, z: 8 }];
+    const r = tesseliere({ footprintM: FP70, storeys: 1, typ: "mfh", einheiten: STD, raumzonen: true, regeln: { rettungsweg: true, treppenraum: true } });
+    assert.ok(r.weListe.every((w) => w.rettungsweg_innen_naeherung === true && w.rettungsweg_innen_art !== "tueren"));
+    assert.ok(r.rettungswegWarnungen.length > 0);
+    assert.ok(r.rettungswegWarnungen.every((x) => x.text.includes("[Näherung innen: ")));
   });
 });

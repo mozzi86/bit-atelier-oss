@@ -44,9 +44,13 @@ test.describe("75-01 — Griffe in Bildschirm-Pixeln, Cursor je Ziel", () => {
     await expect(ecke).toBeVisible({ timeout: 15000 });
 
     // Zoom 1×: sichtbarer Eckgriff = 2 · r = 10 px (±1.5 px Rendering-Toleranz).
+    // 75-17: boundingBox() includes the 1.5 px stroke, so an exact handle measures
+    // 10 + 1.5 = 11.5 px — the upper bound gets 0.01 px float headroom (11.5001 seen
+    // once px() became letterbox-exact in fill mode; r · CTM = 10.0 px).
+    const OBEN = 11.5 + 0.01;
     const b1 = await breite(ecke);
     expect(b1, "Eckgriff bei 1×").toBeGreaterThanOrEqual(8.5);
-    expect(b1).toBeLessThanOrEqual(11.5);
+    expect(b1).toBeLessThanOrEqual(OBEN);
 
     // Auf 8× zoomen (1,2^12 ≈ 8,9 → geklemmt auf maxZoom 8).
     const plus = page.getByRole("button", { name: "Vergrößern" });
@@ -62,7 +66,7 @@ test.describe("75-01 — Griffe in Bildschirm-Pixeln, Cursor je Ziel", () => {
     }
     expect(gemessen, "kein Eckgriff im Sichtfeld bei 8×").not.toBeNull();
     expect(gemessen, "Eckgriff bei 8×").toBeGreaterThanOrEqual(8.5);
-    expect(gemessen).toBeLessThanOrEqual(11.5);
+    expect(gemessen).toBeLessThanOrEqual(OBEN);
     await page.getByRole("button", { name: "Ansicht zurücksetzen" }).click();
 
     // Cursor je Ziel — vier verschiedene Werte, jeder als SVG-data-URI.

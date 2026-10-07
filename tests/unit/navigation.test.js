@@ -11,7 +11,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { navGroups, navFlach, navSichtbar } from "@/navigation.js";
+import { navGroups, navFlach, navSichtbar, seitenBreite } from "@/navigation.js";
 
 const APP = new URL("../../src/App.jsx", import.meta.url);
 const I18N = new URL("../../packages/nova-core/src/lib/i18n.jsx", import.meta.url);
@@ -107,7 +107,8 @@ test("Icons außerhalb des Labors sind eindeutig", () => {
 test("projektfrei und umfang nur an existierenden Routen und mit gültigem Wert", () => {
   const pfade = new Set(routenAusApp().map((r) => r.path));
   // 80-01: "zugang" joins the allowed fields (personnel gate, see the check below).
-  const erlaubt = new Set(["title", "url", "icon", "labor", "projektfrei", "umfang", "zugang"]);
+  // 75-16: "breite" marks drawing pages (one width rule in the shell).
+  const erlaubt = new Set(["title", "url", "icon", "labor", "projektfrei", "umfang", "zugang", "breite"]);
   for (const g of navGroups) {
     for (const e of g.items) {
       for (const feld of Object.keys(e)) assert.ok(erlaubt.has(feld), `${e.title}: unbekanntes Feld ${feld}`);
@@ -123,11 +124,18 @@ test("projektfrei und umfang nur an existierenden Routen und mit gültigem Wert"
         assert.equal(e.zugang, "personal", `${e.title}: zugang muss 'personal' sein`);
         assert.equal(e.url, "/People", `${e.title}: zugang nur am Personal-Eintrag`);
       }
+      if ("breite" in e) {
+        assert.equal(e.breite, "voll", `${e.title}: breite muss 'voll' sein`);
+        assert.ok(pfade.has(e.url), `${e.title}: breite an ${e.url} ohne Route`);
+      }
     }
   }
   // 80-01: Büro-Gruppe vervollständigt (E-02) — Personal and Einstellungen work without a project.
   const projektfrei = navFlach.filter((e) => e.projektfrei).map((e) => e.url).sort();
   assert.deepEqual(projektfrei, ["/Accounting", "/AddressBook", "/BitAegis", "/IfcViewer", "/ModelCheck", "/People", "/Settings", "/SketchStudio"]);
+  // 75-16: the drawing pages that lift the 1280 px page cap.
+  const voll = navFlach.filter((e) => e.breite === "voll").map((e) => e.url).sort();
+  assert.deepEqual(voll, ["/BimViewer", "/ComplexDesigner", "/ModelCheck", "/SiteControl"]);
   const portfolio = navFlach.filter((e) => e.umfang === "portfolio").map((e) => e.url).sort();
   assert.deepEqual(portfolio, ["/AIDashboard", "/Accounting", "/AtelierDeveloper", "/Dashboard", "/InvestmentPlatform"]);
 });
@@ -265,4 +273,11 @@ test("die h1-Prüfung erkennt Abweichungen (sonst wäre der Test oben wertlos)",
   assert.equal(ersteUeberschrift("<h1>{t('KI Tool')}</h1>"), "KI Tool");
   assert.equal(ersteUeberschrift("<h1>BIT Sketcher <span>(Labor)</span></h1>"), "BIT Sketcher");
   assert.equal(ersteUeberschrift("<div>keine</div>"), null);
+});
+
+test("seitenBreite: Zeichenseiten voll, alle anderen ohne Angabe (75-16)", () => {
+  assert.equal(seitenBreite("/ComplexDesigner"), "voll");
+  assert.equal(seitenBreite("/BimViewer"), "voll");
+  assert.equal(seitenBreite("/Reports"), undefined);
+  assert.equal(seitenBreite("/gibt-es-nicht"), undefined);
 });
