@@ -1,0 +1,96 @@
+{
+  "name": "EnergyScenario",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "description": "Reference to parent project"
+    },
+    "name": {
+      "type": "string",
+      "description": "Scenario name"
+    },
+    "inputs": {
+      "type": "object",
+      "properties": {
+        "envelope": {
+          "type": "object",
+          "description": "Building envelope data"
+        },
+        "systems": {
+          "type": "object",
+          "description": "HVAC systems configuration"
+        },
+        "setpoints": {
+          "type": "object",
+          "properties": {
+            "heating": {
+              "type": "number",
+              "default": 20
+            },
+            "cooling": {
+              "type": "number",
+              "default": 26
+            }
+          }
+        },
+        "try_dataset": {
+          "type": "string",
+          "description": "Test Reference Year dataset"
+        }
+      }
+    },
+    "results": {
+      "type": "object",
+      "properties": {
+        "qh_annual": {
+          "type": "number",
+          "description": "Annual heating demand kWh"
+        },
+        "qc_annual": {
+          "type": "number",
+          "description": "Annual cooling demand kWh"
+        },
+        "pe_annual": {
+          "type": "number",
+          "description": "Primary energy kWh"
+        },
+        "co2_annual": {
+          "type": "number",
+          "description": "CO2 emissions kg"
+        },
+        "monthly_results": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "geg_compliance": {
+      "type": "object",
+      "properties": {
+        "reference_demand": {
+          "type": "number"
+        },
+        "calculated_demand": {
+          "type": "number"
+        },
+        "compliance_factor": {
+          "type": "number"
+        },
+        "passes_geg": {
+          "type": "boolean"
+        }
+      }
+    },
+    "calculation_date": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "project_id",
+    "name"
+  ]
+}

@@ -1,0 +1,7 @@
+Datum,Empfänger,Kontonummer,Transaktionstyp,Verwendungszweck,Kategorie,Betrag (EUR),Betrag (Fremdwährung),Fremdwährung,Wechselkurs
+2026-09-01,Beispiel Bauherr GmbH,DE89370400440532013000,Überweisung,RE-2026 -014 Abschlag,Sonstiges,11900.00,,,
+2026-09-03,Müller Hausverwaltung,DE12500105170648489890,Lastschrift,Miete Büro September,Sonstiges,-650.00,,,
+2026-09-05,Beispiel Versicherung AG,DE27100777770209299700,Lastschrift,Beitrag Versicherung Police BH-000001,Sonstiges,-280.00,,,
+2026-09-08,Finanzamt Musterstadt,DE02120300000000202051,Lastschrift,USt-Vorauszahlung Q2 2026,Sonstiges,-1900.00,,,
+2026-09-10,Inhaberin A,DE89370400440532013099,Lastschrift,Privatentnahme September,Sonstiges,-2000.00,,,
+2026-09-12,Beispiel Bauherr GmbH,DE89370400440532013000,Überweisung,RE2026014 Restzahlung,Sonstiges,4800.00,,,

@@ -1,0 +1,150 @@
+# Provider profiles (Hermes pattern: a profile is data, the transport is code).
+# api_mode: anthropic | openai_compat | mock
+# The API key is read from os.environ[env_var] — never written into this file
+# (an api_key entry here is refused at load time). env_var: null = no key needed.
+# Prices are EUR per million tokens; null → /status shows "—" instead of a guess.
+# quirks (openai_compat): include_usage, extra_body, headers, no_tools, models_url.
+
+profiles:
+  - name: mock
+    api_mode: mock
+    models: [mock-1]
+    default_model: mock-1
+    aux_model: mock-1
+    context_window: 128000
+    preis_in_pro_mio: 0
+    preis_out_pro_mio: 0
+
+  - name: anthropic
+    api_mode: anthropic
+    base_url: https://api.anthropic.com
+    env_var: ANTHROPIC_API_KEY
+    models: [claude-fable-5-1, claude-opus-5, claude-sonnet-5, claude-haiku-4-5-20251001]
+    default_model: claude-sonnet-5
+    aux_model: claude-haiku-4-5-20251001
+    context_window: 200000
+    quirks:
+      anthropic_version: "2023-06-01"
+
+  # Alibaba Cloud Model Studio — TWO subscriptions, TWO endpoints, TWO keys.
+  # A Token-Plan key against the Coding-Plan URL (or vice versa) gives 401
+  # "invalid access token". The user lost days to this on 01.–04.09.2026.
+  - name: alibaba-token-plan
+    api_mode: openai_compat
+    base_url: https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
+    env_var: DASHSCOPE_API_KEY            # key form sk-sp-…
+    models: [qwen3.8-max, qwen3.8-flash, qwen3.7-plus, qwen3.7-max, qwen3.6-flash, deepseek-v4-pro, glm-5.2]
+    default_model: qwen3.8-max
+    aux_model: qwen3.8-flash
+    context_window: 128000
+    quirks:
+      include_usage: true
+      extra_body: { enable_thinking: false }
+
+  - name: alibaba-coding-plan
+    api_mode: openai_compat
+    # Path taken from Hermes Agent v0.21.0 (hermes_cli/config_defaults.py), not /compatible-mode/v1.
+    base_url: https://coding-intl.dashscope.aliyuncs.com/v1
+    env_var: DASHSCOPE_CODING_API_KEY
+    models: [qwen3.8-coder-plus, qwen3.8-max]   # [ASSUMED] — `harness doctor` lists the real ones
+    default_model: qwen3.8-coder-plus
+    aux_model: qwen3.8-coder-plus
+    context_window: 128000
+    quirks:
+      include_usage: true
+      extra_body: { enable_thinking: false }
+
+  - name: deepseek
+    api_mode: openai_compat
+    base_url: https://api.deepseek.com/v1
+    env_var: DEEPSEEK_API_KEY
+    models: [deepseek-chat, deepseek-reasoner]
+    default_model: deepseek-chat
+    aux_model: deepseek-chat
+    context_window: 128000
+    quirks:
+      include_usage: true
+
+  - name: groq
+    api_mode: openai_compat
+    base_url: https://api.groq.com/openai/v1
+    env_var: GROQ_API_KEY
+    models: [llama-3.3-70b-versatile, llama-3.1-8b-instant]
+    default_model: llama-3.3-70b-versatile
+    aux_model: llama-3.1-8b-instant
+    context_window: 128000
+    quirks:
+      include_usage: true
+
+  # --- Plan 83-03: more OpenAI-compatible cloud providers -------------------------
+  # Base URLs [CITED] from each provider's own docs, checked 07.10.2026 (source in
+  # the comment). models: [] = any model name is accepted; `harness doctor` lists
+  # what the key really offers. Default models, context windows: [ASSUMED] — model
+  # line-ups change monthly. No prices (null → /status shows "—", no guess).
+  # include_usage only where the stream_options flag is documented (OpenAI);
+  # elsewhere tokens are estimated and marked "(geschätzt)".
+
+  # https://developers.openai.com/api/reference — POST https://api.openai.com/v1/chat/completions
+  - name: openai
+    api_mode: openai_compat
+    base_url: https://api.openai.com/v1
+    env_var: OPENAI_API_KEY
+    models: []
+    default_model: gpt-4o-mini            # [ASSUMED] example
+    aux_model: gpt-4o-mini
+    context_window: 128000                # [ASSUMED]
+    quirks:
+      include_usage: true
+
+  # https://ai.google.dev/gemini-api/docs/openai — base …/v1beta/openai/ + chat/completions
+  - name: gemini
+    api_mode: openai_compat
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    env_var: GEMINI_API_KEY
+    models: []
+    default_model: gemini-3.8-flash       # [ASSUMED] example from the docs page
+    context_window: 1000000               # [ASSUMED]
+
+  # https://docs.mistral.ai/api/ — POST https://api.mistral.ai/v1/chat/completions
+  - name: mistral
+    api_mode: openai_compat
+    base_url: https://api.mistral.ai/v1
+    env_var: MISTRAL_API_KEY
+    models: []
+    default_model: mistral-large-latest   # [ASSUMED] example
+    context_window: 128000                # [ASSUMED]
+
+  # https://openrouter.ai/docs/quickstart — one key, many vendors; model ids are "vendor/model"
+  - name: openrouter
+    api_mode: openai_compat
+    base_url: https://openrouter.ai/api/v1
+    env_var: OPENROUTER_API_KEY
+    models: []
+    default_model: openai/gpt-4o-mini     # [ASSUMED] example
+    context_window: 128000                # [ASSUMED] — depends on the chosen model
+
+  # Local servers — no key. LM Studio: start its server with
+  # `lms server start --port 1234`, list models via `lms ls`.
+  - name: lmstudio
+    api_mode: openai_compat
+    base_url: http://127.0.0.1:1234/v1
+    env_var: null
+    models: []                            # filled by `harness doctor` / GET /v1/models
+    default_model: null
+    context_window: 32768                 # [ASSUMED] — depends on the loaded model's context length
+    preis_in_pro_mio: 0
+    preis_out_pro_mio: 0
+    quirks:
+      include_usage: true
+
+  - name: ollama
+    api_mode: openai_compat
+    base_url: http://127.0.0.1:11434/v1
+    env_var: null
+    models: []                            # from /api/tags
+    default_model: null
+    context_window: 32768                 # [ASSUMED]
+    preis_in_pro_mio: 0
+    preis_out_pro_mio: 0
+    quirks:
+      models_url: http://127.0.0.1:11434/api/tags

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BIT-Atelier — Bauprojekt-Plattform</title>
+    <!-- 72-12 (N-09): cold start. The note in #root is plain HTML, visible
+         before any script or stylesheet has loaded; createRoot replaces it on
+         the first render. It covers the viewport so a dark system does not see
+         a white page while the bundle loads. Colours are the app's own:
+         slate-50/slate-600 light, #0b1220 (dark page background)/slate-300 dark. -->
+    <style>
+      .kaltstart { position: fixed; inset: 0; margin: 0; display: flex; align-items: center; justify-content: center;
+        font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: #f8fafc; color: #475569; }
+      @media (prefers-color-scheme: dark) { .kaltstart { background: #0b1220; color: #cbd5e1; } }
+      /* Dark chosen in the app on a light system: set by the script below. */
+      .dark .kaltstart { background: #0b1220; color: #cbd5e1; }
+    </style>
+    <!-- Without JavaScript the app never mounts: the loading note would
+         contradict the noscript message below, so it is hidden. -->
+    <noscript><style>.kaltstart { display: none; }</style></noscript>
+    <!-- Dark class before the first render. ThemeProvider sets it in an effect,
+         which can run after the first paint: one frame of the mounted app came
+         out white on a dark system (N-09 proof). Same start value as
+         getInitialTheme in ThemeProvider.jsx (key "nc-theme", else the system
+         setting); keep both in step. A future script-src CSP (57-06 G-13) needs
+         a hash for this block; blocked, only that one frame returns. -->
+    <script>
+      (function () {
+        var gewaehlt = null;
+        try { gewaehlt = localStorage.getItem("nc-theme"); } catch (e) { /* storage blocked: system setting */ }
+        var dunkel = gewaehlt === "dark"
+          || (gewaehlt !== "light" && !!window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dunkel) document.documentElement.classList.add("dark");
+      })();
+    </script>
+  </head>
+  <body>
+    <noscript>
+      <p style="font-family:system-ui,sans-serif;max-width:560px;margin:15vh auto;padding:0 24px">
+        BIT-Atelier braucht JavaScript. Bitte im Browser einschalten — die Anwendung läuft danach vollständig lokal.
+        <br>BIT-Atelier needs JavaScript. Please enable it — the application then runs entirely in your browser.
+      </p>
+    </noscript>
+    <div id="root"><p class="kaltstart" role="status">BIT-Atelier wird geladen …</p></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

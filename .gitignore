@@ -1,0 +1,122 @@
+#env
+.env
+.env.*
+!.env.example
+
+# Local JSON database (regenerate with `npm run seed`)
+server/db.json
+server/db.json.tmp
+server/db.json.bak
+server/db.json.pre31
+server/db.json.pre33
+server/blobs/
+
+# Personal-Speicherklasse (Plan 80-02, D-P80-A #5): eigene Datei, nie
+# im Repo — enthält, anders als db.json, echte Personendaten.
+server/personal.json
+server/personal.json.*
+server/personal-blobs/
+
+# Plan 83-03: data folder of the downloadable release (start-windows.cmd /
+# start.sh set BIT_DATA_DIR=<app>/daten) — the user's projects, never in the repo.
+/daten/
+
+# Logs
+/logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Python caches (from installed skills)
+__pycache__/
+*.pyc
+
+# Phase 33: Blob-Store (abgeleitete Daten — aus dem Import reproduzierbar)
+server/blobs/
+
+# Phase 33: lokales venv des eingefrorenen Orakels (nur für Gate G0)
+# Anlegen: python3 -m venv parity/oracle/.venv &&
+#          parity/oracle/.venv/bin/pip install -r parity/oracle/requirements.txt
+parity/oracle/.venv/
+
+# Phase 33: Ausgabe des Einmal-Transformers (auf Zuruf neu erzeugbar)
+*.novabundle.json
+
+# Phase 33 / W5: die erzeugte Kostenberechnungs-XLSX. Wird von Gate G14 bei
+# JEDEM Lauf neu gebaut und gegen die goldene Referenzdatei verglichen. Nicht
+# eingecheckt — ein eingechecktes Artefakt kann von seinem Erzeuger abdriften,
+# ohne dass ein Gate rot wird. Der Vergleichsanker ist die Referenzdatei im
+# NDA-Archiv (BIT_NDA_DIR), nicht diese Ausgabe.
+parity/artifacts/kb.xlsx
+
+# Plan 83-01: Kunden-/NDA-Material liegt AUSSERHALB des Repos und wird über
+# BIT_NDA_DIR gelesen (siehe tests/nda.mjs und
+# .planning/phases/83-open-source/83-01-SUMMARY.md). Die Muster sind bewusst
+# generisch — kein Projekt- oder Kundenname gehört in diese Datei.
+server/db.json.*
+parity/fixtures/
+parity/golden/
+parity/oracle/
+parity/artifacts/*.json
+.planning/quellen/rohbau-bim-*/
+tests/unit/fixtures/loi-*.csv
+# lokale Ersetzungs- und Sperrliste (Klartext) für projektnamen-anwenden.mjs
+.planning/tools/*.local.json
+
+# Phase 33 / W7: das von Gate G20 vollständig gebaute KUNDENPAKET (assemble +
+# npm install + seed + vite build). Enthält ein eigenes node_modules und dist/
+# und wird bei jedem Lauf neu zusammengesetzt; der Install wird wiederverwendet,
+# solange der Ordner steht. Frischer Nachweis: Ordner löschen, `npm run parity`.
+parity/artifacts/verkaufspaket*/
+parity/artifacts/guardprobe*/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+.env
+.vite
+
+.claude/worktrees/
+dist-demo
+dist-lokal
+__uat-lokal/
+server/db.json.vor-jb-import
+
+# Phase 67: Atelier AI Harness (Python sidecar) — venv, workspaces, logs, secrets
+harness/.venv/
+harness/projects/
+harness/logs/
+harness/config.yaml
+harness/providers.yaml
+harness/*.egg-info/
+
+# Supabase CLI link metadata (per machine, contains project ref/pooler url)
+supabase/.temp/
+
+# Google-Drive-Verknuepfungen (Nutzer-Dateien, kein Repo-Inhalt)
+*.gdoc
+
+# Cloud build size report (scripts/build-cloud.mjs, kept out of dist/)
+build-cloud-groessen.md

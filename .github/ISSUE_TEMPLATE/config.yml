@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Feedback per E-Mail / feedback by mail
+    url: mailto:me@bit-atelier.de?subject=BIT-Atelier%20Feedback
+    about: Lieber privat? Schreiben Sie direkt. / Prefer private? Write directly.
+  - name: Website
+    url: https://bit-atelier.de
+    about: Projekt, Leistungen, Kontakt / project, services, contact

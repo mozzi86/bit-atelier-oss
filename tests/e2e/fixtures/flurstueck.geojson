@@ -1,0 +1,21 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "flurstueck": "1234/5", "gemarkung": "Nürnberg" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [11.0762, 49.4516],
+            [11.0772, 49.4516],
+            [11.0772, 49.4526],
+            [11.0762, 49.4526],
+            [11.0762, 49.4516]
+          ]
+        ]
+      }
+    }
+  ]
+}

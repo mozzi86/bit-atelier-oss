@@ -1,0 +1,61 @@
+# Atelier AI Harness — behaviour configuration.
+# Copy to config.yaml and adjust. Secrets never go here: API keys live in .env only.
+
+# developer = "BIT Atelier Developer Harness" (repo access, git, shell with approval)
+# user      = "Atelier AI Harness"           (project workspace only, allowlist shell)
+mode: user
+
+# Provider profile name from providers.yaml and the model to start with.
+provider: mock
+model: null            # null = default_model of the profile
+
+# Local service (HTTP + WebSocket). Never bind to anything but 127.0.0.1.
+host: 127.0.0.1
+port: 8765
+
+# Workspaces: projects/<slug>/PROJECT.md, memory/, tasks.md, files/, model/
+projects_dir: projects
+project: efh-satteldach
+# The app repository — only reachable in developer mode. Default: parent of harness/.
+repo_root: null
+
+# Memory budget inside the system prompt (characters); the rest is listed as an index.
+memory_budget_chars: 2200
+# Every N turns the harness appends a short reminder to save lasting facts.
+memory_nudge_every: 10
+
+agent:
+  max_rounds: 20         # tool-calling rounds per user turn before the loop stops
+  max_tokens: 4096
+
+shell:
+  # Read-only commands run without asking. Everything else shows the command,
+  # one sentence of explanation and waits for "ja". Blocklist is hard-coded.
+  allowlist:
+    - git status
+    - git log
+    - git diff
+    - ls
+    - dir
+    - cat
+    - type
+    - rg
+    - grep
+    - find
+    - python --version
+    - node --version
+    - npm ls
+  # Read ONCE at start-up and frozen. Ignored in user mode. Prompt injection cannot flip it.
+  yolo: false
+  timeout_s: 120
+
+# Speech (67-05). Needs the extra: pip install -e ".[voice]". Audio stays in memory.
+stt:
+  enabled: true
+  model: small          # tiny | base | small | medium | large-v3 — [ASSUMED] small: Diktatqualität vs. Tempo
+  language: de
+tts:
+  enabled: false        # Piper, local; voice file under harness/voices/<name>.onnx
+  voice: de_DE-thorsten-medium
+
+logs_dir: logs

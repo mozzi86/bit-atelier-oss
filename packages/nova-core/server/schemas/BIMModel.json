@@ -1,0 +1,60 @@
+{
+  "name": "BIMModel",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "description": "Reference to parent project"
+    },
+    "ifc_file_url": {
+      "type": "string",
+      "description": "URL to IFC file"
+    },
+    "version": {
+      "type": "string",
+      "description": "Model version"
+    },
+    "ifc_version": {
+      "type": "string",
+      "enum": [
+        "IFC2x3",
+        "IFC4",
+        "IFC4x3"
+      ],
+      "default": "IFC4"
+    },
+    "mapping_rules": {
+      "type": "object",
+      "description": "Rules for mapping feasibility IDs to IFC GUIDs"
+    },
+    "import_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "processing",
+        "ready",
+        "error"
+      ],
+      "default": "processing"
+    },
+    "element_count": {
+      "type": "integer",
+      "description": "Total number of elements"
+    },
+    "spaces_count": {
+      "type": "integer",
+      "description": "Number of spaces/rooms"
+    },
+    "reconciliation_log": {
+      "type": "array",
+      "description": "Log of ID mappings during import"
+    }
+  },
+  "required": [
+    "project_id",
+    "ifc_file_url"
+  ]
+}

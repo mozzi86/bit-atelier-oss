@@ -1,0 +1,7 @@
+{
+  "//": "Deno workspace config for the Supabase Edge Functions (Phase 57-04).",
+  "//nodeModulesDir": "'manual' resolves npm: specifiers from the repo's existing node_modules (supabase-js is already a package.json dependency since 57-01) instead of downloading them into DENO_DIR - so `deno check` runs with NO registry/network access.",
+  "//include": "scopes the program to the functions folder; `deno check supabase/functions/**/index.ts` is run from the repo root, where this file is auto-discovered.",
+  "nodeModulesDir": "manual",
+  "include": ["supabase/functions/"]
+}

@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier AI Harness — Standalone</title>
+<!--
+  Build-free reference chat for the harness service (python -m harness serve).
+  It defines the minimum the app tab "KI Tool" (plan 67-06) must offer:
+  WebSocket streaming, tool activity, slash menu from /skills, status line,
+  approval dialog. The service serves this file at http://127.0.0.1:8765/ —
+  open it there (a file:// origin is rejected by the WebSocket origin check).
+-->
+<style>
+  :root { --bg:#f6f7f8; --fg:#1b1f23; --muted:#5b6470; --line:#d9dee4; --me:#e8f0fe; --ai:#ffffff; --tool:#fff7e0; --warn:#b45309; --err:#b91c1c; --ok:#15803d; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111417; --fg:#e6e9ec; --muted:#98a2ad; --line:#2a3138; --me:#1e2a3d; --ai:#181c21; --tool:#2b2413; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--fg); display:flex; flex-direction:column; height:100vh; }
+  header { padding:10px 16px; border-bottom:1px solid var(--line); display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  header b { font-size:15px; }
+  #status { color:var(--muted); font-size:12px; }
+  #dot { width:9px; height:9px; border-radius:50%; background:var(--err); display:inline-block; margin-right:6px; }
+  #dot.on { background:var(--ok); }
+  main { flex:1; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .msg { max-width:min(820px, 92%); padding:10px 12px; border-radius:10px; border:1px solid var(--line); white-space:pre-wrap; word-break:break-word; }
+  .me { align-self:flex-end; background:var(--me); }
+  .ai { align-self:flex-start; background:var(--ai); }
+  .tool { align-self:flex-start; background:var(--tool); font-size:12px; font-family: ui-monospace, Consolas, monospace; }
+  .tool summary { cursor:pointer; }
+  .notice { align-self:center; color:var(--muted); font-size:12px; }
+  .error { align-self:center; color:var(--err); font-size:13px; }
+  footer { border-top:1px solid var(--line); padding:10px 16px; position:relative; }
+  form { display:flex; gap:8px; }
+  textarea { flex:1; resize:none; min-height:44px; max-height:160px; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--ai); color:var(--fg); font:inherit; }
+  button { padding:0 16px; border-radius:8px; border:1px solid var(--line); background:var(--ai); color:var(--fg); cursor:pointer; }
+  button.primary { background:#1d4ed8; color:#fff; border-color:#1d4ed8; }
+  #slash { position:absolute; bottom:64px; left:16px; background:var(--ai); border:1px solid var(--line); border-radius:8px; padding:6px; max-height:220px; overflow:auto; min-width:320px; box-shadow:0 6px 20px rgba(0,0,0,.12); }
+  #slash div { padding:6px 8px; border-radius:6px; cursor:pointer; }
+  #slash div:hover, #slash div.sel { background:var(--me); }
+  #slash small { color:var(--muted); margin-left:8px; }
+  #approval { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; }
+  [hidden] { display:none !important; }
+  #approval .box { background:var(--ai); border:1px solid var(--line); border-radius:12px; padding:18px 20px; max-width:560px; width:92%; }
+  #approval code { display:block; background:var(--bg); padding:8px 10px; border-radius:6px; margin:8px 0; white-space:pre-wrap; word-break:break-all; }
+  .row { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
+  .hint { color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <b id="title">Atelier AI Harness</b>
+  <span id="status"><span id="dot"></span>nicht verbunden</span>
+  <span style="flex:1"></span>
+  <label class="hint">Dienst <input id="url" value="ws://127.0.0.1:8765/ws/chat" data-auto="1" size="34" style="font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--ai);color:var(--fg)"></label>
+  <button id="connect">Verbinden</button>
+  <button id="btnStatus" title="/status">Status</button>
+</header>
+<main id="log"></main>
+<footer>
+  <div id="slash" hidden></div>
+  <form id="form">
+    <textarea id="input" placeholder="Nachricht … ( / für Skills, Enter sendet, Shift+Enter Zeilenumbruch )" autocomplete="off"></textarea>
+    <!-- Push-to-Talk (67-05): hold → MediaRecorder → POST /stt → text goes INTO the field, never sent by itself. -->
+    <button type="button" id="ptt" title="Halten zum Sprechen (Diktat als Vorschau, nichts wird gesendet)">🎤 Halten zum Sprechen</button>
+    <button class="primary" type="submit">Senden</button>
+  </form>
+  <div class="hint" id="hint">Startbefehl für den Dienst: <code>python -m harness serve</code> im Ordner <code>harness/</code> (venv aktiv).
+    <label style="margin-left:12px"><input type="checkbox" id="ttsOn"> Antworten vorlesen (TTS, Standard aus)</label>
+    <span id="sttInfo"></span>
+  </div>
+  <div class="hint" id="sttError" style="color:var(--err)" hidden></div>
+</footer>
+<div id="approval" hidden>
+  <div class="box">
+    <b>Bestätigung nötig</b>
+    <p id="apExplain" style="margin:8px 0 0"></p>
+    <code id="apCmd"></code>
+    <div class="row"><button id="apNo">Nein</button><button id="apYes" class="primary">Ja, ausführen</button></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const log = $("log"), input = $("input"), slash = $("slash");
+  let ws = null, current = null, skills = [], selIdx = 0, pendingApproval = null;
+  // Served by the harness itself → talk to the same host:port (works for --port overrides).
+  if (location.protocol.startsWith("http")) $("url").value = `ws://${location.host}/ws/chat`;
+  const httpBase = () => $("url").value.replace(/^ws/, "http").replace(/\/ws\/chat$/, "");
+
+  function add(cls, text) {
+    const el = document.createElement("div");
+    el.className = "msg " + cls;
+    el.textContent = text;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+  function addTool(ev) {
+    const el = document.createElement("details");
+    el.className = "msg tool";
+    el.innerHTML = "<summary></summary><pre style='margin:6px 0 0;white-space:pre-wrap'></pre>";
+    el.querySelector("summary").textContent = `⚙ ${ev.name} ${JSON.stringify(ev.arguments || {})}`;
+    el.dataset.id = ev.id;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+  }
+  function setStatus(s) {
+    $("title").textContent = s.display_name || "Atelier AI Harness";
+    if (s.stt) {
+      const st = s.stt;
+      $("ptt").disabled = !st.verfuegbar;
+      $("ptt").title = st.verfuegbar
+        ? (st.bereit ? `Halten zum Sprechen — ${st.modell} auf ${st.geraet}${st.warnung ? " · " + st.warnung : ""}` : `Modell ${st.modell} lädt noch …`)
+        : (st.hinweis || "STT nicht verfügbar");
+      if (st.warnung && !$("sttInfo").textContent) $("sttInfo").textContent = " · STT: " + st.warnung;
+    }
+    const k = s.kosten_eur == null ? "—" : s.kosten_eur.toFixed(4) + " €";
+    $("status").innerHTML = `<span id="dot" class="${ws && ws.readyState === 1 ? "on" : ""}"></span>` +
+      `${s.mode} · ${s.provider}/${s.model} · Projekt ${s.projekt || "—"} · Tokens ${s.tokens.total} · Kosten ${k} · offene Aufgaben ${s.offene_aufgaben ?? "—"}`;
+  }
+
+  async function loadSkills() {
+    try {
+      const r = await fetch(httpBase() + "/skills");
+      skills = (await r.json()).skills || [];
+    } catch (e) { skills = []; }
+  }
+
+  function connect() {
+    if (ws) ws.close();
+    ws = new WebSocket($("url").value);
+    ws.onopen = () => { add("notice", "verbunden"); loadSkills(); };
+    ws.onclose = () => { $("dot").className = ""; add("notice", "Verbindung geschlossen — Dienst läuft? python -m harness serve"); };
+    ws.onerror = () => add("error", "WebSocket-Fehler — läuft der Dienst unter " + $("url").value + "?");
+    ws.onmessage = (m) => {
+      const ev = JSON.parse(m.data);
+      switch (ev.type) {
+        case "hello": case "status": setStatus(ev); break;
+        case "text_delta":
+          if (!current) current = add("ai", "");
+          current.textContent += ev.text; log.scrollTop = log.scrollHeight; break;
+        case "tool_call": current = null; addTool(ev); break;
+        case "tool_result": {
+          const el = [...log.querySelectorAll(".tool")].find(x => x.dataset.id === ev.id);
+          if (el) el.querySelector("pre").textContent = ev.result.slice(0, 4000);
+          break;
+        }
+        case "approval": pendingApproval = ev; $("apExplain").textContent = ev.erklaerung; $("apCmd").textContent = ev.befehl; $("approval").hidden = false; break;
+        case "usage": break;
+        case "notice": add("notice", ev.message); break;
+        case "error": add("error", ev.message); current = null; break;
+        case "done": { const said = current?.textContent; current = null; ws.send(JSON.stringify({ type: "status" })); speak(said); break; }
+      }
+    };
+  }
+
+  function reply(ja) {
+    if (!pendingApproval) return;
+    ws.send(JSON.stringify({ type: "approval_reply", id: pendingApproval.id, ja }));
+    add("notice", (ja ? "bestätigt: " : "abgelehnt: ") + pendingApproval.befehl);
+    pendingApproval = null; $("approval").hidden = true;
+  }
+  $("apYes").onclick = () => reply(true);
+  $("apNo").onclick = () => reply(false);
+
+  function send() {
+    const text = input.value.trim();
+    if (!text || !ws || ws.readyState !== 1) return;
+    add("me", text);
+    ws.send(JSON.stringify({ type: "user", text }));
+    input.value = ""; slash.hidden = true; current = null;
+  }
+  $("form").onsubmit = (e) => { e.preventDefault(); send(); };
+
+  // --- Push-to-Talk: hold the button (mouse/touch/Space while focused) ------------
+  let rec = null, chunks = [], recording = false;
+  const sttErr = (msg) => { $("sttError").textContent = msg || ""; $("sttError").hidden = !msg; };
+  async function pttStart() {
+    if (recording) return;
+    sttErr("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
+      rec = new MediaRecorder(stream, { mimeType: mime });
+      chunks = [];
+      rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunks, { type: rec.mimeType });
+        $("ptt").textContent = "… transkribiere";
+        try {
+          const fd = new FormData();
+          fd.append("audio", blob, "aufnahme.webm");
+          const r = await fetch(httpBase() + "/stt", { method: "POST", body: fd });
+          const body = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(body.detail || `Dienst antwortet ${r.status}`);
+          // Preview only: append to the field, cursor at the end. The user presses Enter.
+          const sep = input.value && !/\s$/.test(input.value) ? " " : "";
+          input.value += sep + (body.text || "");
+          input.focus(); input.setSelectionRange(input.value.length, input.value.length);
+          $("sttInfo").textContent = ` · Diktat ${body.dauer_s}s auf ${body.geraet} (${body.modell})`;
+        } catch (e) { sttErr("Diktat fehlgeschlagen: " + e.message); }
+        finally { $("ptt").textContent = "🎤 Halten zum Sprechen"; }
+      };
+      rec.start();
+      recording = true;
+      $("ptt").textContent = "● Aufnahme … loslassen zum Beenden";
+    } catch (e) { sttErr("Mikrofon nicht verfügbar: " + e.message); }
+  }
+  function pttStop() { if (recording && rec) { recording = false; rec.stop(); } }
+  const pttBtn = $("ptt");
+  pttBtn.addEventListener("mousedown", pttStart); pttBtn.addEventListener("mouseup", pttStop); pttBtn.addEventListener("mouseleave", pttStop);
+  pttBtn.addEventListener("touchstart", (e) => { e.preventDefault(); pttStart(); }); pttBtn.addEventListener("touchend", pttStop);
+  pttBtn.addEventListener("keydown", (e) => { if (e.code === "Space") { e.preventDefault(); pttStart(); } });
+  pttBtn.addEventListener("keyup", (e) => { if (e.code === "Space") pttStop(); });
+
+  // --- TTS (optional, default off): read finished answers aloud via POST /tts ------
+  async function speak(text) {
+    if (!$("ttsOn").checked || !text) return;
+    try {
+      const r = await fetch(httpBase() + "/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+      if (!r.ok) { const b = await r.json().catch(() => ({})); add("notice", "TTS: " + (b.detail || r.status)); return; }
+      new Audio(URL.createObjectURL(await r.blob())).play();
+    } catch (e) { add("notice", "TTS-Fehler: " + e.message); }
+  }
+  $("connect").onclick = connect;
+  $("btnStatus").onclick = () => ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: "status" }));
+
+  // Slash menu: filter skills by the typed prefix, Tab/Enter inserts.
+  function renderSlash() {
+    const q = input.value.slice(1).toLowerCase();
+    const items = skills.filter(s => s.name.toLowerCase().startsWith(q));
+    if (!input.value.startsWith("/") || input.value.includes(" ") || !items.length) { slash.hidden = true; return; }
+    selIdx = Math.min(selIdx, items.length - 1);
+    slash.innerHTML = "";
+    items.forEach((s, i) => {
+      const d = document.createElement("div");
+      d.className = i === selIdx ? "sel" : "";
+      d.innerHTML = `/${s.name}<small></small>`; d.querySelector("small").textContent = s.description;
+      d.onclick = () => { input.value = "/" + s.name + " "; slash.hidden = true; input.focus(); };
+      slash.appendChild(d);
+    });
+    slash.hidden = false;
+  }
+  input.addEventListener("input", () => { selIdx = 0; renderSlash(); });
+  input.addEventListener("keydown", (e) => {
+    if (!slash.hidden) {
+      const items = slash.querySelectorAll("div");
+      if (e.key === "ArrowDown") { selIdx = (selIdx + 1) % items.length; renderSlash(); e.preventDefault(); return; }
+      if (e.key === "ArrowUp") { selIdx = (selIdx - 1 + items.length) % items.length; renderSlash(); e.preventDefault(); return; }
+      if (e.key === "Tab" || e.key === "Enter") { items[selIdx]?.click(); e.preventDefault(); return; }
+      if (e.key === "Escape") { slash.hidden = true; return; }
+    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+
+  connect();
+})();
+</script>
+</body>
+</html>

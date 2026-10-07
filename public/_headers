@@ -1,0 +1,27 @@
+# Response headers for Cloudflare Pages (57-06 Task 1e).
+# Read natively by the hosting, like public/_redirects - no dependency, no
+# configuration, no build step.
+#
+# Why frame-ancestors matters here and not "some day": without it /anmeldung -
+# and from Task 3 on /zugang - can be loaded invisibly inside a foreign page
+# and covered with someone else's form. The visitor then types office data, or
+# a password, into a page they believe is ours. X-Frame-Options says the same
+# thing for older browsers that ignore the CSP directive.
+#
+# Deliberately NOT a full Content-Security-Policy yet: the runtime origins are
+# not measured. Five map tile hosts (maplibreStyles.js:17,25,39,50,62), three
+# edge functions, mapbox-gl-rtl-text.js and the language model endpoints would
+# all need to be in script-src/connect-src/img-src, and a script-src that is
+# one entry short breaks the app silently rather than loudly. That measurement
+# is its own pass (57-06 G-13).
+
+/*
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
+
+# Phase 78 hotfix (23.09.2026): rule sets are project material. Nothing below this
+# folder may be cached at the edge - a deleted file stayed publicly cached for days.
+/pruefregeln/*
+  Cache-Control: no-store

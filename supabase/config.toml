@@ -1,0 +1,13 @@
+# Supabase CLI project configuration (Phase 57-01).
+#
+# Deliberately minimal: this machine has no Docker/WSL (D-P57-08), so the
+# local stack (`supabase start`) is never used. The CLI only pushes the
+# migrations in ./migrations against the two cloud projects:
+#
+#   supabase link --project-ref <ref of bit-atelier-dev>    # refs: Supabase dashboard
+#   supabase db push
+#   supabase link --project-ref <ref of bit-atelier-prod>
+#   supabase db push
+#
+# Project refs and keys belong into .env (git-ignored) — never into this file.
+project_id = "bit-atelier"

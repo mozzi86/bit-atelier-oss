@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atelier-ai-harness"
+version = "0.1.0"
+description = "Atelier AI Harness — provider-agnostic agent core for the BIT Atelier App (local FastAPI service + CLI)"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = { text = "MIT" }
+# Pinned exactly (Hermes rule: a moving dependency is an untested dependency).
+# Versions resolved from PyPI on 2026-09-05; bump deliberately, then re-run pytest.
+dependencies = [
+  "fastapi==0.141.1",
+  "uvicorn[standard]==0.52.4",
+  "httpx==0.28.1",
+  "PyYAML==6.0.3",
+  "pydantic==2.13.5",
+  "python-dotenv==1.2.3",
+  # 67-05: FastAPI needs it for multipart uploads (POST /stt); route registration fails without it.
+  "python-multipart==0.0.32",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.1.1", "pytest-asyncio==1.4.0"]
+# 67-03: IFC read/write. ifcopenshell (IfcOpenShell project, LGPL-3.0) pulls
+# numpy, shapely, lark, isodate and python-dateutil; the core stays free of them.
+ifc = ["ifcopenshell==0.8.5"]
+# 67-05: local speech. faster-whisper (SYSTRAN, MIT; pulls ctranslate2 4.8.2, OpenNMT, MIT),
+# sounddevice (MIT, PortAudio) for the CLI microphone, piper-tts (MIT) optional TTS.
+voice = ["faster-whisper==1.2.1", "sounddevice==0.5.6", "piper-tts==1.8.0"]
+# GPU path for faster-whisper on Windows/Linux: cuBLAS + cuDNN as wheels (NVIDIA, proprietary
+# but redistributable). devices.register_cuda_dlls() puts their bin/ folders on the loader path.
+voice-cuda = ["nvidia-cublas-cu12==12.9.2.10", "nvidia-cudnn-cu12==9.25.1.1"]
+
+[project.scripts]
+harness = "harness.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["harness*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# `voice`: downloads a faster-whisper model — run explicitly with `-m voice`.
+markers = ["voice: needs the [voice] extra and a model download"]
+addopts = "-m 'not voice'"
+asyncio_default_fixture_loop_scope = "function"

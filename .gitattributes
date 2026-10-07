@@ -1,0 +1,21 @@
+# Generated files that tests compare byte for byte with their generator output
+# (tests/unit/beispielmodell.test.js; the reference-project IDS lives in the NDA archive since Plan 83-01). The generators
+# write LF; with core.autocrlf=true (Windows default) a fresh clone would check
+# them out with CRLF and the byte-identity tests fail although nothing changed.
+public/beispiel/*.ifc text eol=lf
+public/beispiel/*.ids text eol=lf
+public/pruefregeln/*.ids text eol=lf
+public/pruefregeln/*.json text eol=lf
+
+# 83-03: start scripts of the downloadable release. start.sh must keep LF (a CRLF
+# shebang line fails with "bad interpreter" on macOS/Linux, also in a ZIP built
+# on Windows); start-windows.cmd keeps CRLF (cmd's goto/label search misreads
+# LF-only batch files).
+*.sh text eol=lf
+*.cmd text eol=crlf
+
+# 79-11: the DATEV EXTF golden fixture's CRLF is protocol DATA (every row must end
+# 0x0D 0x0A), not a line-ending style choice — `-text` stops autocrlf from silently
+# stripping it to LF on add (found while writing tests/unit/buchhaltung-datev.test.js:
+# the staged blob had 0 CR bytes although the working file had the real CRLF pairs).
+tests/unit/fixtures/buchhaltung/datev/EXTF_Buchungsstapel_golden.csv -text

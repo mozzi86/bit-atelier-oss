@@ -1,0 +1,307 @@
+{
+ "_zweck": "Plan 83-01: gehashte Sperrliste (SHA-256 des NFKC-normalisierten, kleingeschriebenen Fragments, Länge, 32-Bit-Rollhash als Vorfilter, Wortgrenzen-Flag). Erzeugt mit .planning/tools/projektnamen-anwenden.mjs --hashes aus der lokalen Klartextliste. Nicht von Hand ändern.",
+ "eintraege": [
+  {
+   "nr": 1,
+   "laenge": 12,
+   "sha256": "47f63f3fb4b680ad28febf2ab71ee0b8bbd92281658b0128f17ef14031a460ef",
+   "rk": 1135697076,
+   "wort": false
+  },
+  {
+   "nr": 2,
+   "laenge": 6,
+   "sha256": "d7dadf4211dc7dbd1977696013fa813cf1f68f500200fb86c4b676ff579cf833",
+   "rk": 4076009257,
+   "wort": false
+  },
+  {
+   "nr": 3,
+   "laenge": 9,
+   "sha256": "598e6e119798845a83de5a7d2703e0bca5f45e018f40434608752f98787dfc62",
+   "rk": 4246210706,
+   "wort": false
+  },
+  {
+   "nr": 4,
+   "laenge": 6,
+   "sha256": "3bf66b2bb0d97af75ad32d64bf14e370711ceb7935b2b56fbeae0052d1da6397",
+   "rk": 4008572466,
+   "wort": false
+  },
+  {
+   "nr": 5,
+   "laenge": 23,
+   "sha256": "475972d64d38544e7caadf1a1f7fa368bbbf1f899f37ccbe183bc192e803ead5",
+   "rk": 13831365,
+   "wort": false
+  },
+  {
+   "nr": 6,
+   "laenge": 7,
+   "sha256": "fcf2c84e926aca00e30d06e83e329f3d1d29aa58ab955adb91e85400565c6422",
+   "rk": 1028232403,
+   "wort": false
+  },
+  {
+   "nr": 7,
+   "laenge": 5,
+   "sha256": "bd616eb10c9b5c2ea638b5070c20cfc4db64e405161dcc150ddcb5bb6f12fc21",
+   "rk": 422196777,
+   "wort": true
+  },
+  {
+   "nr": 8,
+   "laenge": 7,
+   "sha256": "19c1ec49637c44dc3ca3ed4b945ad9a75a9b860d6c9e0286ec02b1f1d099417f",
+   "rk": 48850007,
+   "wort": false
+  },
+  {
+   "nr": 9,
+   "laenge": 8,
+   "sha256": "7bb49e9adb1a65ceec418f97a225a92476303a6b00068c7096a2a10722aa86fd",
+   "rk": 3779706974,
+   "wort": false
+  },
+  {
+   "nr": 10,
+   "laenge": 10,
+   "sha256": "e260cba88eb4c574e09ec3d751990b4a3fe9415570f817f0afdebf0a77934596",
+   "rk": 4129317953,
+   "wort": false
+  },
+  {
+   "nr": 11,
+   "laenge": 6,
+   "sha256": "a33c3e480ce4c6bab15bdb6df7d85516d156396e22f86c194bcb7fc640cd344c",
+   "rk": 404293213,
+   "wort": false
+  },
+  {
+   "nr": 12,
+   "laenge": 8,
+   "sha256": "ee69d1bdabf0badbb4e67a22abf3099c77c1249acc74471f0ee1e5ce9615d338",
+   "rk": 3311501892,
+   "wort": false
+  },
+  {
+   "nr": 13,
+   "laenge": 8,
+   "sha256": "b4d969421ab34a7895fc58810b7f1ffc93520b10c9cc6c403ca607b9f29f8c04",
+   "rk": 3978794826,
+   "wort": false
+  },
+  {
+   "nr": 14,
+   "laenge": 11,
+   "sha256": "124db1100e86c641555d0c7c03c987b457d06fa5becc7844e47b9fdd3303262c",
+   "rk": 4164084186,
+   "wort": false
+  },
+  {
+   "nr": 15,
+   "laenge": 3,
+   "sha256": "10947fa6f1228a524a78daf07b257cbfe6fe0f33aa62f9fa1cf2997262087848",
+   "rk": 7292232,
+   "wort": true
+  },
+  {
+   "nr": 16,
+   "laenge": 8,
+   "sha256": "4c1d12a6df181bd97e564b68cb14e97cfaa566f24f07b858ab78039645320ec3",
+   "rk": 4163997516,
+   "wort": true
+  },
+  {
+   "nr": 17,
+   "laenge": 18,
+   "sha256": "6e8ab60cecce9b2c7df09c49704c414cab26ef39ab62c1eb9634f5e565b5ed61",
+   "rk": 3759185832,
+   "wort": false
+  },
+  {
+   "nr": 18,
+   "laenge": 19,
+   "sha256": "6cdbdfb9d79d9c1502679c5e689a4101bc2a142341ec09960e2c53f698cd04d5",
+   "rk": 1306853832,
+   "wort": false
+  },
+  {
+   "nr": 19,
+   "laenge": 19,
+   "sha256": "5ff378832f3a3336ec667a603376ac97e74ea4cddb12ba5bffb6e5d7040e2936",
+   "rk": 2981138645,
+   "wort": false
+  },
+  {
+   "nr": 20,
+   "laenge": 23,
+   "sha256": "454174fb6b9c58588f608815b603d26e713b8b455d04656e67b1bb6b5bd502e6",
+   "rk": 390315015,
+   "wort": false
+  },
+  {
+   "nr": 21,
+   "laenge": 3,
+   "sha256": "ebecac3dbb3428c344df1b9e9656e0648db6b480513e8c763a69b5f0675465d3",
+   "rk": 7620662,
+   "wort": true
+  },
+  {
+   "nr": 22,
+   "laenge": 3,
+   "sha256": "8760d12e729567e54d6ed15e9faf7ed9b199a2dd9a19fc886169a029a0d5bb8e",
+   "rk": 6436173,
+   "wort": true
+  },
+  {
+   "nr": 23,
+   "laenge": 19,
+   "sha256": "47c9f1e7473f051d3d9dbbe4b9b0c92af26c6fdae6637b19603d652323335ddb",
+   "rk": 2415715331,
+   "wort": false
+  },
+  {
+   "nr": 24,
+   "laenge": 13,
+   "sha256": "e016d3e0bc78f933e75853777ffe4cf2fc9c7ab44e6104be5b9099ff0c8910ef",
+   "rk": 3828958583,
+   "wort": false
+  },
+  {
+   "nr": 25,
+   "laenge": 16,
+   "sha256": "33b5bd028fefdf740d8365dea5c538c3874b20d45672062b34c4a1ca56c91b77",
+   "rk": 193431172,
+   "wort": false
+  },
+  {
+   "nr": 26,
+   "laenge": 8,
+   "sha256": "53d6d33536435bfa678f9a4649547534766fd3b03481f2c0935304d7abe25d92",
+   "rk": 1304258123,
+   "wort": false
+  },
+  {
+   "nr": 27,
+   "laenge": 9,
+   "sha256": "19d9e855792e59737a527e09c292654af929f99fd43f44f98a07b9d8d4955d10",
+   "rk": 3839094598,
+   "wort": true
+  },
+  {
+   "nr": 28,
+   "laenge": 7,
+   "sha256": "94d075eb40cf5d9301a1594b6d075b32ba1b8b35dcc3bd58f08df0e53a0e3053",
+   "rk": 2372347386,
+   "wort": true
+  },
+  {
+   "nr": 29,
+   "laenge": 20,
+   "sha256": "3f8cadb42e2ae8ea0b30a6723aff8cd6fd2764004a3f3f79967c07c954e60ee4",
+   "rk": 583651377,
+   "wort": false
+  },
+  {
+   "nr": 30,
+   "laenge": 14,
+   "sha256": "ffc5801d2ba34a42e6d0e34788bfad656cb1d47affd7b385db52ed2e0535825f",
+   "rk": 3906807406,
+   "wort": false
+  },
+  {
+   "nr": 31,
+   "laenge": 10,
+   "sha256": "8a1130a20d743420dc149c91f6c695954c87fd840b7836db75af9f2cdfe185f2",
+   "rk": 1661146280,
+   "wort": false
+  },
+  {
+   "nr": 32,
+   "laenge": 11,
+   "sha256": "fda05cb171e59f66d2276eee468efa15c0c4c26a1a78ab086ba9a1b264119c07",
+   "rk": 1712804015,
+   "wort": false
+  },
+  {
+   "nr": 33,
+   "laenge": 12,
+   "sha256": "97528fc623db477c82a2cefd259c04653b0672eae9a570add0634925df5eaa14",
+   "rk": 2753266447,
+   "wort": false
+  },
+  {
+   "nr": 34,
+   "laenge": 6,
+   "sha256": "1f18a49a8e8a2bb7f1db3d32554f8242708d97e8bab2e1ec9e87269e77be0128",
+   "rk": 1451648008,
+   "wort": false
+  },
+  {
+   "nr": 35,
+   "laenge": 11,
+   "sha256": "de60cce1d4908f369de06bf11110c2847ae6004ae7d6868d379e3cc88a0d4081",
+   "rk": 1764316221,
+   "wort": false
+  },
+  {
+   "nr": 36,
+   "laenge": 4,
+   "sha256": "d457421796ec1d0ee6828d35d26b22a6e49b860f1c90fcb69136775e53d85b22",
+   "rk": 2078723799,
+   "wort": true
+  },
+  {
+   "nr": 37,
+   "laenge": 4,
+   "sha256": "ce70c947a06174658d182dc4021301546164609cf255744de11d3a46819ae653",
+   "rk": 1670473373,
+   "wort": true
+  },
+  {
+   "nr": 38,
+   "laenge": 9,
+   "sha256": "bb1e7576075e29ba38f9c587e32a7f3f8adfeaf8164bea52c65ce76e6e14ea9e",
+   "rk": 2659628524,
+   "wort": true
+  },
+  {
+   "nr": 39,
+   "laenge": 8,
+   "sha256": "b31441b1d21ccb18f0c7ca23aefe9d9243303640ed42ce63a0b9d9e98c631278",
+   "rk": 344591820,
+   "wort": true
+  },
+  {
+   "nr": 40,
+   "laenge": 9,
+   "sha256": "0e7e2c8ef0e237f2e3a6c721527612075e14cccb4100d5f562715685b824be9f",
+   "rk": 1481588005,
+   "wort": true
+  },
+  {
+   "nr": 41,
+   "laenge": 5,
+   "sha256": "3d396c2b66d43a7d5e6d52ba7a61f73220921f5070a78df5fcf377ac198b9991",
+   "rk": 4125946880,
+   "wort": true
+  },
+  {
+   "nr": 42,
+   "laenge": 3,
+   "sha256": "dafcebaa74ca66b46ae39481d5665fc9492ce607c36a69aafed3fcb3f29a8aca",
+   "rk": 7358265,
+   "wort": true
+  }
+ ],
+ "ausnahmen": [
+  {
+   "datei": "packages/nova-core/src/lib/labels.js",
+   "nr": 16,
+   "anzahl": 1,
+   "grund": "Stadt→Bundesland-Zuordnung (Datenwert einer Ortsliste, kein Projektbezug)"
+  }
+ ]
+}

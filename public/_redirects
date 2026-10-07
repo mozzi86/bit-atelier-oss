@@ -1,0 +1,5 @@
+# SPA-Weiche für Cloudflare Pages (57-05).
+# Der Cloud-Build nutzt BrowserRouter (App.jsx:18 — HashRouter nur serverlos).
+# Ohne diese Zeile sucht das Hosting bei /Projects oder /anmeldung eine Datei
+# und liefert 404, statt die App zu laden.
+/*    /index.html   200

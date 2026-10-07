@@ -1,0 +1,46 @@
+# Pflicht-Property-Sets je IFC-Klasse — Konfiguration für ifc_check.py.
+#
+# Herkunft: die IDS-Beispieldatei der App (public/beispiel/musterprojekt.ids,
+# BRAND-01) verlangt Pset_WallCommon.FireRating für jede IFCWALL; die übrigen
+# Einträge sind die Mindestsätze, die der /ifc-Mengenauszug und die Prüf-Suite
+# brauchen (Qto_*BaseQuantities je Klasse). [ASSUMED] für ein Wohnbau-
+# Referenzprojekt — pro Auftrag gegen die echte AIA/IDS des Bauherrn tauschen.
+#
+# Format:
+#   klasse: IFC-Klasse (ohne Präfix, Groß/klein egal)
+#   psets:  Liste von {name: Pset-Name, pflicht: [Eigenschaftsnamen]}
+#
+# Auswertung: fehlendes Pset oder fehlende Pflicht-Eigenschaft -> warn (nie
+# fail — Ehrlichkeits-Konvention der App: Befunde zeigen, nicht blockieren).
+
+version: 1
+
+regeln:
+  - klasse: IfcWall
+    psets:
+      - name: Pset_WallCommon
+        pflicht: [IsExternal, LoadBearing, FireRating]   # FireRating: IDS BRAND-01
+      - name: Qto_WallBaseQuantities
+        pflicht: [Length, Height, Width, GrossSideArea, NetSideArea, NetVolume]
+  - klasse: IfcSlab
+    psets:
+      - name: Pset_SlabCommon
+        pflicht: [IsExternal, LoadBearing]
+      - name: Qto_SlabBaseQuantities
+        pflicht: [Width, Length, GrossArea, GrossVolume]
+  - klasse: IfcRoof
+    psets:
+      - name: Pset_RoofCommon
+        pflicht: [IsExternal, LoadBearing]
+  - klasse: IfcWindow
+    psets:
+      - name: Pset_WindowCommon
+        pflicht: [IsExternal, ThermalTransmittance]
+      - name: Qto_WindowBaseQuantities
+        pflicht: [Width, Height, Area]
+  - klasse: IfcDoor
+    psets:
+      - name: Pset_DoorCommon
+        pflicht: [IsExternal]
+      - name: Qto_DoorBaseQuantities
+        pflicht: [Width, Height, Area]

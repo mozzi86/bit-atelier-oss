@@ -1,0 +1,54 @@
+# Release: a tag v* builds the client once and publishes BIT-Atelier.zip.
+# The zip contains the full source plus the prebuilt dist/, so the start scripts only run
+# `npm ci --omit=dev` on the user's machine. The asset name is version-free on purpose:
+# the website links to releases/latest/download/BIT-Atelier.zip.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Gates
+        run: |
+          npm run lint
+          npm run test:unit
+
+      - name: Build the client
+        run: npm run build
+
+      - name: Assemble BIT-Atelier.zip
+        run: |
+          set -euo pipefail
+          rm -rf staging && mkdir -p staging
+          git archive --format=tar --prefix=BIT-Atelier/ HEAD | tar -x -C staging
+          cp -r dist staging/BIT-Atelier/dist
+          chmod +x staging/BIT-Atelier/start.sh
+          (cd staging && zip -qr ../BIT-Atelier.zip BIT-Atelier)
+          ls -l BIT-Atelier.zip
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # A re-pushed tag replaces its release (and the old zip) instead of failing.
+          gh release delete "$GITHUB_REF_NAME" --yes 2>/dev/null || true
+          gh release create "$GITHUB_REF_NAME" BIT-Atelier.zip \
+            --title "BIT-Atelier $GITHUB_REF_NAME" \
+            --notes "Download BIT-Atelier.zip, unzip it and start start-windows.cmd (Windows) or ./start.sh (macOS/Linux). Requires Node.js 22. Use at your own risk — see LICENSE."

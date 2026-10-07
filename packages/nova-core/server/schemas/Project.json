@@ -1,0 +1,95 @@
+{
+  "name": "Project",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Project name"
+    },
+    "client": {
+      "type": "string",
+      "description": "Client organization"
+    },
+    "location": {
+      "type": "object",
+      "properties": {
+        "lat": {
+          "type": "number"
+        },
+        "lng": {
+          "type": "number"
+        },
+        "address": {
+          "type": "string"
+        },
+        "city": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string"
+        }
+      }
+    },
+    "zoning_set": {
+      "type": "object",
+      "properties": {
+        "far_max": {
+          "type": "number"
+        },
+        "height_max": {
+          "type": "number"
+        },
+        "setbacks": {
+          "type": "object",
+          "properties": {
+            "front": {
+              "type": "number"
+            },
+            "side": {
+              "type": "number"
+            },
+            "rear": {
+              "type": "number"
+            }
+          }
+        },
+        "parking_ratio": {
+          "type": "number"
+        }
+      }
+    },
+    "currency": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "standards": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "GEG",
+          "DIN_18599",
+          "DIN_4108",
+          "DIN_276",
+          "HOAI",
+          "VOB"
+        ]
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "feasibility",
+        "design",
+        "construction",
+        "handover"
+      ],
+      "default": "feasibility"
+    }
+  },
+  "required": [
+    "name",
+    "client",
+    "location"
+  ]
+}

@@ -1,0 +1,11 @@
+"Kontonummer:";"DE00 0000 0000 0000 0000 01"
+"Kontostand vom 27.09.2026:";"48.170,00 €"
+
+"Zeitraum: 01.01.2026 - 27.09.2026"
+Buchungsdatum;Wertstellung;Status;Zahlungspflichtige*r;Zahlungsempfänger*in;Verwendungszweck;Umsatztyp;IBAN;Betrag (€);Gläubiger-ID;Mandatsreferenz;Kundenreferenz
+01.09.2026;01.09.2026;Gebucht;Beispiel Bauherr GmbH;;RE-2026 -014 Abschlag;Eingang;DE89370400440532013000;11900,00;;;
+03.09.2026;03.09.2026;Gebucht;;Müller Hausverwaltung;Miete Büro September;Ausgang;DE12500105170648489890;-650,00;;;
+05.09.2026;05.09.2026;Gebucht;;Beispiel Versicherung AG;Beitrag Versicherung Police BH-000001;Ausgang;DE27100777770209299700;-280,00;;;
+08.09.2026;08.09.2026;Gebucht;;Finanzamt Musterstadt;USt-Vorauszahlung Q2 2026;Ausgang;DE02120300000000202051;-1900,00;;;
+10.09.2026;10.09.2026;Gebucht;;Inhaberin A;Privatentnahme September;Ausgang;DE89370400440532013099;-2000,00;;;
+12.09.2026;12.09.2026;Gebucht;Beispiel Bauherr GmbH;;RE2026014 Restzahlung;Eingang;DE89370400440532013000;4800,00;;;

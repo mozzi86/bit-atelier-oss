@@ -1,0 +1,42 @@
+﻿{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@core/*": ["./packages/nova-core/src/*"],
+      "@ifc/*": ["./packages/nova-ifc-viewer/src/*"],
+      "@ava/*": ["./packages/nova-ausschreibung/src/*"],
+      "@pdf/*": ["./packages/nova-pdf/src/*"],
+      "@designer/*": ["./packages/nova-designer/src/*"],
+      "@sketch/*": ["./packages/bit-sketch/src/*"],
+      "@/*": ["./src/*"]
+    },
+    "jsx": "react-jsx",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["esnext", "dom"],
+    "target": "esnext",
+    "checkJs": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "types": []
+  },
+  "include": [
+    "src/components/**/*.js",
+    "src/pages/**/*.jsx",
+    "src/Layout.jsx",
+    "packages/*/src/components/**/*.js",
+    "packages/*/src/pages/**/*.jsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/vite-plugins",
+    "src/components/ui",
+    "src/api",
+    "src/lib",
+    "packages/nova-core",
+    "packages/*/src/lib"
+  ]
+}

@@ -1,0 +1,7 @@
+Buchungstag;Valuta;Vorgang;Buchungstext;Verwendungszweck;Auftraggeberkonto;Kontonummer/IBAN;Empfänger;Betrag Soll;Betrag Haben;Waehrung
+01.09.2026;01.09.2026;Gutschrift;Gutschrift;RE-2026 -014 Abschlag;DE00000000000000000001;DE89370400440532013000;Beispiel Bauherr GmbH;;11900,00;EUR
+03.09.2026;03.09.2026;Buchung;Buchung;Miete Büro September;DE00000000000000000001;DE12500105170648489890;Müller Hausverwaltung;650,00;;EUR
+05.09.2026;05.09.2026;Buchung;Buchung;Beitrag Versicherung Police BH-000001;DE00000000000000000001;DE27100777770209299700;Beispiel Versicherung AG;280,00;;EUR
+08.09.2026;08.09.2026;Buchung;Buchung;USt-Vorauszahlung Q2 2026;DE00000000000000000001;DE02120300000000202051;Finanzamt Musterstadt;1900,00;;EUR
+10.09.2026;10.09.2026;Buchung;Buchung;Privatentnahme September;DE00000000000000000001;DE89370400440532013099;Inhaberin A;2000,00;;EUR
+12.09.2026;12.09.2026;Gutschrift;Gutschrift;RE2026014 Restzahlung;DE00000000000000000001;DE89370400440532013000;Beispiel Bauherr GmbH;;4800,00;EUR

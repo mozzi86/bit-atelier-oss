@@ -1,0 +1,15 @@
+name: Feedback
+description: Allgemeine Rückmeldung — was gefällt, was stört, was fehlt. / General feedback.
+labels: [feedback]
+body:
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Ihre Rückmeldung / your feedback
+    validations:
+      required: true
+  - type: dropdown
+    id: rolle
+    attributes:
+      label: Ihre Rolle / your role
+      options: [Architektur, Fachplanung, Bauherr / client, Projektsteuerung, Software / developer, andere / other]

@@ -1,0 +1,19 @@
+name: Idee oder Wunsch / Feature request
+description: Eine Prüfregel, ein Format, ein Ablauf, der fehlt. / A rule, format or workflow that is missing.
+labels: [wunsch]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Welches Problem im Büroalltag soll gelöst werden? / Which problem in daily office work?
+    validations:
+      required: true
+  - type: textarea
+    id: vorschlag
+    attributes:
+      label: Vorschlag / proposal
+  - type: input
+    id: werkzeuge
+    attributes:
+      label: Beteiligte Programme oder Formate / tools or formats involved
+      placeholder: "z. B. Revit-IFC, GAEB X84, BCF aus Solibri, DXF"

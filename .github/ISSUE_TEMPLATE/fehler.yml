@@ -1,0 +1,34 @@
+name: Fehler melden / Bug report
+description: Etwas funktioniert nicht wie erwartet. / Something does not work as expected.
+labels: [fehler]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke! Bitte keine vertraulichen Projektdaten, Kundennamen oder API-Schlüssel anhängen.
+        Thank you! Please do not attach confidential project data, client names or API keys.
+  - type: textarea
+    id: was
+    attributes:
+      label: Was ist passiert? / What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: schritte
+    attributes:
+      label: Schritte zum Nachstellen / Steps to reproduce
+      placeholder: "1. Prüf-Suite öffnen  2. Musterprojekt laden  3. …"
+  - type: textarea
+    id: erwartet
+    attributes:
+      label: Was hätten Sie erwartet? / What did you expect?
+  - type: input
+    id: version
+    attributes:
+      label: Version und Fassung / version and edition
+      description: Einstellungen › System, z. B. 1.0.0 (lokal) / Settings › System
+  - type: dropdown
+    id: system
+    attributes:
+      label: Betriebssystem / operating system
+      options: [Windows, macOS, Linux, andere / other]
