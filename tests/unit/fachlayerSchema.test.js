@@ -70,11 +70,14 @@ describe("87-07 — Fachlayer-Schema", () => {
       for (const m of text.matchAll(/["'`]([a-z]+_layer)["'`]/g)) benutzt.add(m[1]);
     }
     benutzt.delete("ifc_layer"); // filter axis on an IFC attribute, not a BimModel field
-    const register = fs.readFileSync(path.join(REPO, ".planning/FACHLAYER-SCHEMA.md"), "utf8");
+    // .planning/ is private and not part of the public export (scripts/oss-export.mjs): there the code
+    // register (LAYER_VERSION) is still checked, only the comparison with the planning document is skipped.
+    const registerPfad = path.join(REPO, ".planning/FACHLAYER-SCHEMA.md");
+    const register = fs.existsSync(registerPfad) ? fs.readFileSync(registerPfad, "utf8") : null;
     for (const feld of benutzt) {
       assert.ok(istFachlayer(feld), `${feld} fehlt in LAYER_VERSION`);
-      assert.ok(register.includes(`\`${feld}\``), `${feld} fehlt in FACHLAYER-SCHEMA.md`);
+      if (register) assert.ok(register.includes(`\`${feld}\``), `${feld} fehlt in FACHLAYER-SCHEMA.md`);
     }
-    for (const feld of Object.keys(LAYER_VERSION)) assert.ok(register.includes(`\`${feld}\``), `${feld} nur im Code registriert`);
+    if (register) for (const feld of Object.keys(LAYER_VERSION)) assert.ok(register.includes(`\`${feld}\``), `${feld} nur im Code registriert`);
   });
 });
