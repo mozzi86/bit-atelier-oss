@@ -48,6 +48,7 @@ export class Sketch {
   // ---------- Geometrie ----------
 
   addPoint(x, y, { fixed = false, construction = false, id = nextId("p") } = {}) {
+    /** @type {{id:string,type:'point',x:number,y:number,fixed:boolean,construction:boolean}} */
     const p = { id, type: "point", x, y, fixed, construction };
     this.points.set(id, p);
     return p;
@@ -58,6 +59,7 @@ export class Sketch {
       throw new Error(`Linie ${id}: Endpunkt fehlt (${p1}, ${p2})`);
     }
     if (p1 === p2) throw new Error(`Linie ${id}: identische Endpunkte`);
+    /** @type {{id:string,type:'line',p1:string,p2:string,construction:boolean}} */
     const l = { id, type: "line", p1, p2, construction };
     this.lines.set(id, l);
     return l;
@@ -73,6 +75,7 @@ export class Sketch {
   addCircle(center, radius, { construction = false, id = nextId("c") } = {}) {
     if (!this.points.has(center)) throw new Error(`Kreis ${id}: Mittelpunkt fehlt (${center})`);
     if (!(radius > 0)) throw new Error(`Kreis ${id}: Radius muss > 0 sein`);
+    /** @type {{id:string,type:'circle',center:string,radius:number,construction:boolean}} */
     const c = { id, type: "circle", center, radius, construction };
     this.circles.set(id, c);
     return c;

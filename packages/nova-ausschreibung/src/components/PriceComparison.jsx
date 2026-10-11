@@ -8,7 +8,17 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@core/components/ui/select";
 import FormModal from "@core/components/common/FormModal";
-import { Plus, Gavel, Award, Download, TrendingDown } from "lucide-react";
+import { Plus, Gavel, Award, Download, TrendingDown, FileUp, ClipboardCheck, FileText } from "lucide-react";
+// 90-03: import a bidder's GAEB offer (X84) instead of typing the prices.
+import AngebotImportDialog from "./AngebotImportDialog";
+// 90-04: deterministic offer check (quantity × EP = GP, sums, missing/0,00 € prices) + Prüfvermerk.
+import AngebotPruefungDialog from "./AngebotPruefungDialog";
+import { angebotPruefen, pruefStatus } from "@ava/lib/angebotPruefung";
+import { useI18n } from "@core/lib/i18n";
+// 90-05: award proposal (ranking, justification blocks, proposal + contract LV as PDF drafts).
+import VergabevorschlagDialog from "./VergabevorschlagDialog";
+// 90-06: fill a blank VHB form (user's own folder) as a draft, with a mandatory check step.
+import VhbFormularDialog from "./VhbFormularDialog";
 import { eur, eur0, num, gp, bidUnitPrice, bidTotal, BID_STATUS, toCsv, downloadCsv } from "./avaUtils";
 import { benchmarkFor, korridorText } from "@ava/lib/priceReference";
 
@@ -29,11 +39,16 @@ const NoBenchmarkBadge = ({ reason }) => (
 
 // Preisspiegel: compare bids per position, mark the cheapest, award the contract.
 export default function PriceComparison({
-  tender, positions, bids, contacts, onCreateBid, onAward, priceRefs = [],
+  tender, positions, bids, contacts, onCreateBid, onUpdateBid, onAward, priceRefs = [], projekt = null, onUpdateTender,
 }) {
+  const { t } = useI18n();
+  const [showVergabe, setShowVergabe] = useState(false);
+  const [showVhb, setShowVhb] = useState(false);
   const [showBid, setShowBid] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   // Doppel-Submit-Schutz (HI-03): Button während laufendem await deaktivieren.
   const [busy, setBusy] = useState(false);
+  const [pruefBidId, setPruefBidId] = useState(/** @type {string|null} */ (null));
 
   const tps = useMemo(
     () => positions
@@ -51,7 +66,14 @@ export default function PriceComparison({
     minByPos[p.id] = prices.length ? Math.min(...prices) : null;
   }
   const totals = tenderBids.map((b) => ({ bid: b, total: bidTotal(b, tps) }));
-  const minTotal = totals.length ? Math.min(...totals.map((t) => t.total)) : null;
+  // 90-04: live check of every bid — marks cells and shows whether a stored Prüfvermerk is still valid.
+  const pruefung = Object.fromEntries(tenderBids.map((b) => {
+    const erg = angebotPruefen({ bid: b, positionen: tps, andere: tenderBids });
+    return [b.id, { erg, status: pruefStatus(b, erg), codes: Object.fromEntries(erg.zeilen.map((z) => [z.position_id, z.codes])) }];
+  }));
+  // 90-04: only COMPLETE offers compete for "cheapest" — an offer with missing prices is cheap by omission.
+  const vollstaendige = totals.filter((x) => pruefung[x.bid.id]?.erg.vollstaendig);
+  const minTotal = vollstaendige.length ? Math.min(...vollstaendige.map((x) => x.total)) : null;
 
   // Phase 28: Marktkontext Losebene — bewusst getrennt vom Preisspiegel,
   // damit Lossummen nie als Einheitspreise gelesen werden.
@@ -68,11 +90,13 @@ export default function PriceComparison({
   const [contactId, setContactId] = useState("");
   const [prices, setPrices] = useState({});
   const [note, setNote] = useState("");
+  const [summeBieter, setSummeBieter] = useState("");
 
   const openBid = () => {
     setContactId(invited[0]?.id || others[0]?.id || "");
     setPrices(Object.fromEntries(tps.map((p) => [p.id, ""])));
     setNote("");
+    setSummeBieter("");
     setShowBid(true);
   };
 
@@ -88,6 +112,11 @@ export default function PriceComparison({
     setBusy(true);
     try {
       const c = contacts.find((x) => x.id === contactId);
+      // 90-04 (Befund 90-03): an empty EP field stays MISSING — it used to be written as 0, an invented
+      // zero price that made the bidder cheaper. A typed "0" is a real 0,00 € and stays (flagged by the check).
+      const gefuellt = (v) => String(v ?? "").trim() !== "" && Number.isFinite(Number(v));
+      const lineItems = tps.filter((p) => gefuellt(prices[p.id])).map((p) => ({ position_id: p.id, unit_price: Number(prices[p.id]) }));
+      const fehlend = tps.length - lineItems.length;
       await onCreateBid({
       tender_id: tender.id,
       project_id: tender.project_id,
@@ -95,8 +124,10 @@ export default function PriceComparison({
       bidder_name: c?.company || c?.name || "Bieter",
       submitted_date: new Date().toISOString(),
       status: "submitted",
-      note,
-        line_items: tps.map((p) => ({ position_id: p.id, unit_price: Number(prices[p.id]) || 0 })),
+      note: [note.trim(), fehlend ? `${fehlend} Position(en) ohne Preis` : ""].filter(Boolean).join(" · "),
+      // The bidder's own total from the offer letter (optional) — the check compares it with the recomputed sum.
+      angebotssumme_bieter: gefuellt(summeBieter) ? Number(summeBieter) : null,
+        line_items: lineItems,
       });
       setShowBid(false);
     } finally {
@@ -132,6 +163,15 @@ export default function PriceComparison({
         <div className="flex gap-2">
           <Button variant="outline" onClick={exportCsv} disabled={!tenderBids.length}>
             <Download className="w-4 h-4 mr-2" /> Export
+          </Button>
+          <Button variant="outline" onClick={() => setShowImport(true)} disabled={!tps.length} data-testid="pv-gaeb-import">
+            <FileUp className="w-4 h-4 mr-2" /> GAEB-Angebot importieren
+          </Button>
+          <Button variant="outline" onClick={() => setShowVergabe(true)} disabled={!tenderBids.length || !onUpdateTender} data-testid="pv-vergabe">
+            <FileText className="w-4 h-4 mr-2" /> {t("Vergabevorschlag")}
+          </Button>
+          <Button variant="outline" onClick={() => setShowVhb(true)} disabled={!onUpdateTender} data-testid="pv-vhb">
+            <FileText className="w-4 h-4 mr-2" /> {t("VHB-Formular")}
           </Button>
           <Button onClick={openBid} className="bg-gradient-to-r from-emerald-600 to-teal-600">
             <Plus className="w-4 h-4 mr-2" /> Angebot erfassen
@@ -177,6 +217,7 @@ export default function PriceComparison({
                   <th key={b.id} className="py-2 px-3 text-right">
                     <div className="font-medium text-slate-700">{b.bidder_name}</div>
                     <Badge className={`${(BID_STATUS[b.status] || {}).color} text-[10px]`}>{(BID_STATUS[b.status] || {}).label}</Badge>
+                    <PruefKnopf pr={pruefung[b.id]} t={t} onClick={() => setPruefBidId(b.id)} />
                   </th>
                 ))}
               </tr>
@@ -194,9 +235,13 @@ export default function PriceComparison({
                   {tenderBids.map((b) => {
                     const up = bidUnitPrice(b, p.id);
                     const isMin = up != null && minByPos[p.id] != null && up === minByPos[p.id] && tenderBids.length > 1;
+                    const codes = pruefung[b.id]?.codes[p.id] || [];
+                    // 0,00 €, arithmetic findings and outliers get a ring; a missing price shows "—" in red.
+                    const auffaellig = codes.some((c) => c !== "ohne_preis");
                     return (
-                      <td key={b.id} className={`py-2 px-3 text-right tabular-nums ${isMin ? "bg-emerald-50 font-semibold text-emerald-700" : ""}`}>
-                        {up != null ? eur(up) : "—"}
+                      <td key={b.id} title={codes.length ? codes.join(", ") : undefined}
+                        className={`py-2 px-3 text-right tabular-nums ${isMin ? "bg-emerald-50 font-semibold text-emerald-700" : ""} ${auffaellig ? "ring-1 ring-inset ring-amber-300" : ""}`}>
+                        {up != null ? eur(up) : <span className="text-rose-600">—</span>}
                       </td>
                     );
                   })}
@@ -208,10 +253,15 @@ export default function PriceComparison({
                 <td className="py-2 px-3" colSpan={3}>Angebotssumme (netto)</td>
                 <td className="py-2 px-3 text-right tabular-nums text-slate-500">{eur0(estimateTotal)}</td>
                 {totals.map(({ bid, total }) => {
-                  const isMin = total === minTotal && totals.length > 1;
+                  const isMin = total === minTotal && totals.length > 1 && !!pruefung[bid.id]?.erg.vollstaendig;
                   return (
                     <td key={bid.id} className={`py-2 px-3 text-right tabular-nums ${isMin ? "text-emerald-700" : ""}`}>
                       {isMin && <TrendingDown className="inline w-3.5 h-3.5 mr-1" />}{eur0(total)}
+                      {!pruefung[bid.id]?.erg.vollstaendig && (
+                        <div className="text-[10px] font-normal text-rose-600" data-testid="pv-unvollstaendig">
+                          {pruefung[bid.id]?.erg.zaehler.ohne_preis} {t("ohne Preis")}
+                        </div>
+                      )}
                     </td>
                   );
                 })}
@@ -234,6 +284,25 @@ export default function PriceComparison({
           </table>
         </CardContent>
       </Card>
+
+      {showImport && (
+        <AngebotImportDialog tender={tender} tps={tps} contacts={contacts} onCreateBid={onCreateBid} onClose={() => setShowImport(false)} />
+      )}
+
+      {showVhb && (
+        <VhbFormularDialog tender={tender} bids={tenderBids} contacts={contacts} projekt={projekt}
+          onUpdateTender={onUpdateTender} onClose={() => setShowVhb(false)} />
+      )}
+
+      {showVergabe && (
+        <VergabevorschlagDialog tender={tender} tps={tps} bids={tenderBids} projekt={projekt}
+          onUpdateTender={onUpdateTender} onClose={() => setShowVergabe(false)} />
+      )}
+
+      {pruefBidId && tenderBids.some((b) => b.id === pruefBidId) && (
+        <AngebotPruefungDialog tender={tender} bid={tenderBids.find((b) => b.id === pruefBidId)} tps={tps} andere={tenderBids}
+          onUpdateBid={onUpdateBid} onClose={() => setPruefBidId(null)} />
+      )}
 
       {showBid && (
         <FormModal title="Angebot erfassen" onClose={() => setShowBid(false)}>
@@ -269,6 +338,11 @@ export default function PriceComparison({
               <Label className="text-xs">Bemerkung</Label>
               <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="z.B. Nachlass, Lieferzeit…" />
             </div>
+            <div>
+              <Label className="text-xs">{t("Angebotssumme laut Bieter (netto, optional)")}</Label>
+              <Input type="number" step="any" value={summeBieter} onChange={(e) => setSummeBieter(e.target.value)} data-testid="pv-summe-bieter" />
+              <div className="mt-1 text-[11px] text-slate-400">{t("Leere EP-Felder bleiben leer (kein Preis) — sie werden nicht als 0 gespeichert.")}</div>
+            </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setShowBid(false)}>Abbrechen</Button>
               <Button type="submit" disabled={!contactId || busy} className="bg-gradient-to-r from-emerald-600 to-teal-600">{busy ? "Speichern…" : "Angebot speichern"}</Button>
@@ -277,5 +351,23 @@ export default function PriceComparison({
         </FormModal>
       )}
     </div>
+  );
+}
+
+/**
+ * 90-04: "Prüfen" button in a bid's column header with the state of its Prüfvermerk
+ * (none / current / outdated) and the finding count of the live check.
+ * @param {{pr: {erg: ReturnType<typeof angebotPruefen>, status: "keine"|"aktuell"|"veraltet"}|undefined, t: (k: string) => string, onClick: () => void}} props
+ */
+function PruefKnopf({ pr, t, onClick }) {
+  if (!pr) return null;
+  const { erg, status } = pr;
+  const farbe = status === "aktuell" ? (erg.befunde ? "text-rose-700" : "text-emerald-700") : status === "veraltet" ? "text-amber-700" : "text-slate-500";
+  const text = status === "aktuell" ? t("geprüft") : status === "veraltet" ? t("Prüfung veraltet") : t("prüfen");
+  return (
+    <button type="button" onClick={onClick} className={`mt-1 flex w-full items-center justify-end gap-1 text-[10px] hover:underline ${farbe}`}
+      data-testid="pv-pruefen" data-status={status} data-befunde={erg.befunde}>
+      <ClipboardCheck className="h-3 w-3" /> {text}{erg.befunde ? ` · ${erg.befunde} ${t("Befund(e)")}` : ""}
+    </button>
   );
 }

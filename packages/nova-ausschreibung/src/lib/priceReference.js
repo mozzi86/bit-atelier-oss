@@ -140,6 +140,7 @@ export function parseCsv(text) {
 // --- TED-Search-API v3 ---------------------------------------------------------
 // Query-Body für POST https://api.ted.europa.eu/v3/notices/search (kein Key).
 // Limits der API: limit ≤ 250, page×limit ≤ 15.000.
+/** @param {{year?: number|string, page?: number, limit?: number}} [q] */
 export function buildTedQuery({ year, page = 1, limit = 250 } = {}) {
   const y = Number(year) || new Date().getFullYear();
   return {
@@ -195,6 +196,7 @@ export function parseTedResponse(json, year) {
 // placeOfPerformance.csv (NUTS) × optional receivedSubmissions.csv (Bieterzahl).
 // Höchste noticeVersion je noticeIdentifier gewinnt; Dedupe über
 // (noticeIdentifier, tenderId); nur CPV 45*; nicht-EUR (falls Spalte gefüllt) raus.
+/** @param {{tenderCsv?: string, classificationCsv?: string, placeCsv?: string, submissionsCsv?: string, year?: number|string}} [o] the DÖE CSV texts and the year */
 export function parseDoeeCsv({ tenderCsv, classificationCsv, placeCsv, submissionsCsv, year } = {}) {
   const tenders = parseCsv(tenderCsv || "").rows;
   const classif = parseCsv(classificationCsv || "").rows;
@@ -321,6 +323,7 @@ export function aggregateLots(lots, { source = "demo", fetched_at = null } = {})
 // --- Benchmark-Lookup ---------------------------------------------------------------
 // trade → CPV-Gruppe; Suche exakt (group, region, year), dann region → "DE",
 // dann jüngstes verfügbares Jahr der Gruppe (beliebige Region). Wirft nie.
+/** @param {any[]} cells @param {{trade?: string, region?: string, year?: number|string}} [o] */
 export function benchmarkFor(cells, { trade, region, year } = {}) {
   const list = Array.isArray(cells) ? cells : [];
   const cpv = TRADE_CPV[trade] || "45000000"; // unbekanntes Gewerk → 4500

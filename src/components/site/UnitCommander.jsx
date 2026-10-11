@@ -16,7 +16,7 @@ const STATUS_BADGE = {
   safety_stop: "bg-rose-100 text-rose-800",
 };
 
-export default function UnitCommander({ units, selectedId, onSelect, sim, commandMode, setCommandMode, can = { command: true }, role }) {
+export default function UnitCommander({ units, selectedId, onSelect, sim, commandMode, setCommandMode, can = /** @type {{command: boolean, zones?: boolean}} */ ({ command: true }), role }) {
   const unit = units.find((u) => u.id === selectedId);
   const lockTitle = !can.command
     ? `Rolle ${role || "Beobachter"}: nur Lesezugriff`

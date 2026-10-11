@@ -19,9 +19,11 @@ import { useBriefkopf } from "@core/lib/useBriefkopf";
 import { nachtraegeDesProjekts } from "@core/lib/nachtraege";
 import { toast } from "sonner";
 import {
-  FileText, Download, FileDown, Upload, Trash2, FileUp, Ruler, Loader2, Building2, ArrowRight,
+  FileText, Download, FileDown, Upload, Trash2, FileUp, Ruler, Loader2, Building2, ArrowRight, ClipboardList,
 } from "lucide-react";
 import ReportDocument from "@/components/reports/ReportDocument";
+// 90-08: stored, numbered minutes with carry-forward of open tasks.
+import ProtokollBuch from "@/components/reports/ProtokollBuch";
 import EmptyState from "@core/components/common/EmptyState";
 import { DRAWING_TYPES } from "@/components/reports/Drawings";
 import { exportElementToPdf, fileToDataUrl, fmtBytes } from "@core/lib/pdf";
@@ -174,6 +176,7 @@ export default function Reports() {
             <TabsTrigger value="report"><FileText className="w-4 h-4 mr-2" /> Bericht</TabsTrigger>
             <TabsTrigger value="drawings"><Ruler className="w-4 h-4 mr-2" /> Zeichnungen</TabsTrigger>
             <TabsTrigger value="docs"><FileUp className="w-4 h-4 mr-2" /> Dokumente</TabsTrigger>
+            <TabsTrigger value="protokolle"><ClipboardList className="w-4 h-4 mr-2" /> {t("Protokolle")}</TabsTrigger>
           </TabsList>
 
           {/* Report */}
@@ -291,6 +294,10 @@ export default function Reports() {
           </TabsContent>
 
           {/* Documents */}
+          <TabsContent value="protokolle" className="pt-4">
+            <ProtokollBuch />
+          </TabsContent>
+
           <TabsContent value="docs" className="pt-4">
             <Card className="mb-4 border-2 border-dashed border-slate-200 shadow-none rounded-xl">
               <CardContent className="p-6 text-center">

@@ -2,7 +2,7 @@
   "name": "bit-atelier",
   "private": true,
   "license": "MIT",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "type": "module",
   "engines": {
     "node": ">=22.9"
@@ -103,8 +103,8 @@
     "@eslint/js": "^9.19.0",
     "@playwright/test": "^1.60.0",
     "@types/node": "^22.13.5",
-    "@types/react": "^18.2.66",
-    "@types/react-dom": "^18.2.22",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "baseline-browser-mapping": "^2.8.32",

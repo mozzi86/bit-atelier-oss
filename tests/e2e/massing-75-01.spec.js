@@ -6,7 +6,7 @@
 // Der Massing-Reiter braucht keinen Standort: ohne Parzelle gilt das
 // 70 × 50-m-Zeichenfeld [ASSUMED] mit dem Standard-Footprint.
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/base.js";
 
 // GL Driver Message: headless-Chromium meldet GPU-Stalls der three.js-Ansicht — Treiber, nicht App.
 const ERLAUBT_OFFLINE = /(ERR_|net::|Failed to fetch|timeout|aborted|404|503|tiles\.|openfreemap|elevation-tiles|Image could not be loaded|AbortError|GL Driver Message|WebGL)/i;

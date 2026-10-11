@@ -858,6 +858,8 @@ describe("61-03 — tote Zwischenräume (D-P61-05)", () => {
     const z = checks.find((c) => c.key === "zwischenraeume");
     assert.equal(z.status, "offen");
     assert.ok(/10/.test(z.detail));
+    // B-87-13: the workshop shows the number from `rest_m2`, not from the text.
+    assert.ok(Math.abs(z.rest_m2 - 10) < 1e-9, `rest_m2 ${z.rest_m2}`);
   });
 });
 
@@ -986,7 +988,10 @@ describe("61-04 — raumSlicing (Guillotine-Zerlegung des WE-Bands)", () => {
       assert.equal(wes.size, 1);
     }
     // weListe bleibt erhalten (Slicing ändert nichts an WE-Liste/Grenzen):
-    assert.equal(r.weListe.length, 2);
+    // 84-09: plus one gable unit at each corridor end (20 m − 2 × 6 m = 8 m corridor run).
+    // 85 (Band füllen): the type repeats along the side bands, plus two gable units.
+    assert.ok(r.weListe.length >= 4, String(r.weListe.length));
+    assert.equal(r.weListe.filter((w) => w.kopf).length, 2, "zwei Kopfwohnungen");
     // Flächeninvariante: Σ Räume + Flur + Rest = BBox.
     const gesamt = 20 * 14;
     const summe = r.zonen.reduce((s, z) => s + polyAreaLocal(z.points), 0);
@@ -1048,7 +1053,9 @@ describe("tesselierung.js — 75-07 Architekturregeln", () => {
     const r = tesseliere({ footprintM: FP40, storeys: 1, typ: "spaenner", einheiten: TYPEN, raumzonen: true });
     const raeume = r.zonen.filter((z) => z.art);
     assert.ok(raeume.length > 20);
-    const innenAnFassade = raeume.filter((z) => (z.art === "sanitaer" || z.art === "abstell") && fassadenAbstand(z) < 0.01);
+    // 84-02 (pinwheel): baths never at a facade; store rooms only at the strip end
+    // (84-06), which may lie on the arm's second (end) facade [ASSUMED acceptable].
+    const innenAnFassade = raeume.filter((z) => (z.art === "sanitaer" || (z.art === "abstell" && !/^Abstellraum/.test(z.name))) && fassadenAbstand(z) < 0.01);
     assert.equal(innenAnFassade.length, 0, `Bäder/Abstell an der Fassade: ${innenAnFassade.map((z) => z.name).join(", ")}`);
     const aufenthalt = raeume.filter((z) => z.art === "aufenthalt");
     assert.equal(aufenthalt.filter((z) => fassadenAbstand(z) < 0.01).length, aufenthalt.length, "jeder Aufenthaltsraum an einer Fassade");
@@ -1059,11 +1066,17 @@ describe("tesselierung.js — 75-07 Architekturregeln", () => {
   it("regeln.mindestbreiten: 40 × 26 Mittelflur meldet zu schmale Räume als Hinweis mit Ursache", () => {
     const ohne = tesseliere({ footprintM: FP40, storeys: 1, typ: "mittelflur", einheiten: TYPEN, raumzonen: true });
     const mit = tesseliere({ footprintM: FP40, storeys: 1, typ: "mittelflur", einheiten: TYPEN, raumzonen: true, regeln: { mindestbreiten: true } });
-    assert.equal(ohne.hinweise.length, 0);
+    // 84-01: the apartment layout (75-14) is always on — its merge hints [75-14] are in
+    // both results; the 75-07 rule adds nothing of its own beyond them. 85-02: so is the
+    // deep-band hint (FP40 is 26 m deep → 12,1 m bands, window row cut).
+    assert.equal(ohne.hinweise.filter((s) => !/\[(75-14|85-02)\]/.test(s)).length, 0);
     const h = mit.hinweise.filter((s) => /Mindestbreite/.test(s));
-    assert.ok(h.length >= 1, "mindestens ein Mindestbreiten-Hinweis");
-    assert.match(h[0], /Bandtiefe 12,10 m/);
-    assert.match(h[0], /Vorschlag/);
+    // 85 (Band füllen): units are no longer squeezed below their room minimum widths,
+    // so the rule often has nothing left to report; when it does, the hint names the cause.
+    for (const x of h) {
+      assert.match(x, /Bandtiefe 12,10 m/);
+      assert.match(x, /verbreitern|Vorschlag/);
+    }
     assert.equal(mit.raumWarns.filter((s) => /Mindestbreite/.test(s)).length, 0, "Hinweise wandern aus raumWarns nach hinweise");
     assert.equal(MINDESTBREITEN.aufenthalt, 3.6);
   });
@@ -1087,10 +1100,12 @@ describe("tesselierung.js — 75-07 Architekturregeln", () => {
 
   it("regeln.himmelsrichtung + nordwinkel: orientierung je WE, Hinweis bei Wohnen nach Norden", () => {
     const r0 = tesseliere({ footprintM: FP40, storeys: 1, typ: "mittelflur", einheiten: TYPEN, raumzonen: true, regeln: { himmelsrichtung: true }, nordwinkel: 0 });
-    assert.deepEqual([...new Set(r0.weListe.map((w) => w.orientierung))].sort(), ["N", "S"]);
+    // 84-09: side bands face N/S; the gable units face the gables (O/W).
+    assert.deepEqual([...new Set(r0.weListe.filter((w) => !w.kopf).map((w) => w.orientierung))].sort(), ["N", "S"]);
+    assert.deepEqual([...new Set(r0.weListe.filter((w) => w.kopf).map((w) => w.orientierung))].sort(), ["O", "W"]);
     assert.ok(r0.hinweise.some((h) => /Wohnen.*nach N/.test(h)), "Wohnräume im Nordband werden gemeldet");
     const r90 = tesseliere({ footprintM: FP40, storeys: 1, typ: "mittelflur", einheiten: TYPEN, raumzonen: true, regeln: { himmelsrichtung: true }, nordwinkel: 90 });
-    assert.deepEqual([...new Set(r90.weListe.map((w) => w.orientierung))].sort(), ["O", "W"]);
+    assert.deepEqual([...new Set(r90.weListe.filter((w) => !w.kopf).map((w) => w.orientierung))].sort(), ["O", "W"]);
     assert.equal(orientierungFuerBand({ achse: "x", z0: -13, zKante: -13 }, 0).label, "N");
     assert.equal(orientierungFuerBand({ achse: "x", z0: -13, zKante: 13 }, 0).label, "S");
     assert.equal(orientierungFuerBand({ achse: "z", x0: -20, zKante: 20 }, 0).label, "O");

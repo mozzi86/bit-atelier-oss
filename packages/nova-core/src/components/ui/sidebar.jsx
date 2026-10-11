@@ -55,7 +55,14 @@ export function SidebarProvider({ children }) {
   );
 }
 
+/**
+ * @type {React.ForwardRefExoticComponent<React.HTMLAttributes<HTMLElement> & React.RefAttributes<HTMLElement>>}
+ */
 export const Sidebar = React.forwardRef(
+  /**
+   * @param {React.HTMLAttributes<HTMLElement>} props
+   * @param {React.ForwardedRef<HTMLElement>} ref
+   */
   ({ className, children, style, ...props }, ref) => {
     const { isMobile, openMobile, setOpenMobile, collapsed, triggerRef } = useSidebar();
     const eigenerRef = React.useRef(/** @type {HTMLElement|null} */ (null));
@@ -135,6 +142,7 @@ export const Sidebar = React.forwardRef(
 );
 Sidebar.displayName = "Sidebar";
 
+/** @param {React.ButtonHTMLAttributes<HTMLButtonElement>} props */
 export function SidebarTrigger({ className, ...props }) {
   const { toggle, isMobile, openMobile, collapsed, triggerRef } = useSidebar();
   const { t } = useI18n();
@@ -154,17 +162,41 @@ export function SidebarTrigger({ className, ...props }) {
   );
 }
 
-export const SidebarHeader = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.HTMLAttributes<HTMLDivElement> & React.RefAttributes<HTMLDivElement>>}
+ */
+export const SidebarHeader = React.forwardRef(
+  /**
+   * @param {React.HTMLAttributes<HTMLDivElement>} props
+   * @param {React.ForwardedRef<HTMLDivElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <div ref={ref} className={cn("flex flex-col gap-2", className)} {...props} />
 ));
 SidebarHeader.displayName = "SidebarHeader";
 
-export const SidebarFooter = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.HTMLAttributes<HTMLDivElement> & React.RefAttributes<HTMLDivElement>>}
+ */
+export const SidebarFooter = React.forwardRef(
+  /**
+   * @param {React.HTMLAttributes<HTMLDivElement>} props
+   * @param {React.ForwardedRef<HTMLDivElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <div ref={ref} className={cn("flex flex-col gap-2 mt-auto", className)} {...props} />
 ));
 SidebarFooter.displayName = "SidebarFooter";
 
-export const SidebarContent = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.HTMLAttributes<HTMLDivElement> & React.RefAttributes<HTMLDivElement>>}
+ */
+export const SidebarContent = React.forwardRef(
+  /**
+   * @param {React.HTMLAttributes<HTMLDivElement>} props
+   * @param {React.ForwardedRef<HTMLDivElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <div
     ref={ref}
     className={cn("flex min-h-0 flex-1 flex-col gap-2 overflow-auto", className)}
@@ -173,32 +205,79 @@ export const SidebarContent = React.forwardRef(({ className, ...props }, ref) =>
 ));
 SidebarContent.displayName = "SidebarContent";
 
-export const SidebarGroup = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.HTMLAttributes<HTMLDivElement> & React.RefAttributes<HTMLDivElement>>}
+ */
+export const SidebarGroup = React.forwardRef(
+  /**
+   * @param {React.HTMLAttributes<HTMLDivElement>} props
+   * @param {React.ForwardedRef<HTMLDivElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <div ref={ref} className={cn("relative flex w-full min-w-0 flex-col", className)} {...props} />
 ));
 SidebarGroup.displayName = "SidebarGroup";
 
-export const SidebarGroupLabel = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.HTMLAttributes<HTMLDivElement> & React.RefAttributes<HTMLDivElement>>}
+ */
+export const SidebarGroupLabel = React.forwardRef(
+  /**
+   * @param {React.HTMLAttributes<HTMLDivElement>} props
+   * @param {React.ForwardedRef<HTMLDivElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <div ref={ref} className={cn("flex shrink-0 items-center", className)} {...props} />
 ));
 SidebarGroupLabel.displayName = "SidebarGroupLabel";
 
-export const SidebarGroupContent = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.HTMLAttributes<HTMLDivElement> & React.RefAttributes<HTMLDivElement>>}
+ */
+export const SidebarGroupContent = React.forwardRef(
+  /**
+   * @param {React.HTMLAttributes<HTMLDivElement>} props
+   * @param {React.ForwardedRef<HTMLDivElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <div ref={ref} className={cn("w-full text-sm", className)} {...props} />
 ));
 SidebarGroupContent.displayName = "SidebarGroupContent";
 
-export const SidebarMenu = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.HTMLAttributes<HTMLUListElement> & React.RefAttributes<HTMLUListElement>>}
+ */
+export const SidebarMenu = React.forwardRef(
+  /**
+   * @param {React.HTMLAttributes<HTMLUListElement>} props
+   * @param {React.ForwardedRef<HTMLUListElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <ul ref={ref} className={cn("flex w-full min-w-0 flex-col gap-1", className)} {...props} />
 ));
 SidebarMenu.displayName = "SidebarMenu";
 
-export const SidebarMenuItem = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.LiHTMLAttributes<HTMLLIElement> & React.RefAttributes<HTMLLIElement>>}
+ */
+export const SidebarMenuItem = React.forwardRef(
+  /**
+   * @param {React.LiHTMLAttributes<HTMLLIElement>} props
+   * @param {React.ForwardedRef<HTMLLIElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <li ref={ref} className={cn("group/menu-item relative", className)} {...props} />
 ));
 SidebarMenuItem.displayName = "SidebarMenuItem";
 
+/**
+ * @type {React.ForwardRefExoticComponent<React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean } & React.RefAttributes<HTMLButtonElement>>}
+ */
 export const SidebarMenuButton = React.forwardRef(
+  /**
+   * @param {React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean }} props
+   * @param {React.ForwardedRef<HTMLButtonElement>} ref
+   */
   ({ className, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     const { isMobile, setOpenMobile } = useSidebar();

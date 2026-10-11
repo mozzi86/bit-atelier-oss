@@ -41,7 +41,10 @@ jobs:
           cp -r dist staging/BIT-Atelier/dist
           chmod +x staging/BIT-Atelier/start.sh
           (cd staging && zip -qr ../BIT-Atelier.zip BIT-Atelier)
-          ls -l BIT-Atelier.zip
+          # 92-01/02: the in-app updater and the installers refuse a zip without this checksum file.
+          sha256sum BIT-Atelier.zip > BIT-Atelier.zip.sha256
+          cp installer/BIT-Atelier-Installer.cmd installer/install.sh .
+          ls -l BIT-Atelier.zip BIT-Atelier.zip.sha256 BIT-Atelier-Installer.cmd install.sh
 
       - name: Publish the release
         env:
@@ -49,6 +52,6 @@ jobs:
         run: |
           # A re-pushed tag replaces its release (and the old zip) instead of failing.
           gh release delete "$GITHUB_REF_NAME" --yes 2>/dev/null || true
-          gh release create "$GITHUB_REF_NAME" BIT-Atelier.zip \
+          gh release create "$GITHUB_REF_NAME" BIT-Atelier.zip BIT-Atelier.zip.sha256 BIT-Atelier-Installer.cmd install.sh \
             --title "BIT-Atelier $GITHUB_REF_NAME" \
-            --notes "Download BIT-Atelier.zip, unzip it and start start-windows.cmd (Windows) or ./start.sh (macOS/Linux). Requires Node.js 22. Use at your own risk — see LICENSE."
+            --notes "Windows: download BIT-Atelier-Installer.cmd and double-click it (installs to your user folder, creates shortcuts, no admin rights). macOS/Linux: curl -fsSL https://github.com/mozzi86/bit-atelier-oss/releases/latest/download/install.sh | sh. Manual: unzip BIT-Atelier.zip and start start-windows.cmd or ./start.sh. Requires Node.js 22.9+. An installed app shows new versions and updates itself from inside the app. Use at your own risk — see LICENSE."

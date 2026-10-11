@@ -151,6 +151,7 @@ export const DACH_ZUSCHLAG = 1.2;
 export const FREISTELLUNG_FWG = 0.10;
 export const FREISTELLUNG_FWG_NORD = 0.15;
 
+/** @param {{proRaum?: Map<string, any>, storeys?: number}} [o] proRaum: roomKey → {zone, fenster} */
 export function screeningJeGeschoss({ proRaum, storeys = 1 } = {}) {
   const raeume = [...(proRaum?.values() || [])].map(({ zone, fenster }) => {
     const flaeche = polygonAreaXZ(zone.points);
@@ -282,6 +283,7 @@ export function sonneneintrag(raum, {
 // Das Kennwert-Ranking ist dafür KEIN Majorant (Nordfenster: Gewicht 0,3 im
 // Kennwert, aber voll in S_vorh) — es bleibt reine Anzeige-Reihenfolge.
 // Freigestellte Räume (f_WG unter Grenze) sind pass ohne Rechnung.
+/** @param {{geschosse?: Map<number, any>, ohneRaum?: any[], optionen?: Record<string, any>}} [o] */
 export function raumklimaChecks({ geschosse, ohneRaum = [], optionen = {} } = {}) {
   const items = [];
   if (!geschosse || geschosse.size === 0) {
@@ -297,6 +299,7 @@ export function raumklimaChecks({ geschosse, ohneRaum = [], optionen = {} } = {}
     let kritisch = raeume[0];
     let status = "offen";
     let detail = "Keine Fenster zugeordnet.";
+    /** @type {any} */
     let din = null;
     raeume.filter((r) => r.fenster.length && !r.nachweisFrei).forEach((r) => {
       const d = sonneneintrag(r, optionen);

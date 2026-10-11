@@ -54,7 +54,7 @@ const zellwert = (v) => {
 };
 
 export default function KatalogEditor({
-  kataloge = {},
+  kataloge = /** @type {Record<string, any[]>} */ ({}),
   projektId = null,
   onSave,
   onDelete,

@@ -28,6 +28,7 @@ import { useFachlayer } from "@designer/lib/useFachlayer";
 import { WERKSTATT_DEFAULT, einheitenAnreichern } from "@designer/lib/werkstattDefaults";
 // 75-13: escape-route paths (red line) come from the SAME solver as the workshop.
 import { tesseliere, RETTUNGSWEG_INNEN_NAEHERUNG } from "@designer/lib/tesselierung";
+import ZonenTueren from "./ZonenTueren";
 import { nordwinkelFuer } from "@designer/lib/nordwinkel";
 import { useI18n } from "@core/lib/i18n";
 // 75-08 Task 5 (MSB-1): the app's ONE solar formula — the local copy lived
@@ -36,6 +37,7 @@ import { useI18n } from "@core/lib/i18n";
 import { sunPosition, SONNEN_PRESETS, planAzimut } from "@designer/lib/sonnenstand";
 
 // 75-16: compact tile (p-2, text-base) for the fixed 280–320 px key-figure column.
+/** @param {{icon: any, label: string, value: any, sub?: any, tint?: string, testid?: string}} props */
 const KPI = ({ icon: Icon, label, value, sub, tint, testid }) => (
   <div className="rounded-lg bg-slate-50 px-2 py-1.5 min-w-0" data-testid={testid}>
     <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-0.5"><Icon className={`w-3 h-3 shrink-0 ${tint}`} /> <span className="truncate">{label}</span></div>
@@ -55,7 +57,7 @@ const MONTHS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", 
 // list is never reassigned or mutated — not from immutability.
 const KEINE = [];
 
-// Spacio-style massing studio: drag the footprint on the site, tune storeys,
+// Massing studio: drag the footprint on the site, tune storeys,
 // see GRZ/GFZ/BGF and the shadow update live, plus a 3D massing preview.
 // `parcel` (optional): site_parcel aus der Baufeld-Planung (Canvas-Pixel) —
 // wird als gestrichelte blaue read-only Referenzlinie im 2D-Plan gezeigt.
@@ -769,7 +771,11 @@ export default function MassingStudio({
       regeln: layer.regeln && typeof layer.regeln === "object" ? layer.regeln : {},
       nordwinkel: Number.isFinite(Number(layer.nordwinkel)) ? Number(layer.nordwinkel) : 0,
       tuerAufschlaege: layer.tuerAufschlaege && typeof layer.tuerAufschlaege === "object" ? layer.tuerAufschlaege : {},
+      // 84-10: level switch per unit (same guard as the workshop — R units are wider).
+      stufeJeWe: layer.stufeJeWe && typeof layer.stufeJeWe === "object" ? layer.stufeJeWe : {},
       okf_m: (Math.max(1, Math.round(store.storeys || 1)) - 1) * (store.storeyHeight || 3),
+      // 86-05b: bar minimum of the applied proposal (same guard as the workshop; default 120).
+      riegelMinFlaeche_m2: Number(layer.riegelMinFlaeche_m2) > 0 ? Number(layer.riegelMinFlaeche_m2) : WERKSTATT_DEFAULT.riegelMinFlaeche_m2,
     });
     const warnJeWe = new Map((r.rettungswegWarnungen || []).map((w) => [w.we, w]));
     // any: the escape-route fields (rettungsweg_*) are only present while the rule is on.
@@ -1239,6 +1245,13 @@ export default function MassingStudio({
                   </g>
                 );
               })}
+              {/* 84-05: door openings of the ground floor at 1:200 (opening only, like the
+                  workshop; leaf and swing belong to the 1:50 focus). The zones of all storeys
+                  lie on top of each other here, so only level 0 is drawn. */}
+              {lod.zonen && (
+                <ZonenTueren zonen={zones.filter((z) => Math.round(Number(z?.level) || 0) === 0)}
+                  X={(x) => mx(cxM + x)} Z={(z) => my(cyM + z)} SCALE={scale} px={px} nurOeffnung prefix="ms" />
+              )}
               {/* 75-13: escape routes as thin red lines (toggle "Rettungsweg zeigen"), warn = dashed + label. */}
               {lod.zonen && rettungswegAktiv && (
                 <g data-rettungswege={rettungswege.length} pointerEvents="none">

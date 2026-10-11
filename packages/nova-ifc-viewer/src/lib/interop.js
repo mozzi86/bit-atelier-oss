@@ -85,7 +85,7 @@ export function downloadText(filename, text, mime = "text/plain") {
 export function readJsonFile(file) {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
-    r.onload = () => { try { resolve(JSON.parse(r.result)); } catch (e) { reject(e); } };
+    r.onload = () => { try { resolve(JSON.parse(/** @type {string} */ (r.result))); } catch (e) { reject(e); } };
     r.onerror = reject;
     r.readAsText(file);
   });

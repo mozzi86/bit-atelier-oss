@@ -12,12 +12,31 @@
 //
 // Isomorph: kein window, kein DOMParser, keine Aliase.
 
-/** Status-Schlüssel wie im Orakel: `e.status || '?'` (null/'' → '?'). */
+import { normalisiereStatus } from '../kataloge.js';
+
+/** Status-Schlüssel wie im Orakel: `e.status || '?'` (null/'' → '?'). Raw spelling —
+ *  group keys (`gruppenKey`) and `deckung().je_status` keep it as the data carries it. */
 export function statusKey(el) {
   return el?.status || '?';
 }
 
-/** Bucket-Schlüssel des Vorindex. */
+/**
+ * Status in the comparable form for buckets and selector matching (87-06 / B-87-08,
+ * status axis). The rule editor writes the PIPELINE spelling of the StatusKonvention
+ * ("Neubau", "?"), the classified elements carry the INTERNAL one ("neubau", null) —
+ * both go through `normalisiereStatus`, the one normalisation point (T-33-04), and meet
+ * as 'neubau'; null/''/'?' become '?'. A spelling the convention does not know stays
+ * as it is (it then only matches itself — never silently folded into "unknown").
+ * @param {string|null|undefined} status
+ * @returns {string}
+ */
+export function statusNorm(status) {
+  const raw = status == null ? '' : String(status).trim();
+  if (raw === '' || raw === '?') return '?';
+  return normalisiereStatus(raw) ?? raw;
+}
+
+/** Bucket-Schlüssel des Vorindex (status already normalised by the caller). */
 export function bucketKey(klasse, status) {
   return `${klasse ?? ''}|${status ?? '?'}`;
 }
@@ -32,7 +51,7 @@ export function typNameText(el) {
 export const GRUPPEN_KUERZUNG = 60;
 export function gruppenKey(el) {
   const t = String(el?.typ ?? el?.name ?? '');
-  return `${el?.klasse ?? ''}|${statusKey(el)}|${t.slice(0, GRUPPEN_KUERZUNG)}`;
+  return `${el?.klasse ?? el?.ifc_klasse ?? ''}|${statusKey(el)}|${t.slice(0, GRUPPEN_KUERZUNG)}`;
 }
 
 /**
@@ -77,8 +96,12 @@ export function buildIndex(elemente = []) {
   const statusSet = new Set();
 
   for (const el of alle) {
-    const k = el?.klasse ?? '';
-    const s = statusKey(el);
+    // 87-06 (B-87-08): the AVA feeds classifiedElements / mapToClassifiedElements straight
+    // in — they carry `ifc_klasse`, not `klasse` (zuEngineElemente is called nowhere in the
+    // app). Every class rule hit 0 silently. Read both, like avaFilters.matchElement.
+    const k = el?.klasse ?? el?.ifc_klasse ?? '';
+    // B-87-08 status axis: buckets in the normalised spelling, see statusNorm().
+    const s = statusNorm(statusKey(el));
     klassen.add(k);
     statusSet.add(s);
     const key = bucketKey(k, s);
@@ -94,7 +117,10 @@ export function buildIndex(elemente = []) {
    * Kandidatenmenge für eine (klasse, status)-Kombination.
    * Fehlt eine Achse (null/undefined), wird über sie NICHT eingeschränkt.
    */
-  function kandidaten(klasse, status) {
+  function kandidaten(klasse, statusRoh) {
+    // The rule's status arrives in pipeline spelling ("Neubau") — same normalisation
+    // as the buckets, otherwise a status rule misses its bucket and yields 0 (B-87-08).
+    const status = statusRoh ? statusNorm(statusRoh) : statusRoh;
     if (klasse && status) return buckets.get(bucketKey(klasse, status)) || [];
     if (klasse) {
       const out = [];
@@ -131,6 +157,7 @@ export const OHNE_WERT = '-';
  *          Σ der Histogramm-Werte == count (fehlende Werte unter OHNE_WERT).
  */
 export function gruppiere(elemente = []) {
+  /** @type {Record<string, {count: number, qty: Record<string, number>, material: Record<string, number>, geschosse: Record<string, number>}>} */
   const out = {};
   for (const el of elemente || []) {
     const key = gruppenKey(el);
@@ -164,8 +191,8 @@ export function gruppiere(elemente = []) {
  * Deckung in BEIDE Richtungen — wird in W5 (Plan 33-03) von `deckung.js` genutzt.
  * @param {Array} elemente
  * @param {Set<string>|Array<string>} gedeckteGuids GUIDs, die eine Position trägt
- * @returns {{gruppen_ohne_position: Array, gruppen_teilweise: Array,
- *            elemente_ohne_position: number, je_status: Object}}
+ * @returns {{gruppen_gesamt: number, gruppen_ohne_position: Array, gruppen_teilweise: Array,
+ *            gruppen_voll: number, elemente_ohne_position: number, je_status: Object}}
  */
 export function deckung(elemente = [], gedeckteGuids = []) {
   const cov = gedeckteGuids instanceof Set ? gedeckteGuids : new Set(gedeckteGuids);

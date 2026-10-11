@@ -25,7 +25,7 @@ const CATEGORIES = [
 export default function ARSiteView({ building, onExit }) {
   const mountRef = useRef(null);
   const videoRef = useRef(null);
-  const three = useRef({});           // mutable three.js handles (no re-render)
+  const three = useRef(/** @type {Record<string, any>} */ ({})); // mutable three.js handles (no re-render)
   const toolRef = useRef(null);       // current tool for pointer handler
   const scaleRef = useRef(1);         // current model scale for measure conversion
 
@@ -34,7 +34,7 @@ export default function ARSiteView({ building, onExit }) {
   const [opacity, setOpacity] = useState(0.62);
   const [transform, setTransform] = useState({ rotY: 25, scale: 1, posX: 0, posZ: 0 });
   const [visible, setVisible] = useState(
-    CATEGORIES.reduce((m, c) => ((m[c.key] = c.key !== "fundament"), m), {}),
+    CATEGORIES.reduce((m, c) => ((m[c.key] = c.key !== "fundament"), m), /** @type {Record<string, boolean>} */ ({})),
   );
   const [pitDepth, setPitDepth] = useState(0);   // 0 = aus (kein Schnitt), >0 = Schnitttiefe in m
   const [measurePts, setMeasurePts] = useState([]);
@@ -85,6 +85,7 @@ export default function ARSiteView({ building, onExit }) {
       });
 
     const model = new THREE.Group();
+    /** @type {Record<string, any>} */
     const groups = {};
     CATEGORIES.forEach((c) => { groups[c.key] = new THREE.Group(); model.add(groups[c.key]); });
 

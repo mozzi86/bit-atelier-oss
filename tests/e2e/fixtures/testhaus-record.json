@@ -1,0 +1,313 @@
+{
+  "footprintM": [
+    {
+      "x": -35,
+      "z": -8
+    },
+    {
+      "x": 35,
+      "z": -8
+    },
+    {
+      "x": 35,
+      "z": 8
+    },
+    {
+      "x": -35,
+      "z": 8
+    }
+  ],
+  "storeys": 4,
+  "storeyHeight": 3,
+  "unit": "m",
+  "sketch_layer": {
+    "points": [],
+    "lines": [],
+    "circles": [],
+    "constraints": [],
+    "params": []
+  },
+  "werkstatt_layer": {
+    "typ": "mittelflur",
+    "einheiten": [
+      {
+        "key": "st-2zi",
+        "name": "2-Zimmer-Wohnung",
+        "gruppe": "standard",
+        "nutzung": "wohnen",
+        "zimmer": 2,
+        "flaeche_m2": 55,
+        "min_m2": 45,
+        "max_m2": 65,
+        "balkon": {
+          "anzahl": 1,
+          "m2": 6
+        },
+        "raumartSchall": "wohnen",
+        "raumprogramm": [
+          {
+            "raum": "Wohnen/Essen",
+            "art": "aufenthalt",
+            "min_m2": 18,
+            "max_m2": 28,
+            "fensterpflicht": true
+          },
+          {
+            "raum": "Schlafen",
+            "art": "aufenthalt",
+            "min_m2": 11,
+            "max_m2": 17,
+            "fensterpflicht": true
+          },
+          {
+            "raum": "Küche",
+            "art": "kueche",
+            "min_m2": 6,
+            "max_m2": 10,
+            "fensterpflicht": false
+          },
+          {
+            "raum": "Bad",
+            "art": "sanitaer",
+            "min_m2": 4,
+            "max_m2": 7,
+            "fensterpflicht": false
+          },
+          {
+            "raum": "Abstellraum",
+            "art": "abstell",
+            "min_m2": 2,
+            "max_m2": 4,
+            "fensterpflicht": false
+          },
+          {
+            "raum": "Flur",
+            "art": "flur",
+            "min_m2": 4,
+            "max_m2": 7,
+            "fensterpflicht": false
+          }
+        ]
+      },
+      {
+        "key": "st-3zi",
+        "name": "3-Zimmer-Wohnung",
+        "gruppe": "standard",
+        "nutzung": "wohnen",
+        "zimmer": 3,
+        "flaeche_m2": 75,
+        "min_m2": 65,
+        "max_m2": 85,
+        "balkon": {
+          "anzahl": 1,
+          "m2": 7
+        },
+        "raumartSchall": "wohnen",
+        "raumprogramm": [
+          {
+            "raum": "Wohnen/Essen",
+            "art": "aufenthalt",
+            "min_m2": 22,
+            "max_m2": 32,
+            "fensterpflicht": true
+          },
+          {
+            "raum": "Schlafen",
+            "art": "aufenthalt",
+            "min_m2": 12,
+            "max_m2": 17,
+            "fensterpflicht": true
+          },
+          {
+            "raum": "Kind/Büro",
+            "art": "aufenthalt",
+            "min_m2": 10,
+            "max_m2": 14,
+            "fensterpflicht": true
+          },
+          {
+            "raum": "Küche",
+            "art": "kueche",
+            "min_m2": 7,
+            "max_m2": 11,
+            "fensterpflicht": false
+          },
+          {
+            "raum": "Bad",
+            "art": "sanitaer",
+            "min_m2": 5,
+            "max_m2": 8,
+            "fensterpflicht": false
+          },
+          {
+            "raum": "Abstellraum",
+            "art": "abstell",
+            "min_m2": 2,
+            "max_m2": 4,
+            "fensterpflicht": false
+          },
+          {
+            "raum": "Flur",
+            "art": "flur",
+            "min_m2": 5,
+            "max_m2": 8,
+            "fensterpflicht": false
+          }
+        ]
+      },
+      {
+        "key": "st-4zi",
+        "name": "4-Zimmer-Wohnung",
+        "gruppe": "standard",
+        "nutzung": "wohnen",
+        "zimmer": 4,
+        "flaeche_m2": 97,
+        "min_m2": 85,
+        "max_m2": 110,
+        "balkon": {
+          "anzahl": 1,
+          "m2": 8
+        },
+        "raumartSchall": "wohnen",
+        "raumprogramm": [
+          {
+            "raum": "Wohnen/Essen",
+            "art": "aufenthalt",
+            "min_m2": 25,
+            "max_m2": 35,
+            "fensterpflicht": true
+          },
+          {
+            "raum": "Schlafen",
+            "art": "aufenthalt",
+            "min_m2": 13,
+            "max_m2": 18,
+            "fensterpflicht": true
+          },
+          {
+            "raum": "Kind 1",
+            "art": "aufenthalt",
+            "min_m2": 10,
+            "max_m2": 14,
+            "fensterpflicht": true
+          },
+          {
+            "raum": "Kind 2/Büro",
+            "art": "aufenthalt",
+            "min_m2": 9,
+            "max_m2": 13,
+            "fensterpflicht": true
+          },
+          {
+            "raum": "Küche",
+            "art": "kueche",
+            "min_m2": 8,
+            "max_m2": 12,
+            "fensterpflicht": false
+          },
+          {
+            "raum": "Bad",
+            "art": "sanitaer",
+            "min_m2": 5,
+            "max_m2": 9,
+            "fensterpflicht": false
+          },
+          {
+            "raum": "Abstellraum",
+            "art": "abstell",
+            "min_m2": 3,
+            "max_m2": 5,
+            "fensterpflicht": false
+          },
+          {
+            "raum": "Flur",
+            "art": "flur",
+            "min_m2": 6,
+            "max_m2": 9,
+            "fensterpflicht": false
+          }
+        ]
+      }
+    ],
+    "angewendet": true,
+    "eigeneTypen": [],
+    "gesperrteGrenzen": [],
+    "balkonJeTyp": {},
+    "regeln": {
+      "wandstaerken": false,
+      "fensterJeRaum": false,
+      "himmelsrichtung": false,
+      "rettungsweg": false,
+      "mindestbreiten": false,
+      "wohnungsgrundriss": false,
+      "fensterMax": 1,
+      "fensterMaxJeRaum": {},
+      "balkon": {},
+      "treppenraum": false,
+      "aufzug": true,
+      "treppenraumErweiterung_m": 0
+    },
+    "nordwinkel": 0,
+    "keller": {
+      "aktiv": false,
+      "optionen": {
+        "abteilMin_m2": 4,
+        "abteilZiel_m2": 6,
+        "abteilMax_m2": 10,
+        "abteilTiefeMax_m": 3,
+        "gang_b": 1.1,
+        "technik": true,
+        "technik_m2": 12,
+        "fahrrad": true,
+        "fahrradJeWe_m2": 1.5,
+        "wasch": false,
+        "wasch_m2": 8
+      },
+      "mengen": null
+    },
+    "tiefgarage": {
+      "aktiv": false,
+      "optionen": {
+        "laenge_m": null,
+        "anordnung": "senkrecht",
+        "gegenverkehr": true,
+        "rampeNeigung": 0.15,
+        "rampeZweispurig": false,
+        "barrierefreiAnzahl": null,
+        "kfzSchluessel": 1,
+        "oberirdisch_stk": 0,
+        "nutzungWohnen": true,
+        "lueftungMaschinell": false,
+        "unterzugReserve_m": 0.4
+      },
+      "mengen": null
+    },
+    "anordnung": {},
+    "grenzenPositionen": {},
+    "stufeJeWe": {},
+    "tuerAufschlaege": {}
+  },
+  "entwaesserung_layer": {
+    "rueckstau": {
+      "ebene_m": 0,
+      "massnahme": "keine",
+      "kanalsohle_m": -2.5
+    },
+    "regen": {
+      "r5_100": 800,
+      "r30_100": 300,
+      "qAb_ls": 5,
+      "dauer_min": 30
+    },
+    "dach": {
+      "ablaeufe": [],
+      "notueberlaeufe": [],
+      "gefaelle_pct": 2,
+      "dmin_m": 0.12
+    },
+    "rueckhalt": {
+      "elemente": [],
+      "flaechen": []
+    }
+  }
+}

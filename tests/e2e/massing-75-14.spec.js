@@ -1,12 +1,12 @@
 // Headless-Nachweis 75-14 (MS-07/MS-09, MSB-14/17…21): Diele, Türen, Erschließungsgraph,
 // Raumqualität in Werkstatt und WohnungsFokus.
 //
-// Ablauf: Werkstatt öffnen (Regel „wohnungsgrundriss" AUS → keine Türöffnungen, keine
-// Qualitätskarte = Default byte-gleich), Regel AN → Türöffnungen `wt-tuer` im Geschoss-
-// plan, Qualitätskarte `wt-qualitaet` mit Zählern, 0 Erschließungs-fail (jede WE hat
-// Diele + Türen zu allen Räumen), Fokus der ersten WE: `fk-tuer` mit Blatt + Bogen,
-// Diele-Label, Klick auf eine Tür dreht den Aufschlag, Rückgängig stellt ihn zurück,
-// `fk-qualitaet` vorhanden. Am Ende Regel wieder AUS (Aufräumen).
+// Ablauf (seit 84-01, D-P84-A „Türen immer“): Werkstatt öffnen — der Schalter
+// „Wohnungsgrundriss“ ist angehakt und gesperrt, ohne Zutun gibt es Türöffnungen
+// `wt-tuer` im Geschossplan, Qualitätskarte `wt-qualitaet` mit Zählern, 0 Erschließungs-
+// fail (jede WE hat Diele + Türen zu allen Räumen), Fokus der ersten WE: `fk-tuer` mit
+// Blatt + Bogen, Diele-Label, Klick auf eine Tür dreht den Aufschlag, Rückgängig stellt
+// ihn zurück, `fk-qualitaet` vorhanden. Nichts aufzuräumen — es gibt keinen Schalter mehr.
 //
 // Regeln (Lehren 75-05/07/09/11): --workers=1 · Chips/Umschalter per dispatchEvent ·
 // SVG-Elemente über count()/Attribute, nie toBeVisible · Werkstatt-Regeln nur über
@@ -14,8 +14,8 @@
 // Die Zahlen des Review-Testhauses (30 × 20 m) werden als Annotation protokolliert —
 // Seitenverhältnis-warn/-fail sind dort ehrlich zu erwarten (Bandtiefe 9,1 m).
 
-import { test, expect } from "@playwright/test";
-import { ERLAUBT_OFFLINE, schalteRegel } from "./fixtures/massing.js";
+import { test, expect } from "./fixtures/base.js";
+import { ERLAUBT_OFFLINE } from "./fixtures/massing.js";
 import { BILD_PROGRAMM } from "./fixtures/bildWohnung.js";
 
 const SEITE_WERKSTATT = "/ComplexDesigner?projekt=Review%20Testhaus&tab=werkstatt";
@@ -36,7 +36,6 @@ async function wacheAuf(page) {
 async function werkstattBereit(page) {
   await page.goto(SEITE_WERKSTATT);
   await expect(page.getByTestId("wt-regeln")).toBeVisible({ timeout: 30000 });
-  await schalteRegel(page, "wohnungsgrundriss", false);
   if (!(await page.getByTestId("wt-we").count())) {
     const anwenden = page.getByRole("button", { name: /Tesselierung anwenden/ });
     await expect(anwenden).toBeVisible({ timeout: 15000 });
@@ -53,16 +52,14 @@ test.describe("75-14 Diele, Türen, Erschließung, Raumqualität", () => {
   test.use({ viewport: { width: 1280, height: 1800 } });
   test.describe.configure({ timeout: 240000 });
 
-  test("Regel aus = keine Türen/Qualität; Regel an = Türöffnungen, Qualitätskarte, 0 Erschließungs-fail; Fokus zeigt Türen, Diele, Aufschlag-Undo", async ({ page }) => {
+  test("84-01 Türen immer: Schalter gesperrt + an, Türöffnungen, Qualitätskarte, 0 Erschließungs-fail; Fokus zeigt Türen, Diele, Aufschlag-Undo", async ({ page }) => {
     const warnungen = await wacheAuf(page);
     await werkstattBereit(page);
 
-    // --- Default (rule OFF): nothing of 75-14 is drawn — the plan is the Phase-61/75-07 plan.
-    await expect(page.getByTestId("wt-tuer")).toHaveCount(0);
-    await expect(page.getByTestId("wt-qualitaet")).toHaveCount(0);
-
-    // --- Rule ON: door openings in the storey plan + quality card with counters.
-    await schalteRegel(page, "wohnungsgrundriss", true);
+    // --- 84-01: the apartment-layout switch is locked on — doors without any click.
+    const schalter = page.getByTestId("wt-regel-wohnungsgrundriss");
+    await expect(schalter).toBeChecked();
+    await expect(schalter).toBeDisabled();
     await page.waitForTimeout(600);
     const tuerenMassing = await page.getByTestId("wt-tuer").count();
     expect(tuerenMassing, "Türöffnungen im Geschossplan").toBeGreaterThan(0);
@@ -134,13 +131,6 @@ test.describe("75-14 Diele, Türen, Erschließung, Raumqualität", () => {
     expect(await fokus.locator(`[data-testid="fk-tuer"][data-tuer-zone="${zone}"]`).first().getAttribute("data-tuer"), "Redo").toBe("rechts");
     await page.getByTestId("fk-tuer-undo").dispatchEvent("click");
     await page.waitForTimeout(500);
-
-    // --- Clean up: rule back OFF (layer persists), wait out the debounce.
-    await page.goto(SEITE_WERKSTATT);
-    await expect(page.getByTestId("wt-regeln")).toBeVisible({ timeout: 30000 });
-    await schalteRegel(page, "wohnungsgrundriss", false);
-    await page.waitForTimeout(1600);
-    await expect(page.getByTestId("wt-tuer")).toHaveCount(0);
 
     // Fixture sanity: the picture apartment's programme is the one the unit tests use.
     expect(BILD_PROGRAMM.map((r) => r.raum)).toContain("Kind 2/Büro");

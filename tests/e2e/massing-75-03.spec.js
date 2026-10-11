@@ -3,7 +3,7 @@
 // Masstext "+2,00 m" waehrend des Drags; Esc stellt zurueck; Tab + Zahl setzt exakt.
 // Netz: alles ausser localhost geblockt (Muster produktreife-72-01).
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/base.js";
 
 import { ERLAUBT_OFFLINE, messen, punkte, nordkante, resetRechteck, nurLocalhost } from "./fixtures/massing.js";
 

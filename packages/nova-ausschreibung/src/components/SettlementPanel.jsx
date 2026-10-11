@@ -88,7 +88,8 @@ export default function SettlementPanel({ tenders, positions, bids, measurements
   // Undecided = pending and in_progress — both still wait for a decision in Finance.
   const offen = offeneNachtraege(changeOrders).length;
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ position_id: "", tender_id: "", quantity: 0, note: "" });
+  // quantity holds the raw input string while typing; Number() is applied on save.
+  const [form, setForm] = useState(/** @type {{position_id: string, tender_id: string, quantity: number|string, note: string}} */ ({ position_id: "", tender_id: "", quantity: 0, note: "" }));
 
   // contract unit price for a position = awarded bid's line price.
   const contractEP = (tender, positionId) => {

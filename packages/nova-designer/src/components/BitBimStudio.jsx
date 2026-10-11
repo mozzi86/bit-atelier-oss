@@ -405,8 +405,10 @@ export default function BitBimStudio({ complexData }) {
   const [sunHour, setSunHour] = useState(14); // Sonnenstand (Uhrzeit 0-24)
   const animRef = useRef([]); // bewegte Stadt-Objekte für den tick()-Loop: [{mesh,pts,cum,total,d,speed}]
   const mountRef = useRef(null);
-  const three = useRef({});
-  const orbit = useRef({ on: false, x: 0, y: 0, theta: 0.7, phi: 1.0, radius: 70 });
+  // Mutable three.js handle bag (scene, camera, groups, callbacks) — filled in the
+  // mount effect, never a render dependency. Keys are open on purpose (87-09).
+  const three = useRef(/** @type {Record<string, any>} */ ({}));
+  const orbit = useRef(/** @type {Record<string, any>} */ ({ on: false, x: 0, y: 0, theta: 0.7, phi: 1.0, radius: 70 }));
 
   // Gemeinsame Quelle (Massing-Studio ↔ Gebäudemodell ↔ Kennzahlen): Footprint/Geschosse/Höhe/Einheit
   const bp = useBuildingProgram();
@@ -827,7 +829,7 @@ export default function BitBimStudio({ complexData }) {
       const typeId = kind === "door" ? doorType : winType;
       const ty = openingTypeById(kind, typeId);
       const lvl = Math.min(planLevel, storeys - 1);
-      let best = null, bestD = 1e9;
+      let best = /** @type {{scope: string, w: any, u: number, len: number}|null} */ (null), bestD = 1e9;
       // gezeichnete Wände
       customWalls.forEach((w) => {
         const pr = projectPointToSeg(p, w.a, w.b);
@@ -1229,7 +1231,7 @@ export default function BitBimStudio({ complexData }) {
   const exportPlanPDF = async () => {
     if (view === "3d") { setHint("PDF-Plan nur aus Grundriss/Schnitt — bitte 2D-Ansicht wählen."); return; }
     const wrap = mountRef.current?.parentElement?.querySelector("svg");
-    const svgEl = [...document.querySelectorAll("div")].find((d) => d.style.height === "520px" && d.className.includes("bg-slate-50"))?.querySelector("svg");
+    const svgEl = [.../** @type {any} */ (document.querySelectorAll("div"))].find((d) => d.style.height === "520px" && d.className.includes("bg-slate-50"))?.querySelector("svg");
     const target = svgEl || wrap; if (!target) { setHint("Keine 2D-Zeichnung gefunden."); return; }
     try {
       const { jsPDF } = await import("jspdf");
@@ -2210,7 +2212,7 @@ export default function BitBimStudio({ complexData }) {
             )}
             {view !== "3d" && (
               <BimPlan2D
-                model={model} mode={view} level={Math.min(planLevel, storeys - 1)} storeyHeight={storeyHeight}
+                model={model} mode={/** @type {"grundriss"|"schnitt"} */ (view)} level={Math.min(planLevel, storeys - 1)} storeyHeight={storeyHeight}
                 layerVis={layerVis} envOpenings={envOpenings} customZones={customZones} customSlabs={customSlabs} customRoofs={customRoofs} unit={unit}
                 edit={view === "grundriss" && !sketchEdit ? { tool, draft, hover, customWalls, customColumns, customWindows, selected, multiSel, onPoint, onHover: setHover, onFinish, onPick, onMarquee, onClear, onMoveWallPt, onMoveWall, onMoveColumn, onMoveOpening, onMovePolyVert, onMoveFootVert, onMoveFootEdge, onInsertFootVert, onDeleteFootVert } : undefined}
                 focus={focus2d}

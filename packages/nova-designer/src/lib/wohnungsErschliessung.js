@@ -139,7 +139,7 @@ export function gemeinsameKante(zoneA, zoneB, tol = 0.02) {
  * polyline (no SVG arc flags — same approach as wohnMoebel.tuerAufschlag) and the swing
  * bounding box for collision checks.
  * @param {{points: Array<{x:number,z:number}>}} zone room the door belongs to
- * @param {{wand:number, u_m:number, breite_m:number, aufschlag?:string}} tuer door record
+ * @param {{wand:number, u_m:number, breite_m:number, aufschlag?:string, nachAussen?:boolean}} tuer door record (84-08: nachAussen = leaf swings out of the zone)
  * @returns {{scharnier:{x:number,z:number}, geschlossen:{x:number,z:number}, offen:{x:number,z:number},
  *   bogen:Array<{x:number,z:number}>, normale:{x:number,z:number}, richtung:{x:number,z:number},
  *   aabb:{x0:number,z0:number,x1:number,z1:number}, breite:number}|null} null when the edge does not exist
@@ -149,7 +149,9 @@ export function tuerGeometrie(zone, tuer) {
   if (!kante) return null;
   const b = Math.max(0.1, num(tuer.breite_m, TUERBREITEN.zimmer));
   const richtung = { x: (kante.b.x - kante.a.x) / kante.laenge, z: (kante.b.z - kante.a.z) / kante.laenge };
-  const normale = innenNormale(zone, kante);
+  // 84-08: `nachAussen` doors (bath, store room) swing out of the zone into the hall.
+  const innen = innenNormale(zone, kante);
+  const normale = tuer.nachAussen ? { x: -innen.x, z: -innen.z } : innen;
   const u0 = Math.max(0, Math.min(kante.laenge - b, num(tuer.u_m)));
   const p0 = { x: kante.a.x + richtung.x * u0, z: kante.a.z + richtung.z * u0 };
   const p1 = { x: p0.x + richtung.x * b, z: p0.z + richtung.z * b };
@@ -281,6 +283,68 @@ export function erreichbarkeit(zonen, opts = {}) {
     graph: { knoten: liste.map((z) => ({ name: String(z.name), art: z.art, wurzel: istFlurZone(z) })), kanten },
     fehler,
   };
+}
+
+/**
+ * 84-06: tolerance (m) along the corridor axis within which the apartment
+ * entrance door counts as "the corridor ends at the entrance" [ASSUMED 2,0 m —
+ * the hall square is ≈ 1,2–2,0 m long].
+ */
+export const FLURENDE_EINGANG_M = 2.0;
+
+/**
+ * Corridor ends of ONE apartment (Nutzerregel 84-06, 07.10.2026: a corridor never
+ * ends on a partition — always on a room door, a small store room or a bath).
+ * For each hall/corridor zone the strip axis is its longest edge; the two extreme
+ * edges across that axis are its ends. An end is fine when a door lies IN that end
+ * wall (a door of any zone of the unit, or the zone's own door), or — at the
+ * entrance side — when the apartment entrance door sits within FLURENDE_EINGANG_M
+ * of that end.
+ * @param {Array<object>} zonen zones (storey or unit list); other units ignored when we is given
+ * @param {{we?: string}} [opts]
+ * @returns {Array<{zone:string, ende:"min"|"max", ok:boolean, grund:"tuer"|"eingang"|"trennwand"}>}
+ */
+export function flurEnden(zonen, opts = {}) {
+  const we = opts?.we;
+  const liste = (Array.isArray(zonen) ? zonen : []).filter((z) => z && Array.isArray(z.points) && z.raumart !== "balkon" && z.we !== undefined && z.we !== null && (we === undefined || String(z.we) === String(we)));
+  const out = [];
+  // Door segments of the unit in metres (closed leaf line = the opening).
+  const tueren = [];
+  for (const z of liste) {
+    for (const t of Array.isArray(z.tueren) ? z.tueren : []) {
+      const g = tuerGeometrie(z, t);
+      if (g) tueren.push({ a: g.scharnier, b: g.geschlossen, eingang: t.nach === null || t.nach === undefined, zone: String(z.name) });
+    }
+  }
+  // 84-04: a house stair is circulation but no corridor strip — it has no "ends".
+  for (const f of liste.filter((z) => istFlurZone(z) && z.art !== "treppe")) {
+    const kanten = kantenVon(f);
+    if (kanten.length < 3) continue;
+    const lang = kanten.reduce((m, k) => (k.laenge > m.laenge ? k : m), kanten[0]);
+    const ax = { x: (lang.b.x - lang.a.x) / lang.laenge, z: (lang.b.z - lang.a.z) / lang.laenge };
+    const proj = (p) => p.x * ax.x + p.z * ax.z;
+    const ps = f.points.map((p) => proj({ x: num(p.x), z: num(p.z) }));
+    const lo = Math.min(...ps), hi = Math.max(...ps);
+    for (const { ende, wert } of [{ ende: "min", wert: lo }, { ende: "max", wert: hi }]) {
+      // End wall = edges whose both ends project onto the extreme value.
+      const endKanten = kanten.filter((k) => Math.abs(proj(k.a) - wert) < 1e-6 && Math.abs(proj(k.b) - wert) < 1e-6);
+      const aufKante = (t) => endKanten.some((k) => {
+        const auf = (p) => Math.abs((p.x - k.a.x) * (k.b.z - k.a.z) - (p.z - k.a.z) * (k.b.x - k.a.x)) / k.laenge < 0.02
+          && (p.x - k.a.x) * (k.b.x - k.a.x) + (p.z - k.a.z) * (k.b.z - k.a.z) >= -0.02 * k.laenge
+          && (p.x - k.b.x) * (k.a.x - k.b.x) + (p.z - k.b.z) * (k.a.z - k.b.z) >= -0.02 * k.laenge;
+        return auf(t.a) && auf(t.b);
+      });
+      let grund = "trennwand";
+      if (tueren.some(aufKante)) grund = "tuer";
+      else if (tueren.some((t) => t.eingang && t.zone === String(f.name) && Math.abs(proj({ x: (t.a.x + t.b.x) / 2, z: (t.a.z + t.b.z) / 2 }) - wert) <= FLURENDE_EINGANG_M)) grund = "eingang";
+      // 84-04: on an upper floor of a house the stair arrives in the hall — it is the
+      // entrance of that floor (same tolerance as the apartment door).
+      else if (liste.some((t) => t.art === "treppe" && t.level === f.level && gemeinsameKante(t, f)
+        && Math.min(...t.points.map((p) => Math.abs(proj({ x: num(p.x), z: num(p.z) }) - wert))) <= FLURENDE_EINGANG_M)) grund = "eingang";
+      out.push({ zone: String(f.name), ende: /** @type {"min"|"max"} */ (ende), ok: grund !== "trennwand", grund: /** @type {any} */ (grund) });
+    }
+  }
+  return out;
 }
 
 /**

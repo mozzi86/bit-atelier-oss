@@ -77,6 +77,7 @@ function SchallschutzPlanKarte({ raumart, onUebernehmen }) {
       plan.entranceCfg ? { entrance: plan.entranceCfg } : {},
       platziert.map((o) => ({ level: o.level, edge: o.edge, u: o.u, width: o.width })),
     );
+    /** @type {Record<string, number>} */
     const je = {};
     [...platziert, ...auto]
       .filter((o) => o.kind === "window")

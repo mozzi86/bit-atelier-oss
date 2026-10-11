@@ -20,7 +20,7 @@
 // massing-Specs laufen mit --workers=1 (geteilter persistierter Footprint in
 // server/db.json, Wettlauf bei Parallelbetrieb — Lehre 75-06).
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, resetRechteck, punkte, nurLocalhost } from "./fixtures/massing.js";
 
 const PROJEKT = "Review Testhaus";

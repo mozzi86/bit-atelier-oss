@@ -108,6 +108,9 @@ function zonenBBox(zonen) {
  *   75-14: raumQualitaet.pruefeWohnung result of this unit (computed by the workshop — one calc path)
  * @param {(zone: object) => boolean} [p.balkonAktiv] 75-13: is the balcony switch of this room on (workshop reads the layer)
  * @param {(zone: object, an: boolean) => void} [p.onBalkonToggle] 75-13: the ONE write path for the balcony switch
+ * @param {string|null} [p.stufe] 84-10: effective level of this unit ("standard" | "B" | "R", switch > mix entry)
+ * @param {string|null} [p.stufeVorgabe] 84-10: level the mix entry gives (shown when the switch differs)
+ * @param {(s: string) => void} [p.onStufeChange] 84-10: the ONE write path of the switch (werkstatt_layer.stufeJeWe)
  */
 export default function WohnungsFokus({
   plan, we, zonen, checks, nonce, onClose, onGotoInnenausbau, onGotoChecks,
@@ -115,6 +118,7 @@ export default function WohnungsFokus({
   woflv = null, personen = 2, fensterNaeherung = false,
   tuerAufschlaege = null, onTuerAufschlaegeChange, qualitaet = null,
   balkonAktiv, onBalkonToggle,
+  stufe: stufeProp = null, stufeVorgabe = null, onStufeChange,
 }) {
   const { t } = useI18n();
   const hoeheAuto = usePlanHoehe({ min: HOEHE_AUTO });
@@ -188,7 +192,14 @@ export default function WohnungsFokus({
   const [sel, setSel] = useState(null);          // { key, id } of the selected item
   const [aktivKey, setAktivKey] = useState(null); // active room key (catalogue target)
   const [sperre, setSperre] = useState(true);     // blocking collision ON [ASSUMED default]
-  const [stufe, setStufe] = useState(STUFE_DEFAULT); // movement-area level
+  // Movement-area level. 84-10 (D-P84-R): with the workshop callback the level is the unit's
+  // REAL level (switch > mix entry), written to werkstatt_layer.stufeJeWe — it changes the
+  // generated unit (R doors/bath/hall), not only the furniture areas. Without the callback
+  // (standalone use) it stays local state as before.
+  const [stufeLokal, setStufeLokal] = useState(STUFE_DEFAULT);
+  const stufeGespeichert = typeof onStufeChange === "function";
+  const stufe = stufeGespeichert ? (BEWEGUNG_STUFEN.includes(stufeProp) ? stufeProp : STUFE_DEFAULT) : stufeLokal;
+  const setStufe = (s) => (stufeGespeichert ? onStufeChange(s) : setStufeLokal(s));
   const [sperrHinweis, setSperrHinweis] = useState(null); // why a move was rejected
   const [autoHinweise, setAutoHinweise] = useState([]);   // auto-furnishing notes
 
@@ -526,6 +537,12 @@ export default function WohnungsFokus({
                 </button>
               ))}
             </span>
+            {/* 84-10: the switch beats the mix level — say so when they differ. */}
+            {stufeGespeichert && stufeVorgabe && stufeVorgabe !== stufe && (
+              <span data-testid="fk-stufe-vorgabe" className="text-[11px] text-amber-700">
+                {t("Schalter überschreibt die Vorgabe des Mix")}: {stufeVorgabe === "standard" ? t("Standard") : stufeVorgabe}
+              </span>
+            )}
             <label className="flex items-center gap-1 text-slate-600 select-none">
               <input
                 type="checkbox" data-testid="fk-sperre" checked={sperre}

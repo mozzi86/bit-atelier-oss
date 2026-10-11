@@ -41,7 +41,7 @@ export const STATUS = Object.freeze(['Open', 'InProgress', 'Resolved', 'Closed']
  *
  * @param {string} alt aktueller Status (unbekannt → nur Ziel geprüft)
  * @param {string} neu Zielstatus
- * @param {{kommentar?: string, erlaubt?: string[]}} [opt]
+ * @param {{kommentar?: string, erlaubt?: readonly string[]}} [opt]
  *   kommentar: Antworttext (leer/fehlt = kein Kommentar)
  *   erlaubt: eigene Statusliste überschreibt STATUS ([ASSUMED]-Auflösung)
  * @returns {{ok: boolean, grund: string}}
@@ -115,9 +115,10 @@ export function topicsZuLayer(parse, bisher, { quelle = 'catenda', datum = new D
  * kommentar kommt als letzter dazu.
  *
  * @param {object} layer befunde_layer-Form
- * @param {{autor?: string, praefix?: string}} [opt]
+ * @param {{autor?: string, praefix?: string, erlaubt?: readonly string[]}} [opt]
  *   autor: CreationAuthor/ModifiedAuthor der Antwort (Default 'BIT-Atelier')
  *   praefix: Text vor „<status>: <text>" (Default 'BIT-Atelier')
+ *   erlaubt: eigene Statusliste (Default STATUS), wie in uebergang()
  * @returns {Array<object>} topics in buildBcfZip-Form (guid, titel, …,
  *   kommentare[], topicStatus = neuer Status, modifiedDate/modifiedAuthor)
  */
@@ -167,7 +168,7 @@ export function antwortTopics(layer, { autor = 'BIT-Atelier', praefix = 'BIT-Ate
  * @param {object} layer
  * @param {string} guid Topic-Guid
  * @param {{status: string, text: string, datum?: string}|null} antwort
- * @param {{erlaubt?: string[]}} [opt] eigene Statusliste (Default STATUS) — deren
+ * @param {{erlaubt?: readonly string[]}} [opt] eigene Statusliste (Default STATUS) — deren
  *   erster Eintrag ist der Fallback, wenn `antwort.status` fehlt
  * @returns {object} neue Layer-Form (Antwort unter lowercase-Guid)
  */

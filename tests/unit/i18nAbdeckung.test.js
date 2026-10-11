@@ -138,6 +138,8 @@ function benutzteSchluessel() {
   // 83-03: AI presets and connection types (LlmConnections.jsx passes label to t()).
   for (const k of tabellenTexte("packages/nova-core/src/lib/kiVorlagen.js", "KI_VORLAGEN", ["label"])) merke(k, "packages/nova-core/src/lib/kiVorlagen.js");
   for (const k of tabellenTexte("packages/nova-core/src/lib/kiVorlagen.js", "KI_TYPEN", ["label"])) merke(k, "packages/nova-core/src/lib/kiVorlagen.js");
+  // 86-05b: figure labels of the proposal cards (VorschlagKarte passes k.label to t()).
+  for (const k of tabellenTexte("packages/nova-designer/src/lib/bebauungsvorschlaege.js", "KENNZAHLEN", ["label"])) merke(k, "packages/nova-designer/src/lib/bebauungsvorschlaege.js");
   return schluessel;
 }
 

@@ -253,7 +253,7 @@ export function geschosseAusModell(modell) {
  *   `geschoss` grenzt auf ein Geschoss ein (empfohlen: das unterste oberirdische);
  *   ohne Angabe zählen alle Umriss-Bauteile.
  * @returns {{polygon: Array<{x,z}>, flaeche: number, rasterFlaeche: number,
- *            bauteile: number, geschoss: string|null, hinweis: string|null}|null}
+ *            bauteile: number, geschoss: string|null, quelle: string, hinweis: string|null}|null}
  */
 export function grundrissAusModell(modell, opt = {}) {
   const { geschoss = null, zelle = 0.5, toleranz = 0.8, klassen = null } = opt;

@@ -162,6 +162,7 @@ export function feuerwehrplanStatus(bestandteile = {}) {
 // Plausibilitäts-Checks (Konzept) — bewusst NUR "pass"/"warn", NIE "fail" (Haftung):
 // Richtwerte dürfen nicht als prüffähiges Brandschutzkonzept / bestandene Abnahme
 // erscheinen (T-18-04). Genau 7 Items.
+/** @param {Record<string, any>} [o] okf (m), groessteNE (m²), freistehend, nutzung, laengsteFlucht (m), maxFluchtweg (m), anleiterArt, bruestung (m), flaecheJeTr (m²), footArea (m²), bmaMode, schutzumfang */
 export function brandChecks({
   okf = 0, groessteNE = 0, freistehend = false, nutzung = "wohnen",
   laengsteFlucht = 0, maxFluchtweg = DEFAULT_MAX_FLUCHTWEG,

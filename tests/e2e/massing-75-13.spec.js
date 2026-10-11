@@ -19,7 +19,7 @@
 // über schalteRegel (useFachlayer-Ladesperre) · three.js-WebGL-pageerror ignorieren · am Ende
 // alle 75-13-Schalter zurück und Typologie Mittelflur (die Schicht liegt in server/db.json).
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, resetRechteck, schalteRegel, nurLocalhost } from "./fixtures/massing.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -65,8 +65,10 @@ async function werkstattBereit(page, ziel) {
   await expect(page.getByTestId("wt-regeln")).toBeVisible({ timeout: 30000 });
   await page.waitForTimeout(1200);
   // Known start: all rules this spec touches OFF (the layer persists between runs).
-  for (const k of ["fensterJeRaum", "treppenraum", "rettungsweg", "wohnungsgrundriss"]) await schalteRegel(page, k, false);
+  // 84-01: "wohnungsgrundriss" is no switch any more (locked on).
+  // 84-07: the stair switch is locked on for MFH/Spänner — switch to Mittelflur FIRST.
   await setzeTypologie(page, "Mittelflur");
+  for (const k of ["fensterJeRaum", "treppenraum", "rettungsweg"]) await schalteRegel(page, k, false);
   const anwenden = page.getByRole("button", { name: /Tesselierung anwenden/ });
   await expect(anwenden).toBeVisible({ timeout: 15000 });
   const entfernen = page.getByRole("button", { name: /entfernen/i }).first();
@@ -200,14 +202,16 @@ test.describe("75-13 Fenster-Deckel, Balkon, Treppenraum + Aufzug, Rettungsweg",
     await page.waitForTimeout(800);
     const warnKarten = page.getByTestId("wt-rettungsweg-warn");
     const warnVorher = await warnKarten.count();
-    test.info().annotations.push({ type: "rettungsweg-70m-alt", description: `alter Kern (Phase 61): ${warnVorher} warn` });
+    test.info().annotations.push({ type: "rettungsweg-70m-alt", description: `Treppenraum als Standard (84-07): ${warnVorher} warn` });
     expect(warnVorher, "70 m lang: Rettungsweg über 35 m").toBeGreaterThan(0);
     expect(await warnKarten.first().getAttribute("data-stufe")).toBe("warn");
     expect(await warnKarten.first().textContent()).toMatch(/Rettungsweg .* > 35 m/);
 
     // --- Necessary stair enclosure: panel appears with the lift switch; extension slider 0–6 m.
-    await expect(page.getByTestId("wt-treppenraum")).toHaveCount(0);
-    await schalteRegel(page, "treppenraum", true);
+    // 84-07: MFH carries the stair enclosure by default — panel present, switch locked on.
+    await expect(page.getByTestId("wt-treppenraum")).toBeVisible();
+    await expect(page.getByTestId("wt-regel-treppenraum")).toBeChecked();
+    await expect(page.getByTestId("wt-regel-treppenraum")).toBeDisabled();
     const panel = page.getByTestId("wt-treppenraum");
     await expect(panel).toBeVisible();
     const aufzug = page.getByTestId("wt-regel-aufzug");
@@ -268,8 +272,8 @@ test.describe("75-13 Fenster-Deckel, Balkon, Treppenraum + Aufzug, Rettungsweg",
     await page.goto(SEITE_WERKSTATT);
     await expect(page.getByTestId("wt-regeln")).toBeVisible({ timeout: 30000 });
     await page.waitForTimeout(1200);
-    for (const k of ["treppenraum", "rettungsweg"]) await schalteRegel(page, k, false);
     await setzeTypologie(page, "Mittelflur");
+    for (const k of ["treppenraum", "rettungsweg"]) await schalteRegel(page, k, false);
     await page.waitForTimeout(1600);
     expect(warnungen, `Konsole: ${warnungen.join(" | ")}`).toEqual([]);
   });

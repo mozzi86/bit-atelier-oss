@@ -63,6 +63,8 @@ const EINTRAEGE = [
   // session-only by design, so it stays out of the deletable set too (it is
   // gone with the tab already).
   { schluessel: 'bit-atelier-sicherung-spaeter', speicher: 'sessionStorage', zweck: 'Sicherungs-Hinweis für diese Sitzung ausgeblendet', kategorie: 'notwendig', fassung: 'lokale Fassung', loeschbar: false, inRichtlinie: true, geraetecache: false },
+  // 92-01: "Später" in the update banner — the version number whose banner the user hid.
+  { schluessel: 'bit.update.spaeter', speicher: 'localStorage', zweck: 'Update-Hinweis für eine bestimmte Version ausgeblendet („Später“)', kategorie: 'notwendig', fassung: 'lokale Fassung', loeschbar: true, inRichtlinie: true, geraetecache: false },
   { schluessel: 'kitool.verlauf.v1', speicher: 'sessionStorage', zweck: 'Chatverlauf des KI-Assistenten (max. 200 Nachrichten); endet mit dem Tab', kategorie: 'notwendig', fassung: 'lokale Fassung mit Harness', loeschbar: false, inRichtlinie: true, geraetecache: false },
   { schluessel: null, speicher: 'IndexedDB', zweck: 'Sämtliche Projekt- und Eingabedaten der lokalen Fassung', kategorie: 'notwendig', fassung: 'lokale Fassung', loeschbar: false, inRichtlinie: true, geraetecache: false },
   { schluessel: null, speicher: 'Cache Storage', zweck: 'Anwendungsdateien für den Offline-Betrieb', kategorie: 'notwendig', fassung: 'lokale Fassung', loeschbar: false, inRichtlinie: true, geraetecache: false },

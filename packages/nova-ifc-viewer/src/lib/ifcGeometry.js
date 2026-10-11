@@ -37,6 +37,10 @@ export const DIM_COLOR = [0.88, 0.9, 0.93]; // zurückgenommene Umgebung
 const yieldToPaint = () => new Promise((r) => setTimeout(r, 0));
 
 // parseIfcModel(arrayBuffer, { onProgress?, api? }) — api injizierbar (Worker/Node).
+/**
+ * @param {ArrayBuffer|Uint8Array} arrayBuffer
+ * @param {{onProgress?: (text: string) => void, api?: any}} [opt]
+ */
 export async function parseIfcModel(arrayBuffer, { onProgress, api: injectedApi } = {}) {
   const progress = typeof onProgress === "function" ? onProgress : () => {};
   const t0 = performance.now();
@@ -63,6 +67,7 @@ export async function parseIfcModel(arrayBuffer, { onProgress, api: injectedApi 
 
     // --- 1) Geometrie streamen: Rohteile sammeln (synchron, WASM-blockierend) ---
     progress("Lese Geometrie…");
+    /** @type {Array<{eid: number, verts: Float32Array, index: Uint32Array, mat: any}|null>} */
     const parts = [];
     let totalVerts = 0;
     let totalIdx = 0;
@@ -138,7 +143,7 @@ export async function parseIfcModel(arrayBuffer, { onProgress, api: injectedApi 
     let vOff = 0; // Vertex-Offset
     let iOff = 0; // Index-Offset
     for (let p = 0; p < parts.length; p++) {
-      const { eid, verts, index: pIdx, mat: m } = parts[p];
+      const { eid, verts, index: pIdx, mat: m } = /** @type {NonNullable<typeof parts[number]>} */ (parts[p]);
       const col = colorFor(eid);
       const nVerts = verts.length / 6;
       for (let v = 0; v < nVerts; v++) {

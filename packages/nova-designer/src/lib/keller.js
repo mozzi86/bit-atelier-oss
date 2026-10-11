@@ -62,12 +62,15 @@ export const KELLER_DEFAULT_OPTIONEN = Object.freeze({
   fahrradJeWe_m2: KELLER_FAHRRAD_JE_WE_M2,
   wasch: false,
   wasch_m2: KELLER_WASCH_M2,
+  // 91-02: room "Haustechnik Regenwasser", m² — NOT a user option of the cellar: the Werkstatt
+  // passes the size of regenwassernutzung.technikraumRegenwasser() (0 = no rainwater plant).
+  regenwasser_m2: 0,
 });
 
 /**
  * Harden options: default missing fields, num()-safe numbers, min ≤ ziel ≤ max.
  * @param {object|null|undefined} optionen partial options (m², m, booleans)
- * @returns {{abteilMin_m2:number, abteilZiel_m2:number, abteilMax_m2:number, abteilTiefeMax_m:number, gang_b:number, technik:boolean, technik_m2:number, fahrrad:boolean, fahrradJeWe_m2:number, wasch:boolean, wasch_m2:number}}
+ * @returns {{abteilMin_m2:number, abteilZiel_m2:number, abteilMax_m2:number, abteilTiefeMax_m:number, gang_b:number, technik:boolean, technik_m2:number, fahrrad:boolean, fahrradJeWe_m2:number, wasch:boolean, wasch_m2:number, regenwasser_m2:number}}
  */
 export function kellerOptionen(optionen) {
   const o = { ...KELLER_DEFAULT_OPTIONEN, ...(optionen || {}) };
@@ -81,6 +84,7 @@ export function kellerOptionen(optionen) {
     technik: !!o.technik, technik_m2: Math.max(0, num(o.technik_m2, KELLER_TECHNIK_M2)),
     fahrrad: !!o.fahrrad, fahrradJeWe_m2: Math.max(0, num(o.fahrradJeWe_m2, KELLER_FAHRRAD_JE_WE_M2)),
     wasch: !!o.wasch, wasch_m2: Math.max(0, num(o.wasch_m2, KELLER_WASCH_M2)),
+    regenwasser_m2: Math.max(0, num(o.regenwasser_m2, 0)),
   };
 }
 
@@ -213,6 +217,9 @@ export function kellerLayout(opts) {
     pflicht.push({ key: "fahrrad", name: "Fahrradraum", m2: o.fahrradJeWe_m2 * wes.length, raumart: "keller" });
   }
   if (o.wasch && o.wasch_m2 > 0) pflicht.push({ key: "wasch", name: "Waschraum", m2: o.wasch_m2, raumart: "keller" });
+  // 91-02 (user 10.10.2026: own building-services area for the rainwater plant): a room of its
+  // own next to the general Technikraum, noise source like it (pump / booster).
+  if (o.regenwasser_m2 > 0) pflicht.push({ key: "regenwasser", name: "Haustechnik Regenwasser", m2: o.regenwasser_m2, raumart: "laut" });
   const pflichtSumme = pflicht.reduce((s, p) => s + p.m2, 0);
   // Strip depth = Σ m² ÷ footprint depth, at least PFLICHT_MIN_TIEFE, never more
   // than the footprint offers. Rooms are stacked across (v) proportional to area.
@@ -313,10 +320,11 @@ export function kellerLayout(opts) {
  *   abteilfronten_lfm              fronts to the corridor (mesh wall + door) = Σ compartment widths, lfm
  *   verkehr_m2                     corridor area, m²
  *   technik_m2 / fahrrad_m2 / wasch_m2   mandatory rooms as drawn, m²
+ *   regenwasser_m2                 91-02: room "Haustechnik Regenwasser" as drawn, m² (0 without plant)
  *   gesamt_m2                      Σ of all basement zones, m²
  * The deep LV integration (nova-ausschreibung) is open — see module header.
  * @param {{zonen?: Array<object>, abteile?: Array<object>, zwischenwaende_lfm?: number, fronten_lfm?: number}} input
- * @returns {{abteile_stk:number, abteile_m2:number, trennwaende_lfm:number, abteilfronten_lfm:number, verkehr_m2:number, technik_m2:number, fahrrad_m2:number, wasch_m2:number, gesamt_m2:number}}
+ * @returns {{abteile_stk:number, abteile_m2:number, trennwaende_lfm:number, abteilfronten_lfm:number, verkehr_m2:number, technik_m2:number, fahrrad_m2:number, wasch_m2:number, regenwasser_m2:number, gesamt_m2:number}}
  */
 export function kellerMengen(input) {
   const zonen = Array.isArray(input?.zonen) ? input.zonen : [];
@@ -332,6 +340,7 @@ export function kellerMengen(input) {
     technik_m2: flaecheVon("technik"),
     fahrrad_m2: flaecheVon("fahrrad"),
     wasch_m2: flaecheVon("wasch"),
+    regenwasser_m2: flaecheVon("regenwasser"),
     gesamt_m2: r2(zonen.reduce((s, z) => s + zonenFlaeche(z), 0)),
   };
 }

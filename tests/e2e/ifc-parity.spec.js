@@ -102,7 +102,8 @@ test("der IFC-Import-Reiter nimmt .ifc-Dateien an und zeigt die Zustandszahlen",
   const fehler = [];
   page.on("pageerror", (e) => fehler.push(String(e)));
 
-  await page.goto("/AVA");
+  // 72-15 moved the import panel to the BIM-Mengen tab (87-01: the spec follows).
+  await page.goto("/AVA?tab=takeoff");
   const karte = page.getByText(/IFC-Import \(web-ifc\)/i).first();
   await expect(karte).toBeVisible({ timeout: 20_000 });
 

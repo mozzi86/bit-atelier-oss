@@ -19,6 +19,7 @@ function pointInPoly(x, z, poly) {
 
 // Farbverlauf nach normierter Höhe (0..1): Grün → Ocker → Fels → Schnee.
 function heightColor(t) {
+  /** @type {Array<[number, [number, number, number]]>} */
   const stops = [
     [0.0, [34, 102, 51]],
     [0.4, [120, 130, 60]],
@@ -184,7 +185,7 @@ export default function TerrainView3D() {
   const synthetic = offline || calcOffline;
   const calcCellM = (SPAN_CALC * 1000) / 9;
   const mountRef = useRef(null);
-  const three = useRef({});
+  const three = useRef(/** @type {Record<string, any>} */ ({})); // three.js handles (87-09)
   // rotX nahe der oberen Klammergrenze (-1.4) => Start in Vogelperspektive (steile Aufsicht).
   const drag = useRef({ on: false, x: 0, y: 0, rotY: 0.6, rotX: -1.25 });
 

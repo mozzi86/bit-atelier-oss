@@ -171,10 +171,12 @@ export function zoomedToBBox(box, W, H, padU, minZoom, maxZoom) {
 
 /**
  * Viewport-Hook für SVG-Pläne.
- * @param svgRef ref auf das <svg>-Element (viewBox kommt aus diesem Hook)
- * @param W/H    SVG-Einheiten-Größe des Inhalts (darf sich dynamisch ändern —
- *               BimPlan2Ds SCALE hängt an der Modell-BBox)
- * @param attachKey optional: ändert sich dieser Wert, wird der Wheel-Listener
+ * @param {{svgRef: any, W: number, H: number, minZoom?: number, maxZoom?: number,
+ *          wheelFactor?: number, attachKey?: any, fuellen?: boolean}} q
+ *   svgRef: ref auf das <svg>-Element (viewBox kommt aus diesem Hook);
+ *   W/H: SVG-Einheiten-Größe des Inhalts (darf sich dynamisch ändern —
+ *               BimPlan2Ds SCALE hängt an der Modell-BBox);
+ *   attachKey optional: ändert sich dieser Wert, wird der Wheel-Listener
  *               neu registriert — nötig, wenn das <svg> KONDITIONAL gerendert
  *               wird (z.B. 2D/3D-Umschalter) und damit remountet; sonst hinge
  *               der Listener am alten, entsorgten Element.

@@ -87,14 +87,15 @@ export function seiteVon(punkte, zentrum) {
  *   texte: Array<{x:number, z:number, winkel:number, text:string, laengeM:number, aussen:boolean,
  *     hinweis?: {a:{x:number,z:number}, b:{x:number,z:number}}}>,
  *   winkel: number, richtung: {x:number,z:number}, normale: {x:number,z:number},
- *   aussenReihe: boolean, breiteM: number
- * }} all coordinates in metres; `winkel` = normalised text angle (deg); `normale` points
+ *   aussenReihe: boolean, breiteM: number, ausgelassen: number
+ * }} all coordinates in metres; `ausgelassen` = part numbers dropped because the outer row
+ *   would run past the chain end (zoomed out); `winkel` = normalised text angle (deg); `normale` points
  *   from the measured edge towards the dimension line; `breiteM` = how far the chain
  *   (incl. its text rows) extends beyond the measured edge — the next chain starts there
  */
 export function ketteGeometrie({ punkte, offsetM = 0.5, seite = 1, pxJeM = 40, schrift = 9, format = formatMeter }) {
   const leer = { linie: { a: { x: 0, z: 0 }, b: { x: 0, z: 0 } }, hilfslinien: [], striche: [], texte: [], winkel: 0,
-    richtung: { x: 1, z: 0 }, normale: { x: 0, z: 1 }, aussenReihe: false, breiteM: 0 };
+    richtung: { x: 1, z: 0 }, normale: { x: 0, z: 1 }, aussenReihe: false, breiteM: 0, ausgelassen: 0 };
   const pts = (Array.isArray(punkte) ? punkte : []).filter((q) => Number.isFinite(q?.x) && Number.isFinite(q?.z));
   if (pts.length < 2) return leer;
   const s = Math.max(pxJeM, 1e-6);
@@ -181,8 +182,22 @@ export function ketteGeometrie({ punkte, offsetM = 0.5, seite = 1, pxJeM = 40, s
     });
   }
 
+  // Zoomed out, almost no number fits and the greedy outer row ran far past the
+  // end of the chain — a fan of leaders across the whole plan (user 07.10.2026:
+  // „bemaßung verliert sich … am ende … beim rauszoomen“). Plan practice at a
+  // coarse scale: drop the part numbers that do not fit and keep the slashes,
+  // the fitting numbers and the overall chain. Allowed overhang past the last
+  // station: one character [ASSUMED], so a short last piece may still lean out.
+  let ausgelassen = 0;
+  const grenzeM = uN + (ZEICHEN_BREITE * schrift + TEXT_RAND_PX) * mProPx;
+  if (aussenReihe && letztesAussenEnde > grenzeM) {
+    ausgelassen = texte.filter((t) => t.aussen).length;
+    for (let i = texte.length - 1; i >= 0; i -= 1) if (texte[i].aussen) texte.splice(i, 1);
+    aussenReihe = false;
+  }
+
   const breiteM = offsetM + ueberstandM + (aussenReihe ? 2 : 1) * reiheM;
-  return { linie, hilfslinien, striche, texte, winkel, richtung: { x: dx, z: dz }, normale: { x: nx, z: nz }, aussenReihe, breiteM };
+  return { linie, hilfslinien, striche, texte, winkel, richtung: { x: dx, z: dz }, normale: { x: nx, z: nz }, aussenReihe, breiteM, ausgelassen };
 }
 
 /**
@@ -194,7 +209,9 @@ export function ketteGeometrie({ punkte, offsetM = 0.5, seite = 1, pxJeM = 40, s
  */
 export function kettenPaar({ gesamt = true, ...p }) {
   const teil = ketteGeometrie(p);
-  if (!gesamt || teil.texte.length < 2) return { teil, gesamt: null };
+  // Two or more pieces → an overall chain (count the pieces, not the drawn numbers:
+  // zoomed out the part numbers may all be dropped, the total must stay).
+  if (!gesamt || teil.hilfslinien.length < 3) return { teil, gesamt: null };
   const pts = (p.punkte || []).filter((q) => Number.isFinite(q?.x) && Number.isFinite(q?.z));
   // Reuse the part chain's axis: the overall chain spans its first/last station.
   const enden = [teil.hilfslinien[0].a, teil.hilfslinien[teil.hilfslinien.length - 1].a];

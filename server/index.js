@@ -14,6 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { datenOrdner, datenPfad } from './datenPfad.js';
+import { updateRouter } from './updateRouter.js';
 import { appAusliefern, istAppModus } from './appAuslieferung.js';
 import { createDb } from '../packages/nova-core/server/db.js';
 import { createBlobStore } from '../packages/nova-core/server/blobs.js';
@@ -96,6 +97,9 @@ const APP_MODUS = istAppModus();
 app.get('/api/status', (_req, res) => {
   res.json({ name: PAKET.name, version: PAKET.version, modus: APP_MODUS ? 'app' : 'api', node: process.versions.node });
 });
+
+// --- Self-update (92-01): check the latest release, install it from inside the app ---
+app.use('/api', updateRouter({ root: path.join(__dirname, '..'), port: PORT, appModus: APP_MODUS, version: PAKET.version }));
 
 // --- Telemetry source configuration (prepares MQTT/WebRTC integration) ------
 // App-only — bleibt als einzige Inline-Route in der Kompositionswurzel.

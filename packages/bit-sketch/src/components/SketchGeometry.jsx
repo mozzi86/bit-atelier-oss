@@ -36,6 +36,7 @@ const LEER = new Set();
  * @param masstab   Faktor auf Strichstärken/Punktradien/Schriftgrößen — 1 =
  *                  Standalone-Look; im BimPlan2D-Overlay ggf. verkleinern.
  */
+/** @param {{sketch: any, X: (x: number) => number, Y: (y: number) => number, scale: number, selection?: any, lastSolve?: any, hoverPt?: any, onSelect?: (...a: any[]) => any, masstab?: number}} props */
 export default function SketchGeometry({
   sketch,
   X,

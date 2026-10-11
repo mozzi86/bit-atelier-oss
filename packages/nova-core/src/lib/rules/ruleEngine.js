@@ -21,7 +21,8 @@
 //   (Pitfall 13 / T-33-07: Morphs liefern nie BaseQuantities.)
 //
 // Treue zum Orakel (parity/oracle/anwenden_jb.py):
-//   - klasse/status sind EXAKTE Gleichheitsvergleiche, Status via `e.status || '?'`
+//   - klasse ist ein EXAKTER Gleichheitsvergleich; Status wird auf beiden Seiten über
+//     die StatusKonvention normalisiert (statusNorm: "Neubau" ≙ "neubau", null ≙ "?")
 //   - typ-Muster prüfen gegen `(typ||'') + '|' + (name||'')`
 //   - Muster sind unverankert und case-insensitiv (Python re.search + re.I)
 //   - `Count` zählt Treffer, sonst wird qty[variable] summiert (fehlend → 0.0)
@@ -29,7 +30,7 @@
 // Isomorph: kein window, kein DOMParser, keine Aliase.
 
 import { matchPattern, patternWarnung, evaluateWithBudget } from './patternMatch.js';
-import { buildIndex, statusKey, typNameText } from './elementIndex.js';
+import { buildIndex, statusKey, statusNorm, typNameText } from './elementIndex.js';
 
 /** Achse ohne Einschränkung? Leer, fehlend oder `["*"]`. */
 function istWildcardAchse(sel) {
@@ -76,15 +77,22 @@ export function matchSelektor(selektor) {
   const zustand = selektor?.zustand || {};
   const muster = selektor?.muster || {};
   const bereich = selektor?.bereich || {};
+  // B-87-08 status axis: the editor writes "Neubau"/"?", the elements carry
+  // "neubau"/null — compare both in the normalised spelling (statusNorm). The
+  // wildcard axis stays untouched.
+  const statusAuswahl = istWildcardAchse(zustand.status)
+    ? zustand.status
+    : (Array.isArray(zustand.status) ? zustand.status : [zustand.status]).map(statusNorm);
 
   return function trifft(el) {
-    // WAS-Achsen
-    if (!inAxis(was.ifc_klasse, el?.klasse)) return false;
+    // WAS-Achsen — class from `klasse` (engine form) or `ifc_klasse` (classified
+    // elements as the AVA passes them; 87-06, B-87-08).
+    if (!inAxis(was.ifc_klasse, el?.klasse ?? el?.ifc_klasse)) return false;
     if (!inAxis(was.kg, el?.kg)) return false;
     if (!inAxis(was.gewerk, el?.gewerk)) return false;
     if (!inAxis(was.schicht, el?.schicht)) return false;
     // ZUSTAND
-    if (!inAxis(zustand.status, statusKey(el))) return false;
+    if (!inAxis(statusAuswahl, statusNorm(statusKey(el)))) return false;
     // MUSTER — typ und name prüfen gegen den ZUSAMMENGESETZTEN String
     if (muster.typ != null && !matchPattern(typNameText(el), muster.typ)) return false;
     if (muster.name != null && !matchPattern(typNameText(el), muster.name)) return false;
@@ -116,7 +124,7 @@ export function selektorWarnungen(selektor) {
 /**
  * Menge einer Regel.
  * @param {{selektor, mengenbasis, faktor}} regel — `mengenbasis: "Count"` zählt Treffer
- * @param {Array|{alle,kandidaten}} elemente Elementliste ODER ein buildIndex()-Ergebnis
+ * @param {any[]|{alle: any[], kandidaten: Function}} elemente Elementliste ODER ein buildIndex()-Ergebnis
  * @param {{budgetMs?: number}} [opts]
  * @returns {{menge, treffer, element_ids, warnungen, dauer_ms, abgebrochen}}
  */
@@ -126,10 +134,12 @@ export function mengeVonRegel(regel, elemente, opts = {}) {
   const faktor = Number(regel?.faktor ?? 1) || (regel?.faktor === 0 ? 0 : 1);
   const warnungen = selektorWarnungen(selektor);
 
-  const index =
-    elemente && typeof elemente === 'object' && typeof elemente.kandidaten === 'function'
+  // Either form ends up as a buildIndex()-shaped object; the union is resolved at runtime.
+  const index = /** @type {ReturnType<typeof buildIndex>} */ (
+    elemente && typeof elemente === 'object' && typeof /** @type {any} */ (elemente).kandidaten === 'function'
       ? elemente
-      : buildIndex(elemente || []);
+      : buildIndex(/** @type {any[]} */ (elemente) || [])
+  );
 
   // Vorindex nutzen, wenn Klasse und/oder Status genau EINEN Wert festlegen.
   const klasse = einzelwert(selektor?.was?.ifc_klasse);

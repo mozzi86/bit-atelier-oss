@@ -7,6 +7,8 @@ import { Plus, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ContactForm from "../components/contacts/ContactForm";
 import ContactList from "../components/contacts/ContactList";
+// 90-07: participant list of the current project (roles, PDF A4 landscape).
+import BeteiligtePanel from "../components/contacts/BeteiligtePanel";
 
 export default function AddressBook() {
   const [contacts, setContacts] = useState([]);
@@ -79,6 +81,8 @@ export default function AddressBook() {
             Neuer Kontakt
           </Button>
         </motion.div>
+
+        {!isLoading && <BeteiligtePanel contacts={contacts} />}
 
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />

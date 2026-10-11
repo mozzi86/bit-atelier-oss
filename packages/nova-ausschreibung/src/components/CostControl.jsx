@@ -8,6 +8,8 @@ import { TrendingDown, TrendingUp } from "lucide-react";
 import { eur0, gp, bidUnitPrice, DIN276 } from "./avaUtils";
 import { useBuildingProgram } from "@core/lib/useBuildingProgram";
 import { benchmarkFor, korridorText } from "@ava/lib/priceReference";
+// 90-10: per-KG cost control with Excel export template and budget-increase request.
+import KostenJeKgKarte from "./KostenJeKgKarte";
 
 const DIN_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4", "#ec4899", "#84cc16"];
 
@@ -158,6 +160,8 @@ export default function CostControl({ positions, tenders, bids, measurements, ch
           })}
         </CardContent>
       </Card>
+
+      <KostenJeKgKarte positions={positions} tenders={tenders} bids={bids} measurements={measurements} changeOrders={changeOrders || []} />
 
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>

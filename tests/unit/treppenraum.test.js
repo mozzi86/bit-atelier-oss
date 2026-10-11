@@ -6,7 +6,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { tesseliere, kernRegeln, TREPPENRAUM, AUFZUG_SCHWELLEN, RETTUNGSWEG_MAX } from "@designer/lib/tesselierung";
+import { tesseliere, kernRegeln, TREPPENRAUM, AUFZUG_SCHWELLEN, RETTUNGSWEG_MAX, EINGANG } from "@designer/lib/tesselierung";
 import { AUFZUG_GESCHOSS_GRENZE, AUFZUG_OKF_GRENZE } from "@designer/lib/accessibility";
 import { WERKSTATT_TYPEN } from "@designer/lib/wohnungsTypen";
 
@@ -60,16 +60,48 @@ describe("kernRegeln (75-13 Task 4)", () => {
 });
 
 describe("tesselierung.js — notwendiger Treppenraum (75-13 Task 4)", () => {
-  it("Default (kein Schalter): weiterhin „Kern“ als Flur-Zone, kein Treppenraum, kein Aufzug", () => {
+  // 84-07 (D-P75-13-D, Nutzer 07.10.2026 „treppenkern standard“): MFH and Spänner
+  // ALWAYS carry the necessary stair enclosure; a stored treppenraum:false is ignored.
+  it("84-07: MFH ohne Schalter hat den notwendigen Treppenraum (kein altes „Kern“-Label), gespeichertes false wird ignoriert", () => {
     const r = mfh({});
-    assert.equal(kern(r).length, 0);
-    assert.ok(r.zonen.some((z) => /^Kern /.test(z.name) && z.raumart === "flur"));
+    assert.ok(kern(r).some((z) => z.raumart === "treppenraum"));
+    assert.equal(r.zonen.filter((z) => /^Kern /.test(z.name)).length, 0);
+    assert.equal(JSON.stringify(mfh({ treppenraum: false })), JSON.stringify(r));
+    assert.ok(r.hinweise.some((h) => /^Aufzug /.test(h)), "Aufzug-Hinweis steht immer");
   });
 
-  it("Treppenraum-Schalter aus → alle übrigen Kern-Schalter wirkungslos (Ausgabe byte-gleich zum Default)", () => {
-    const a = mfh({});
-    const b = mfh({ treppenraum: false, aufzug: true, treppenraumErweiterung_m: 5 });
-    assert.equal(JSON.stringify(a), JSON.stringify(b));
+  it("84-07: Mittelflur und Laubengang bleiben ohne Kern (Treppenkern-Standard nur MFH/Spänner)", () => {
+    const mf = tesseliere({ footprintM: FP40, storeys: 1, typ: "mittelflur", einheiten: REF, raumzonen: true });
+    assert.equal(kern(mf).length, 0);
+    assert.equal(mf.zonen.filter((z) => z.eingang).length, 0);
+  });
+
+  it("84-07: Eingangshalle im EG (MFH) — gegenüber dem Kern, Fassade → Flur, Hauseingangstür ≥ 0,90 m licht, nur Geschoss 0", () => {
+    const r = tesseliere({ footprintM: FP40, storeys: 3, typ: "mfh", einheiten: REF, raumzonen: true });
+    const e = r.zonen.filter((z) => z.eingang);
+    assert.equal(e.length, 1, "genau eine Eingangshalle");
+    assert.equal(e[0].level, 0);
+    assert.equal(e[0].we, undefined, "keine Wohnung");
+    const t = e[0].tueren.find((q) => q.typ === "hauseingang");
+    assert.ok(t && t.nach === null);
+    assert.ok(t.breite_m - 2 * 0.1 >= EINGANG.tuerLichtMin_m, `Rohbaumaß ${t.breite_m} m lässt ≥ 0,90 m licht`);
+    const bb = bbox(e);
+    assert.ok(bb.w >= EINGANG.begegnung_m, `Hallenbreite ${bb.w} m ≥ 1,80 m Begegnungsfläche`);
+    // Hall reaches from the facade to the corridor: its z-extent touches the bbox edge and the corridor.
+    const zs = e[0].points.map((p) => p.z);
+    assert.ok(Math.max(...zs) === 13 || Math.min(...zs) === -13, "an der Fassade");
+    const flur = r.zonen.find((z) => z.level === 0 && /^Flur 0/.test(z.name));
+    const fz = flur.points.map((p) => p.z);
+    assert.ok(zs.some((z) => fz.some((q) => Math.abs(q - z) < 1e-9)), "berührt den Flur");
+  });
+
+  it("84-07: Spänner — Eingangshalle im EG zwischen Südfassade und Kern, OG behalten die Wohnung dort", () => {
+    const r = tesseliere({ footprintM: FP40, storeys: 2, typ: "spaenner", einheiten: REF, raumzonen: true });
+    const e = r.zonen.filter((z) => z.eingang);
+    assert.equal(e.length, 1);
+    assert.equal(e[0].level, 0);
+    assert.ok(Math.min(...e[0].points.map((p) => p.z)) === -13, "an der Südfassade");
+    assert.ok(r.weListe.filter((w) => w.level === 1).length >= r.weListe.filter((w) => w.level === 0).length, "OG nicht weniger WE als EG");
   });
 
   it("ohne Aufzug: Treppenraum 2,5 × 5 m (raumart treppenraum, Name „Treppenraum 0 ·WT“), kein Aufzug-Zone", () => {
@@ -92,10 +124,14 @@ describe("tesselierung.js — notwendiger Treppenraum (75-13 Task 4)", () => {
     assert.match(k.find((z) => z.raumart === "aufzug").name, /^Aufzug 0 /);
   });
 
-  it("Spänner: gleicher Kern, 6 × 3 m auf der langen Achse mit Aufzug, 2,5 × 5 m ohne", () => {
+  it("Spänner (84-02 Windmühle): Kern 6 × 4,5 m mit Aufzug (+ Podest 1,50 vor dem Aufzug), 5 × 2,5 m ohne — lange Seite auf der langen Achse", () => {
     const sp = (regeln) => tesseliere({ footprintM: FP40, storeys: 1, typ: "spaenner", einheiten: REF, raumzonen: true, regeln });
-    assert.deepEqual(bbox(kern(sp({ treppenraum: true, aufzug: true }))), { w: 6, d: 3 });
-    assert.deepEqual(bbox(kern(sp({ treppenraum: true, aufzug: false }))), { w: 2.5, d: 5 });
+    assert.deepEqual(bbox(kern(sp({ treppenraum: true, aufzug: true }))), { w: 6, d: 4.5 });
+    assert.deepEqual(bbox(kern(sp({ treppenraum: true, aufzug: false }))), { w: 5, d: 2.5 });
+    // Shaft keeps 2,5 × 3 m; the stair enclosure is stair + landing (L-shaped).
+    const mit = kern(sp({ treppenraum: true, aufzug: true }));
+    assert.deepEqual(bbox(mit.filter((z) => z.raumart === "aufzug")), { w: 2.5, d: 3 });
+    assert.equal(mit.find((z) => z.raumart === "treppenraum").points.length, 6);
   });
 
   it("Aufzug-Vorgabe nach Geschossen: 4 Geschosse → Aufzug-Zone und Hinweis „an“, 3 Geschosse → keine Zone, Hinweis „aus“", () => {
@@ -172,14 +208,19 @@ describe("tesselierung.js — Treppenraum-Erweiterung (75-13 Task 4)", () => {
     }
   });
 
-  it("Warn verschwindet, wenn die Erweiterung reicht: 70 m lang → ohne Erweiterung warn (> 35 m), mit 6 m je Seite keiner mehr", () => {
+  // 84-01: the walked line now runs through room door and hall (75-17 + doors always),
+  // so the 70 m house is longer than in 75-13 (46,9 m) and 6 m of extension no longer
+  // clears every unit — the end units honestly get "second stair enclosure".
+  it("Erweiterung verkürzt die Wege: 70 m lang → warn (> 35 m); mit 6 m je Seite kürzer und weniger warn, der Rest nennt den zweiten Treppenraum", () => {
     const ohne = lang({});
     assert.ok(maxLauf(ohne) > RETTUNGSWEG_MAX);
     assert.ok(ohne.rettungswegWarnungen.length > 0);
-    assert.ok(ohne.rettungswegWarnungen.every((w) => w.stufe === "warn" && /Treppenraum-Erweiterung um/.test(w.text)));
+    assert.ok(ohne.rettungswegWarnungen.every((w) => w.stufe === "warn"));
+    assert.ok(ohne.rettungswegWarnungen.some((w) => /Treppenraum-Erweiterung um/.test(w.text)), "mindestens eine WE ist mit Erweiterung zu retten");
     const mit = lang({ treppenraumErweiterung_m: 6 });
-    assert.ok(maxLauf(mit) <= RETTUNGSWEG_MAX, `${maxLauf(mit)} m`);
-    assert.equal(mit.rettungswegWarnungen.length, 0);
+    assert.ok(maxLauf(mit) < maxLauf(ohne), `${maxLauf(mit)} m < ${maxLauf(ohne)} m`);
+    assert.ok(mit.rettungswegWarnungen.length < ohne.rettungswegWarnungen.length);
+    assert.ok(mit.rettungswegWarnungen.every((w) => /zweiten Treppenraum vorsehen — eine Treppenraum-Erweiterung bis 6 m je Seite reicht nicht/.test(w.text)));
   });
 
   it("reicht auch 6 m nicht (100 m lang), nennt die Meldung den zweiten Treppenraum statt einer sinnlosen Erweiterung", () => {

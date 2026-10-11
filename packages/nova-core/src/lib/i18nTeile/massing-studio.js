@@ -7,6 +7,8 @@
 
 /** @type {Record<string, string>} */
 export const EN = {
+  // --- 86-03: bar network (WohnungsWerkstatt.jsx) — label of each bar ("Riegel 2").
+  "Riegel": "Block",
   // --- 75-15: architectural dimension chains (WohnungsFokus.jsx) — the unit is
   // written once next to the scale chip, never on the numbers of a chain.
   "Maße in m": "Dimensions in m",
@@ -53,7 +55,16 @@ export const EN = {
   "Werkstatt-Regel „Rettungsweg“ ist aus": "workshop rule “escape route” is off",
   "Lauflinie vom tiefsten Punkt jeder WE durch Zimmertür und Diele bis zur Treppenraum-Tür (MBO §35 Abs. 2); Ringe = Türen; rot gestrichelt = Näherung": "Walked line from the deepest point of every unit through the room door and the hall to the stair door (MBO §35 Abs. 2); rings = doors; dashed red = approximation",
   "Näherung innen": "Approximation inside the unit",
+  "immer an": "always on",
+  "Bei Mehrfamilienhaus und Spänner immer an (Phase 84): Treppenkern mit Aufzug-Schalter und Eingangshalle im EG": "Always on for apartment blocks and point blocks (phase 84): stair core with lift switch and entrance hall on the ground floor",
+  "Seit Phase 84 immer an: jede Wohnung bekommt Diele und Türen; Erschließung und Rettungsweg laufen über die Türen": "Always on since phase 84: every unit gets a hall and doors; access and escape route run through the doors",
   "ohne Türdaten (Regel „Wohnungsgrundriss“ aus) — Tür je Raum in der Mitte der gemeinsamen Wand ≥ 1,185 m zum Flur angenommen": "no door data (rule “Apartment layout” off) — one door per room assumed in the middle of its shared wall ≥ 1.185 m to the hall",
   "ein Raum hat keine Tür zum Flur — Weg durch den Nachbarraum gerechnet (Durchgangszimmer sind ausgeschlossen, D-P75-14-C)": "a room has no door to the hall — route counted through the neighbouring room (walk-through rooms are excluded, D-P75-14-C)",
   "kein Weg über Türen gefunden — Luftlinie im offenen Grundriss": "no route through doors found — straight line through the open plan",
+  "Gebäudeflur an Außenwand": "Building corridor at the outer wall",
+  "R-Wohnungen im Gebäude": "Wheelchair units in the building",
+  "Ausführung (barrierefrei)": "Level (barrier-free)",
+  "B — barrierefrei nutzbar": "B — barrier-free usable",
+  "R — rollstuhlgerecht": "R — wheelchair accessible",
+  "Schalter überschreibt die Vorgabe des Mix": "The switch overrides the mix default",
 };

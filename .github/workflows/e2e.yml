@@ -1,0 +1,56 @@
+# E2E nachts und auf Zuruf (Plan 87-03).
+#
+# Die Playwright-Specs laufen seriell gegen Vite + Express (`npm run dev`, von
+# Playwright gestartet) und teilen sich das Projekt „Review Testhaus“ in
+# server/db.json — das Global-Setup (87-01) zwingt das Haus auf 70 × 16 m und
+# stellt es nach jedem Test per API wieder her. server/db.json ist gitignored: der
+# Seed legt die Demo-Projekte an, das Global-Setup das Testhaus aus
+# tests/e2e/fixtures/testhaus-record.json (B-87-05). Lokal NICHT seeden, solange
+# der Server läuft — er hält die DB im Speicher.
+name: E2E
+
+on:
+  schedule:
+    - cron: "30 2 * * *" # 02:30 UTC = 04:30 MESZ, nach den Nachtläufen
+  workflow_dispatch:
+
+concurrency:
+  group: e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: Playwright (seriell)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CI: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Abhängigkeiten
+        run: npm ci
+
+      - name: Playwright-Browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Demo-Daten (frische DB)
+        run: npm run seed
+
+      - name: E2E
+        run: npm run test:e2e
+
+      - name: Report sichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14

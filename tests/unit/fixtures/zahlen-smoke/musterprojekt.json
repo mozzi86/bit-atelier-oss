@@ -1,0 +1,60 @@
+{
+  "bauteile": 10,
+  "mit_qty": 10,
+  "uebersprungen": 0,
+  "klassen": {
+    "IfcBeam": {
+      "anzahl": 2,
+      "area_m2": 11,
+      "volume_m3": 3.3,
+      "length_m": 22
+    },
+    "IfcDuctSegment": {
+      "anzahl": 1,
+      "area_m2": 9.6,
+      "volume_m3": 0.96,
+      "length_m": 6
+    },
+    "IfcSlab": {
+      "anzahl": 1,
+      "area_m2": 96,
+      "volume_m3": 24,
+      "length_m": 12
+    },
+    "IfcSpace": {
+      "anzahl": 1,
+      "area_m2": 86.63,
+      "volume_m3": 259.89,
+      "length_m": 38.08
+    },
+    "IfcWall": {
+      "anzahl": 5,
+      "area_m2": 139.68,
+      "volume_m3": 33.52,
+      "length_m": 46.56
+    }
+  },
+  "positionen": {
+    "Wand Beton": {
+      "menge": 33.52,
+      "treffer": 5,
+      "gp_eur": 10726.4
+    },
+    "Decke Beton": {
+      "menge": 24,
+      "treffer": 1,
+      "gp_eur": 6720
+    },
+    "Träger": {
+      "menge": 2,
+      "treffer": 2,
+      "gp_eur": 2900
+    },
+    "Räume": {
+      "menge": 86.63,
+      "treffer": 1,
+      "gp_eur": 86.63
+    }
+  },
+  "kosten_eur": 20433.03
+}

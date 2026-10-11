@@ -10,6 +10,9 @@
 //   3. Jahrhundertregen & Rückhalt — the site-plan core (LageplanPlan) with the retention
 //      catalogue (swale / trench / swale-trench / retention roof as areas, cisterns as points),
 //      the DIN 1986-100 flood balance and the emergency roof drainage.
+//   4. 91-02 Regenwassernutzung — DIN 1989-1 yield / demand / storage, cistern under the garage,
+//      services room (RegenwasserKarte); settings in entwaesserung_layer.nutzung, figures from
+//      useRegenwasser with THIS planner's live layers (no second load, no stale copy).
 //
 // In:  project (useProject), plan (usePlanModel: footprint, storeys, dachform), panel cache
 //      (haustechnik:we, haustechnik:sanitaerJeWe), netz_layer (READ + the additive gefaelle_pct
@@ -50,6 +53,11 @@ import { GRUEN_ARTEN } from "@designer/lib/pflanzen";
 import BimPlan2D from "./BimPlan2D";
 import LageplanPlan from "./LageplanPlan";
 import KatalogPanel from "./KatalogPanel";
+// 91-02: rainwater harvesting card + the shared figures hook (same numbers as the Werkstatt).
+import RegenwasserKarte from "./RegenwasserKarte";
+import { useRegenwasser } from "@designer/lib/useRegenwasser";
+// 91-03/91-05: the quantity list goes to the AVA through the AVA's existing LV CSV import.
+import AvaCsvKnopf from "./AvaCsvKnopf";
 
 // The checks know pass/warn/offen (never fail — a licensed drainage design replaces this, T-17-04).
 const T_STATUS = { ...STATUS_STYLE, offen: { color: "bg-slate-100 text-slate-600", dot: "bg-slate-400", label: "offen" } };
@@ -195,16 +203,21 @@ export default function EntwaesserungPlanner({ complexData = null } = {}) {
     r5_100: regen.r5_100, aDach, nAblaeufe: dach.ablaeufe.length, nNot: dach.notueberlaeufe.length,
   }), [regen.r5_100, aDach, dach.ablaeufe.length, dach.notueberlaeufe.length]);
 
+  // --- Karte 4: Regenwassernutzung (91-02) -------------------------------------
+  const rw = useRegenwasser({ location: complexData?.location || null, entwaesserung: entwRaw, werkstatt: wtLayer, aussenanlagen: aussenLayer });
+  const setNutzung = (patch) => setEntw((l) => ({ ...l, nutzung: { ...l.nutzung, ...patch } }));
+
   // --- Checks + Mengen ---------------------------------------------------------
   const gefChecks = useMemo(() => gefaelleChecks(gefPlan, { dachform, nNot: dach.notueberlaeufe.length }), [gefPlan, dachform, dach.notueberlaeufe.length]);
   const checks = useMemo(() => [
     ...entwaesserungChecks({ sw, gl, rueckstau, bilanz, rueckhalt: rhVol, not: notEntw, dachform }),
     ...gefChecks,
-  ], [sw, gl, rueckstau, bilanz, rhVol, notEntw, dachform, gefChecks]);
+    ...rw.checks,
+  ], [sw, gl, rueckstau, bilanz, rhVol, notEntw, dachform, gefChecks, rw.checks]);
   const mengenRoh = useMemo(() => entwaesserungMengen({
     gl, dach: { ablaeufe: dach.ablaeufe, notueberlaeufe: dach.notueberlaeufe },
-    rueckstau: entw.rueckstau, rueckhalt: rhVol, gefaelleMengen: gefaelleMengen(gefPlan),
-  }), [gl, dach, entw.rueckstau, rhVol, gefPlan]);
+    rueckstau: entw.rueckstau, rueckhalt: rhVol, gefaelleMengen: [...gefaelleMengen(gefPlan), ...rw.mengen],
+  }), [gl, dach, entw.rueckstau, rhVol, gefPlan, rw.mengen]);
   // Dedupe by key: entwaesserungMengen AND gefaelleMengen both emit "ablaeufe"
   // (same drains counted by two libs) — the AVA list must not show a row twice.
   // First occurrence wins (the drainage lib's row carries the DN in its label).
@@ -604,6 +617,9 @@ export default function EntwaesserungPlanner({ complexData = null } = {}) {
         </CardContent>
       </Card>
 
+      {/* --- 91-02: Regenwassernutzung (Projektvorgabe) --- */}
+      <RegenwasserKarte rw={rw} onNutzung={setNutzung} />
+
       {/* --- Checks + Mengen (AVA-Übergabe) --- */}
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
@@ -621,7 +637,9 @@ export default function EntwaesserungPlanner({ complexData = null } = {}) {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Ruler className="w-4 h-4" /> {t("Mengen (AVA-Übergabe)")}</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Ruler className="w-4 h-4" /> {t("Mengen (AVA-Übergabe)")}
+            <AvaCsvKnopf zeilen={mengen} gewerk={t("Entwässerung")} quelle={t("Entwässerungsplaner")} datei="entwaesserung-mengen" testid="ew-mengen-csv" />
+          </CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-0.5 text-xs" data-testid="ew-mengen">
               {mengen.length === 0 && <div className="text-slate-400">{t("Noch keine Mengen — Netz, Abläufe oder Rückhalt anlegen.")}</div>}

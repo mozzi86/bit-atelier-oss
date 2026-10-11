@@ -98,6 +98,7 @@ export function flurOk(breite) {
 // Sanitärraum plausibel (Konzept): Bewegungsfläche vor Objekten ≥ Zielwert der
 // Ausbaustufe UND bodengleiche Dusche; bei Stufe R zusätzlich seitliche Fläche
 // neben WC ≥ 0,90 m und unterfahrbarer Waschtisch. [ASSUMED A12]
+/** @param {{stufe?: string, bewegung?: number|string, dusche?: string, wcSeitlich?: number, waschtisch?: string}} [o] bewegung/wcSeitlich in m */
 export function sanitaerOk({ stufe = "R", bewegung, dusche = "ja", wcSeitlich = WC_SEITLICH, waschtisch = "ja" } = {}) {
   const ja = (v) => v === true || v === "ja";
   if (num(bewegung) < bewegungsflaeche(stufe)) return false;
@@ -111,6 +112,7 @@ export function sanitaerOk({ stufe = "R", bewegung, dusche = "ja", wcSeitlich = 
 // als geprüfter DIN-18040-Nachweis nach Landesbauordnung erscheinen (T-19-04).
 // Genau 8 Items (Keys: aufzug, erschliessung, erreichbar, rollstuhl, bewegung,
 // tuer, flur, sanitaer).
+/** @param {Record<string, any>} [o] storeys, okf (m), aufzugMode, kabineB/kabineT (m), erschliessung, we, quotePct (%), vorhErreichbar, vorhR, … — see the destructuring below */
 export function bfChecks({
   storeys = 0, okf = 0, aufzugMode = "auto", kabineB, kabineT, // Kabinenmaße ohne Default — fehlend ≠ Mindestmaß erfüllt (ME-05)
   erschliessung = "ja", we = 0, quotePct = DEFAULT_R_QUOTE, vorhErreichbar = 0, vorhR = 0,

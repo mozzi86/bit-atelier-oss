@@ -14,8 +14,9 @@ import { ALGORITHM, SOLVE_STATUS, buildSolverInput, applySolution, solverIdToMod
  */
 export function runSolve(wrapper, sketch, { extraConstraints = [], algorithm = ALGORITHM.DogLeg } = {}) {
   wrapper.clear_data();
-  wrapper.push_primitives_and_params(buildSolverInput(sketch, extraConstraints));
-  const status = wrapper.solve(algorithm);
+  // planegcs' own union types are stricter than our plain-object builder → cast
+  wrapper.push_primitives_and_params(/** @type {any} */ (buildSolverInput(sketch, extraConstraints)));
+  const status = wrapper.solve(/** @type {any} */ (algorithm));
   const statusName = SOLVE_STATUS[status] ?? "failed";
 
   const backToModel = (ids) => [...new Set(ids.map(solverIdToModelId))];

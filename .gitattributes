@@ -1,3 +1,13 @@
+# 87-04: ONE line-ending rule for the whole repo — text files are stored and checked
+# out with LF (attribute beats core.autocrlf=true on the Windows clones). Before,
+# 1 672 tracked files sat with CRLF in the working tree and 713 with LF, every
+# edit by a tool that writes LF produced whole-file phantom diffs, and patch
+# scripts needed "\r\n" normalisation (tesselierung.js). Exceptions below keep
+# their own ending on purpose. Git detects binaries itself (text=auto).
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+
 # Generated files that tests compare byte for byte with their generator output
 # (tests/unit/beispielmodell.test.js; the reference-project IDS lives in the NDA archive since Plan 83-01). The generators
 # write LF; with core.autocrlf=true (Windows default) a fresh clone would check

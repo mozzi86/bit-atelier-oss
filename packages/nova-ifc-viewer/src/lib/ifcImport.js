@@ -107,6 +107,24 @@ export const STATUS_PROP_KEYS = ["Renovation Status", "Umbau-Status", "Status"];
 // --- Relations-Indizes (einmal je Modell aufbauen — O(Relationen), nicht O(n²)) ----------
 
 // Geschoss je Element: IFCRELCONTAINEDINSPATIALSTRUCTURE → RelatingStructure.Name.
+// 87-02: what the import SKIPS is counted and reported instead of vanishing in an empty
+// catch — a lost quantity made the takeoff sum smaller without any hint. Module state,
+// set by extractFromModel for the duration of one extraction (the builders below are
+// private and run synchronously inside it).
+/** @type {null|{relationen:number, properties:number, quantities:number, definitionen:number, elemente:number, sonstige:number, beispiele:Array<{art:string, id:number|null, grund:string}>}} */
+let uebersprungenZaehler = null;
+const UEBERSPRUNGEN_FELD = { Relation: "relationen", Property: "properties", Quantity: "quantities", Definition: "definitionen", Element: "elemente" };
+function neuerUebersprungenZaehler() {
+  return { relationen: 0, properties: 0, quantities: 0, definitionen: 0, elemente: 0, sonstige: 0, beispiele: [] };
+}
+/** Count one skipped entry; keeps the first five as examples (expressId + reason). */
+function notiereUebersprungen(art, id, err) {
+  const z = uebersprungenZaehler;
+  if (!z) return;
+  z[UEBERSPRUNGEN_FELD[art] || "sonstige"] += 1;
+  if (z.beispiele.length < 5) z.beispiele.push({ art, id: Number.isFinite(Number(id)) ? Number(id) : null, grund: String(err?.message || err || "").slice(0, 120) });
+}
+
 function buildStoreyIndex(api, modelID) {
   const byElement = new Map(); // expressId → Geschossname
   const structNameCache = new Map();
@@ -116,7 +134,8 @@ function buildStoreyIndex(api, modelID) {
       try {
         const struct = api.GetLine(modelID, structId);
         name = str(struct?.Name) ?? str(struct?.LongName) ?? null;
-      } catch {
+      } catch (e) {
+        notiereUebersprungen("Struktur", structId, e);
         name = null;
       }
       structNameCache.set(structId, name);
@@ -135,7 +154,7 @@ function buildStoreyIndex(api, modelID) {
       for (const h of rel?.RelatedElements || []) {
         if (h?.value != null && !byElement.has(h.value)) byElement.set(h.value, name);
       }
-    } catch { /* defekte Relation überspringen */ }
+    } catch (e) { notiereUebersprungen("Relation", typeof relId === "number" ? relId : null, e); }
   }
   return { byElement, nameOf };
 }
@@ -154,7 +173,7 @@ function buildAggregateIndex(api, modelID) {
       for (const h of rel?.RelatedObjects || []) {
         if (h?.value != null && !parentByChild.has(h.value)) parentByChild.set(h.value, whole);
       }
-    } catch { /* defekte Relation überspringen */ }
+    } catch (e) { notiereUebersprungen("Relation", typeof relId === "number" ? relId : null, e); }
   }
 
   // IFCRELVOIDSELEMENT: eine Öffnung (IfcOpeningElement) hängt nicht in der
@@ -168,7 +187,7 @@ function buildAggregateIndex(api, modelID) {
       if (host != null && opening != null && !parentByChild.has(opening)) {
         parentByChild.set(opening, host);
       }
-    } catch { /* defekte Relation überspringen */ }
+    } catch (e) { notiereUebersprungen("Relation", typeof relId === "number" ? relId : null, e); }
   }
   return parentByChild;
 }
@@ -197,7 +216,7 @@ function buildPsetIndex(api, modelID) {
             const p = api.GetLine(modelID, h.value);
             const pName = val(p?.Name);
             if (pName != null) props[String(pName)] = val(p?.NominalValue);
-          } catch { /* einzelne Property überspringen */ }
+          } catch (e) { notiereUebersprungen("Property", h?.value, e); }
         }
         out.psets = { [String(val(def?.Name) ?? "Pset")]: props };
       } else if (Array.isArray(def?.Quantities)) {
@@ -213,11 +232,11 @@ function buildPsetIndex(api, modelID) {
               line?.CountValue ?? line?.WeightValue ?? line?.TimeValue,
             );
             if (v != null) q[qName] = v;
-          } catch { /* einzelne Quantity überspringen */ }
+          } catch (e) { notiereUebersprungen("Quantity", h?.value, e); }
         }
         if (Object.keys(q).length) out.qty = q;
       }
-    } catch { /* defekte Definition überspringen */ }
+    } catch (e) { notiereUebersprungen("Definition", defId, e); }
     defCache.set(defId, out);
     return out;
   };
@@ -250,7 +269,7 @@ function buildPsetIndex(api, modelID) {
           qtyByElement.set(eid, cur);
         }
       }
-    } catch { /* defekte Relation überspringen */ }
+    } catch (e) { notiereUebersprungen("Relation", typeof relId === "number" ? relId : null, e); }
   }
   return { psetsByElement, qtyByElement };
 }
@@ -287,7 +306,7 @@ function buildClassificationIndex(api, modelID) {
         if (cur) cur.push(label);
         else byElement.set(h.value, [label]);
       }
-    } catch { /* defekte Relation überspringen */ }
+    } catch (e) { notiereUebersprungen("Relation", typeof relId === "number" ? relId : null, e); }
   }
   return byElement;
 }
@@ -331,7 +350,7 @@ function resolveMaterial(api, modelID, matId, depth = 0) {
           }
           layers.push({ name, dicke: qtyNum(layer?.LayerThickness) });
           if (name) names.push(name);
-        } catch { /* Layer überspringen */ }
+        } catch (e) { notiereUebersprungen("Material", h?.value, e); }
       }
       // IfcMaterialLayerSet hat KEIN Attribut `Name` — das Orakel liefert hier None,
       // der Aufbau-Name steckt in `LayerSetName` (L5-Zusatzwissen, nicht der Orakelwert).
@@ -348,7 +367,7 @@ function resolveMaterial(api, modelID, matId, depth = 0) {
           const n = r.names[0] ?? str(c?.Name);
           layers.push({ name: n, dicke: null });
           if (n) names.push(n);
-        } catch { /* Constituent überspringen */ }
+        } catch (e) { notiereUebersprungen("Material", h?.value, e); }
       }
       return { name: eigenerName, layerset: null, layers, names };
     }
@@ -373,7 +392,8 @@ function resolveMaterial(api, modelID, matId, depth = 0) {
       layers: eigenerName ? [{ name: eigenerName, dicke: null }] : [],
       names: eigenerName ? [eigenerName] : [],
     };
-  } catch {
+  } catch (e) {
+    notiereUebersprungen("Material", matId, e);
     return leer;
   }
 }
@@ -396,7 +416,7 @@ function buildMaterialIndex(api, modelID) {
       for (const h of rel?.RelatedObjects || []) {
         if (h?.value != null && !byElement.has(h.value)) byElement.set(h.value, info);
       }
-    } catch { /* defekte Relation überspringen */ }
+    } catch (e) { notiereUebersprungen("Relation", typeof relId === "number" ? relId : null, e); }
   }
   return byElement;
 }
@@ -412,7 +432,7 @@ function buildTypeIndex(api, modelID) {
       for (const h of rel?.RelatedObjects || []) {
         if (h?.value != null && !typeByElement.has(h.value)) typeByElement.set(h.value, typeId);
       }
-    } catch { /* defekte Relation überspringen */ }
+    } catch (e) { notiereUebersprungen("Relation", typeof relId === "number" ? relId : null, e); }
   }
   return typeByElement;
 }
@@ -458,7 +478,16 @@ export function statusFromPsets(psets, katalogSnapshot = null) {
 export function extractFromModel(api, modelID, opt = {}) {
   const { onProgress, katalogSnapshot = null } = opt;
   const progress = typeof onProgress === "function" ? onProgress : () => {};
+  // 87-02: one counter per extraction (see notiereUebersprungen), reset even on a throw.
+  uebersprungenZaehler = neuerUebersprungenZaehler();
+  try {
+    return extractFromModelKern(api, modelID, progress, katalogSnapshot);
+  } finally {
+    uebersprungenZaehler = null;
+  }
+}
 
+function extractFromModelKern(api, modelID, progress, katalogSnapshot) {
   let schema = "";
   try { schema = api.GetModelSchema(modelID) || ""; } catch { /* optional */ }
 
@@ -593,7 +622,7 @@ export function extractFromModel(api, modelID, opt = {}) {
           // L9: Alias-Projektion — Viewer und Bestandsfilter rechnen unverändert weiter.
           mengen: mengenAusQty(qty),
         });
-      } catch { /* kaputtes Element bricht nicht den Import */ }
+      } catch (e) { notiereUebersprungen("Element", expressId, e); }
     }
   }
 
@@ -602,6 +631,16 @@ export function extractFromModel(api, modelID, opt = {}) {
   }
 
   progress(`${elements.length} Bauteile gelesen.`);
+
+  // 87-02: skipped entries are a warning the user sees — the sums are incomplete.
+  const z0 = uebersprungenZaehler || neuerUebersprungenZaehler();
+  const uebersprungen = { ...z0, gesamt: z0.relationen + z0.properties + z0.quantities + z0.definitionen + z0.elemente + z0.sonstige };
+  if (uebersprungen.gesamt > 0) {
+    const teile = Object.entries(UEBERSPRUNGEN_FELD).map(([art, feld]) => [art, uebersprungen[feld]]).filter(([, k]) => k > 0).map(([art, k]) => `${k} × ${art}`);
+    if (uebersprungen.sonstige > 0) teile.push(`${uebersprungen.sonstige} × Material/Struktur`);
+    const beispiele = uebersprungen.beispiele.map((b) => `#${b.id ?? "?"} ${b.art}`).join(", ");
+    warnungen.push(`${uebersprungen.gesamt} Einträge beim Import übersprungen (${teile.join(", ")}) — Mengen und Zuordnungen können unvollständig sein; Beispiele: ${beispiele}.`);
+  }
 
   // L10: Kennzahlen für BimSnapshot — der Import ist erst dann geprüft, wenn jemand die
   // Zahlen sieht (6.038 Bauteile, 355 ohne Status …).
@@ -614,6 +653,7 @@ export function extractFromModel(api, modelID, opt = {}) {
     mit_qty: elements.filter((e) => Object.keys(e.qty).length > 0).length,
     mehrfach_klassifiziert: elements.filter((e) => (e.classifications || []).length >= 2).length,
     warnungen_anzahl: warnungen.length,
+    uebersprungen,
     bekannte_abweichung: [
       {
         ort: "qty (L4)",

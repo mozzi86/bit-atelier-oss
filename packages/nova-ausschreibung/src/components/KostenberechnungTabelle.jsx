@@ -46,7 +46,7 @@ export default function KostenberechnungTabelle({
   positionen = [],
   schichtenJePosition = null,
   reihen = null,
-  kataloge = {},
+  kataloge = /** @type {Record<string, any[]>} */ ({}),
   vertraege = [],
   deckungJePosition = null,
   preisstand = "2026-05",

@@ -1,4 +1,4 @@
-// Spacio-style rapid residential feasibility: unit mix + code compliance.
+// Rapid residential feasibility: unit mix + code compliance.
 // @designer darf @designer importieren (ESLint-Boundary) — die
 // Barrierefreiheits-Faustformeln kommen aus der Fachlib statt aus einer Kopie.
 import { aufzugPflicht, erfBarrierefreiErreichbar } from "@designer/lib/accessibility";

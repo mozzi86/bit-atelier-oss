@@ -41,7 +41,37 @@ export const WERKSTATT_DEFAULT = {
   // boundary positions (grenzenPositionen). Both are solver INPUTS, not geometry.
   anordnung: {},
   grenzenPositionen: {},
+  // 84-10: level switch per unit { "<level>|<typKey>|<n>": "standard"|"B"|"R" } (keys from
+  // tesselierung.stufeSchluessel). It beats the `stufe` of the mix entry (D-P84-R); an entry
+  // that equals the mix level is removed again. Older layers default additively to {}.
+  stufeJeWe: {},
+  // 86-05b: minimum footprint of a further bar, m² (tesseliere riegelMinFlaeche_m2; 120 =
+  // solver default → byte-identical result), and the proposal the user applied last
+  // ({ id, typologie, parameter, algoVersion, footprintHash, gewaehltAm } or null).
+  // Schema werkstatt_layer v2 — both optional, older layers default additively.
+  riegelMinFlaeche_m2: 120,
+  gewaehlterVorschlag: null,
 };
+
+/**
+ * 84-10: add a catalogue (or own) type to the unit mix. A second entry of the same type
+ * gets its own unique `key` (`<basis>~2`, …) and names the catalogue type in `basisKey`
+ * (einheitenAnreichern resolves it from there). Why: every consumer finds a unit's mix
+ * entry by `key` (weListe[].typKey → einheiten.find, balkonJeTyp, anordnung, the level
+ * switch) — two entries with one key meant the second was never reachable, so "2-Zi R next
+ * to 2-Zi" (D-P84-R) needs distinct keys.
+ * @param {Array<object>} einheiten current mix (layer.einheiten)
+ * @param {object} quelle catalogue / own type to add
+ * @returns {Array<object>} new mix list (input untouched)
+ */
+export function mixEintragHinzufuegen(einheiten, quelle) {
+  const liste = Array.isArray(einheiten) ? einheiten : [];
+  const vorhanden = new Set(liste.map((e) => e?.key));
+  const basis = quelle?.basisKey ?? quelle?.key;
+  let key = quelle?.key;
+  for (let n = 1; vorhanden.has(key); ) { n += 1; key = `${basis}~${n}`; }
+  return [...liste, key === quelle?.key ? { ...quelle } : { ...quelle, key, basisKey: basis }];
+}
 
 /**
  * Enrich stored units of older layers with the catalogue definitions so the
@@ -67,7 +97,9 @@ export function einheitenAnreichern(einheiten) {
       return m ? Number(m[1]) : undefined;
     })();
     const zielZimmer = e?.zimmer ?? nameZimmer;
-    const katalogTyp = WERKSTATT_TYPEN.find((t) => t.key === e?.key)
+    // 84-10: a second entry of the same catalogue type has its own unique `key`
+    // (mixEintragHinzufuegen) and names the catalogue type in `basisKey`.
+    const katalogTyp = WERKSTATT_TYPEN.find((t) => t.key === (e?.basisKey ?? e?.key))
       // Alt-Format (61-01: Keys t2/t3/t4, kein zimmer-Feld) → Fallback über
       // die Zimmerzahl, damit auch ältere Layer ein raumprogramm bekommen.
       || WERKSTATT_TYPEN.find((t) => t.nutzung === (e?.nutzung || "wohnen") && t.zimmer === zielZimmer);

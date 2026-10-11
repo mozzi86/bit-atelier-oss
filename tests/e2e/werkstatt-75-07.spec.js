@@ -4,7 +4,7 @@
 // Regeln werden am Ende wieder abgeschaltet, damit der werkstatt_layer des
 // Testprojekts im Ausgangszustand bleibt.
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, schalteRegel } from "./fixtures/massing.js";
 
 const SEITE = "/ComplexDesigner?projekt=Review%20Testhaus&tab=werkstatt";

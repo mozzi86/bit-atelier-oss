@@ -22,6 +22,11 @@ import {
   ERSCHLIESSUNG, tesseliere, istWerkstattZone, tesselierungsChecks, empfehleErschliessung,
   // 75-13: core rules (lift default = duty), balcony rule values.
   kernRegeln, TREPPENRAUM, BALKON, AUFZUG_SCHWELLEN,
+  // 84-01: the rules tesseliere() really applies (apartment layout always on).
+  // 84-07: + stair core standard for MFH/Spänner.
+  effektiveRegeln, KERN_STANDARD_TYPEN,
+  // 84-10: level per unit (standard / B / R): the switch key and the three values.
+  stufeSchluessel, STUFEN,
 } from "@designer/lib/tesselierung";
 import {
   WERKSTATT_TYPEN, validiereTyp, woflvFlaeche, mfgFlaeche, belichtungJeWE,
@@ -42,6 +47,13 @@ import { personenFuerTyp } from "@designer/lib/wohnMoebel";
 import { pruefeAlle, wohnungsRegeln } from "@designer/lib/raumQualitaet";
 import ZonenTueren from "./ZonenTueren";
 import { kurzRaumname } from "@designer/lib/massstab";
+// 86-05b: building proposals — tab panel (Worker + cards) and the stale check of the stored one.
+import VorschlaegePanel from "./VorschlaegePanel";
+import { typologieLabel } from "./VorschlagKarte";
+import { vorschlagVeraltet } from "@designer/lib/bebauungsvorschlaege";
+// 91-02: rainwater plant — cistern under the garage (overlay) + services room in the cellar.
+import { useRegenwasser } from "@designer/lib/useRegenwasser";
+import { zisternenRechteck } from "@designer/lib/regenwassernutzung";
 
 const de1 = (n) => (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 1 });
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -61,7 +73,9 @@ const WT_STATUS = {
 // which cannot parse JSX — read the SAME table. Re-exported here for every
 // existing importer of the component.
 export { WERKSTATT_DEFAULT } from "@designer/lib/werkstattDefaults";
-import { WERKSTATT_DEFAULT, einheitenAnreichern } from "@designer/lib/werkstattDefaults";
+import { WERKSTATT_DEFAULT, einheitenAnreichern, mixEintragHinzufuegen } from "@designer/lib/werkstattDefaults";
+// 86-01: while mounted, the workshop regenerates the zones itself — the footprint follower stays quiet.
+import { useWerkstattAngemeldet } from "@designer/lib/useWerkstattRehydrate";
 
 // [ASSUMED] Automatic garage length when the user gives none and the cellar is
 // active: 60 % of the footprint length, but never less than ramp + two stalls —
@@ -93,12 +107,15 @@ const RAUM_ARTEN = [
  * @param {(m: Record<string, Array<object>>) => void} [props.onMoeblierungChange]
  *   ein Schreibweg: updateComplexData('moeblierung', …) — fehlt er, ist der Fokus read-only
  * @param {boolean} [props.speicherbar] Entwurf hat Name + Standort („Entwurf speichern" möglich)
+ * @param {{lat?: number, lng?: number}|null} [props.standort] 91-02: site location (complexData.location) —
+ *   the rainwater figures use the same precipitation as the drainage planner
  */
-export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblierungChange, speicherbar } = {}) {
+export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblierungChange, speicherbar, standort = null } = {}) {
   const { t } = useI18n();
   const { project } = useProject();
   const plan = usePlanModel(project?.id);
   const store = useBuildingProgram();
+  useWerkstattAngemeldet();
   const zones = Array.isArray(store.zones) ? store.zones : [];
   const [layer, setLayer] = useFachlayer(project?.id, "werkstatt_layer", WERKSTATT_DEFAULT);
   // 75-16: floor-plan height follows the window (≥ the old fixed 420 px).
@@ -145,9 +162,16 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
     nordwinkel: Number.isFinite(Number(layer?.nordwinkel)) ? Number(layer.nordwinkel) : 0,
     // Migrations-Guard 75-14: door-swing overrides, plain object.
     tuerAufschlaege: layer?.tuerAufschlaege && typeof layer.tuerAufschlaege === "object" ? layer.tuerAufschlaege : {},
+    // Migrations-Guard 84-10: level switch per unit, plain object.
+    stufeJeWe: layer?.stufeJeWe && typeof layer.stufeJeWe === "object" ? layer.stufeJeWe : {},
+    // Migrations-Guard 86-05b (schema v2): bar minimum > 0 or the solver default; stored proposal or null.
+    riegelMinFlaeche_m2: Number(layer?.riegelMinFlaeche_m2) > 0 ? Number(layer.riegelMinFlaeche_m2) : WERKSTATT_DEFAULT.riegelMinFlaeche_m2,
+    gewaehlterVorschlag: layer?.gewaehlterVorschlag && typeof layer.gewaehlterVorschlag === "object" ? layer.gewaehlterVorschlag : null,
   }), [layer, angereicherteEinheiten]);
   const setCfg = (patch) => setLayer({ ...cfg, ...patch });
-  const [ansicht, setAnsicht] = useState("geschosse"); // Sub-Tab: Geschosse | Kellerabteile
+  const [ansicht, setAnsicht] = useState("geschosse"); // Sub-Tab: Geschosse | Kellerabteile | Tiefgarage | Vorschläge (86-05b)
+  // 86-05b: is the stored proposal still the one computed for this footprint and algorithm?
+  const vorschlagStand = useMemo(() => vorschlagVeraltet(cfg.gewaehlterVorschlag, store.footprintM), [cfg.gewaehlterVorschlag, store.footprintM]);
 
   const maxLevel = Math.max(0, Math.round(store.storeys || 1) - 1);
   const lvl = Math.min(level, maxLevel);
@@ -169,15 +193,38 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
       nordwinkel: cfg.nordwinkel,
       // 75-14: door swings toggled in the focus (only read with regeln.wohnungsgrundriss).
       tuerAufschlaege: cfg.tuerAufschlaege,
+      // 84-10: R units — switch per unit (beats the mix level) read by the generator.
+      stufeJeWe: cfg.stufeJeWe,
       // 75-13: top-storey floor level for the lift duty (OKF ≈ (storeys − 1) · storey height).
       okf_m: (Math.max(1, Math.round(store.storeys || 1)) - 1) * (store.storeyHeight || 3),
+      // 86-05b: bar minimum of the applied proposal (default 120 → byte-identical to before).
+      riegelMinFlaeche_m2: cfg.riegelMinFlaeche_m2,
     }),
-    [store.footprintM, store.storeys, store.storeyHeight, cfg.typ, cfg.einheiten, cfg.gesperrteGrenzen, cfg.anordnung, cfg.grenzenPositionen, cfg.regeln, cfg.nordwinkel, cfg.tuerAufschlaege]
+    [store.footprintM, store.storeys, store.storeyHeight, cfg.typ, cfg.einheiten, cfg.gesperrteGrenzen, cfg.anordnung, cfg.grenzenPositionen, cfg.regeln, cfg.nordwinkel, cfg.tuerAufschlaege, cfg.stufeJeWe, cfg.riegelMinFlaeche_m2]
   );
+  // 84-10 (D-P84-R): level of every unit — the mix entry gives the default, the switch of the
+  // unit beats it. `schluesselJeWe` = key in cfg.stufeJeWe (type + position, not the unit number).
+  const schluesselJeWe = useMemo(() => stufeSchluessel(ergebnis.weListe), [ergebnis.weListe]);
+  /** @param {string} we unit id @returns {string} level of the mix entry of this unit */
+  const mixStufeVonWe = (we) => {
+    const w = ergebnis.weListe.find((x) => x.we === we);
+    return String(cfg.einheiten.find((e) => e.key === w?.typKey)?.stufe || "standard");
+  };
+  /** The ONE write path of the per-unit switch: equal to the mix level → entry removed. */
+  const setzeStufeFuerWe = (we, stufe) => {
+    const key = schluesselJeWe.get(String(we));
+    if (!key || !STUFEN.includes(stufe)) return;
+    const next = { ...cfg.stufeJeWe };
+    if (stufe === mixStufeVonWe(we)) delete next[key]; else next[key] = stufe;
+    setCfg({ stufeJeWe: next });
+  };
+  const rWohnungen = useMemo(() => ergebnis.weListe.filter((w) => w.stufe === "R").length, [ergebnis.weListe]);
   // 75-13: resolved core rules for the switches (lift default = duty by office rule / OKF).
+  // 84-07: from the effective rules — MFH/Spänner always have the stair enclosure.
+  const kernStandard = KERN_STANDARD_TYPEN.includes(String(cfg.typ));
   const kernInfo = useMemo(
-    () => kernRegeln(cfg.regeln, Math.max(1, Math.round(store.storeys || 1)), (Math.max(1, Math.round(store.storeys || 1)) - 1) * (store.storeyHeight || 3)),
-    [cfg.regeln, store.storeys, store.storeyHeight]
+    () => kernRegeln(effektiveRegeln(cfg.regeln, { typ: cfg.typ }), Math.max(1, Math.round(store.storeys || 1)), (Math.max(1, Math.round(store.storeys || 1)) - 1) * (store.storeyHeight || 3)),
+    [cfg.regeln, cfg.typ, store.storeys, store.storeyHeight]
   );
   // 75-13: per-room window cap by ZONE name, expanded from the type|room keys of the
   // layer (fensterJeRaum only knows zone names, the editor only knows type rooms).
@@ -195,14 +242,17 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
     }
     return out;
   }, [cfg.regeln, ergebnis.zonen, typKeyJeWe]);
-  // 75-14: quality list per unit (access graph, 10 m², ratio, wardrobe wall) —
-  // only with the rule on; the footprint bbox marks the window walls of legacy zones.
-  const wohnungsgrundrissAktiv = wohnungsRegeln(cfg.regeln).aktiv;
+  // 75-14: quality list per unit (access graph, 10 m², ratio, wardrobe wall); the
+  // footprint bbox marks the window walls of legacy zones. 84-01: the apartment
+  // layout is always on, so this reads the effective rules (normally true).
+  const wohnungsgrundrissAktiv = wohnungsRegeln(effektiveRegeln(cfg.regeln)).aktiv;
   const qualitaetJeWe = useMemo(() => {
     if (!wohnungsgrundrissAktiv) return [];
     const bb = footprintBBox(store.footprintM);
-    return pruefeAlle(ergebnis.zonen, { bbox: { minX: bb.minX, maxX: bb.maxX, minZ: bb.minZ, maxZ: bb.maxZ }, regeln: cfg.regeln });
-  }, [wohnungsgrundrissAktiv, ergebnis.zonen, store.footprintM, cfg.regeln]);
+    // 84-10: R/B units are measured against their level (bath movement area, door width, wardrobe).
+    const stufeJeWe = Object.fromEntries(ergebnis.weListe.filter((w) => w.stufe).map((w) => [w.we, w.stufe]));
+    return pruefeAlle(ergebnis.zonen, { bbox: { minX: bb.minX, maxX: bb.maxX, minZ: bb.minZ, maxZ: bb.maxZ }, regeln: effektiveRegeln(cfg.regeln), stufeJeWe });
+  }, [wohnungsgrundrissAktiv, ergebnis.zonen, ergebnis.weListe, store.footprintM, cfg.regeln]);
   const qualitaetZaehler = useMemo(() => qualitaetJeWe.reduce((s, q) => ({
     ok: s.ok + (q.zaehler.ok || 0), warn: s.warn + (q.zaehler.warn || 0), fail: s.fail + (q.zaehler.fail || 0),
   }), { ok: 0, warn: 0, fail: 0 }), [qualitaetJeWe]);
@@ -230,14 +280,25 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
   }, [store.footprintM, plan.storeyHeight, ergebnis.weListe, cfg.tiefgarage.optionen, cfg.keller.aktiv]);
   const tgChecksListe = useMemo(() => tiefgarageChecks(tgErgebnis), [tgErgebnis]);
 
+  // 91-02: the same rainwater figures as the drainage planner (useRegenwasser; this component owns
+  // werkstatt_layer and passes it live). The cistern is drawn under the garage; the services room
+  // "Haustechnik Regenwasser" becomes a mandatory cellar room of the size the plant needs.
+  const rw = useRegenwasser({ werkstatt: layer, location: standort });
+  const rwTechnik_m2 = rw.nutzung.aktiv && rw.speicher.gesamt_m3 > 0 ? rw.technikraum.m2 : 0;
+  const tgZisterne = useMemo(() => {
+    if (!rw.nutzung.aktiv || rw.zisterne.lage !== "unter_tg" || rw.zisterne.volumen_m3 <= 0) return null;
+    const points = zisternenRechteck(tgErgebnis.zonen, rw.zisterne.grundflaeche_m2);
+    return points ? { points, volumen_m3: rw.zisterne.volumen_m3, nutzhoehe_m: rw.zisterne.nutzhoehe_m, passt: rw.zisterne.passt, eingaben: rw.eingaben, klimaStatus: rw.klimaStatus } : null;
+  }, [rw.nutzung.aktiv, rw.zisterne, tgErgebnis.zonen, rw.eingaben, rw.klimaStatus]);
+
   // 61-06: Kellergeschoss aus DERSELBEN weListe — ein Abteil je WE, level −1.
   // 62-02: with the garage applied the cellar starts behind it (uStart).
   const kellerErgebnis = useMemo(
     () => kellerLayout({
-      footprintM: store.footprintM, weListe: ergebnis.weListe, optionen: cfg.keller.optionen,
+      footprintM: store.footprintM, weListe: ergebnis.weListe, optionen: { ...cfg.keller.optionen, regenwasser_m2: rwTechnik_m2 },
       uStart: cfg.tiefgarage.aktiv ? tgErgebnis.laenge_m : 0,
     }),
-    [store.footprintM, ergebnis.weListe, cfg.keller.optionen, cfg.tiefgarage.aktiv, tgErgebnis.laenge_m]
+    [store.footprintM, ergebnis.weListe, cfg.keller.optionen, cfg.tiefgarage.aktiv, tgErgebnis.laenge_m, rwTechnik_m2]
   );
   const kellerChecksListe = useMemo(() => kellerChecks(kellerErgebnis), [kellerErgebnis]);
 
@@ -339,7 +400,8 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
       ? cfg.eigeneTypen[Number(id.slice(6))]
       : WERKSTATT_TYPEN.find((t) => t.key === id);
     if (!quelle) return;
-    setCfg({ einheiten: [...cfg.einheiten, { ...quelle }], angewendet: cfg.angewendet });
+    // 84-10: a second entry of the same type gets its own key (so "2-Zi R" can stand next to "2-Zi").
+    setCfg({ einheiten: mixEintragHinzufuegen(cfg.einheiten, quelle), angewendet: cfg.angewendet });
     setSelIdx(cfg.einheiten.length);
   };
 
@@ -415,11 +477,14 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
   const tessChecks = useMemo(
     () => tesselierungsChecks({
       weListe: ergebnis.weListe, restNachfrage_m2: ergebnis.restNachfrage_m2, angefordert: cfg.einheiten.length,
+      // 84-09: building corridor at the outer wall (warn).
+      zonen: ergebnis.zonen, footprintM: store.footprintM,
     }),
-    [ergebnis, cfg.einheiten.length]
+    [ergebnis, cfg.einheiten.length, store.footprintM]
   );
   const toteCheck = tessChecks.find((c) => c.key === "zwischenraeume");
   const anzahlCheck = tessChecks.find((c) => c.key === "anzahl");
+  const flurCheck = tessChecks.find((c) => c.key === "gebaeudeflur");
   const ueberbelegung = ergebnis.restNachfrage_m2 > 0.05;
 
   // --- WoFlV/MF-G je WE ----------------------------------------------------------
@@ -429,8 +494,13 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
       const eintrag = cfg.einheiten.find((e) => e.key === w.typKey) || {};
       const nutzung = eintrag.nutzung === "gewerbe" ? "gewerbe" : "wohnen";
       // 75-13: balcony zones are NOT rooms — they enter via `balkone` below.
-      const alleZonen = ergebnis.zonen.filter((z) => z.we === w.we && z.level === w.level);
-      const raumZonen = alleZonen.filter((z) => z.raumart !== "balkon");
+      // 84-04: houses (Reihenhaus/EFH) keep one `we` over all storeys — every storey
+      // counts (the level filter used to drop the upper floors); apartment ids carry
+      // their storey, so the plain `we` match is the same set there.
+      const alleZonen = ergebnis.zonen.filter((z) => z.we === w.we);
+      // WoFlV §3 Abs. 3 Nr. 2: stairs with more than three risers (and their landings)
+      // do not count [CITED from memory — check against gesetze-im-internet.de].
+      const raumZonen = alleZonen.filter((z) => z.raumart !== "balkon" && z.art !== "treppe");
       const balkonZonen = alleZonen.filter((z) => z.raumart === "balkon");
       /** @type {Array<{name: string, flaeche_m2: number, dachschraege?: {unter1m_m2?: number, zwischen1und2m_m2?: number}}>} */
       let raeume = raumZonen.map((z) => ({ name: z.name, flaeche_m2: num(z.flaeche_m2, polygonAreaM(z.points)) }));
@@ -683,6 +753,19 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                     <span> · {t("passend")}: {empfehlung.typen.map((k) => ERSCHLIESSUNG[k]?.label || k).join(" / ")}</span>
                   )}
                 </div>
+                {/* 86-05b: the applied proposal — or the warning that footprint/algorithm moved on
+                    since it was computed (never silently recomputed under the same id). Plain spans. */}
+                {cfg.gewaehlterVorschlag && (vorschlagStand.veraltet ? (
+                  <div className="mt-1 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900"
+                    data-testid="wt-vorschlag-veraltet" data-grund={vorschlagStand.grund} data-vorschlag={cfg.gewaehlterVorschlag.id}>
+                    {t("Vorschlag veraltet")} ({vorschlagStand.grund === "algorithmus" ? t("Algorithmus geändert") : t("Grundfläche geändert")}): {typologieLabel(cfg.gewaehlterVorschlag.typologie)}
+                  </div>
+                ) : (
+                  <div className="mt-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-900"
+                    data-testid="wt-vorschlag-aktiv" data-vorschlag={cfg.gewaehlterVorschlag.id}>
+                    {t("Vorschlag")}: {typologieLabel(cfg.gewaehlterVorschlag.typologie)}
+                  </div>
+                ))}
               </div>
 
               {/* 75-07: Architekturregeln — jede optional, Default aus (Phase 61 unverändert). */}
@@ -697,17 +780,27 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                     ["rettungsweg", t("Rettungsweg ≤ 35 m (MBO §35)")],
                     // 75-11 (MSB-13): windows per room instead of every 3.5 m.
                     ["fensterJeRaum", t("Fenster je Raum (statt je 3,5 m)")],
-                    // 75-14: hall + doors + access graph, ≥ 10 m², ≤ 1 : 1,8, wardrobe wall 3 m.
-                    ["wohnungsgrundriss", t("Wohnungsgrundriss: Diele, Türen, ≥ 10 m², ≤ 1 : 1,8, Schrankwand 3 m")],
                     // 75-13: necessary stair enclosure (+ lift switch, + extension) for MFH/Spänner.
                     ["treppenraum", t("Notwendiger Treppenraum + Aufzug (MBO §35/§39)")],
-                  ].map(([k, label]) => (
-                    // min-w-0 + wrapping span: the long 75-13/75-14 labels no longer run into the neighbour column.
-                    <label key={k} className="flex min-w-0 items-start gap-1.5">
-                      <input type="checkbox" className="mt-0.5 shrink-0" checked={!!cfg.regeln?.[k]} onChange={(e) => setRegel(k, e.target.checked)} data-testid={`wt-regel-${k}`} />
-                      <span className="min-w-0 break-words">{label}</span>
-                    </label>
-                  ))}
+                  ].map(([k, label]) => {
+                    // 84-07: MFH/Spänner always have the stair enclosure — shown checked and locked.
+                    const fest = k === "treppenraum" && kernStandard;
+                    return (
+                      // min-w-0 + wrapping span: the long 75-13/75-14 labels no longer run into the neighbour column.
+                      <label key={k} className={`flex min-w-0 items-start gap-1.5${fest ? " text-slate-500" : ""}`}
+                        title={fest ? t("Bei Mehrfamilienhaus und Spänner immer an (Phase 84): Treppenkern mit Aufzug-Schalter und Eingangshalle im EG") : undefined}>
+                        <input type="checkbox" className="mt-0.5 shrink-0" checked={fest || !!cfg.regeln?.[k]} disabled={fest} readOnly={fest}
+                          onChange={fest ? undefined : (e) => setRegel(k, e.target.checked)} data-testid={`wt-regel-${k}`} />
+                        <span className="min-w-0 break-words">{label}{fest && <> — {t("Standard")}</>}</span>
+                      </label>
+                    );
+                  })}
+                  {/* 84-01: hall + doors + access graph are no longer a switch (D-P84-A) — shown
+                      checked and locked so the rule list still says what the plan contains. */}
+                  <label className="flex min-w-0 items-start gap-1.5 text-slate-500" title={t("Seit Phase 84 immer an: jede Wohnung bekommt Diele und Türen; Erschließung und Rettungsweg laufen über die Türen")}>
+                    <input type="checkbox" className="mt-0.5 shrink-0" checked readOnly disabled data-testid="wt-regel-wohnungsgrundriss" />
+                    <span className="min-w-0 break-words">{t("Wohnungsgrundriss: Diele, Türen, ≥ 10 m², ≤ 1 : 1,8, Schrankwand 3 m")} — {t("immer an")}</span>
+                  </label>
                 </div>
                 {/* 75-13 Task 2: global window cap — only meaningful with the per-room window rule. */}
                 {cfg.regeln?.fensterJeRaum && (
@@ -721,7 +814,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                   </label>
                 )}
                 {/* 75-13 Task 4: lift switch (default = duty) + stair-enclosure extension slider. */}
-                {cfg.regeln?.treppenraum && (
+                {kernInfo.aktiv && (
                   <div className="space-y-1 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs" data-testid="wt-treppenraum">
                     <label className="flex items-center gap-1.5">
                       <input type="checkbox" checked={kernInfo.aufzug} onChange={(e) => setRegel("aufzug", e.target.checked)} data-testid="wt-regel-aufzug" />
@@ -777,6 +870,10 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">{t("Einheiten")} ({cfg.einheiten.length})</CardTitle>
+              {/* 84-10: how many units of the generated building are wheelchair units (mix + switch). */}
+              <div className="text-[11px] text-slate-500" data-testid="r-zaehler" data-r={rWohnungen}>
+                {t("R-Wohnungen im Gebäude")}: {rWohnungen} / {ergebnis.weListe.length}
+              </div>
             </CardHeader>
             <CardContent className="space-y-1">
               {cfg.einheiten.map((e, i) => (
@@ -792,6 +889,9 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                 >
                   <span className="font-medium">{e.name}</span>
                   <span className="text-slate-500"> · {e.zimmer || 0} {t("Zi")} · {de1(e.flaeche_m2)} m²{e.nutzung === "gewerbe" ? ` · ${t("Gewerbe")}` : ""}</span>
+                  {(e.stufe === "R" || e.stufe === "B") && (
+                    <span data-testid={`einheit-stufe-${i}`} className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-800">{e.stufe}</span>
+                  )}
                 </button>
               ))}
               {sel && (
@@ -834,6 +934,32 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                     </Select>
                   </div>
                   <NumberField label={t("Zimmer")} value={sel.zimmer ?? 0} min={0} onChange={(v) => setSel({ zimmer: v })} />
+                </div>
+                {/* 84-10 (D-P84-R): level of every unit of this type — "R" = wheelchair measures in
+                    the generator (doors 1,01 m, bath 1,50 × 2,05 m, hall 1,50 m). A single unit can
+                    be switched in the focus view (the switch beats this). */}
+                <div className="space-y-1" data-testid="einheit-stufe">
+                  <div className="text-xs text-slate-500">{t("Ausführung (barrierefrei)")}</div>
+                  {/* native select: new shadcn elements each add a tsc children error (Altlast) */}
+                  <select
+                    data-testid="einheit-stufe-wahl"
+                    value={sel.stufe === "R" || sel.stufe === "B" ? sel.stufe : "standard"}
+                    onChange={(e) => {
+                      const neu = e.target.value;
+                      // 84-10: switches of units of THIS type that now equal the mix level do
+                      // nothing any more — drop them (otherwise they would silently override a later
+                      // mix change). Switches with a different level stay (switch beats mix).
+                      const stufeJeWe = Object.fromEntries(Object.entries(cfg.stufeJeWe || {})
+                        .filter(([k, v]) => !(k.split("|")[1] === String(sel.key) && v === neu)));
+                      const einheiten = cfg.einheiten.map((x, i) => (i === Math.min(selIdx, cfg.einheiten.length - 1) ? { ...x, stufe: neu === "standard" ? undefined : neu } : x));
+                      setCfg({ einheiten, stufeJeWe });
+                    }}
+                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                  >
+                    <option value="standard">{t("Standard")}</option>
+                    <option value="B">{t("B — barrierefrei nutzbar")}</option>
+                    <option value="R">{t("R — rollstuhlgerecht")}</option>
+                  </select>
                 </div>
                 <div className="grid grid-cols-3 gap-2" data-testid="einheit-flaechen">
                   <NumberField label={t("Fläche")} suffix="m²" value={sel.flaeche_m2} onChange={(v) => setSel({ flaeche_m2: v })} />
@@ -1024,7 +1150,20 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
               <TabsTrigger value="tiefgarage" data-testid="wt-tab-tiefgarage">
                 {t("Tiefgarage")}{cfg.tiefgarage.aktiv ? ` (${tgErgebnis.mengen.stellplaetze_stk})` : ""}
               </TabsTrigger>
+              <TabsTrigger value="vorschlaege" data-testid="wt-tab-vorschlaege">{t("Vorschläge")}</TabsTrigger>
             </TabsList>
+            <TabsContent value="vorschlaege">
+              {/* 86-05b: proposals compute only while this tab is open (Worker); applying one
+                  writes the whole configuration through the layer's ONE write path. */}
+              <VorschlaegePanel
+                footprintM={store.footprintM}
+                cfg={cfg}
+                storeys={store.storeys}
+                storeyHeight={store.storeyHeight}
+                aktiv={ansicht === "vorschlaege"}
+                onUebernehmen={(neu) => setLayer(neu)}
+              />
+            </TabsContent>
             <TabsContent value="tiefgarage">
               <TiefgaragenPlaner
                 plan={plan}
@@ -1038,6 +1177,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                 onAnwenden={tgAnwenden}
                 onEntfernen={tgEntfernen}
                 mengenPersistiert={cfg.tiefgarage.mengen}
+                zisterne={tgZisterne}
               />
             </TabsContent>
             <TabsContent value="keller">
@@ -1085,6 +1225,11 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
               tuerAufschlaege={cfg.tuerAufschlaege}
               onTuerAufschlaegeChange={wohnungsgrundrissAktiv ? (m) => setCfg({ tuerAufschlaege: m }) : undefined}
               qualitaet={qualitaetJeWe.find((q) => q.we === fokusWe) || null}
+              /* 84-10 (D-P84-R): effective level of this unit (switch > mix), the mix default
+                 for the hint, and the ONE write path of the switch (werkstatt_layer.stufeJeWe). */
+              stufe={ergebnis.weListe.find((w) => w.we === fokusWe)?.stufe || "standard"}
+              stufeVorgabe={mixStufeVonWe(fokusWe)}
+              onStufeChange={(s) => setzeStufeFuerWe(fokusWe, s)}
               /* 75-13: balcony toggle at the room (type|room key — same setter as the editor row). */
               balkonAktiv={(zone) => cfg.regeln?.balkon?.[balkonKey(typKeyJeWe.get(zone?.we), raumBasis(zone?.name))] === true}
               onBalkonToggle={(zone, an) => setBalkonRaum(typKeyJeWe.get(zone?.we), raumBasis(zone?.name), an)}
@@ -1142,7 +1287,31 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                           <pattern id="wt-balkon-schraffur" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
                             <line x1="0" y1="0" x2="0" y2="6" stroke="#0369a1" strokeWidth="0.6" />
                           </pattern>
+                          <pattern id="wt-rest-schraffur" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+                            <line x1="0" y1="0" x2="0" y2="8" stroke="#94a3b8" strokeWidth="0.8" />
+                          </pattern>
                         </defs>
+                        {/* 86-01: footprint parts outside the fitted rectangle — left empty in this stage. */}
+                        {(ergebnis.form?.rest || []).map((poly, i) => (
+                          <polygon key={`rest-${i}`} points={poly.map((p) => `${X(p.x)},${Z(p.z)}`).join(" ")}
+                            fill="url(#wt-rest-schraffur)" stroke="#94a3b8" strokeWidth="0.8" strokeDasharray="4 3" pointerEvents="none"
+                            data-testid="wt-form-rest" />
+                        ))}
+                        {/* 86-03: every bar is a house of its own — outline and number near its first corner. */}
+                        {(ergebnis.form?.riegel || []).map((r) => {
+                          const ecken = r.rechteck.map((p) => ({ x: X(p.x), y: Z(p.z) }));
+                          const mx = ecken.reduce((s, p) => s + p.x, 0) / ecken.length, my = ecken.reduce((s, p) => s + p.y, 0) / ecken.length;
+                          const dx = mx - ecken[0].x, dy = my - ecken[0].y, l = Math.hypot(dx, dy) || 1;
+                          const fs = bildPx(11);
+                          const tx = ecken[0].x + (dx / l) * bildPx(22), ty = ecken[0].y + (dy / l) * bildPx(22);
+                          return (
+                            <g key={`riegel-${r.nr}`} pointerEvents="none" data-testid="wt-riegel" data-riegel={r.nr} data-we={r.we}>
+                              <polygon points={ecken.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#334155" strokeWidth={bildPx(1)} strokeDasharray={`${bildPx(6)} ${bildPx(3)}`} />
+                              <text x={tx} y={ty} dy={fs * 0.35} fontSize={fs} fontWeight="700" textAnchor="middle" fill="#334155"
+                                stroke="#f8fafc" strokeWidth={bildPx(3)} paintOrder="stroke">{`${t("Riegel")} ${r.nr}`}</text>
+                            </g>
+                          );
+                        })}
                         {balkone.map((z, i) => (
                           <polygon key={`bk-${i}`} points={z.points.map((p) => `${X(p.x)},${Z(p.z)}`).join(" ")}
                             fill="url(#wt-balkon-schraffur)" stroke="#0369a1" strokeWidth="0.7" pointerEvents="none"
@@ -1159,10 +1328,12 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                           // Rotate the label when the shaft is narrower on screen than the word (~0,6 · font · 6 chars).
                           const hoch = Math.abs(x1 - x0) < fs * 0.6 * 6 + bildPx(4) && Math.abs(y1 - y0) > Math.abs(x1 - x0);
                           const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+                          // 86-01: the cross runs along the shaft's own diagonals (a turned footprint turns the shaft).
+                          const [a, b, c, d] = z.points.length === 4 ? z.points : [{ x: Math.min(...xs), z: Math.min(...zs) }, { x: Math.max(...xs), z: Math.min(...zs) }, { x: Math.max(...xs), z: Math.max(...zs) }, { x: Math.min(...xs), z: Math.max(...zs) }];
                           return (
                             <g key={`az-${i}`} pointerEvents="none" data-testid="wt-aufzug" data-name={z.name}>
-                              <line x1={x0} y1={y0} x2={x1} y2={y1} stroke="#475569" strokeWidth={bildPx(0.8)} />
-                              <line x1={x0} y1={y1} x2={x1} y2={y0} stroke="#475569" strokeWidth={bildPx(0.8)} />
+                              <line x1={X(a.x)} y1={Z(a.z)} x2={X(c.x)} y2={Z(c.z)} stroke="#475569" strokeWidth={bildPx(0.8)} />
+                              <line x1={X(b.x)} y1={Z(b.z)} x2={X(d.x)} y2={Z(d.z)} stroke="#475569" strokeWidth={bildPx(0.8)} />
                               <text x={cx} y={cy} dy={fs * 0.35} fontSize={fs} fontWeight="600" textAnchor="middle" fill="#1e293b"
                                 stroke="#f8fafc" strokeWidth={bildPx(3)} paintOrder="stroke" transform={hoch ? `rotate(-90 ${cx} ${cy})` : undefined}>
                                 {t("Aufzug")}
@@ -1194,9 +1365,12 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                               data-testid="wt-fenster" data-raum={f.raum} data-breite={f.breite} />
                           );
                         })}
-                        {/* 75-14: door openings of the room zones (opening only at
-                            1:200 — leaf and arc belong to the 1:50 focus). */}
-                        <ZonenTueren zonen={ergebnis.zonen.filter((z) => z.level === overlayLevel)} X={X} Z={Z} SCALE={SCALE} nurOeffnung prefix="wt" />
+                        {/* 75-14: door symbols of the room zones. Since 75-16 the overview fills the
+                            window (≈ 1:50 on a wide screen), so leaf + swing arc are drawn like in the
+                            focus as soon as a door reads on screen; below ~14 px per metre (a 0,885-m
+                            leaf under 12 px) only the opening remains (user 10.10.: "Türen wie
+                            Architekturtüren"). [ASSUMED threshold] */}
+                        <ZonenTueren zonen={ergebnis.zonen.filter((z) => z.level === overlayLevel)} X={X} Z={Z} SCALE={SCALE} px={bildPx} nurOeffnung={pxJeM / (bildPx(1) || 1) < 14} prefix="wt" />
                         {/* WE-Zonen: Tipp = Fokusansicht, Drag auf eine Nachbar-WE
                             desselben Bands = Reihenfolge tauschen (61-07). Labels
                             rendert BimPlan2D selbst (Zonen sind in customZones). */}
@@ -1233,10 +1407,11 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                           const label = g.verschoben ? `📌 ${t("verschoben")}` : `${g.gesperrt ? "🔒 " : "±"}${deltaCm} cm`;
                           const verzahnt = !!(g.verzahnung && !g.verzahnung.warn);
                           const p = g.pos_m;
-                          const x1 = g.achse === "z" ? X(g.quer0) : X(p);
-                          const y1 = g.achse === "z" ? Z(p) : Z(g.quer0);
-                          const x2 = g.achse === "z" ? X(g.quer1) : X(p);
-                          const y2 = g.achse === "z" ? Z(p) : Z(g.quer1);
+                          // 86-01: in a turned footprint the boundary comes with its world end points.
+                          const x1 = g.gedreht ? X(g.p0.x) : g.achse === "z" ? X(g.quer0) : X(p);
+                          const y1 = g.gedreht ? Z(g.p0.z) : g.achse === "z" ? Z(p) : Z(g.quer0);
+                          const x2 = g.gedreht ? X(g.p1.x) : g.achse === "z" ? X(g.quer1) : X(p);
+                          const y2 = g.gedreht ? Z(g.p1.z) : g.achse === "z" ? Z(p) : Z(g.quer1);
                           const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
                           // gesperrt rot · verzahnt violett (gestufte Trennwand,
                           // der Zahn selbst ist die Raum-Zone) · flexibel amber
@@ -1245,7 +1420,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                             <g key={`gr-${g.id}`} data-testid="wt-grenze" data-gesperrt={g.gesperrt ? "1" : "0"}
                               data-verschoben={g.verschoben ? "1" : "0"} data-pos={Math.round(g.pos_m * 100) / 100} data-id={g.id}
                               style={{ cursor: g.achse === "x" ? "ew-resize" : "ns-resize" }}
-                              onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); startDrag(e, { kind: "grenze", grenze: g }); }}>
+                              onPointerDown={(e) => { if (e.button !== 0 || g.gedreht) return; e.stopPropagation(); startDrag(e, { kind: "grenze", grenze: g }); }}>
                               <title>{g.verzahnung?.warn
                                 ? `${t("Verzahnung")}: ${g.verzahnung.warn}`
                                 : g.verschoben ? t("von Hand gesetzt — Ziehen verschiebt, Klick gibt frei")
@@ -1292,6 +1467,13 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                     <span className="font-semibold">warn</span> · {w.text}
                   </div>
                 ))}
+                {/* 84-09: building corridor at the outer wall — WARN (heat loss), above the hints. */}
+                {flurCheck && flurCheck.status === "warn" && (
+                  <div className="mt-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900"
+                    data-testid="wt-gebaeudeflur-warn" data-stufe="warn">
+                    <span className="font-semibold">warn</span> · {t("Gebäudeflur an Außenwand")}: {flurCheck.detail}
+                  </div>
+                )}
                 {(ergebnis.hinweise || []).map((h) => (
                   <div key={h} className="mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="wt-hinweis">{h}</div>
                 ))}

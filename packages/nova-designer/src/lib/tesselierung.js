@@ -22,6 +22,11 @@
 import { rettungsweg as lauflinie, punktInPolygon, innenwegUeberTueren } from "./rettungsweg.js";
 // 75-13: ONE source for the lift duty numbers (import-free module, as rettungsweg.js).
 import { aufzugPflicht, AUFZUG_GESCHOSS_GRENZE, AUFZUG_OKF_GRENZE } from "./accessibility.js";
+// 86-01: footprint-true tessellation (frame + largest inscribed rectangle + remainder).
+import {
+  bereinigen, istAchsRechteck, istRechteck, rahmen, inLokal, inWelt, schwerpunkt, flaeche as polyFlaeche,
+  kandidatenRichtungen, groesstesRechteck, restOhneRechteck, streifenIntervalle,
+} from "./formGeometrie.js";
 
 // Zahlen-Härtung (apartments.js-Muster): nie NaN/Infinity weiterreichen.
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -102,11 +107,14 @@ export const ERSCHLIESSUNG = {
  * @property {boolean} [treppenraum]         75-13: name the core "Treppenraum", lift switch + extension (MFH/Spänner)
  * @property {boolean} [aufzug]              75-13: lift shaft beside the stair (default: aufzugPflicht of storeys/OKF)
  * @property {number}  [treppenraumErweiterung_m] 75-13: stair-enclosure extension along the corridor, m PER SIDE (0–6)
+ * @property {boolean} [windmuehle]          84-02: Spänner as a pinwheel — four units round the stair enclosure, each with its door on it
+ * @property {boolean} [kopfwohnung]         84-09: gable units over the full building depth, the building corridor ends on their door (Mittelflur/MFH)
  */
 
 /**
  * Door record stored on a room zone (75-14). Edge `wand` runs points[wand] → points[wand+1];
- * `u_m` is measured from the edge start to the jamb; `aufschlag` "links" = hinge at u_m,
+ * `u_m` is measured from the edge start to the jamb (84-11: set by tuerVersatz — the hinge
+ * side keeps TUER_ECKABSTAND_SCHRANK_M to the corner); `aufschlag` "links" = hinge at u_m,
  * "rechts" = hinge at u_m + breite_m; the leaf always swings INTO the room; `nach` names
  * the zone the door opens from (hall/corridor), null = apartment entrance.
  * @typedef {object} Tuer
@@ -115,7 +123,8 @@ export const ERSCHLIESSUNG = {
  * @property {number} breite_m
  * @property {"links"|"rechts"} aufschlag
  * @property {string|null} nach
- * @property {"zimmer"|"bad"|"wohnung"|"treppenraum"|"T30-RS"} [typ] 75-13: "treppenraum" = stair door from the corridor, "T30-RS" = fire door at an extension end
+ * @property {boolean} [nachAussen] 84-08: the leaf swings OUT of the zone (bath BF-64, store room)
+ * @property {"zimmer"|"bad"|"wohnung"|"treppenraum"|"T30-RS"|"hauseingang"} [typ] 75-13: "treppenraum" = stair door from the corridor, "T30-RS" = fire door at an extension end; 84-07: "hauseingang" = house door of the ground-floor entrance hall
  */
 
 /** Goldener Schnitt — Wert inline (self-contained; @core/lib/proportion.js hat dieselbe Zahl). */
@@ -155,6 +164,27 @@ export const RETTUNGSWEG_MAX = 35;
  * grows the enclosure along the corridor by up to 6 m PER SIDE [ASSUMED range].
  */
 export const TREPPENRAUM = { treppe: { w: 2.5, d: 5 }, mitAufzug: { gesamt: 6, tiefe: 3, treppe: 3.5, aufzug: 2.5 }, erweiterungMax_m: 6, restTiefeMin_m: 2 };
+
+/**
+ * 84-07 (D-P75-13-D, Nutzer 07.10.2026: „bau 84-07 mit treppenkern standard“):
+ * typologies whose stair core is ALWAYS the necessary stair enclosure — no
+ * switch any more (the lift keeps its switch). Mittelflur/Laubengang have no
+ * core in the skeleton, Reihenhaus/EFH have their own entrance per unit.
+ */
+export const KERN_STANDARD_TYPEN = ["mfh", "spaenner"];
+
+/**
+ * 84-07 ground-floor entrance hall (Nutzer: „im eg gibt es natürlich einen
+ * eingangsbereich“). Values from DIN 18040-2 as summarised on nullbarriere.de
+ * (Nutzer-Link 07.10.2026) [CITED via secondary source]: movement area with a
+ * change of direction 1,50 × 1,50 m (also in front of letter boxes, bell panel
+ * and lift doors), passing area 1,80 × 1,80 m, clear door width ≥ 0,90 m,
+ * entrance step-free (threshold ≤ 2 cm). Derived [ASSUMED]: hall width 3,0 m =
+ * 1,80 m passing/turning area + ≈ 0,30 m letter-box wall + door-leaf zone;
+ * entrance door raw opening 1,135 m (DIN 18100 Richtmaß) so the clear width
+ * stays ≥ 0,90 m after frame and leaf.
+ */
+export const EINGANG = { breite_m: 3.0, tuer_m: 1.135, bewegung_m: 1.5, begegnung_m: 1.8, tuerLichtMin_m: 0.9 };
 
 /**
  * Lift duty thresholds — re-exported from accessibility.js (AUFZUG_GESCHOSS_GRENZE 3,
@@ -212,8 +242,56 @@ export function kernRegeln(rg, nGeschosse, okf_m) {
  */
 export const TUERBREITEN = { zimmer: 0.885, bad: 0.985, wohnung: 0.985 };
 
-/** Distance jamb → adjacent wall in metres [ASSUMED 0,15 — plaster + frame]. */
-export const TUER_ANSCHLAG_ABSTAND = 0.15;
+/**
+ * 84-10: raw door opening widths of a wheelchair unit (R), metres. DIN 18040-2 via
+ * REGELN-BARRIEREFREI.md BF-35/BF-21: clear width ≥ 0,90 m; clear = raw − 0,025 m
+ * (DIN-18100 reveal/rebate deduction, as in moebel.js) ⇒ rooms need the 1,01 m raw
+ * size (tuer_1010, clear 0,985); bath and entrance door (0,985 → clear 0,96) already
+ * reach 0,90 and stay.
+ */
+export const TUERBREITEN_R = { zimmer: 1.01, bad: 0.985, wohnung: 0.985 };
+
+/**
+ * 84-10: the three apartment levels of a unit. "standard" = no barrier-free rule
+ * beyond the building (default), "B" = barrier-free usable, "R" = wheelchair usable
+ * (DIN 18040-2). Same values as wohnMoebel.BEWEGUNG_STUFEN (furniture movement areas).
+ */
+export const STUFEN = ["standard", "B", "R"];
+
+/** DIN 4172 (Maßordnung im Hochbau, NF-70): octametric raster 12,5 cm — every masonry size is a multiple. */
+export const MAUERWERK_RASTER_M = 0.125;
+/**
+ * Distance jamb → adjacent wall in metres: one raster unit (84-11). Was 0,15 [ASSUMED
+ * plaster + frame] — the user (10.10.2026) rejected it as "kein Mauerwerksmaß".
+ */
+export const TUER_ANSCHLAG_ABSTAND = MAUERWERK_RASTER_M;
+/**
+ * 84-11 (user 10.10.2026, NF-66a / NF-73): wall piece room corner → hinge so that a
+ * wardrobe fits behind the opened leaf: 7 × 12,5 = 0,875 m. The user said "90 cm";
+ * 0,875 is the next raster size below [ASSUMED, D-BW-01 — alternative 8 × 12,5 = 1,00].
+ */
+export const TUER_ECKABSTAND_SCHRANK_M = 7 * MAUERWERK_RASTER_M;
+
+/**
+ * 84-11: jamb offset `u_m` of a room door on an edge of length `wandLaenge_m` so that the
+ * HINGE side keeps TUER_ECKABSTAND_SCHRANK_M of wall to the corner (wardrobe behind the
+ * leaf). Short walls: as much as fits, rounded down to the 12,5-cm raster, never below
+ * TUER_ANSCHLAG_ABSTAND (the width check `breite ≥ tuer + 2 × Anschlag` runs before).
+ * "links" = hinge at u_m → door near the edge START; "rechts" = hinge at u_m + breite →
+ * door near the edge END, the wardrobe piece lies at that corner. Pure.
+ * @param {number} wandLaenge_m
+ * @param {number} tuerBreite_m
+ * @param {"links"|"rechts"} [aufschlag]
+ * @returns {number} u_m from the edge start, m
+ */
+export function tuerVersatz(wandLaenge_m, tuerBreite_m, aufschlag = "links") {
+  const L = Math.max(0, num(wandLaenge_m)), b = Math.max(0, num(tuerBreite_m));
+  let frei = Math.min(TUER_ECKABSTAND_SCHRANK_M, L - b - TUER_ANSCHLAG_ABSTAND);
+  if (frei < TUER_ECKABSTAND_SCHRANK_M - 1e-9) frei = Math.floor(frei / MAUERWERK_RASTER_M + 1e-9) * MAUERWERK_RASTER_M;
+  frei = Math.max(TUER_ANSCHLAG_ABSTAND, frei);
+  const u = aufschlag === "rechts" ? L - b - frei : frei;
+  return Math.max(0, Math.round(u * 1e6) / 1e6);
+}
 
 /**
  * 75-17: plain-text reason why the inner escape-route leg is an approximation
@@ -231,6 +309,129 @@ export const RETTUNGSWEG_INNEN_NAEHERUNG = {
  * apartment corridor strip uses MINDESTBREITEN.flur (1,20 m).
  */
 export const DIELE_MASSE = { minBreite: 1.2, flaeche: 4, minFlaeche: 3, maxFlaeche: 6 };
+
+/**
+ * 84-10: hall of a wheelchair unit (R): turning area 1,50 × 1,50 m once in the hall
+ * (REGELN-BARRIEREFREI.md BF-53, L2 S. 87/89) — the hall square is at least 1,50 m
+ * wide and 1,50 m deep (the back row is at least 1,50 m deep); the area target of
+ * 4 m² stays. The corridor strip keeps 1,20 m (BF-50).
+ */
+export const DIELE_MASSE_R = { minBreite: 1.5, flaeche: 4, minFlaeche: 3, maxFlaeche: 6 };
+
+/**
+ * 84-10: corridor strip of a wheelchair unit (R), m [ASSUMED 1,50]: the room doors open
+ * from the strip and need the 1,50 × 1,50 m movement area on the opening side (BF-24,
+ * L2 S. 42–43), which a 1,20 m strip cannot give; the corridor-end door (1,01 m raw
+ * + 2 × jamb 0,15 m) needs ≥ 1,31 m, a 1,20 m strip only allows 0,90 m raw (clear
+ * 0,875 < 0,90). BF-50 itself only demands 1,20 m — the extra width is the choice that
+ * keeps the R door rule and the movement area true; the generated unit loses ≈ 0,3 m depth.
+ */
+export const FLURBREITE_R = 1.5;
+
+/**
+ * 84-06 corridor end (Nutzer 07.10.2026: „ein flur endet nie auf eine trennwand ..
+ * immer endet er auf eine zimmer tür , ein kleinen abstellraum oder ein bad“).
+ * The strip end opposite the entrance becomes a small store room whose door sits
+ * in the end wall. Length along the strip [ASSUMED 1,0 m]: with the strip width
+ * 1,20 m that is 1,2 m² — Neufert (REGELN-NEUFERT.md): store room ≥ 1 m², inner
+ * width ≥ 0,75 m. Doors of row rooms inside that last metre move to the other end
+ * of their wall; if one cannot, that END room takes the strip end instead and its
+ * door moves into the end wall (the corridor then ends on that room's door).
+ */
+export const FLURENDE = { abstellLaenge_m: 1.0, abstellMinLaenge_m: 0.85 };
+// 84-04: abstellMinLaenge_m — fallback length when a room door misses the 1,0 m store
+// room by centimetres: 0,85 × 1,20 m strip = 1,02 m² ≥ Neufert 1 m² [ASSUMED].
+
+/**
+ * 84-04 stair inside a house (Reihenhaus/EFH), plan size in m [ASSUMED]: two flights
+ * with a half landing, 2 × 1,00 m flight + 0,20 m eye = 2,20 m wide, 2,60 m long
+ * (≈ 16 risers 17,5/26 cm for ≈ 2,90 m storey height); flight width 1,00 m ≥ 0,80 m
+ * usable width for buildings with ≤ 2 units (DIN 18065 Tab. 1 [CITED from memory]).
+ */
+export const TREPPE_HAUS = { breite_m: 2.2, tiefe_m: 2.6 };
+
+/**
+ * 84-05: minimum width of a row house, m [ASSUMED 6,0]: stair 2,20 + hall 1,20 + bath
+ * 1,29 + kitchen door 1,19 m side by side in the back row (TREPPE_HAUS, DIELE_MASSE,
+ * door widths) — typical row houses are 5,5–6,5 m wide.
+ */
+export const REIHENHAUS_MIN_BREITE_M = 6.0;
+
+/**
+ * 85: minimum width of an apartment along its band, m [ASSUMED 4,20]: back row hall
+ * 1,20 + bath 1,29 + kitchen door 1,19 m, and the living room 3,60 m (MINDESTBREITEN)
+ * at the facade with some slack. Room-zone mode only (band mode = Phase 61).
+ */
+export const WE_MIN_BREITE_M = 4.2;
+
+/**
+ * 85-02: step of the target ladder for the cut window row, as v in 1 : v [ASSUMED 0,2].
+ * A window row that would FAIL the aspect-ratio rule (≥ seitenverhaeltnisFail, 1 : 2,5,
+ * D-P75-14-B) is cut to the first target on the ladder 1 : 1,8 (warn threshold),
+ * 1 : 2,0, 1 : 2,2, … below the fail threshold at which no room has to be merged;
+ * the depth it gives up goes to the inner (windowless) zone. Rows below the fail
+ * threshold are not touched (the Phase-75/84 layouts stay byte-identical).
+ */
+export const FENSTERZEILE_VERHAELTNIS_SCHRITT = 0.2;
+
+/**
+ * 85-02: floor for the cut window row, m [ASSUMED 3,0 — a bedroom 2,4 m wide still
+ * gets ≥ 7 m²; below that the room minimums merge rooms].
+ */
+export const FENSTERZEILE_MIN_TIEFE_M = 3.0;
+
+/** 84-04: guest WC added to a house ground floor when the type has one bath only, m² [ASSUMED]. */
+export const GAESTE_WC_M2 = 2.5;
+
+/**
+ * 84-02: minimum strip stub beside a centred hall, m [ASSUMED 1,5 — a room door
+ * 0,885 m + 2 × 0,15 m jambs + 0,3 m; a shorter stub only holds a niche without a
+ * door]; shorter → the hall moves to that end (L-shape).
+ */
+export const DIELE_STUMPF_M = 1.5;
+
+/**
+ * 84-08 part 2: outer bath size the generator aims for, m — DIN 18040-2 5.5.2 via
+ * REGELN-BARRIEREFREI.md BF-57/60: movement area 1,20 × 1,20 m in front of WC /
+ * washbasin plus a fixture zone [ASSUMED 0,55 m] ⇒ ≥ 1,20 × 1,75 m. Same numbers as
+ * raumQualitaet.BAD_BEWEGUNG (the check); kept here because raumQualitaet imports
+ * this module (a unit test pins both together).
+ */
+export const BAD_ZUSCHNITT = { kurz_m: 1.2, lang_m: 1.75 };
+
+/**
+ * 84-10: outer bath size of a wheelchair unit (R), m — movement area 1,50 × 1,50 m in
+ * front of WC / washbasin (BF-57/60, DIN 18040-2 5.5.2 Tab. 4) plus the fixture zone
+ * [ASSUMED 0,55 m] ⇒ ≥ 1,50 × 2,05 m. Same numbers as raumQualitaet.BAD_BEWEGUNG.
+ */
+export const BAD_ZUSCHNITT_R = { kurz_m: 1.5, lang_m: 2.05 };
+
+/**
+ * 84-09 gable unit (Nutzer 07.10.2026: „die flur regel gilt auch für mittelflur da
+ * sind dann die end wohnungen anders damit der flur nicht gegen die außenwand stößt —
+ * heizungsthema, flur niedriger temperiert“). The building corridor of Mittelflur/MFH
+ * never reaches the gable: at both ends one unit spans the FULL building depth
+ * (three facades) and the corridor ends on its entrance door. Reason: the common
+ * corridor is heated lower (or not at all) than the units — a corridor end at the
+ * outer wall is a cold bridge with heat flowing corridor → facade.
+ * Depth along the corridor axis, m [ASSUMED]: target = largest catalogue unit /
+ * building depth, clamped to 6,0 … 9,0 m — 6,0 m leaves a window-room row ≥ 3 m
+ * behind the hall row (1,5 m) and the inner strip (1,20 m); 9,0 m keeps the gable
+ * unit below ≈ 1,5 typical units. The remaining corridor run must stay ≥ 8,0 m
+ * (MFH: ≥ core length + 2 × 4,0 m band rest) [ASSUMED], else no gable unit and the
+ * check "Gebäudeflur an Außenwand" warns.
+ */
+export const KOPFWOHNUNG = { minTiefe_m: 6.0, maxTiefe_m: 9.0, minFlurLaenge_m: 8.0, minBandRest_m: 4.0 };
+
+/**
+ * 84-03 gallery width rule (REGELN-BARRIEREFREI BF-16/17, DIN 18040-2 4.3.2 via ByAK
+ * Leitfaden 2 S. 33–34): usable width ≥ 1,50 m, or ≥ 1,20 m with a 1,50 × 1,50 m
+ * turning area at least once and every 15 m on long galleries. Width / spacing in m.
+ */
+export const LAUBENGANG_RANGIER = { breite_m: 1.5, abstand_m: 15 };
+
+/** 84-09: typologies whose building corridor gets gable units (KOPFWOHNUNG). */
+export const KOPF_TYPEN = ["mittelflur", "mfh"];
 
 /**
  * Office defaults of the 75-14 rules — all [ASSUMED] (no building-code value exists;
@@ -263,6 +464,34 @@ export function wohnungsRegeln(rg) {
   };
   out.aktiv = out.diele || out.raumMin_m2 > 0 || out.seitenverhaeltnisMax > 0 || out.schrankwand_m > 0 || out.schlafenMinBreite_m > 0;
   return out;
+}
+
+/**
+ * 84-01 (D-P84-A, Nutzer 07.10.2026: „auch die türdaten müssen da sein“): the
+ * apartment layout — hall, door records, minimum widths — is no longer a switch.
+ * Every room-zone tesselation runs with `wohnungsgrundriss: true`; a stored
+ * `false` from older workshop layers is ignored (the field stays readable, no
+ * store field is renamed). Single values (raumMin_m2, …) still override.
+ * Callers that evaluate the rules themselves (workshop quality list, core panel)
+ * use this helper so they see exactly what tesseliere() used.
+ * 84-07: with `typ` MFH/Spänner the stair enclosure is forced on as well
+ * (KERN_STANDARD_TYPEN); a stored `treppenraum: false` is ignored there.
+ * @param {Regeln|null|undefined} regeln stored workshop rules
+ * @param {{typ?: string|null, raumzonen?: boolean}} [opts] typology and room-zone mode
+ * @returns {Regeln} the rules tesseliere() applies
+ */
+export function effektiveRegeln(regeln, { typ = null, raumzonen = true } = {}) {
+  const r = regeln && typeof regeln === "object" ? regeln : {};
+  const out = { ...r };
+  if (raumzonen) out.wohnungsgrundriss = true;
+  // 84-07 (D-P75-13-D): MFH and Spänner always get the necessary stair enclosure.
+  if (typ && KERN_STANDARD_TYPEN.includes(String(typ))) out.treppenraum = true;
+  // 84-09: room-zone Mittelflur/MFH always get gable units (no switch — the rule is
+  // "never", like 84-01 doors). Band mode (no rooms) keeps the Phase-61 skeleton.
+  if (raumzonen && typ && KOPF_TYPEN.includes(String(typ))) out.kopfwohnung = true;
+  // 84-02: room-zone Spänner always as a pinwheel (every unit at the stair).
+  if (raumzonen && String(typ) === "spaenner") out.windmuehle = true;
+  return /** @type {Regeln} */ (out);
 }
 
 /** Raum-Präferenz je Himmelsrichtung [ASSUMED]: Wohnen Süd/West, Schlafen Ost/Nord. */
@@ -387,6 +616,53 @@ function footprintBBox(footprintM) {
 // Längenrest: > 0 = ungenutzter Rest (alle an max), < 0 = Überbelegung
 // (Σ min > verfuegbar). Breiten sind nie < min, nie negativ; Überbelegung
 // terminiert mit rest statt überlappender Geometrie zu erzeugen (Pitfall 3).
+/**
+ * 85 „Band füllen“: the units placed along one band. The catalogue (in band order)
+ * is walked round robin; a unit is taken while the band length left over at the
+ * TARGET widths still holds its MINIMUM width (and the minimums stay within the
+ * band). A type that does not fit any more is skipped for the next one — Phase 61
+ * placed every catalogue entry once and let the overflow fall out (restNachfrage),
+ * leaving the band end empty. Second stage: when even the MAXIMUM widths leave length
+ * unused, one more unit is taken as long as all minimums fit (verteileBand then
+ * squeezes evenly). Whether a type is placed nowhere at all stays the job of the
+ * „WE-Anzahl“ check.
+ * @param {Array<object>} liste ordered catalogue entries of the band
+ * @param {Array<{ziel:number, min:number, max:number}>} kandidaten widths of `liste`, m (kandidatenFuer)
+ * @param {number} laenge band length, m
+ * @returns {Array<object>} entries to place, in placing order
+ */
+export function fuelleBand(liste, kandidaten, laenge) {
+  const n = Array.isArray(liste) ? liste.length : 0;
+  if (!n || !Array.isArray(kandidaten) || kandidaten.length !== n) return liste;
+  const L = Math.max(0, num(laenge));
+  const kMin = (i) => Math.max(0.05, num(kandidaten[i].min));
+  const idx = [];
+  let sZiel = 0, sMin = 0, zeiger = 0;
+  // Hard caps (for, not while): a band never holds more than 200 units.
+  for (let runde = 0; runde < 200; runde++) {
+    let dazu = false;
+    for (let j = 0; j < n; j++) {
+      const i = (zeiger + j) % n;
+      if (L - sZiel >= kMin(i) - 1e-9 && sMin + kMin(i) <= L + 1e-9) {
+        idx.push(i); sZiel += Math.max(0, num(kandidaten[i].ziel)); sMin += kMin(i); zeiger = i + 1; dazu = true;
+        break;
+      }
+    }
+    if (!dazu) break;
+  }
+  for (let runde = 0; runde < 200; runde++) {
+    const sMax = idx.reduce((s, i) => s + Math.max(0, num(kandidaten[i].max)), 0);
+    if (sMax >= L - 1e-9) break;
+    let dazu = false;
+    for (let j = 0; j < n; j++) {
+      const i = (zeiger + j) % n;
+      if (sMin + kMin(i) <= L + 1e-9) { idx.push(i); sMin += kMin(i); zeiger = i + 1; dazu = true; break; }
+    }
+    if (!dazu) break;
+  }
+  return idx.map((i) => liste[i]);
+}
+
 export function verteileBand(verfuegbar, kandidaten) {
   const ks = (Array.isArray(kandidaten) ? kandidaten : []).map((k) => {
     const min = Math.max(0, num(k?.min));
@@ -430,6 +706,11 @@ export function verteileBand(verfuegbar, kandidaten) {
  * @property {number} [laenge] length along the running axis, metres
  * @property {string} [erschliessungsseite] edge the corridor sits on
  * @property {boolean} [zweiFassaden] both cross edges are facades (Spänner quadrants, 75-07)
+ * @property {boolean} [kopf] 84-09 gable band: exactly ONE unit over the full building depth
+ * @property {boolean} [einzel] 84-02 pinwheel arm: exactly ONE unit over the whole band
+ * @property {[number, number]} [eingangBereich] 84-02: running-axis interval (m) where the entrance door may sit (contact with the stair enclosure / hall)
+ * @property {number} [kontakt_m] 84-02: length of the access side shared with the stair enclosure / hall, m
+ * @property {number} [eingangMitte] 84-09: running-axis coordinate (m) of the corridor axis = centre of the entrance door
  */
 
 // Band-Shape: { level, seite, achse, x0, x1, z0, z1, tiefe, zKante, laenge,
@@ -443,7 +724,51 @@ function bandRechteck(level, seite, achse, x0, x1, z0, z1, zKante, erschliessung
   return { level, seite, achse, x0, x1, z0, z1, tiefe, zKante, laenge, erschliessungsseite };
 }
 
-function skelettMittelflur(bb, n, cfg, { mitKern = false } = {}) {
+/**
+ * 84-09: the two gable bands of a corridor skeleton — each one unit over the full
+ * building depth at a corridor end, running ACROSS the corridor; facade = gable,
+ * access side = the corridor end (the entrance door sits on the corridor axis).
+ * @param {number} level storey index
+ * @param {boolean} entlangX corridor runs along x
+ * @param {number} a0 corridor-axis start of the building, m
+ * @param {number} a1 corridor-axis end of the building, m
+ * @param {number} b0 cross-axis start, m
+ * @param {number} b1 cross-axis end, m
+ * @param {number} L gable-unit depth along the corridor axis, m
+ * @returns {BandMeta[]} [kopf0 at a0, kopf1 at a1]
+ */
+function kopfBaender(level, entlangX, a0, a1, b0, b1, L) {
+  const mitteB = (b0 + b1) / 2;
+  const meta = { kopf: true, eingangMitte: mitteB };
+  return entlangX
+    ? [
+      { ...bandRechteck(level, "kopf0", "z", a0, a0 + L, b0, b1, a0, "ost"), ...meta },
+      { ...bandRechteck(level, "kopf1", "z", a1 - L, a1, b0, b1, a1, "west"), ...meta },
+    ]
+    : [
+      { ...bandRechteck(level, "kopf0", "x", b0, b1, a0, a0 + L, a0, "nord"), ...meta },
+      { ...bandRechteck(level, "kopf1", "x", b0, b1, a1 - L, a1, a1, "sued"), ...meta },
+    ];
+}
+
+/**
+ * 84-09: gable-unit depth that fits, or 0 with the reason. The corridor run left
+ * between the two gable units must hold `minLauf_m`.
+ * @param {number} laengs building length along the corridor, m
+ * @param {number} wunsch_m wanted depth (KOPFWOHNUNG clamp applied by the caller), m
+ * @param {number} minLauf_m minimum remaining corridor run, m
+ * @returns {{tiefe_m:number, grund:string|null}}
+ */
+function kopfTiefe(laengs, wunsch_m, minLauf_m) {
+  const L = num(wunsch_m);
+  if (L <= 0) return { tiefe_m: 0, grund: null };
+  if (laengs - 2 * L < minLauf_m - 1e-9) {
+    return { tiefe_m: 0, grund: `Gebäude ${laengs.toFixed(1).replace(".", ",")} m zu kurz für zwei Kopfwohnungen à ${L.toFixed(1).replace(".", ",")} m + ${minLauf_m.toFixed(1).replace(".", ",")} m Flur` };
+  }
+  return { tiefe_m: L, grund: null };
+}
+
+function skelettMittelflur(bb, n, cfg, { mitKern = false, kopfTiefe_m = 0 } = {}) {
   const entlangX = bb.w >= bb.d;
   const quer = entlangX ? bb.d : bb.w;
   const flurB = Math.max(0, Math.min(num(cfg.flurbreite, 1.8), quer - 0.5));
@@ -455,6 +780,11 @@ function skelettMittelflur(bb, n, cfg, { mitKern = false } = {}) {
   const baender = [];
   const kernW = num(cfg.kern?.w, 0);
   const kernD = num(cfg.kern?.d, 0);
+  // 84-09: corridor and side bands run between the gable units (L = 0: full length).
+  const kopf = tiefe > 0.05 ? kopfTiefe(entlangX ? bb.w : bb.d, kopfTiefe_m, KOPFWOHNUNG.minFlurLaenge_m) : { tiefe_m: 0, grund: null };
+  const L = kopf.tiefe_m;
+  const xA = bb.minX + (entlangX ? L : 0), xE = bb.maxX - (entlangX ? L : 0);
+  const zA = bb.minZ + (entlangX ? 0 : L), zE = bb.maxZ - (entlangX ? 0 : L);
   for (let level = 0; level < n; level++) {
     const zSued = mitteZ - flurB / 2, zNord = mitteZ + flurB / 2;
     const xWest = mitteX - flurB / 2, xOst = mitteX + flurB / 2;
@@ -469,32 +799,32 @@ function skelettMittelflur(bb, n, cfg, { mitKern = false } = {}) {
           ],
           level, name: `Kern ${level} ·WT`, we: undefined, raumart: "flur",
         });
-        if (mitteX - kw / 2 > bb.minX) flure.push({
+        if (mitteX - kw / 2 > xA) flure.push({
           points: [
-            { x: bb.minX, z: zSued }, { x: mitteX - kw / 2, z: zSued },
-            { x: mitteX - kw / 2, z: zNord }, { x: bb.minX, z: zNord },
+            { x: xA, z: zSued }, { x: mitteX - kw / 2, z: zSued },
+            { x: mitteX - kw / 2, z: zNord }, { x: xA, z: zNord },
           ],
           level, name: `Flur ${level} W ·WT`, we: undefined, raumart: "flur",
         });
-        if (bb.maxX > mitteX + kw / 2) flure.push({
+        if (xE > mitteX + kw / 2) flure.push({
           points: [
-            { x: mitteX + kw / 2, z: zSued }, { x: bb.maxX, z: zSued },
-            { x: bb.maxX, z: zNord }, { x: mitteX + kw / 2, z: zNord },
+            { x: mitteX + kw / 2, z: zSued }, { x: xE, z: zSued },
+            { x: xE, z: zNord }, { x: mitteX + kw / 2, z: zNord },
           ],
           level, name: `Flur ${level} O ·WT`, we: undefined, raumart: "flur",
         });
       } else {
         flure.push({
           points: [
-            { x: bb.minX, z: zSued }, { x: bb.maxX, z: zSued },
-            { x: bb.maxX, z: zNord }, { x: bb.minX, z: zNord },
+            { x: xA, z: zSued }, { x: xE, z: zSued },
+            { x: xE, z: zNord }, { x: xA, z: zNord },
           ],
           level, name: `Flur ${level} ·WT`, we: undefined, raumart: "flur",
         });
       }
       if (tiefe > 0.05) {
-        baender.push(bandRechteck(level, "sued", "x", bb.minX, bb.maxX, bb.minZ, zSued, bb.minZ, "nord"));
-        baender.push(bandRechteck(level, "nord", "x", bb.minX, bb.maxX, zNord, bb.maxZ, bb.maxZ, "sued"));
+        baender.push(bandRechteck(level, "sued", "x", xA, xE, bb.minZ, zSued, bb.minZ, "nord"));
+        baender.push(bandRechteck(level, "nord", "x", xA, xE, zNord, bb.maxZ, bb.maxZ, "sued"));
       }
     } else {
       if (mitKern && kernD > 0) {
@@ -506,36 +836,41 @@ function skelettMittelflur(bb, n, cfg, { mitKern = false } = {}) {
           ],
           level, name: `Kern ${level} ·WT`, we: undefined, raumart: "flur",
         });
-        if (mitteZ - kd / 2 > bb.minZ) flure.push({
+        if (mitteZ - kd / 2 > zA) flure.push({
           points: [
-            { x: xWest, z: bb.minZ }, { x: xOst, z: bb.minZ },
+            { x: xWest, z: zA }, { x: xOst, z: zA },
             { x: xOst, z: mitteZ - kd / 2 }, { x: xWest, z: mitteZ - kd / 2 },
           ],
           level, name: `Flur ${level} S ·WT`, we: undefined, raumart: "flur",
         });
-        if (bb.maxZ > mitteZ + kd / 2) flure.push({
+        if (zE > mitteZ + kd / 2) flure.push({
           points: [
             { x: xWest, z: mitteZ + kd / 2 }, { x: xOst, z: mitteZ + kd / 2 },
-            { x: xOst, z: bb.maxZ }, { x: xWest, z: bb.maxZ },
+            { x: xOst, z: zE }, { x: xWest, z: zE },
           ],
           level, name: `Flur ${level} N ·WT`, we: undefined, raumart: "flur",
         });
       } else {
         flure.push({
           points: [
-            { x: xWest, z: bb.minZ }, { x: xOst, z: bb.minZ },
-            { x: xOst, z: bb.maxZ }, { x: xWest, z: bb.maxZ },
+            { x: xWest, z: zA }, { x: xOst, z: zA },
+            { x: xOst, z: zE }, { x: xWest, z: zE },
           ],
           level, name: `Flur ${level} ·WT`, we: undefined, raumart: "flur",
         });
       }
       if (tiefe > 0.05) {
-        baender.push(bandRechteck(level, "west", "z", bb.minX, xWest, bb.minZ, bb.maxZ, bb.minX, "ost"));
-        baender.push(bandRechteck(level, "ost", "z", xOst, bb.maxX, bb.minZ, bb.maxZ, bb.maxX, "west"));
+        baender.push(bandRechteck(level, "west", "z", bb.minX, xWest, zA, zE, bb.minX, "ost"));
+        baender.push(bandRechteck(level, "ost", "z", xOst, bb.maxX, zA, zE, bb.maxX, "west"));
       }
     }
+    if (L > 0) {
+      baender.push(...(entlangX
+        ? kopfBaender(level, true, bb.minX, bb.maxX, bb.minZ, bb.maxZ, L)
+        : kopfBaender(level, false, bb.minZ, bb.maxZ, bb.minX, bb.maxX, L)));
+    }
   }
-  return { flure, kerne, baender, weUeberGeschosse: false };
+  return { flure, kerne, baender, weUeberGeschosse: false, kopf };
 }
 
 // --- 75-13: MFH with a NECESSARY stair enclosure (regeln.treppenraum) -----------
@@ -549,7 +884,23 @@ function skelettMittelflur(bb, n, cfg, { mitKern = false } = {}) {
 // becomes W/O pieces, the enclosure gets a fire door (T30-RS) at both ends and
 // the escape-route measurement ends there (MBO §35 Abs. 4–6 — walls fire-
 // resistant, no use inside the enclosure; the hint says so).
-function skelettMfhTreppenraum(bb, n, cfg, kern) {
+/**
+ * 84-07: the ground-floor entrance hall as a circulation zone (no unit) with the
+ * house door centred in its facade edge.
+ * @param {Array<{x:number,z:number}>} points hall rectangle (m)
+ * @param {number} breiteM hall width along the facade (m)
+ * @param {number} fassadenKante edge index of `points` that lies in the facade
+ * @returns {object} zone { points, level 0, name, raumart "flur", eingang true, tueren[1] }
+ */
+function eingangshalle(points, breiteM, fassadenKante) {
+  const tB = Math.min(EINGANG.tuer_m, Math.max(0.5, breiteM - 2 * TUER_ANSCHLAG_ABSTAND));
+  return {
+    points, level: 0, name: "Eingangshalle 0 ·WT", we: undefined, raumart: "flur", eingang: true,
+    tueren: /** @type {Tuer[]} */ ([{ wand: fassadenKante, u_m: Math.max(0, (breiteM - tB) / 2), breite_m: tB, aufschlag: "links", nach: null, typ: "hauseingang" }]),
+  };
+}
+
+function skelettMfhTreppenraum(bb, n, cfg, kern, kopfTiefe_m = 0) {
   const entlangX = bb.w >= bb.d;
   const quer = entlangX ? bb.d : bb.w;
   const laengs = entlangX ? bb.w : bb.d;
@@ -568,10 +919,20 @@ function skelettMfhTreppenraum(bb, n, cfg, kern) {
   const trLaenge = mitAufzug ? kLaenge * (TREPPENRAUM.mitAufzug.treppe / TREPPENRAUM.mitAufzug.gesamt) : kLaenge;
   const kA0 = mitteA - kLaenge / 2, kA1 = mitteA + kLaenge / 2, trA1 = kA0 + trLaenge;
   const kB0 = bS - kTiefe;
+  // 84-09: corridor and side bands run between the gable units [ra0, ra1]; the run
+  // must hold the core plus a band rest on each side (KOPFWOHNUNG.minBandRest_m).
+  const kopf = tiefe > 0.05
+    ? kopfTiefe(laengs, kopfTiefe_m, Math.max(KOPFWOHNUNG.minFlurLaenge_m, kLaenge + 2 * KOPFWOHNUNG.minBandRest_m))
+    : { tiefe_m: 0, grund: null };
+  const ra0 = a0 + kopf.tiefe_m, ra1 = a1 - kopf.tiefe_m;
   const E = clamp(num(kern.erweiterung_m), 0, TREPPENRAUM.erweiterungMax_m);
-  const eA0 = Math.max(a0, kA0 - E), eA1 = Math.min(a1, kA1 + E);
+  const eA0 = Math.max(ra0, kA0 - E), eA1 = Math.min(ra1, kA1 + E);
   const dedupe = (pts) => pts.filter((p, i) => { const q = pts[(i + 1) % pts.length]; return Math.abs(p.x - q.x) > 1e-9 || Math.abs(p.z - q.z) > 1e-9; });
   const tuerB = TUERBREITEN.wohnung;
+  // 84-07: ground-floor entrance hall in the band OPPOSITE the core (facade →
+  // corridor → stair door), centred on the core; the house door sits in the facade.
+  const eB = Math.min(EINGANG.breite_m, laengs / 3);
+  const einA0 = mitteA - eB / 2, einA1 = mitteA + eB / 2;
   const flure = [], kerne = [], baender = [], ziele = [];
   const seiteS = entlangX ? "sued" : "west", seiteN = entlangX ? "nord" : "ost";
   const band = (seite, ra0, ra1, rb0, rb1, zK, ers) => (entlangX
@@ -595,8 +956,8 @@ function skelettMfhTreppenraum(bb, n, cfg, kern) {
       treppenraum.brandwaende.push(kanteW, kanteO);
       // Escape-route targets: just outside the two fire doors, in the corridor.
       ziele.push({ level, ...pt(eA0 - 0.05, mitteB) }, { level, ...pt(eA1 + 0.05, mitteB) });
-      if (eA0 > a0 + 1e-9) flure.push({ points: rect(a0, eA0, bS, bN), level, name: `Flur ${level} ${entlangX ? "W" : "S"} ·WT`, we: undefined, raumart: "flur" });
-      if (a1 > eA1 + 1e-9) flure.push({ points: rect(eA1, a1, bS, bN), level, name: `Flur ${level} ${entlangX ? "O" : "N"} ·WT`, we: undefined, raumart: "flur" });
+      if (eA0 > ra0 + 1e-9) flure.push({ points: rect(ra0, eA0, bS, bN), level, name: `Flur ${level} ${entlangX ? "W" : "S"} ·WT`, we: undefined, raumart: "flur" });
+      if (ra1 > eA1 + 1e-9) flure.push({ points: rect(eA1, ra1, bS, bN), level, name: `Flur ${level} ${entlangX ? "O" : "N"} ·WT`, we: undefined, raumart: "flur" });
     } else {
       treppenraum = {
         points: rect(kA0, trA1, kB0, bS), level, name: `Treppenraum ${level} ·WT`, we: undefined, raumart: "treppenraum",
@@ -604,17 +965,24 @@ function skelettMfhTreppenraum(bb, n, cfg, kern) {
         tueren: /** @type {Tuer[]} */ ([{ wand: 2, u_m: Math.max(0, (trLaenge - tuerB) / 2), breite_m: tuerB, aufschlag: "links", nach: null, typ: "treppenraum" }]),
       };
       ziele.push({ level, ...pt((kA0 + trA1) / 2, bS + 0.05) });
-      flure.push({ points: rect(a0, a1, bS, bN), level, name: `Flur ${level} ·WT`, we: undefined, raumart: "flur" });
+      flure.push({ points: rect(ra0, ra1, bS, bN), level, name: `Flur ${level} ·WT`, we: undefined, raumart: "flur" });
     }
     kerne.push(treppenraum);
     if (mitAufzug) kerne.push({ points: rect(trA1, kA1, kB0, bS), level, name: `Aufzug ${level} ·WT`, we: undefined, raumart: "aufzug" });
     if (tiefe > 0.05) {
-      if (kA0 > a0 + 0.05) baender.push({ ...band(seiteS, a0, kA0, b0, bS, b0, seiteN), level });
-      if (a1 > kA1 + 0.05) baender.push({ ...band(seiteS, kA1, a1, b0, bS, b0, seiteN), level });
-      baender.push({ ...band(seiteN, a0, a1, bN, b1, b1, seiteS), level });
+      if (kA0 > ra0 + 0.05) baender.push({ ...band(seiteS, ra0, kA0, b0, bS, b0, seiteN), level });
+      if (ra1 > kA1 + 0.05) baender.push({ ...band(seiteS, kA1, ra1, b0, bS, b0, seiteN), level });
+      if (level === 0) {
+        if (einA0 > ra0 + 0.05) baender.push({ ...band(seiteN, ra0, einA0, bN, b1, b1, seiteS), level });
+        if (ra1 > einA1 + 0.05) baender.push({ ...band(seiteN, einA1, ra1, bN, b1, b1, seiteS), level });
+        flure.push(eingangshalle(rect(einA0, einA1, bN, b1), eB, 2));
+      } else {
+        baender.push({ ...band(seiteN, ra0, ra1, bN, b1, b1, seiteS), level });
+      }
+      if (kopf.tiefe_m > 0) baender.push(...kopfBaender(level, entlangX, a0, a1, b0, b1, kopf.tiefe_m));
     }
   }
-  return { flure, kerne, baender, weUeberGeschosse: false, ziele };
+  return { flure, kerne, baender, weUeberGeschosse: false, ziele, kopf };
 }
 
 function skelettLaubengang(bb, n, cfg) {
@@ -715,8 +1083,128 @@ function skelettSpaenner(bb, n, cfg, kern = null) {
     // den Mittelstreifen statt an die Gegenfassade.
     baender.push({ ...bandRechteck(level, "west", "x", bb.minX, mitteX - cw / 2, bb.minZ, bb.maxZ, bb.minZ, "ost"), zweiFassaden: true });
     baender.push({ ...bandRechteck(level, "ost", "x", mitteX + cw / 2, bb.maxX, bb.minZ, bb.maxZ, bb.minZ, "west"), zweiFassaden: true });
-    baender.push(bandRechteck(level, "suedmitte", "x", mitteX - cw / 2, mitteX + cw / 2, bb.minZ, mitteZ - cd / 2, bb.minZ, "nord"));
+    if (mitTreppenraum && level === 0) {
+      // 84-07: ground floor — the strip between the south facade and the core is
+      // the entrance hall (house door in the facade, stair door on the core side).
+      flure.push(eingangshalle(
+        [{ x: mitteX - cw / 2, z: bb.minZ }, { x: mitteX + cw / 2, z: bb.minZ }, { x: mitteX + cw / 2, z: mitteZ - cd / 2 }, { x: mitteX - cw / 2, z: mitteZ - cd / 2 }],
+        cw, 0,
+      ));
+    } else {
+      baender.push(bandRechteck(level, "suedmitte", "x", mitteX - cw / 2, mitteX + cw / 2, bb.minZ, mitteZ - cd / 2, bb.minZ, "nord"));
+    }
     baender.push(bandRechteck(level, "nordmitte", "x", mitteX - cw / 2, mitteX + cw / 2, mitteZ + cd / 2, bb.maxZ, bb.maxZ, "sued"));
+  }
+  return { flure, kerne, baender, weUeberGeschosse: false, ziele };
+}
+
+// --- 84-02: Spänner as a pinwheel ("Windmühle", Vierspänner) ---------------------
+//
+// The Phase-61 quadrants line several units up in the west/east bands — only the one
+// next to the core touched the stair (84-CONTEXT: 40/48 rooms unreachable). Here the
+// four units wind round the core: each is a rectangle that shares ONE full side with
+// the core (south arm: bottom edge, east arm: right edge, …), has two facades and
+// gets its entrance on that shared side. Core: stair enclosure, long side along the
+// building's long axis (deeper arms). With a lift the core gets a landing beside the
+// shaft — BF-45 / DIN 18040-2 4.3.5 (REGELN-BARRIEREFREI.md): 1,50 × 1,50 m movement
+// area in front of the lift door — so no arm touches the shaft only. Ground floor:
+// the strip between the south facade and the core is the entrance hall (84-07); the
+// south arm then shrinks to the west part and is entered from the hall.
+/** 84-02: landing depth in front of the lift door, m (BF-45: 1,50 × 1,50 m). */
+export const SPAENNER_PODEST_M = 1.5;
+
+/**
+ * Longest interval of an access edge that lies on an edge of one of the circulation
+ * polygons (stair enclosure incl. landing, entrance hall).
+ * @param {"x"|"z"} laufAchse axis the access edge runs along
+ * @param {number} lage fixed coordinate of the access edge, m
+ * @param {number} e0 edge start on the running axis, m
+ * @param {number} e1 edge end, m
+ * @param {Array<Array<{x:number,z:number}>>} polys circulation polygons
+ * @returns {[number, number]|null} contact interval on the running axis, m
+ */
+function kontaktIntervall(laufAchse, lage, e0, e1, polys) {
+  let best = null;
+  for (const pts of polys) {
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[(i + 1) % pts.length];
+      const fix = laufAchse === "x" ? [p.z, q.z] : [p.x, q.x];
+      if (Math.abs(fix[0] - lage) > 1e-6 || Math.abs(fix[1] - lage) > 1e-6) continue;
+      const lauf = laufAchse === "x" ? [p.x, q.x] : [p.z, q.z];
+      const a = Math.max(e0, Math.min(...lauf)), b = Math.min(e1, Math.max(...lauf));
+      if (b - a > 1e-6 && (!best || b - a > best[1] - best[0])) best = [a, b];
+    }
+  }
+  return /** @type {[number, number]|null} */ (best);
+}
+
+function skelettSpaennerWindmuehle(bb, n, kern) {
+  const entlangX = bb.w >= bb.d;
+  const mitAufzug = !!kern?.aufzug;
+  const P = mitAufzug ? SPAENNER_PODEST_M : 0;
+  const T = TREPPENRAUM;
+  const lang = mitAufzug ? T.mitAufzug.gesamt : Math.max(T.treppe.w, T.treppe.d);
+  const kurz = mitAufzug ? T.mitAufzug.tiefe + P : Math.min(T.treppe.w, T.treppe.d);
+  const cw = Math.max(0.5, Math.min(entlangX ? lang : kurz, bb.w - 1));
+  const cd = Math.max(0.5, Math.min(entlangX ? kurz : lang, bb.d - 1));
+  const mitteX = (bb.minX + bb.maxX) / 2, mitteZ = (bb.minZ + bb.maxZ) / 2;
+  const x0 = mitteX - cw / 2, x1 = mitteX + cw / 2, z0 = mitteZ - cd / 2, z1 = mitteZ + cd / 2;
+  const anteil = mitAufzug ? T.mitAufzug.treppe / T.mitAufzug.gesamt : 1;
+  const flure = [], kerne = [], baender = [], ziele = [];
+  const r4 = (ax0, ax1, az0, az1) => [{ x: ax0, z: az0 }, { x: ax1, z: az0 }, { x: ax1, z: az1 }, { x: ax0, z: az1 }];
+  // Stair enclosure polygon (stair + landing) and shaft, level-independent.
+  let treppe, schacht = null;
+  if (!mitAufzug) treppe = r4(x0, x1, z0, z1);
+  else if (entlangX) {
+    const tx1 = x0 + cw * anteil;
+    treppe = [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z0 + P }, { x: tx1, z: z0 + P }, { x: tx1, z: z1 }, { x: x0, z: z1 }];
+    schacht = r4(tx1, x1, z0 + P, z1);
+  } else {
+    const tz1 = z0 + cd * anteil;
+    treppe = [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: tz1 }, { x: x0 + P, z: tz1 }, { x: x0 + P, z: z1 }, { x: x0, z: z1 }];
+    schacht = r4(x0 + P, x1, tz1, z1);
+  }
+  // Escape-route targets: 5 cm outside every stair-enclosure edge on the core boundary.
+  const zielPunkte = [];
+  for (let i = 0; i < treppe.length; i++) {
+    const p = treppe[i], q = treppe[(i + 1) % treppe.length];
+    const mx = (p.x + q.x) / 2, mz = (p.z + q.z) / 2;
+    if (Math.abs(p.z - z0) < 1e-9 && Math.abs(q.z - z0) < 1e-9) zielPunkte.push({ x: mx, z: z0 - 0.05 });
+    else if (Math.abs(p.z - z1) < 1e-9 && Math.abs(q.z - z1) < 1e-9) zielPunkte.push({ x: mx, z: z1 + 0.05 });
+    else if (Math.abs(p.x - x0) < 1e-9 && Math.abs(q.x - x0) < 1e-9) zielPunkte.push({ x: x0 - 0.05, z: mz });
+    else if (Math.abs(p.x - x1) < 1e-9 && Math.abs(q.x - x1) < 1e-9) zielPunkte.push({ x: x1 + 0.05, z: mz });
+  }
+  for (let level = 0; level < n; level++) {
+    kerne.push({ points: treppe.map((p) => ({ ...p })), level, name: `Treppenraum ${level} ·WT`, we: undefined, raumart: "treppenraum" });
+    if (schacht) kerne.push({ points: schacht.map((p) => ({ ...p })), level, name: `Aufzug ${level} ·WT`, we: undefined, raumart: "aufzug" });
+    for (const z of zielPunkte) ziele.push({ level, ...z });
+    const zirkulation = [treppe];
+    const halle = level === 0;
+    if (halle) {
+      const h = r4(x0, x1, bb.minZ, z0);
+      flure.push(eingangshalle(h, cw, 0));
+      zirkulation.push(h);
+    }
+    // Arms: rect [x0, x1, z0, z1] + access side (the side shared with the core / hall).
+    const arme = [
+      halle
+        ? { seite: "windS", r: [bb.minX, x0, bb.minZ, z0], zugang: "maxX" }
+        : { seite: "windS", r: [bb.minX, x1, bb.minZ, z0], zugang: "maxZ" },
+      { seite: "windO", r: [x1, bb.maxX, bb.minZ, z1], zugang: "minX" },
+      { seite: "windN", r: [x0, bb.maxX, z1, bb.maxZ], zugang: "minZ" },
+      { seite: "windW", r: [bb.minX, x0, z0, bb.maxZ], zugang: "maxX" },
+    ];
+    for (const arm of arme) {
+      const [ax0, ax1, az0, az1] = arm.r;
+      if (ax1 - ax0 < 0.5 || az1 - az0 < 0.5) continue;
+      const laufX = arm.zugang === "minZ" || arm.zugang === "maxZ";
+      const lage = arm.zugang === "minX" ? ax0 : arm.zugang === "maxX" ? ax1 : arm.zugang === "minZ" ? az0 : az1;
+      const k = laufX ? kontaktIntervall("x", lage, ax0, ax1, zirkulation) : kontaktIntervall("z", lage, az0, az1, zirkulation);
+      const band = laufX
+        ? bandRechteck(level, arm.seite, "x", ax0, ax1, az0, az1, arm.zugang === "maxZ" ? az0 : az1, arm.zugang === "maxZ" ? "nord" : "sued")
+        : bandRechteck(level, arm.seite, "z", ax0, ax1, az0, az1, arm.zugang === "maxX" ? ax0 : ax1, arm.zugang === "maxX" ? "ost" : "west");
+      baender.push({ ...band, einzel: true, ...(k ? { eingangMitte: (k[0] + k[1]) / 2, eingangBereich: k, kontakt_m: k[1] - k[0] } : {}) });
+    }
   }
   return { flure, kerne, baender, weUeberGeschosse: false, ziele };
 }
@@ -739,18 +1227,20 @@ function skelettReihenhaus(bb, n) {
 // points per level for the escape route). Without it (default) the result is
 // byte-identical to Phase 61 except for the additional `ziele` field (door
 // points of the old core / corridor ends), which tesseliere never emits.
+// 84-09: `kopfTiefe_m` > 0 (Mittelflur/MFH) shortens the corridor by a gable unit
+// at both ends (bands "kopf0"/"kopf1"); the result carries `kopf` { tiefe_m, grund }.
 export function erschliessungsSkelett(opts) {
-  const { footprintM = null, storeys = 1, typ = "mittelflur", kern = null } = opts || {};
+  const { footprintM = null, storeys = 1, typ = "mittelflur", kern = null, kopfTiefe_m = 0, windmuehle = false } = opts || {};
   const bb = footprintBBox(footprintM);
   const n = Math.max(1, Math.round(num(storeys, 1)));
   const cfg = ERSCHLIESSUNG[typ] || ERSCHLIESSUNG.mittelflur;
   switch (typ) {
     case "laubengang": return skelettLaubengang(bb, n, cfg);
-    case "spaenner": return skelettSpaenner(bb, n, cfg, kern);
+    case "spaenner": return windmuehle && kern?.aktiv ? skelettSpaennerWindmuehle(bb, n, kern) : skelettSpaenner(bb, n, cfg, kern);
     case "reihenhaus": return skelettReihenhaus(bb, n);
-    case "mfh": return kern?.aktiv ? skelettMfhTreppenraum(bb, n, cfg, kern) : skelettMittelflur(bb, n, cfg, { mitKern: true });
+    case "mfh": return kern?.aktiv ? skelettMfhTreppenraum(bb, n, cfg, kern, kopfTiefe_m) : skelettMittelflur(bb, n, cfg, { mitKern: true, kopfTiefe_m });
     case "efh": return { flure: [], kerne: [], baender: [], weUeberGeschosse: true };
-    default: return skelettMittelflur(bb, n, cfg);
+    default: return skelettMittelflur(bb, n, cfg, { kopfTiefe_m: typ === "mittelflur" ? kopfTiefe_m : 0 });
   }
 }
 
@@ -1004,10 +1494,41 @@ export function toteZwischenraeume(opts) {
  *   repeated per band and per storey
  * @param {Array<object>} [opts.zonen] zones of ONE band, for the dead-space check
  * @param {number} [opts.bandFlaeche] that band's area in m²
- * @returns {Array<{key: string, label: string, status: string, detail: string}>}
+ * @returns {Array<{key: string, label: string, status: string, detail: string, rest_m2?: number}>}
+ *   rest_m2 (m²) only on the "zwischenraeume" check (B-87-13)
  */
+/**
+ * 84-09 check „Gebäudeflur an Außenwand“: building corridor zones (no unit,
+ * raumart "flur") with an edge on the footprint bbox. Excluded: the Laubengang
+ * (an outdoor gallery by design) and the ground-floor entrance hall (house door in
+ * the facade, 84-07). Reason for the rule (Nutzer 07.10.2026): the common corridor
+ * is heated lower than the units; at the outer wall it is a cold bridge with heat
+ * flowing unit → corridor → facade.
+ * @param {Array<object>} zonen tesseliere() zones
+ * @param {Array<{x:number,z:number}>|null} footprintM footprint polygon, m (bbox approximation as tesseliere)
+ * @returns {Array<{zone:string, level:number, laenge_m:number}>} one entry per corridor zone at the facade; laenge_m = facade-edge length, m
+ */
+export function gebaeudeflurAussenwand(zonen, footprintM) {
+  const bb = footprintBBox(footprintM);
+  const out = [];
+  for (const z of Array.isArray(zonen) ? zonen : []) {
+    if (!z || (z.we !== undefined && z.we !== null) || z.raumart !== "flur" || z.eingang || /^Laubengang/.test(String(z.name || ""))) continue;
+    const pts = Array.isArray(z.points) ? z.points : [];
+    let laenge = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[(i + 1) % pts.length];
+      const px = num(p.x), pz = num(p.z), qx = num(q.x), qz = num(q.z);
+      const aufRand = (Math.abs(px - bb.minX) < 0.011 && Math.abs(qx - bb.minX) < 0.011) || (Math.abs(px - bb.maxX) < 0.011 && Math.abs(qx - bb.maxX) < 0.011)
+        || (Math.abs(pz - bb.minZ) < 0.011 && Math.abs(qz - bb.minZ) < 0.011) || (Math.abs(pz - bb.maxZ) < 0.011 && Math.abs(qz - bb.maxZ) < 0.011);
+      if (aufRand) laenge += Math.hypot(qx - px, qz - pz);
+    }
+    if (laenge > 0.05) out.push({ zone: String(z.name), level: Math.round(num(z.level)), laenge_m: Math.round(laenge * 100) / 100 });
+  }
+  return out;
+}
+
 export function tesselierungsChecks(opts) {
-  const { weListe = [], rest_m2 = 0, restNachfrage_m2, angefordert, zonen, bandFlaeche } = opts || {};
+  const { weListe = [], rest_m2 = 0, restNachfrage_m2, angefordert, zonen, bandFlaeche, footprintM } = opts || {};
   const liste = Array.isArray(weListe) ? weListe : [];
   const checks = [];
   const nf = (v) => (Math.round(num(v) * 10) / 10).toLocaleString("de-DE");
@@ -1057,9 +1578,26 @@ export function tesselierungsChecks(opts) {
 
   if (zonen !== undefined && bandFlaeche !== undefined) {
     const t = toteZwischenraeume({ bandFlaeche, zonen });
+    // B-87-13: the workshop reads `rest_m2` off this check (WohnungsWerkstatt
+    // "Tote Zwischenräume: … m²"); until now only the detail text carried the number.
     checks.push({
-      key: "zwischenraeume", label: "Tote Zwischenräume", status: t.status,
+      key: "zwischenraeume", label: "Tote Zwischenräume", status: t.status, rest_m2: t.rest_m2,
       detail: t.status === "offen" ? `${nf(t.rest_m2)} m² Restfläche — ${t.hinweis}` : (t.hinweis || "lückenlos"),
+    });
+  }
+
+  // 84-09: WARN, not fail — a corridor at the facade is an energy/comfort defect
+  // (heat loss through a lower-tempered zone), not a building-code violation; the
+  // planner may accept it (e.g. corridor with its own window and heating).
+  if (zonen !== undefined && footprintM !== undefined) {
+    const treffer = gebaeudeflurAussenwand(zonen, footprintM);
+    const geschosse = [...new Set(treffer.map((t) => t.level))].length;
+    checks.push({
+      key: "gebaeudeflur", label: "Gebäudeflur an Außenwand",
+      status: treffer.length ? "warn" : "pass",
+      detail: treffer.length
+        ? `${treffer.length} Flurabschnitt(e) in ${geschosse} Geschoss(en) stoßen an die Außenwand — Flur niedriger temperiert als die Wohnungen, Wärmeabfluss zur Fassade; Kopfwohnung über die Gebäudetiefe legen (Gebäude verlängern) oder Spänner wählen`
+        : "Gebäudeflur endet an Wohnungstüren, nicht an der Außenwand",
     });
   }
 
@@ -1100,6 +1638,13 @@ export function raumSlicing(weBand, raumprogramm, regeln = {}) {
   const rg = /** @type {Regeln} */ (regeln && typeof regeln === "object" ? regeln : {});
   // 75-14: resolved apartment-layout rules (all off → Phase-61/75-07 behaviour).
   const wr = wohnungsRegeln(rg);
+  // 84-10: wheelchair unit (b.stufe "R") — own door widths, bath size and hall turning
+  // area (TUERBREITEN_R, BAD_ZUSCHNITT_R, DIELE_MASSE_R). Every other level keeps the
+  // shared constants, so without b.stufe the slicing is byte-identical to before.
+  const rolli = b.stufe === "R";
+  const TB = rolli ? TUERBREITEN_R : TUERBREITEN;
+  const BZ = rolli ? BAD_ZUSCHNITT_R : BAD_ZUSCHNITT;
+  const DM = rolli ? DIELE_MASSE_R : DIELE_MASSE;
   const level = Math.round(num(b.level));
   const we = String(b.we ?? "");
   const achseZ = b.achse === "z";
@@ -1112,15 +1657,19 @@ export function raumSlicing(weBand, raumprogramm, regeln = {}) {
     .filter((r) => r && r.raum);
 
   const raumartFuer = (art) => {
-    if (art === "flur") return "flur";
+    // 84-04: the stair inside a house is circulation (open to the hall).
+    if (art === "flur" || art === "treppe") return "flur";
     if (b.nutzung === "gewerbe") return b.raumartSchall === "laut" ? "laut" : (b.raumartSchall || "buero");
     return "wohnen";
   };
+  // 84-04: houses keep one `we` over all storeys — the storey tag ("EG", "OG 1")
+  // keeps room names unique within the unit (the quality checks key rooms by name).
+  const zusatz = typeof b.geschossName === "string" && b.geschossName ? ` ${b.geschossName}` : "";
   const eindeutigerName = (raum) => {
-    const basis = `${raum} (${we || "WE"})`;
+    const basis = `${raum}${zusatz} (${we || "WE"})`;
     const n = (names.get(basis) || 0) + 1;
     names.set(basis, n);
-    return n === 1 ? `${basis} ·WT` : `${raum} ${n} (${we || "WE"}) ·WT`;
+    return n === 1 ? `${basis} ·WT` : `${raum}${zusatz} ${n} (${we || "WE"}) ·WT`;
   };
   const rechteckZone = (rx0, rx1, rz0, rz1, raumZeile, flaecheOverride) => {
     const pts = achseZ
@@ -1307,16 +1856,27 @@ export function raumSlicing(weBand, raumprogramm, regeln = {}) {
   // the alternative (a room under 2,40 m) is what the user rejected. Only the
   // plain rectangle band is handled here; L-pairs, teeth and two-facade quadrants
   // keep the Phase-61 slicing (hint, follow-up work).
-  const flurT = MINDESTBREITEN.flur;
+  const flurT = rolli ? FLURBREITE_R : MINDESTBREITEN.flur; // 84-10: R corridor strip 1,50 m
   if (wr.diele && (b.hinten || b.zahn || aussp)) {
     warns.push("Diele/Türen [75-14]: für L-Verschränkung/Verzahnung nicht gebaut — Standardzuschnitt (Folgearbeit)");
   }
   if (wr.diele && !b.hinten && !b.zahn && !aussp) {
     const backOhneFlur = back.filter((r) => r.art !== "flur");
-    const flaecheBack2 = backOhneFlur.reduce((s, r) => s + zielFlaeche(r), 0) + DIELE_MASSE.flaeche;
-    const dB2 = clamp(W > 0.1 ? flaecheBack2 / W : 0, DIELE_MASSE.minBreite, Math.max(DIELE_MASSE.minBreite, D * 0.6));
-    const dF2 = D - dB2 - flurT;
-    if (dF2 < 2.4) {
+    const flaecheBack2 = backOhneFlur.reduce((s, r) => s + zielFlaeche(r), 0) + DM.flaeche;
+    // 84-04: houses pass one back-row depth for all storeys (rueckTiefe_m ≥ stair depth)
+    // so the hall and the stair sit at the same place on every floor.
+    // 84-05: in a shallow band the area-based depth can leave less than 2,40 m for the
+    // window rooms — the whole layout then fell back to no hall and no doors. Cap it
+    // there (never below the hall minimum); only those former fallback cases change.
+    const dB2Basis = Math.min(
+      Math.max(
+        clamp(W > 0.1 ? flaecheBack2 / W : 0, DM.minBreite, Math.max(DM.minBreite, D * 0.6)),
+        Math.min(num(b.rueckTiefe_m), Math.max(0, D - flurT - 2.4)),
+      ),
+      Math.max(DM.minBreite, D - flurT - 2.4),
+    );
+    const dF2Basis = D - dB2Basis - flurT;
+    if (dF2Basis < 2.4) {
       warns.push(`Diele/Türen [75-14]: Bandtiefe ${fmt1(D)} m zu gering für zwei Raumreihen + Flur — Standardzuschnitt`);
     } else {
       // Minimum width of a window room: MINDESTBREITEN table (the layout rule
@@ -1324,31 +1884,6 @@ export function raumSlicing(weBand, raumprogramm, regeln = {}) {
       // for bedroom/child room, and raumMin_m2 / row depth so the area holds.
       const tabelle = (r) => (r.art === "aufenthalt" && /schlaf|kind/i.test(String(r.raum || ""))
         ? num(MINDESTBREITEN.schlafen, MINDESTBREITEN.aufenthalt) : num(MINDESTBREITEN[r.art]));
-      const minFront = (r) => Math.max(
-        tabelle(r),
-        r.art === "aufenthalt" && /schlaf|kind/i.test(String(r.raum || "")) ? wr.schlafenMinBreite_m : 0,
-        r.art === "aufenthalt" && wr.raumMin_m2 > 0 ? wr.raumMin_m2 / dF2 : 0,
-        safeDiv(Math.max(0, num(r.min_m2)), dF2),
-      );
-      const frontL = front.map((r) => ({ ...r }));
-      const summeMin = () => frontL.reduce((s, r) => s + minFront(r), 0);
-      for (let runde = 0; runde < 8 && frontL.length > 1 && summeMin() > W + 1e-9; runde += 1) {
-        let idx = -1;
-        frontL.forEach((r, i) => { if (idx < 0 || zielFlaeche(r) < zielFlaeche(frontL[idx])) idx = i; });
-        const links = idx - 1, rechts = idx + 1;
-        const nIdx = links >= 0 && frontL[links].art === frontL[idx].art ? links
-          : rechts < frontL.length && frontL[rechts].art === frontL[idx].art ? rechts : -1;
-        if (nIdx < 0) break;
-        const a = frontL[nIdx], k = frontL[idx];
-        const noetig = summeMin();
-        const merged = {
-          ...a, raum: `${a.raum} + ${k.raum}`, flaeche_m2: zielFlaeche(a) + zielFlaeche(k),
-          min_m2: num(a.min_m2) + num(k.min_m2), max_m2: num(a.max_m2, zielFlaeche(a)) + num(k.max_m2, zielFlaeche(k)),
-        };
-        warns.push(`„${k.raum}" mit „${a.raum}" zusammengelegt [75-14] — Fassade ${fmt1(W)} m reicht nicht für ${frontL.length} Aufenthaltsräume ab Mindestbreite (nötig ${fmt1(noetig)} m); WE verbreitern, Typ wechseln oder Bandtiefe ${fmt1(D)} m senken`);
-        frontL.splice(Math.max(idx, nIdx), 1);
-        frontL.splice(Math.min(idx, nIdx), 1, merged);
-      }
       // Widths: proportional to target areas, clamped to the minimums (verteileBand
       // redistributes the shortfall over the flexible rooms, never negative).
       const breitenMitMin = (liste, breite, minFn) => {
@@ -1359,19 +1894,126 @@ export function raumSlicing(weBand, raumprogramm, regeln = {}) {
           id: r.raum, ziel: gesamt > 0 ? (breite * zielFlaeche(r)) / gesamt : breite / liste.length, min: mins[i], max: breite,
         }))).items;
       };
+      /**
+       * 85-02: the window-room row for a row depth `d` — minimum widths, merges of
+       * rooms that do not fit the facade, widths. Pure: the merge hints are returned,
+       * not pushed, so the depth search below can try several depths.
+       * @param {number} d row depth (window facade to the inner strip), m
+       * @returns {{d:number, frontL:Array<any>, minFront:(r:any)=>number, hinweise:string[], items:Array<any>}}
+       */
+      const frontPlan = (d) => {
+        const minFront = (r) => Math.max(
+          tabelle(r),
+          r.art === "aufenthalt" && /schlaf|kind/i.test(String(r.raum || "")) ? wr.schlafenMinBreite_m : 0,
+          r.art === "aufenthalt" && wr.raumMin_m2 > 0 ? wr.raumMin_m2 / d : 0,
+          safeDiv(Math.max(0, num(r.min_m2)), d),
+        );
+        const frontL = front.map((r) => ({ ...r }));
+        const hinweise = [];
+        const summeMin = () => frontL.reduce((s, r) => s + minFront(r), 0);
+        for (let runde = 0; runde < 8 && frontL.length > 1 && summeMin() > W + 1e-9; runde += 1) {
+          let idx = -1;
+          frontL.forEach((r, i) => { if (idx < 0 || zielFlaeche(r) < zielFlaeche(frontL[idx])) idx = i; });
+          const links = idx - 1, rechts = idx + 1;
+          const nIdx = links >= 0 && frontL[links].art === frontL[idx].art ? links
+            : rechts < frontL.length && frontL[rechts].art === frontL[idx].art ? rechts : -1;
+          if (nIdx < 0) break;
+          const a = frontL[nIdx], k = frontL[idx];
+          const noetig = summeMin();
+          const merged = {
+            ...a, raum: `${a.raum} + ${k.raum}`, flaeche_m2: zielFlaeche(a) + zielFlaeche(k),
+            min_m2: num(a.min_m2) + num(k.min_m2), max_m2: num(a.max_m2, zielFlaeche(a)) + num(k.max_m2, zielFlaeche(k)),
+          };
+          hinweise.push(`„${k.raum}" mit „${a.raum}" zusammengelegt [75-14] — Fassade ${fmt1(W)} m reicht nicht für ${frontL.length} Aufenthaltsräume ab Mindestbreite (nötig ${fmt1(noetig)} m); WE verbreitern, Typ wechseln oder Bandtiefe ${fmt1(D)} m senken`);
+          frontL.splice(Math.max(idx, nIdx), 1);
+          frontL.splice(Math.min(idx, nIdx), 1, merged);
+        }
+        return { d, frontL, minFront, hinweise, items: breitenMitMin(frontL, W, minFront) };
+      };
+      // 85-02: slimmest window room of a plan as depth : width (1 : v → v), only the
+      // "too deep" side — a room wider than deep is not helped by a shallower row.
+      const zeilenVerhaeltnis = (p) => p.frontL.reduce((m, r, i) => {
+        const bw = num(p.items[i]?.breite);
+        return r.art === "aufenthalt" && bw > 0.05 ? Math.max(m, p.d / bw) : m;
+      }, 0);
+      // 85-02: deep band (Laubengang 10,65–14,65 m): the window row would take the whole
+      // rest depth and the rooms become slits (Schlafen 2,8 × 9 m = 1 : 3,2 = fail).
+      // Only when the row would FAIL the aspect-ratio rule: cut it to the largest depth
+      // at which the slimmest window room reaches the lowest target of the ladder
+      // (warn threshold, then +FENSTERZEILE_VERHAELTNIS_SCHRITT up to just below fail)
+      // without merging more rooms than before; the depth it gives up goes to the inner
+      // zone (dB2: kitchen, bath, store — windowless anyway).
+      let plan = frontPlan(dF2Basis);
+      let kappung = null;
+      if (wr.seitenverhaeltnisMax > 0 && wr.seitenverhaeltnisFail > 0 && zeilenVerhaeltnis(plan) >= wr.seitenverhaeltnisFail - 1e-9) {
+        // One downward pass over the depth; candidates that merge more rooms are dropped.
+        const kandidaten = [];
+        for (let d = dF2Basis - 0.1; d >= FENSTERZEILE_MIN_TIEFE_M - 1e-9; d -= 0.1) {
+          const p = frontPlan(d);
+          if (p.hinweise.length <= plan.hinweise.length) kandidaten.push({ p, v: zeilenVerhaeltnis(p) });
+        }
+        for (let v = wr.seitenverhaeltnisMax; v < wr.seitenverhaeltnisFail - 1e-9 && !kappung; v += FENSTERZEILE_VERHAELTNIS_SCHRITT) {
+          const treffer = kandidaten.find((k) => k.v <= v + 1e-9);
+          if (treffer) {
+            kappung = { band_m: D, fensterzeile_m: treffer.p.d, nebenzone_m: D - flurT - treffer.p.d, verhaeltnis: v };
+            plan = treffer.p;
+          }
+        }
+      }
+      const dB2 = kappung ? kappung.nebenzone_m : dB2Basis;
+      const frontL = plan.frontL, minFront = plan.minFront;
+      warns.push(...plan.hinweise);
+      // 84-08 part 2: back-row widths with the bath first. Every back room needs its
+      // door opening + jambs (TUERBREITEN + 2 × TUER_ANSCHLAG_ABSTAND); a bath also
+      // needs the DIN 18040-2 movement area BAD_ZUSCHNITT (short side ≥ 1,20 m, long
+      // side ≥ 1,75 m) — with the row depth dB2 that fixes its minimum width. When all
+      // these minimums fit, they replace the per-room cap breite / n of breitenMitMin;
+      // otherwise the old distribution stays and the row is reported (hint).
+      const badMinBreite = Math.max(
+        TB.bad + 2 * TUER_ANSCHLAG_ABSTAND,
+        BZ.kurz_m,
+        dB2 + 1e-9 >= BZ.lang_m ? 0 : BZ.lang_m,
+      );
+      /** Minimum width of a back room in the side-by-side row, m. */
+      // 84-04: the house stair has a fixed plan size (TREPPE_HAUS), no door.
+      const noetigeBreite = (r) => (r.art === "treppe" ? TREPPE_HAUS.breite_m : r.art === "sanitaer" ? badMinBreite : TB.zimmer + 2 * TUER_ANSCHLAG_ABSTAND);
+      const rueckBreiten = (liste, breite) => {
+        if (!liste.length || breite <= 0.05) return [];
+        const noetig = liste.map(noetigeBreite);
+        if (noetig.reduce((s, v) => s + v, 0) > breite + 1e-9) return breitenMitMin(liste, breite, tabelle);
+        const gesamt = liste.reduce((s, r) => s + zielFlaeche(r), 0);
+        // Keep the old soft minimum (table width, capped at breite / n) where it still fits.
+        let mins = liste.map((r, i) => Math.max(noetig[i], Math.min(tabelle(r), breite / liste.length)));
+        if (mins.reduce((s, v) => s + v, 0) > breite + 1e-9) mins = noetig;
+        return verteileBand(breite, liste.map((r, i) => ({
+          id: r.raum, ziel: r.art === "treppe" ? noetig[i] : gesamt > 0 ? (breite * zielFlaeche(r)) / gesamt : breite / liste.length, min: mins[i], max: r.art === "treppe" ? noetig[i] : breite,
+        }))).items;
+      };
       // Cross-axis levels (lauf system): cK corridor edge, cB back/strip boundary,
       // cS strip/front boundary, cF facade edge.
       const cK = facadeHinten ? rect.z0 : rect.z1;
       const cB = facadeHinten ? rect.z0 + dB2 : rect.z1 - dB2;
       const cS = facadeHinten ? cB + flurT : cB - flurT;
       const cF = facadeHinten ? rect.z1 : rect.z0;
-      const dieleB = clamp(DIELE_MASSE.flaeche / dB2, DIELE_MASSE.minBreite, Math.max(DIELE_MASSE.minBreite, W / 2));
-      const dieleAmEnde = gespiegelt;
-      const xD0 = dieleAmEnde ? rect.x1 - dieleB : rect.x0;
-      const xD1 = dieleAmEnde ? rect.x1 : rect.x0 + dieleB;
-      // Hall zone: L-polygon, first edge = corridor edge (apartment door sits there).
+      const dieleB = clamp(DM.flaeche / dB2, DM.minBreite, Math.max(DM.minBreite, W / 2));
+      let dieleAmEnde = gespiegelt;
+      // 84-09: gable unit — the hall sits centred on the corridor axis (eingangMitte,
+      // running-axis m), the inner strip runs to BOTH sides: T-shaped hall, two ends.
+      // 84-02: when the centred hall leaves less than DIELE_STUMPF_M of strip on one
+      // side (pinwheel arm entered near its end), the hall moves to that end and the
+      // plain L-shape is used; the entrance door stays on eingangMitte.
+      const mitteU = b.eingangMitte !== undefined && b.eingangMitte !== null && Number.isFinite(Number(b.eingangMitte)) ? num(b.eingangMitte) : null;
+      let tForm = mitteU !== null;
+      const xMitte = tForm ? clamp(num(mitteU) - dieleB / 2, rect.x0, rect.x1 - dieleB) : 0;
+      if (tForm && rect.x1 - (xMitte + dieleB) < DIELE_STUMPF_M) { tForm = false; dieleAmEnde = true; }
+      else if (tForm && xMitte - rect.x0 < DIELE_STUMPF_M) { tForm = false; dieleAmEnde = false; }
+      const xD0 = tForm ? xMitte : dieleAmEnde ? rect.x1 - dieleB : rect.x0;
+      const xD1 = tForm ? xD0 + dieleB : dieleAmEnde ? rect.x1 : rect.x0 + dieleB;
+      // Hall zone: L-polygon (84-09: T-polygon), first edge = corridor edge (apartment door sits there).
       const dieleZeile = back.find((r) => r.art === "flur") || { raum: "Diele", art: "flur", fensterpflicht: false };
-      const dielePts = dieleAmEnde
+      /** @param {number} s0 strip start (running axis, m) @param {number} s1 strip end */
+      const dieleT = (s0, s1) => [{ x: xD0, z: cK }, { x: xD1, z: cK }, { x: xD1, z: cB }, { x: s1, z: cB }, { x: s1, z: cS }, { x: s0, z: cS }, { x: s0, z: cB }, { x: xD0, z: cB }];
+      const dielePts = tForm ? dieleT(rect.x0, rect.x1) : dieleAmEnde
         ? [{ x: xD0, z: cK }, { x: rect.x1, z: cK }, { x: rect.x1, z: cS }, { x: rect.x0, z: cS }, { x: rect.x0, z: cB }, { x: xD0, z: cB }]
         : [{ x: xD0, z: cK }, { x: xD1, z: cK }, { x: xD1, z: cB }, { x: rect.x1, z: cB }, { x: rect.x1, z: cS }, { x: rect.x0, z: cS }];
       const weltPts = dielePts.map((p) => (achseZ ? { x: p.z, z: p.x } : { x: p.x, z: p.z }));
@@ -1386,13 +2028,28 @@ export function raumSlicing(weBand, raumprogramm, regeln = {}) {
         return v === "rechts" ? "rechts" : "links";
       };
       // Apartment entrance: centred in the hall's corridor edge, opens into the hall.
-      const bW = TUERBREITEN.wohnung;
-      diele.tueren.push({ wand: 0, u_m: Math.max(0, (dieleB - bW) / 2), breite_m: bW, aufschlag: aufschlagFuer(diele.name, 0), nach: null, typ: "wohnung" });
+      const bW = TB.wohnung;
+      // 84-02: with an access point the door is centred on it (inside the hall edge).
+      // 84-02: with a contact interval [a, b] (pinwheel arm) the door sits as close to the
+      // hall centre as the interval allows — the corridor-end rule (FLURENDE_EINGANG_M)
+      // counts the distance from the strip end to the door.
+      const bereich = Array.isArray(b.eingangBereich) && b.eingangBereich.length === 2 ? b.eingangBereich.map(num) : null;
+      // (The plain hall keeps the Phase-75-14 expression — byte-identical snapshots.)
+      const tuerMitte = bereich
+        ? clamp(xD0 + dieleB / 2, bereich[0] + bW / 2, Math.max(bereich[0] + bW / 2, bereich[1] - bW / 2))
+        : mitteU;
+      const uTuer = tuerMitte !== null ? clamp(tuerMitte - bW / 2 - xD0, 0, Math.max(0, dieleB - bW)) : Math.max(0, (dieleB - bW) / 2);
+      // 84-04: upper storeys of a house have no entrance (the stair leads up); the
+      // ground-floor door of a house is its house door.
+      if (!b.ohneEingang) diele.tueren.push({ wand: 0, u_m: uTuer, breite_m: bW, aufschlag: aufschlagFuer(diele.name, 0), nach: null, typ: b.eingangTyp === "hauseingang" ? "hauseingang" : "wohnung" });
       zonen.push(diele);
       // Rows: doors sit in the edge that faces the strip; u = 0,15 m from the edge
       // start, so the hinge stands at the wall corner and the leaf swings into the
       // room along the side wall — never towards the window (the window wall is the
       // opposite edge of the room).
+      // 84-06: local (band) rectangles of the row rooms, for the corridor-end step.
+      /** @type {Map<any, {x0:number,x1:number,z0:number,z1:number}>} */
+      const lokal = new Map();
       const zeile = (liste, items, xStart, zLow, zHigh, tuerKante, fensterKante) => {
         let x = xStart;
         for (let i = 0; i < liste.length; i += 1) {
@@ -1403,9 +2060,16 @@ export function raumSlicing(weBand, raumprogramm, regeln = {}) {
             break;
           }
           const z = /** @type {any} */ (rechteckZone(x, x + breite, zLow, zHigh, liste[i]));
-          const bT = liste[i].art === "sanitaer" ? TUERBREITEN.bad : TUERBREITEN.zimmer;
-          if (breite >= bT + 2 * TUER_ANSCHLAG_ABSTAND) {
-            z.tueren = [{ wand: tuerKante, u_m: TUER_ANSCHLAG_ABSTAND, breite_m: bT, aufschlag: aufschlagFuer(z.name, 0), nach: diele.name, typ: liste[i].art === "sanitaer" ? "bad" : "zimmer" }];
+          lokal.set(z, { x0: x, x1: x + breite, z0: zLow, z1: zHigh });
+          const bT = liste[i].art === "sanitaer" ? TB.bad : TB.zimmer;
+          if (liste[i].art === "treppe") {
+            // 84-04: open stair beside the hall square — circulation, no door.
+            z.tueren = [];
+          } else if (breite >= bT + 2 * TUER_ANSCHLAG_ABSTAND) {
+            // 84-08 (BF-64, DIN 18040-2 5.5.1): bath doors open OUTWARD (into the hall).
+            // 84-11: the hinge keeps 0,875 m of wall to the corner (wardrobe behind the leaf).
+            const auf = aufschlagFuer(z.name, 0);
+            z.tueren = [{ wand: tuerKante, u_m: tuerVersatz(breite, bT, auf), breite_m: bT, aufschlag: auf, nach: diele.name, typ: liste[i].art === "sanitaer" ? "bad" : "zimmer", ...(liste[i].art === "sanitaer" ? { nachAussen: true } : {}) }];
           } else {
             z.tueren = [];
             warns.push(`„${liste[i].raum}" ${fmt1(breite)} m breit — keine Tür möglich (Öffnung ${fmt1(bT)} m + Anschläge) [75-14]`);
@@ -1421,9 +2085,246 @@ export function raumSlicing(weBand, raumprogramm, regeln = {}) {
       const backLow = Math.min(cK, cB), backHigh = Math.max(cK, cB);
       const frontTuer = facadeHinten ? 0 : 2, frontFenster = facadeHinten ? 2 : 0;
       const backTuer = facadeHinten ? 2 : 0;
+      // --- 84-08 part 2: back row (windowless rooms) with a bath that holds the
+      // movement area. Side by side when every room gets its minimum width
+      // (rueckBreiten); otherwise STACKED over the row depth dB2 in the full row width:
+      // the bath next to the strip (door in the strip edge), the other rooms behind it
+      // with their door in the side wall towards the hall square (the hall spans the
+      // full row depth, so every stacked room touches it). Minimum depths: bath 1,20 m
+      // (1,75 m when the row is narrower than 1,75 m), other rooms door + jambs. Still
+      // too shallow: store rooms of the row are dropped (the 84-06 store room at the
+      // strip end stays) with a hint; failing that, the Phase-75-14 distribution stays
+      // and the hint names the shortfall.
+      const tuerNoetig = (r) => (r.art === "sanitaer" ? TB.bad : TB.zimmer) + 2 * TUER_ANSCHLAG_ABSTAND;
+      const stapelTiefen = (liste, breite) => {
+        if (!liste.length || breite + 1e-9 < Math.max(BZ.kurz_m, TB.bad + 2 * TUER_ANSCHLAG_ABSTAND)) return null;
+        const badLang = breite + 1e-9 >= BZ.lang_m ? BZ.kurz_m : BZ.lang_m;
+        const mins = liste.map((r, i) => (r.art === "sanitaer" ? Math.max(badLang, i === 0 ? 0 : tuerNoetig(r)) : tuerNoetig(r)));
+        if (mins.reduce((a, v) => a + v, 0) > dB2 + 1e-9) return null;
+        const gesamt = liste.reduce((a, r) => a + zielFlaeche(r), 0);
+        return verteileBand(dB2, liste.map((r, i) => ({
+          id: r.raum, ziel: gesamt > 0 ? (dB2 * zielFlaeche(r)) / gesamt : dB2 / liste.length, min: mins[i], max: dB2,
+        }))).items;
+      };
+      /**
+       * Place one back row part.
+       * @param {Array<object>} listeIn windowless rooms of the part (84-04: the stair is moved next to the hall)
+       * @param {number} xStart running-axis start, m
+       * @param {number} breite part width, m
+       * @param {boolean} hallLinks the hall square lies at the part's low-x side
+       */
+      const rueckZeile = (listeIn, xStart, breite, hallLinks) => {
+        if (!listeIn.length || breite <= 0.05) return;
+        // 84-04: the stair sits next to the hall square (same place on every storey).
+        const tr = listeIn.filter((r) => r.art === "treppe"), rest = listeIn.filter((r) => r.art !== "treppe");
+        const liste = hallLinks ? [...tr, ...rest] : [...rest, ...tr];
+        if (tr.length && liste.reduce((a, r) => a + noetigeBreite(r), 0) > breite + 1e-9) {
+          // Never stack a stair: drop the store rooms, else report.
+          const ohne = liste.filter((r) => r.art !== "abstell");
+          if (ohne.reduce((a, r) => a + noetigeBreite(r), 0) <= breite + 1e-9) {
+            warns.push(`Treppe [84-04]: ${liste.filter((r) => r.art === "abstell").map((r) => `„${r.raum}“`).join(", ")} entfällt — Nebenraumzeile ${fmt1(breite)} m reicht sonst nicht für Treppe ${fmt1(TREPPE_HAUS.breite_m)} m + Nebenräume mit Türen`);
+            zeile(ohne, rueckBreiten(ohne, breite), xStart, backLow, backHigh, backTuer, null);
+            return;
+          }
+          warns.push(`Treppe [84-04]: Nebenraumzeile ${fmt1(breite)} m zu schmal für Treppe ${fmt1(TREPPE_HAUS.breite_m)} m + Nebenräume — Haus verbreitern`);
+          zeile(liste, breitenMitMin(liste, breite, tabelle), xStart, backLow, backHigh, backTuer, null);
+          return;
+        }
+        if (liste.reduce((a, r) => a + noetigeBreite(r), 0) <= breite + 1e-9 || !liste.some((r) => r.art === "sanitaer")) {
+          zeile(liste, rueckBreiten(liste, breite), xStart, backLow, backHigh, backTuer, null);
+          return;
+        }
+        // Bath first (next to the strip), the other rooms in programme order behind it.
+        const sortiert = [...liste.filter((r) => r.art === "sanitaer"), ...liste.filter((r) => r.art !== "sanitaer")];
+        let stapel = sortiert;
+        let tiefen = stapelTiefen(stapel, breite);
+        if (!tiefen && stapel.some((r) => r.art === "abstell")) {
+          stapel = sortiert.filter((r) => r.art !== "abstell");
+          const entfaellt = `Bad [84-08]: ${sortiert.filter((r) => r.art === "abstell").map((r) => `„${r.raum}“`).join(", ")} entfällt — Nebenraumzeile ${fmt1(breite)} × ${fmt1(dB2)} m reicht sonst nicht für ein Bad ≥ ${fmt1(BZ.kurz_m)} × ${fmt1(BZ.lang_m)} m mit Türen; Abstellraum am Flurende bleibt`;
+          tiefen = stapelTiefen(stapel, breite);
+          if (tiefen) warns.push(entfaellt);
+          // 84-03: too shallow to stack even without them — the row may fit SIDE BY
+          // SIDE again (shallow rows, Laubengang 30 × 10).
+          const ohne = liste.filter((r) => r.art !== "abstell");
+          if (!tiefen && ohne.reduce((a, r) => a + noetigeBreite(r), 0) <= breite + 1e-9) {
+            warns.push(entfaellt);
+            zeile(ohne, rueckBreiten(ohne, breite), xStart, backLow, backHigh, backTuer, null);
+            return;
+          }
+        }
+        if (!tiefen) {
+          warns.push(`Bad [84-08]: Nebenraumzeile ${fmt1(breite)} × ${fmt1(dB2)} m zu klein für ein Bad ≥ ${fmt1(BZ.kurz_m)} × ${fmt1(BZ.lang_m)} m mit Türen — WE verbreitern oder Typ mit weniger Nebenräumen`);
+          zeile(liste, breitenMitMin(liste, breite, tabelle), xStart, backLow, backHigh, backTuer, null);
+          return;
+        }
+        const hoch = cB > cK; // the strip lies at the high-z side of the row
+        let pos = cB;
+        tiefen.forEach((it, i) => {
+          const d = Math.max(0, num(it.breite));
+          const z0 = hoch ? pos - d : pos, z1 = hoch ? pos : pos + d;
+          pos = hoch ? z0 : z1;
+          const r = stapel[i];
+          const z = /** @type {any} */ (rechteckZone(xStart, xStart + breite, z0, z1, r));
+          lokal.set(z, { x0: xStart, x1: xStart + breite, z0, z1 });
+          const bad = r.art === "sanitaer";
+          const bT = bad ? TB.bad : TB.zimmer;
+          // i = 0: door in the strip edge (backTuer); behind: side wall to the hall —
+          // edge 3 runs x0 (z1→z0), edge 1 runs x1 (z0→z1).
+          const wand = i === 0 ? backTuer : hallLinks ? 3 : 1;
+          // 84-11: side-wall doors measure the versatz along the room depth (edges 1/3).
+          const auf = aufschlagFuer(z.name, 0);
+          const wandL = wand === 1 || wand === 3 ? z1 - z0 : breite;
+          z.tueren = [{ wand, u_m: tuerVersatz(wandL, bT, auf), breite_m: bT, aufschlag: auf, nach: diele.name, typ: bad ? "bad" : "zimmer", ...(bad ? { nachAussen: true } : {}) }];
+          zonen.push(z);
+        });
+      };
       zeile(frontL, breitenMitMin(frontL, W, minFront), rect.x0, frontLow, frontHigh, frontTuer, frontFenster);
-      const backStart = dieleAmEnde ? rect.x0 : xD1;
-      zeile(backOhneFlur, breitenMitMin(backOhneFlur, W - dieleB, tabelle), backStart, backLow, backHigh, backTuer, null);
+      if (tForm) {
+        // 84-09: back row left and right of the centred hall. Rooms in programme
+        // order fill the left part up to its share of the area, the rest goes right;
+        // a part left without a room becomes a store room [ASSUMED] (no hole).
+        const wL = Math.max(0, xD0 - rect.x0), wR = Math.max(0, rect.x1 - xD1);
+        const gesamt = backOhneFlur.reduce((s, r) => s + zielFlaeche(r), 0);
+        const zielL = wL + wR > 0 ? (gesamt * wL) / (wL + wR) : 0;
+        const links = [], rechts = [];
+        let sumL = 0;
+        for (const r of backOhneFlur) {
+          if (wL > 0.3 && sumL + zielFlaeche(r) / 2 <= zielL + 1e-9) { links.push(r); sumL += zielFlaeche(r); } else rechts.push(r);
+        }
+        if (!links.length && rechts.length > 1 && wL > 0.3) links.push(rechts.shift());
+        if (!rechts.length && links.length > 1 && wR > 0.3) rechts.push(links.pop());
+        const fueller = (w) => ({ raum: "Abstellraum", art: "abstell", fensterpflicht: false, flaeche_m2: w * dB2 });
+        if (!links.length && wL > 0.3) links.push(fueller(wL));
+        if (!rechts.length && wR > 0.3) rechts.push(fueller(wR));
+        rueckZeile(links, rect.x0, wL, false);
+        rueckZeile(rechts, xD1, wR, true);
+      } else {
+        const backStart = dieleAmEnde ? rect.x0 : xD1;
+        rueckZeile(backOhneFlur, backStart, W - dieleB, !dieleAmEnde);
+      }
+
+      // --- 84-06: the strip end opposite the entrance must end on a door ----------
+      // 84-09: with a centred hall (gable unit) BOTH strip ends are dead ends; the
+      // same step runs once per end on the shrinking strip [s0, s1].
+      {
+        const sLow = Math.min(cB, cS), sHigh = Math.max(cB, cS), sMitte = (sLow + sHigh) / 2;
+        const lokalPts = (lx0, lx1, lz0, lz1) => (achseZ
+          ? [{ x: lz0, z: lx0 }, { x: lz0, z: lx1 }, { x: lz1, z: lx1 }, { x: lz1, z: lx0 }]
+          : [{ x: lx0, z: lz0 }, { x: lx1, z: lz0 }, { x: lx1, z: lz1 }, { x: lx0, z: lz1 }]);
+        // Door x-interval of a row room: edge 0 runs x-ascending from x0, edge 2 x-descending from x1.
+        const tuerX = (lr, t) => (t.wand === 0 ? [lr.x0 + t.u_m, lr.x0 + t.u_m + t.breite_m] : [lr.x1 - t.u_m - t.breite_m, lr.x1 - t.u_m]);
+        const drin = (xa, xb, lo, hi) => xa >= lo - 1e-9 && xb <= hi + 1e-9;
+        /**
+         * Can every row door (except `ausser`) be reached on the strip [lo, hi]?
+         * Returns the door moves needed, or null.
+         */
+        const tuerenPassen = (lo, hi, ausser) => {
+          const moves = [];
+          for (const [z, lr] of lokal) {
+            const t = z.tueren?.[0];
+            if (!t || z === ausser || (t.wand !== 0 && t.wand !== 2)) continue;
+            const [xa, xb] = tuerX(lr, t);
+            if (drin(xa, xb, lo, hi)) continue;
+            // 84-11: the other wall end is the one AWAY from the hinge-side corner — there
+            // the wardrobe piece (hinge → corner) is long anyway, so only the jamb counts.
+            const wandL = lr.x1 - lr.x0;
+            const u2 = t.aufschlag === "rechts" ? TUER_ANSCHLAG_ABSTAND : wandL - TUER_ANSCHLAG_ABSTAND - t.breite_m;
+            if (wandL - t.breite_m - 2 * TUER_ANSCHLAG_ABSTAND >= -1e-9) {
+              const [ya, yb] = tuerX(lr, { ...t, u_m: u2 });
+              if (drin(ya, yb, lo, hi)) { moves.push({ z, u_m: u2, wand: t.wand }); continue; }
+            }
+            // 84-02: neither wall end is on the strip — nearest free position on the
+            // wall (rooms spanning the whole strip, both ends closed by store rooms).
+            const aMin = Math.max(lr.x0 + TUER_ANSCHLAG_ABSTAND, lo), aMax = Math.min(lr.x1 - TUER_ANSCHLAG_ABSTAND - t.breite_m, hi - t.breite_m);
+            // 85: 2 cm tolerance on the jamb (10,5 instead of 12,5 cm, frame + plaster still
+            // fit) — several layouts missed the free position by 0,5–1,3 cm [ASSUMED].
+            if (aMax >= aMin - 0.02) {
+              const a = aMax < aMin ? aMax : clamp(xa, aMin, aMax);
+              moves.push({ z, u_m: t.wand === 0 ? a - lr.x0 : lr.x1 - (a + t.breite_m), wand: t.wand });
+              continue;
+            }
+            // 84-02: a back-row room beside the hall square opens into it through its
+            // side wall (edge 3 at x0 next to xD1, edge 1 at x1 next to xD0).
+            const hinten = lr.z0 >= Math.min(cK, cB) - 1e-6 && lr.z1 <= Math.max(cK, cB) + 1e-6;
+            const seiteTief = lr.z1 - lr.z0 >= t.breite_m + 2 * TUER_ANSCHLAG_ABSTAND - 1e-9;
+            // 84-11: versatz along the side wall (room depth), hinge side to the corner.
+            const uSeite = tuerVersatz(lr.z1 - lr.z0, t.breite_m, t.aufschlag);
+            if (hinten && seiteTief && Math.abs(lr.x0 - xD1) < 1e-6) { moves.push({ z, u_m: uSeite, wand: 3 }); continue; }
+            if (hinten && seiteTief && Math.abs(lr.x1 - xD0) < 1e-6) { moves.push({ z, u_m: uSeite, wand: 1 }); continue; }
+            return null;
+          }
+          return moves;
+        };
+        const bTEnde = Math.min(TB.zimmer, (sHigh - sLow) - 2 * TUER_ANSCHLAG_ABSTAND);
+        let s0 = rect.x0, s1 = rect.x1;                          // current strip extent
+        /**
+         * Close one dead end of the strip (endeX0: the x0 end, else the x1 end).
+         * @param {boolean} endeX0
+         * @returns {boolean} closed on a door
+         */
+        const schliesseEnde = (endeX0) => {
+          const ende = endeX0 ? s0 : s1;
+          const hallKante = endeX0 ? xD0 : xD1;                  // the strip must stay longer than the hall square
+          const stripOk = (e) => (endeX0 ? e < hallKante - 0.3 : e > hallKante + 0.3);
+          const bereich = (e) => (endeX0 ? [e, s1] : [s0, e]);
+          // End-wall door: edge 3 (x0 side, z1→z0) when the dead end is at x1, edge 1 (x1 side, z0→z1) at x0.
+          // 84-08: bath and store-room doors open outward (BF-64; Neufert: store room door outward).
+          const endTuer = (lz0, lz1, zoneName, typ, nachAussen = false) => ({
+            ...(endeX0
+              ? { wand: 1, u_m: Math.max(0, (sMitte - lz0) - bTEnde / 2), breite_m: bTEnde, aufschlag: aufschlagFuer(zoneName, 0), nach: diele.name, typ }
+              : { wand: 3, u_m: Math.max(0, (lz1 - sMitte) - bTEnde / 2), breite_m: bTEnde, aufschlag: aufschlagFuer(zoneName, 0), nach: diele.name, typ }),
+            ...(nachAussen ? { nachAussen: true } : {}),
+          });
+          // Option A: small store room at the strip end (84-04: the shorter length is
+          // tried when a room door misses the full-length variant by centimetres).
+          let eA = 0, movesA = null;
+          for (const laenge of [FLURENDE.abstellLaenge_m, FLURENDE.abstellMinLaenge_m]) {
+            eA = ende + (endeX0 ? 1 : -1) * laenge;
+            movesA = bTEnde > 0.6 && stripOk(eA) ? tuerenPassen(...bereich(eA), null) : null;
+            if (movesA) break;
+          }
+          if (movesA) {
+            for (const m of movesA) m.z.tueren[0] = { ...m.z.tueren[0], u_m: m.u_m, wand: m.wand };
+            const xa = Math.min(eA, ende), xb = Math.max(eA, ende);
+            const ab = /** @type {any} */ (rechteckZone(xa, xb, sLow, sHigh, { raum: "Abstellraum", art: "abstell", fensterpflicht: false }));
+            ab.tueren = [endTuer(sLow, sHigh, ab.name, "zimmer", true)];
+            zonen.push(ab);
+            if (endeX0) s0 = eA; else s1 = eA;
+            return true;
+          }
+          // Option B: the room at the dead end takes the strip end; its door moves into the end wall.
+          for (const [z, lr] of lokal) {
+            const amEnde = endeX0 ? Math.abs(lr.x0 - rect.x0) < 1e-6 : Math.abs(lr.x1 - rect.x1) < 1e-6;
+            const amStreifen = [lr.z0, lr.z1].some((v) => Math.abs(v - sLow) < 1e-6 || Math.abs(v - sHigh) < 1e-6);
+            if (!amEnde || !amStreifen || !z.tueren?.length) continue;
+            const eB = endeX0 ? lr.x1 : lr.x0;
+            if (!stripOk(eB)) continue;
+            const movesB = tuerenPassen(...bereich(eB), z);
+            if (!movesB) continue;
+            for (const m of movesB) m.z.tueren[0] = { ...m.z.tueren[0], u_m: m.u_m, wand: m.wand };
+            const nz0 = Math.min(lr.z0, sLow), nz1 = Math.max(lr.z1, sHigh);
+            z.points = lokalPts(lr.x0, lr.x1, nz0, nz1);
+            z.flaeche_m2 = polyArea(z.points);
+            z.tueren = [endTuer(nz0, nz1, z.name, z.tueren[0].typ, z.tueren[0].typ === "bad")];
+            lokal.set(z, { x0: lr.x0, x1: lr.x1, z0: nz0, z1: nz1 });
+            if (endeX0) s0 = eB; else s1 = eB;
+            return true;
+          }
+          warns.push(`Flurende [84-06]: Flur endet an der Wohnungstrennwand — kein Abstellraum/Endraum möglich (Band ${fmt1(W)} m)`);
+          return false;
+        };
+        const enden = tForm ? [true, false] : [dieleAmEnde];
+        const geschlossen = enden.map((e) => schliesseEnde(e));
+        if (geschlossen.some(Boolean)) {
+          // Shorten the strip of the hall to the new end(s).
+          let neu;
+          if (tForm) neu = dieleT(s0, s1);
+          else if (dieleAmEnde) neu = [{ x: xD0, z: cK }, { x: rect.x1, z: cK }, { x: rect.x1, z: cS }, { x: s0, z: cS }, { x: s0, z: cB }, { x: xD0, z: cB }];
+          else neu = [{ x: xD0, z: cK }, { x: xD1, z: cK }, { x: xD1, z: cB }, { x: s1, z: cB }, { x: s1, z: cS }, { x: rect.x0, z: cS }];
+          diele.points = neu.map((p) => (achseZ ? { x: p.z, z: p.x } : { x: p.x, z: p.z }));
+          diele.flaeche_m2 = polyArea(diele.points);
+        }
+      }
       // raumMin_m2: an aufenthalt room still below the minimum (only possible after a
       // dropped/clamped row) becomes storage — never a living room on paper.
       if (wr.raumMin_m2 > 0) {
@@ -1436,7 +2337,8 @@ export function raumSlicing(weBand, raumprogramm, regeln = {}) {
           delete z.fensterwand;
         }
       }
-      return Object.assign(zonen, { warns });
+      // 85-02: `kappung` only when the window row was cut (tesseliere turns it into ONE hint per band).
+      return Object.assign(zonen, kappung ? { warns, kappung } : { warns });
     }
   }
 
@@ -1465,6 +2367,44 @@ export function raumSlicing(weBand, raumprogramm, regeln = {}) {
   return Object.assign(zonen, { warns });
 }
 
+/**
+ * 84-10: stable key of every unit for the per-unit level switch (werkstatt_layer
+ * `stufeJeWe`): "<level>|<typKey>|<n>", n = running number of that type on that level
+ * in unit-list order. Type + position instead of the unit number ("WE 0-3"): the
+ * numbers shift as soon as the band fills differently (D-P84-B). A changed mix moves
+ * n as well [ASSUMED acceptable — the switch follows "the 2nd 3-room unit"].
+ * @param {Array<{we: string, level?: number, typKey?: string}>} weListe tesseliere().weListe (placement order)
+ * @returns {Map<string, string>} unit id → key
+ */
+export function stufeSchluessel(weListe) {
+  /** @type {Map<string, number>} */
+  const zaehler = new Map();
+  /** @type {Map<string, string>} */
+  const out = new Map();
+  for (const w of Array.isArray(weListe) ? weListe : []) {
+    const k = `${Math.round(num(w?.level))}|${w?.typKey}`;
+    const n = (zaehler.get(k) || 0) + 1;
+    zaehler.set(k, n);
+    out.set(String(w?.we), `${k}|${n}`);
+  }
+  return out;
+}
+
+/**
+ * 84-10: effective level of one unit — switch of the unit > level of its mix entry >
+ * "standard" (D-P84-R; no automatic).
+ * @param {string|undefined} mix `stufe` of the mix entry ("standard" | "B" | "R")
+ * @param {string|undefined} schluessel key from stufeSchluessel
+ * @param {Record<string, string>|null|undefined} stufeJeWe werkstatt_layer.stufeJeWe
+ * @returns {"standard"|"B"|"R"}
+ */
+export function wirksameStufe(mix, schluessel, stufeJeWe) {
+  const s = stufeJeWe && typeof stufeJeWe === "object" && schluessel !== undefined ? stufeJeWe[schluessel] : undefined;
+  if (typeof s === "string" && STUFEN.includes(s)) return /** @type {"standard"|"B"|"R"} */ (s);
+  if (typeof mix === "string" && STUFEN.includes(mix)) return /** @type {"standard"|"B"|"R"} */ (mix);
+  return "standard";
+}
+
 // --- tesseliere ------------------------------------------------------------------
 //
 // Erweiterter Rückgabe-Vertrag (61-03, rückwärtskompatibel zu 61-01):
@@ -1481,6 +2421,92 @@ export function raumSlicing(weBand, raumprogramm, regeln = {}) {
 // (L-Paar mit dem Folge-Nachbarn), verzahnungsRaum: "<Raumname>" (Zahn an der
 // Grenze zum Folge-Nachbarn; Raum muss im optionalen raumprogramm des Eintrags
 // existieren, sonst warn + kein Zahn).
+// --- 84-04: houses (Reihenhaus / EFH) — room programme per storey ------------------
+/**
+ * Split a unit's room programme over the storeys of a house [ASSUMED office rule]:
+ * ground floor = living/dining, kitchen, store rooms, hall and a guest WC (the
+ * smaller bath of the type, else GAESTE_WC_M2); upper floors = the other living rooms
+ * (round robin), the main bath on the first upper floor and a shower room on the
+ * floors above; a floor without a window room gets a 12 m² room so it is never
+ * empty. With more than one storey every floor gets the stair (TREPPE_HAUS).
+ * One storey: the programme unchanged.
+ * @param {Array<object>} programm type programme (raum, art, flaeche_m2, fensterpflicht)
+ * @param {number} level storey index, 0 = ground floor
+ * @param {number} n number of storeys
+ * @returns {Array<object>} programme of that storey
+ */
+export function hausGeschossProgramm(programm, level, n) {
+  const prog = (Array.isArray(programm) ? programm : []).filter((r) => r && r.raum);
+  if (n <= 1) return prog;
+  const zf = (r) => Math.max(0, num(r?.flaeche_m2, num(r?.min_m2)));
+  const treppe = { raum: "Treppe", art: "treppe", fensterpflicht: false, flaeche_m2: TREPPE_HAUS.breite_m * TREPPE_HAUS.tiefe_m };
+  const flur = prog.filter((r) => r.art === "flur");
+  const istWohnen = (r) => r.art === "aufenthalt" && /wohn|ess/i.test(String(r.raum));
+  const baeder = prog.filter((r) => r.art === "sanitaer").sort((a, c) => zf(c) - zf(a));
+  const zimmer = prog.filter((r) => r.art === "aufenthalt" && !istWohnen(r));
+  if (level === 0) {
+    const eg = [...prog.filter((r) => istWohnen(r) || r.art === "kueche" || r.art === "abstell"), ...flur];
+    if (!eg.some((r) => r.fensterpflicht)) eg.unshift({ raum: "Wohnen", art: "aufenthalt", fensterpflicht: true, flaeche_m2: 20 });
+    eg.push(baeder.length >= 2 ? baeder[baeder.length - 1] : { raum: "Gäste-WC", art: "sanitaer", fensterpflicht: false, flaeche_m2: GAESTE_WC_M2 });
+    return [...eg, treppe];
+  }
+  const meine = zimmer.filter((_, i) => i % (n - 1) === level - 1);
+  const og = [...meine, ...flur];
+  if (!meine.length) og.unshift({ raum: "Zimmer", art: "aufenthalt", fensterpflicht: true, flaeche_m2: 12 });
+  og.push(level === 1 ? (baeder[0] || { raum: "Bad", art: "sanitaer", fensterpflicht: false, flaeche_m2: 5 }) : { raum: "Duschbad", art: "sanitaer", fensterpflicht: false, flaeche_m2: 4 });
+  return [...og, treppe];
+}
+
+/**
+ * Rooms of every storey of one house unit: the storeys share one back-row depth
+ * (≥ stair depth with a stair) so hall and stair line up; ground floor = house door
+ * at the access side (street), upper floors without an entrance.
+ * @param {object} o
+ * @param {string} o.we unit id (same on every storey)
+ * @param {number} o.n storeys
+ * @param {Array<object>} o.programm type programme
+ * @param {{x0:number,x1:number,z0:number,z1:number}} o.rechteck running-axis system rectangle, m
+ * @param {"x"|"z"} o.achse running axis
+ * @param {number} o.fassadeBei window facade (garden side) on the cross axis, m
+ * @param {object} [o.eintrag] catalogue entry (nutzung, raumartSchall)
+ * @param {Regeln} o.rg effective rules
+ * @param {object|null} [o.tuerAufschlaege] door swing overrides
+ * @param {string} [o.stufe] 84-10: effective level of the unit ("R" = wheelchair measures)
+ * @returns {{ geschosse: Array<{level:number, zonen:Array<object>}>, warns: string[] }}
+ */
+function hausZonen({ we, n, programm, rechteck, achse, fassadeBei, eintrag, rg, tuerAufschlaege, stufe }) {
+  const W = num(rechteck.x1) - num(rechteck.x0), D = num(rechteck.z1) - num(rechteck.z0);
+  const progs = Array.from({ length: n }, (_, l) => hausGeschossProgramm(programm, l, n));
+  const zf = (r) => Math.max(0, num(r?.flaeche_m2, num(r?.min_m2)));
+  const dm = stufe === "R" ? DIELE_MASSE_R : DIELE_MASSE; // 84-10: hall turning area of a wheelchair house
+  let rueck = n > 1 ? TREPPE_HAUS.tiefe_m : 0;
+  for (const p of progs) {
+    const back = p.filter((r) => !r.fensterpflicht && r.art !== "flur").reduce((s, r) => s + zf(r), 0) + dm.flaeche;
+    rueck = Math.max(rueck, clamp(W > 0.1 ? back / W : 0, dm.minBreite, Math.max(dm.minBreite, D * 0.6)));
+  }
+  const geschosse = [], warns = [];
+  progs.forEach((p, l) => {
+    const slice = (prog) => raumSlicing({
+      rechteck, fassadeBei, achse, level: l, we, variante: "normal",
+      nutzung: eintrag?.nutzung, raumartSchall: eintrag?.raumartSchall, tuerAufschlaege: tuerAufschlaege || null,
+      ...(stufe === "R" ? { stufe } : {}),
+      geschossName: n > 1 ? (l === 0 ? "EG" : `OG ${l}`) : "", rueckTiefe_m: rueck, ohneEingang: l > 0, eingangTyp: "hauseingang",
+    }, prog, rg);
+    let zs = slice(p);
+    // Narrow house: stair + kitchen + WC do not fit the back row — the kitchen moves
+    // to the window row (eat-in kitchen) [ASSUMED], with a hint.
+    if ((zs.warns || []).some((x) => /Treppe \[84-04\].*zu schmal/.test(x)) && p.some((r) => r.art === "kueche" && !r.fensterpflicht)) {
+      const zs2 = slice(p.map((r) => (r.art === "kueche" ? { ...r, fensterpflicht: true } : r)));
+      if (!(zs2.warns || []).some((x) => /Treppe \[84-04\].*zu schmal/.test(x))) {
+        zs = Object.assign(zs2, { warns: [...(zs2.warns || []), "Treppe [84-04]: Küche an die Fassade gelegt (Wohnküche) — Nebenraumzeile zu schmal für Treppe + Küche"] });
+      }
+    }
+    geschosse.push({ level: l, zonen: zs });
+    warns.push(...(zs.warns || []).map((s) => `${we}${n > 1 ? ` ${l === 0 ? "EG" : `OG ${l}`}` : ""}: ${s}`));
+  });
+  return { geschosse, warns };
+}
+
 /**
  * Manual order of a band (61-07, rest of Phase 42): known keys first in the given
  * order, catalogue entries not named are appended in catalogue order, unknown
@@ -1503,7 +2529,554 @@ export function ordneEinheiten(liste, keys) {
   return out;
 }
 
+/**
+ * 86-01: building depth range per typology for the inscribed rectangle of a NON-rectangular
+ * footprint, m [ASSUMED from empfehleErschliessung and the band depths: Mittelflur/MFH 13–17 m,
+ * Laubengang gallery + one band ≤ ≈ 12 m (85-02 deep-band finding), point block 10–18 m, row
+ * house / house 8–12 / 6–14 m]. A (rotated) rectangle keeps its full depth, as before.
+ */
+export const FORM_TIEFE = {
+  mittelflur: [11, 17], mfh: [11, 17], laubengang: [8, 13], spaenner: [10, 18], reihenhaus: [8, 12], efh: [6, 14],
+};
+
+/**
+ * 86-01: how a footprint is fitted for the rectangle solver. null = axis-parallel rectangle
+ * (or no usable footprint) → the solver runs exactly as before (byte-identical output).
+ * A rotated rectangle → frame along its own edge, rectangle = the footprint itself (nothing
+ * lost). Any other shape → for every candidate edge direction (and square to it) the largest
+ * inscribed rectangle with the typology depth (FORM_TIEFE, falling back to ≥ 4 m) — the
+ * largest wins; the rest of the footprint is returned as remainder pieces.
+ * @param {Array<{x:number, z:number}>|null} footprintM building footprint, m
+ * @param {string} [typ] typology
+ * @returns {null|{rahmen: ReturnType<typeof rahmen>, rechteck: {x0:number,x1:number,z0:number,z1:number}, gesamt_m2: number, belegt_m2: number, rest: Array<Array<{x:number,z:number}>>, rechteckForm: boolean}}
+ */
+export function formEinpassung(footprintM, typ) {
+  if (!Array.isArray(footprintM) || footprintM.length < 3) return null;
+  const pts = bereinigen(footprintM);
+  if (pts.length < 3 || istAchsRechteck(pts)) return null;
+  const mitte = schwerpunkt(pts);
+  const gesamt = polyFlaeche(pts);
+  /** Local bbox of a point list (the rotated rectangle itself). */
+  const bbox = (lok) => {
+    const xs = lok.map((p) => p.x), zs = lok.map((p) => p.z);
+    return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+  };
+  if (istRechteck(pts)) {
+    // Long side along local x (the solver's running axis), rotation as small as possible.
+    let w = Math.atan2(pts[1].z - pts[0].z, pts[1].x - pts[0].x);
+    let r = rahmen(w, mitte), b = bbox(pts.map((p) => inLokal(p, r)));
+    if (b.x1 - b.x0 + 1e-9 < b.z1 - b.z0) { w += Math.PI / 2; r = rahmen(w, mitte); b = bbox(pts.map((p) => inLokal(p, r))); }
+    while (w > Math.PI / 2 + 1e-12) w -= Math.PI;
+    while (w <= -Math.PI / 2 + 1e-12) w += Math.PI;
+    r = rahmen(w, mitte); b = bbox(pts.map((p) => inLokal(p, r)));
+    return { rahmen: r, rechteck: b, gesamt_m2: gesamt, belegt_m2: (b.x1 - b.x0) * (b.z1 - b.z0), rest: [], rechteckForm: true };
+  }
+  const [tMin, tMax] = FORM_TIEFE[String(typ)] || [8, 17];
+  /** @type {null|{r: ReturnType<typeof rahmen>, rect: {x0:number,x1:number,z0:number,z1:number,flaeche:number}, lok: Array<{x:number,z:number}>}} */
+  let best = null;
+  for (const grenzen of [[tMin, tMax], [4, tMax]]) {
+    for (const k of kandidatenRichtungen(pts)) {
+      for (const w of [k.winkel, k.winkel + Math.PI / 2]) {
+        const r = rahmen(w, mitte);
+        const lok = pts.map((p) => inLokal(p, r));
+        const rect = groesstesRechteck(lok, { tiefeMin: grenzen[0], tiefeMax: grenzen[1] });
+        if (rect && (!best || rect.flaeche > best.rect.flaeche + 1e-6)) best = { r, rect, lok };
+      }
+    }
+    if (best) break;
+  }
+  if (!best) return null;
+  const { r, rect, lok } = best;
+  // The solver runs along the LONGER side: depth was searched along local z, so a rectangle
+  // longer in z than in x gets the frame turned by 90° (same rectangle, swapped axes).
+  if (rect.z1 - rect.z0 > rect.x1 - rect.x0 + 1e-9) {
+    const r2 = rahmen(r.winkel + Math.PI / 2, { x: r.ox, z: r.oz });
+    const ecken = [{ x: rect.x0, z: rect.z0 }, { x: rect.x1, z: rect.z1 }].map((p) => inLokal(inWelt(p, r), r2));
+    const b = { x0: Math.min(ecken[0].x, ecken[1].x), x1: Math.max(ecken[0].x, ecken[1].x), z0: Math.min(ecken[0].z, ecken[1].z), z1: Math.max(ecken[0].z, ecken[1].z) };
+    return { rahmen: r2, rechteck: b, gesamt_m2: gesamt, belegt_m2: rect.flaeche, rest: restOhneRechteck(pts.map((p) => inLokal(p, r2)), b).map((t) => t.map((p) => inWelt(p, r2))), rechteckForm: false };
+  }
+  const b = { x0: rect.x0, x1: rect.x1, z0: rect.z0, z1: rect.z1 };
+  return { rahmen: r, rechteck: b, gesamt_m2: gesamt, belegt_m2: rect.flaeche, rest: restOhneRechteck(lok, b).map((t) => t.map((p) => inWelt(p, r))), rechteckForm: false };
+}
+
+/**
+ * Tessellate the footprint into corridors, cores, units and (room-zone mode) rooms.
+ * 86-01: a non-axis-parallel footprint is fitted first (formEinpassung): the rectangle solver
+ * runs in the footprint's own frame inside the largest fitting rectangle and every output
+ * coordinate is turned back — nothing lies outside the footprint any more; the remainder is
+ * reported (`form`, one hint `[86-01]`, added to rest_m2). Axis-parallel rectangles: unchanged.
+ * @param {object} opts see tesseliereKern (footprintM, storeys, typ, einheiten, …); 86-05a:
+ *   `riegelMinFlaeche_m2` (m², optional) reaches riegelZerlegung — default unchanged (120)
+ * @returns {any}
+ */
 export function tesseliere(opts) {
+  const o = opts || {};
+  const form = formEinpassung(o.footprintM, o.typ);
+  if (!form) return tesseliereKern(o);
+  // 86-03: a non-rectangular footprint is filled with several bars (riegelZerlegung); with
+  // only one bar the 86-01 path below runs unchanged.
+  if (!form.rechteckForm && String(o.typ) !== "efh") {
+    const nG = Math.max(1, Math.round(num(o.storeys, 1)));
+    const zerl = riegelZerlegung(o.footprintM, o.typ, { geschosse: nG, geschosshoehe_m: geschosshoeheAus(o.okf_m, nG), riegelMinFlaeche_m2: o.riegelMinFlaeche_m2 }, form);
+    if (zerl && zerl.riegel.length > 1) return tesseliereRiegel(o, zerl);
+  }
+  const { rahmen: rf, rechteck: rk } = form;
+  const winkelGrad = (rf.winkel * 180) / Math.PI;
+  const kern = tesseliereKern({
+    ...o,
+    footprintM: [{ x: rk.x0, z: rk.z0 }, { x: rk.x1, z: rk.z0 }, { x: rk.x1, z: rk.z1 }, { x: rk.x0, z: rk.z1 }],
+    // Facade azimuth: a local normal turns by the frame angle in the world (orientierungFuerBand).
+    nordwinkel: num(o.nordwinkel) + winkelGrad,
+  });
+  const { T, zonen, weListe, grenzen } = kernInWelt(kern, rf);
+  const nGeschosse = Math.max(1, Math.round(num(o.storeys, 1)));
+  const restForm_m2 = Math.max(0, form.gesamt_m2 - form.belegt_m2);
+  const hinweise = [...kern.hinweise];
+  if (!form.rechteckForm && restForm_m2 > 0.5) {
+    const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1).replace(".", ",");
+    const anteil = Math.round((100 * form.belegt_m2) / Math.max(1e-9, form.gesamt_m2));
+    hinweise.push(`Form [86-01]: der Baukörper ist kein Rechteck — belegt ist das größte passende Rechteck ${f1(rk.x1 - rk.x0)} × ${f1(rk.z1 - rk.z0)} m (${anteil} % von ${f1(form.gesamt_m2)} m²), ausgerichtet an einer Kante (${f1(((winkelGrad % 180) + 180) % 180)}°); ${f1(restForm_m2)} m² Restfläche je Geschoss in Schrägen und Ecken bleiben frei (Folgestufen: Schrägen nutzen, zweiter Riegel)`);
+  }
+  /** @type {any} */
+  const out = {
+    ...kern, zonen, weListe, grenzen, hinweise,
+    rest_m2: num(kern.rest_m2) + restForm_m2 * nGeschosse,
+    rest: num(kern.rest) + restForm_m2 * nGeschosse,
+    form: {
+      winkel_grad: Math.round(winkelGrad * 100) / 100,
+      rechteck: [{ x: rk.x0, z: rk.z0 }, { x: rk.x1, z: rk.z0 }, { x: rk.x1, z: rk.z1 }, { x: rk.x0, z: rk.z1 }].map(T),
+      gesamt_m2: Math.round(form.gesamt_m2 * 100) / 100,
+      belegt_m2: Math.round(form.belegt_m2 * 100) / 100,
+      rest_m2: Math.round(restForm_m2 * 100) / 100,
+      fuellgrad: Math.round((1000 * form.belegt_m2) / Math.max(1e-9, form.gesamt_m2)) / 1000,
+      rest: form.rest,
+      rechteckForm: form.rechteckForm,
+    },
+  };
+  if (Array.isArray(kern.waende)) out.waende = kern.waende.map((w) => ({ ...w, a: T(w.a), b: T(w.b) }));
+  return out;
+}
+
+/**
+ * 86-05a: the bar decomposition tesseliere(opts) would use — same fit, same spacing inputs,
+ * same cache key — WITHOUT running the solver. Lets the proposal library skip parameter sets
+ * that lead to the same decomposition before paying for a tessellation. Rotated rectangles
+ * and EFH: one bar; axis-parallel rectangle or invalid footprint: null (tesseliere runs the
+ * plain kernel there, no fit, no bars) — callers treat null as "one building".
+ * @param {object} opts tesseliere options (footprintM, typ, storeys, okf_m, riegelMinFlaeche_m2)
+ * @returns {ReturnType<typeof riegelZerlegung>}
+ */
+export function zerlegungFuer(opts) {
+  const o = opts || {};
+  const form = formEinpassung(o.footprintM, o.typ);
+  if (!form) return null;
+  const nG = Math.max(1, Math.round(num(o.storeys, 1)));
+  return riegelZerlegung(o.footprintM, o.typ, { geschosse: nG, geschosshoehe_m: geschosshoeheAus(o.okf_m, nG), riegelMinFlaeche_m2: o.riegelMinFlaeche_m2 }, form);
+}
+
+/**
+ * 86-01: turn a solver result computed in the local frame `rf` back to the world — zones,
+ * escape-route paths and door points, boundaries (with world end points and `gedreht`: the
+ * overlay draws axis-parallel lines from pos/quer, dragging along a slanted axis is a
+ * follow-up plan). Kerns stay untouched.
+ * @param {any} kern tesseliereKern result in local coordinates
+ * @param {ReturnType<typeof rahmen>} rf frame
+ * @returns {{T: (p: {x:number,z:number}) => {x:number,z:number}, zonen: Array<any>, weListe: Array<any>, grenzen: Array<any>}}
+ */
+function kernInWelt(kern, rf) {
+  const T = (p) => { const q = inWelt(p, rf); return { x: q.x, z: q.z }; };
+  const zonen = kern.zonen.map((z) => ({ ...z, points: (z.points || []).map(T) }));
+  const weListe = kern.weListe.map((w) => ({
+    ...w,
+    ...(Array.isArray(w.rettungsweg_pfad) ? { rettungsweg_pfad: w.rettungsweg_pfad.map(T) } : {}),
+    ...(Array.isArray(w.rettungsweg_tuerpunkte) ? { rettungsweg_tuerpunkte: w.rettungsweg_tuerpunkte.map(T) } : {}),
+  }));
+  const grenzen = kern.grenzen.map((g) => {
+    const a = g.achse === "z" ? { x: g.quer0, z: g.pos_m } : { x: g.pos_m, z: g.quer0 };
+    const b = g.achse === "z" ? { x: g.quer1, z: g.pos_m } : { x: g.pos_m, z: g.quer1 };
+    return { ...g, gedreht: true, p0: T(a), p1: T(b) };
+  });
+  return { T, zonen, weListe, grenzen };
+}
+
+// --- 86-03: bar network — several bars fill the footprint ------------------------------
+//
+// Greedy decomposition in the frame of the first bar (86-01 fit): the next bar is the largest
+// rectangle in the rest — in that frame or square to it — with the typology depth, until it
+// gets too small. Every bar is a house of its own (own corridor/core, own gable units); the
+// solver runs per bar and the results are merged (unit numbers running per storey over all
+// bars, band numbers of bar k shifted by 100·(k−1) so boundary ids and arrangement keys
+// "L<l>-B<b>" stay unique without touching the workshop UI). Linking the corridors into a
+// network of shared cores is a later stage (86-04/86-06).
+
+/**
+ * 86-03: limits of the bar decomposition [ASSUMED, office judgement, not a norm]: a further
+ * bar needs ≥ 120 m² footprint and a length of two minimum unit widths plus ≈ 3 m of
+ * corridor/core; at most 6 bars (more pieces only make slivers). `bandVersatz` = band
+ * number offset per bar (bar k: bands from 100·(k−1)).
+ */
+export const FORM_RIEGEL = { minFlaeche_m2: 120, minLaenge_m: 2 * WE_MIN_BREITE_M + 3, max: 6, bandVersatz: 100 };
+
+/**
+ * 86-03: clear distance between two bars whose long facades face each other, m:
+ * 2 × max(3 m, 0,4 H) — the setback area of both walls after BayBO Art. 6 Abs. 5 Satz 1
+ * (0,4 H, at least 3 m) used as a guide value [ASSUMED, D-P86-04 open; no setback proof].
+ * @param {number} geschosse storeys
+ * @param {number} geschosshoehe_m storey height, m
+ * @returns {number} m
+ */
+export function riegelAbstand(geschosse, geschosshoehe_m) {
+  const H = Math.max(1, Math.round(num(geschosse, 1))) * (num(geschosshoehe_m, 3) > 0 ? num(geschosshoehe_m, 3) : 3);
+  return 2 * Math.max(3, 0.4 * H);
+}
+
+/** Storey height from the top-storey floor level (75-13 okf_m), m; default 3 m [ASSUMED]. */
+function geschosshoeheAus(okf_m, n) {
+  return okf_m !== null && okf_m !== undefined && n > 1 && num(okf_m) > 0 ? num(okf_m) / (n - 1) : 3;
+}
+
+/** Axis-parallel rectangle of frame `f` expressed in frame `g` (both share the origin and differ by k·90°). */
+function rechteckUmrechnen(rk, f, g) {
+  const e = [{ x: rk.x0, z: rk.z0 }, { x: rk.x1, z: rk.z1 }].map((p) => inLokal(inWelt(p, f), g));
+  return { x0: Math.min(e[0].x, e[1].x), x1: Math.max(e[0].x, e[1].x), z0: Math.min(e[0].z, e[1].z), z1: Math.max(e[0].z, e[1].z) };
+}
+
+/**
+ * 86-03: do two bars (axis-parallel rectangles in the same frame) break the spacing rule?
+ * Overlap always does; long facade facing long facade (projections overlap by > 1 cm) needs
+ * `abstand`; a gable may touch anything (fire wall, L corner). Long side = the longer side.
+ * @param {{x0:number,x1:number,z0:number,z1:number}} a m
+ * @param {{x0:number,x1:number,z0:number,z1:number}} b m
+ * @param {number} abstand m
+ * @returns {boolean}
+ */
+export function riegelAbstandVerletzt(a, b, abstand) {
+  const ueberX = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
+  const ueberZ = Math.min(a.z1, b.z1) - Math.max(a.z0, b.z0);
+  if (ueberX > 0.01 && ueberZ > 0.01) return true;
+  const langX = (r) => r.x1 - r.x0 >= r.z1 - r.z0 - 1e-9; // long facades face ±z
+  const langZ = (r) => r.z1 - r.z0 >= r.x1 - r.x0 - 1e-9; // long facades face ±x
+  if (ueberX > 0.01 && langX(a) && langX(b)) return Math.max(a.z0 - b.z1, b.z0 - a.z1) < abstand - 1e-6;
+  if (ueberZ > 0.01 && langZ(a) && langZ(b)) return Math.max(a.x0 - b.x1, b.x0 - a.x1) < abstand - 1e-6;
+  return false;
+}
+
+/**
+ * 86-03: split a footprint into bars. Bar 1 = the 86-01 fit (formEinpassung); then, in that
+ * frame and square to it, repeatedly the largest rectangle with the typology depth
+ * (FORM_TIEFE) that is at least as long as deep, keeps the spacing rule to every bar laid so
+ * far and stays inside the footprint — until it is under FORM_RIEGEL.minFlaeche_m2 /
+ * minLaenge_m or FORM_RIEGEL.max bars exist. Spacing per axis: a bar whose long facade faces
+ * the candidate's long side is grown by `abstand`, a gable by 0 (riegelAbstandVerletzt).
+ * Rectangles, rotated rectangles and EFH: one bar. Pure, deterministic.
+ * @param {Array<{x:number, z:number}>|null} footprintM footprint, m
+ * @param {string} [typ] typology
+ * @param {{geschosse?: number, geschosshoehe_m?: number, riegelMinFlaeche_m2?: number}} [o] for the spacing
+ *   rule; 86-05a: `riegelMinFlaeche_m2` = minimum footprint of a further bar, m² (default
+ *   FORM_RIEGEL.minFlaeche_m2 — the proposal axis "zerlegung" varies it)
+ * @param {ReturnType<typeof formEinpassung>} [vorab] formEinpassung result when already known
+ * @returns {null|{form: NonNullable<ReturnType<typeof formEinpassung>>, riegel: Array<{rahmen: ReturnType<typeof rahmen>, rechteck: {x0:number,x1:number,z0:number,z1:number}}>, basis: ReturnType<typeof rahmen>, abstand_m: number}}
+ *   every bar in its own frame (long side along local x, as the solver expects); `basis` = the
+ *   frame all bars are axis-parallel to
+ */
+export function riegelZerlegung(footprintM, typ, o = {}, vorab = undefined) {
+  const form = vorab === undefined ? formEinpassung(footprintM, typ) : vorab;
+  if (!form) return null;
+  const abstand = riegelAbstand(num(o.geschosse, 1), num(o.geschosshoehe_m, 3));
+  const erster = [{ rahmen: form.rahmen, rechteck: form.rechteck }];
+  const mitte = { x: form.rahmen.ox, z: form.rahmen.oz };
+  const basis1 = rahmen(form.rahmen.winkel, mitte);
+  if (form.rechteckForm || String(typ) === "efh") return { form, riegel: erster, basis: basis1, abstand_m: abstand };
+  // 86-05a: the minimum bar footprint is a parameter (proposal axis "zerlegung"); the cache key
+  // carries EVERY input of the search below — before, a changed minimum would have returned a
+  // stale decomposition (Dev-Team finding, 86-05a-PLAN).
+  const minFlaeche = num(o.riegelMinFlaeche_m2) > 0 ? num(o.riegelMinFlaeche_m2) : FORM_RIEGEL.minFlaeche_m2;
+  const cacheKey = JSON.stringify([bereinigen(footprintM), String(typ), Math.round(abstand * 1000), minFlaeche, FORM_RIEGEL.minLaenge_m, FORM_RIEGEL.max, FORM_TIEFE[String(typ)] || null]);
+  const gemerkt = ZERLEGUNG_CACHE.get(cacheKey);
+  if (gemerkt) {
+    // LRU: a hit moves the entry to the end, so the oldest unused one is evicted first.
+    ZERLEGUNG_CACHE.delete(cacheKey);
+    ZERLEGUNG_CACHE.set(cacheKey, gemerkt);
+    return { form, ...gemerkt, abstand_m: abstand };
+  }
+  const pts = bereinigen(footprintM);
+  const [tMin, tMax] = FORM_TIEFE[String(typ)] || [8, 17];
+  /** @typedef {{rahmen: ReturnType<typeof rahmen>, rechteck: {x0:number,x1:number,z0:number,z1:number}}} Riegel */
+  const summe = (/** @type {Riegel[]} */ rs) => rs.reduce((s, r) => s + (r.rechteck.x1 - r.rechteck.x0) * (r.rechteck.z1 - r.rechteck.z0), 0);
+
+  // (a) Greedy: after `start`, repeatedly the largest rectangle in the rest — in `basis` or
+  // square to it — that keeps the spacing rule to every bar laid so far.
+  const gierig = (/** @type {Riegel[]} */ start, /** @type {ReturnType<typeof rahmen>} */ basis) => {
+    const riegel = [...start];
+    const quer = rahmen(basis.winkel + Math.PI / 2, mitte);
+    while (riegel.length < FORM_RIEGEL.max) {
+      /** @type {null|{f: ReturnType<typeof rahmen>, rect: {x0:number,x1:number,z0:number,z1:number,flaeche:number}}} */
+      let best = null;
+      for (const f of [basis, quer]) {
+        const lok = pts.map((p) => inLokal(p, f));
+        const ausschluss = riegel.map((r) => {
+          const q = rechteckUmrechnen(r.rechteck, r.rahmen, f);
+          const d = q.x1 - q.x0 >= q.z1 - q.z0 - 1e-9 ? abstand : 0; // its long facade faces the candidate's long side
+          return { x0: q.x0, x1: q.x1, z0: q.z0 - d, z1: q.z1 + d };
+        });
+        const rect = groesstesRechteck(lok, { tiefeMin: tMin, tiefeMax: tMax, ausschluss, laengerAlsTief: true, laengeMin: FORM_RIEGEL.minLaenge_m });
+        if (rect && (!best || rect.flaeche > best.rect.flaeche + 1e-6)) best = { f, rect };
+      }
+      if (!best || best.rect.flaeche < minFlaeche) break;
+      riegel.push({ rahmen: best.f, rechteck: { x0: best.rect.x0, x1: best.rect.x1, z0: best.rect.z0, z1: best.rect.z1 } });
+    }
+    return riegel;
+  };
+
+  let wahl = { riegel: gierig(erster, basis1), basis: basis1 };
+  let wahlFlaeche = summe(wahl.riegel);
+
+  // (b) Row layout ("Zeilenbau"): parallel bars of one depth at exactly the spacing, offset
+  // and depth scanned in 0,5 / 1 m steps, along the three heaviest edge directions and square
+  // to them; every strip interval long enough becomes a bar; then (a) fills wings across.
+  // Why: greedy puts the first bar in the middle of a deep shape and leaves two strips too
+  // thin for a second bar (pentagon of the user: 47 % → see 86-03 SUMMARY).
+  for (const k of kandidatenRichtungen(pts, 3)) {
+    for (const w of [k.winkel, k.winkel + Math.PI / 2]) {
+      const f = rahmen(w, mitte);
+      const lok = pts.map((p) => inLokal(p, f));
+      const zs = lok.map((p) => p.z);
+      const zMin = Math.min(...zs), zMax = Math.max(...zs);
+      /** @type {Riegel[]|null} */
+      let besteZeilen = null;
+      let besteF = 0;
+      for (let t = tMax; t >= tMin - 1e-9; t -= 1) {
+        for (let s = 0; s < t + abstand - 1e-9; s += 0.5) {
+          /** @type {Riegel[]} */
+          const zeilen = [];
+          for (let z0 = zMin + s; z0 + t <= zMax + 1e-6 && zeilen.length < FORM_RIEGEL.max; z0 += t + abstand) {
+            for (const [a, b] of streifenIntervalle(lok, z0, z0 + t)) {
+              if (b - a + 1e-9 < Math.max(t, FORM_RIEGEL.minLaenge_m) || (b - a) * t < minFlaeche) continue;
+              if (zeilen.length < FORM_RIEGEL.max) zeilen.push({ rahmen: f, rechteck: { x0: a, x1: b, z0, z1: z0 + t } });
+            }
+          }
+          const fl = summe(zeilen);
+          if (zeilen.length && fl > besteF + 1e-6) { besteF = fl; besteZeilen = zeilen; }
+        }
+      }
+      if (!besteZeilen) continue;
+      const voll = gierig(besteZeilen, f);
+      const fl = summe(voll);
+      // Only a clear gain (> 1 m²) replaces the greedy result — ties keep the 86-01 first bar.
+      if (fl > wahlFlaeche + 1) { wahl = { riegel: voll, basis: f }; wahlFlaeche = fl; }
+    }
+  }
+  if (ZERLEGUNG_CACHE.size >= ZERLEGUNG_CACHE_MAX) ZERLEGUNG_CACHE.delete(ZERLEGUNG_CACHE.keys().next().value);
+  ZERLEGUNG_CACHE.set(cacheKey, wahl);
+  return { form, ...wahl, abstand_m: abstand };
+}
+
+/** 86-03: decompositions already computed (pure function of shape, typology, spacing and —
+ * since 86-05a — the minimum bar area) — the workshop re-tessellates on every toggle; the
+ * row-layout scan costs ~0,1–0,3 s per shape. Insertion order = LRU order (see riegelZerlegung). */
+const ZERLEGUNG_CACHE = new Map();
+/** 86-05a: LRU bound of ZERLEGUNG_CACHE — 6 typologies × 3 minimum-area steps per footprint fit several times. */
+export const ZERLEGUNG_CACHE_MAX = 64;
+/** 86-05a: empty the decomposition cache (tests: "with cache = without cache"). */
+export function zerlegungCacheLeeren() { ZERLEGUNG_CACHE.clear(); }
+/** 86-05a: number of cached decompositions (tests of the LRU bound). @returns {number} */
+export function zerlegungCacheGroesse() { return ZERLEGUNG_CACHE.size; }
+
+/**
+ * 86-03: inputs of bar k translated from the merged (global) numbering to the bar's own:
+ * arrangement / boundary keys of bands 100·(k−1)…, level-switch keys "l|typ|n" minus the
+ * count of that type on that storey in the bars before, door-swing keys with the unit number
+ * minus the units before (skeleton zones of bar k carry " R<k>"). Bar 1 keeps the inputs as
+ * they are (keys of other bars point at nothing there) — so a single bar stays byte-identical.
+ */
+function riegelEingaben(o, k, weOff, typOff) {
+  if (k === 1) return {};
+  const vers = FORM_RIEGEL.bandVersatz * (k - 1);
+  const band = (key) => {
+    const m = /^L(\d+)-B(\d+)(.*)$/.exec(String(key));
+    if (!m) return null;
+    const b = Number(m[2]) - vers;
+    return b >= 0 && b < FORM_RIEGEL.bandVersatz ? `L${m[1]}-B${b}${m[3]}` : null;
+  };
+  const schluessel = (obj, f) => {
+    if (!obj || typeof obj !== "object") return obj;
+    const out = {};
+    for (const [key, v] of Object.entries(obj)) { const n = f(key); if (n !== null) out[n] = v; }
+    return out;
+  };
+  const weLokal = (s) => {
+    let ok = true;
+    const r = String(s)
+      .replace(/\bWE (\d+)-(\d+)\b/g, (_, l, n) => { const m = Number(n) - (weOff.get(l) || 0); if (m < 1) ok = false; return `WE ${l}-${m}`; })
+      .replace(/\bWE (\d+)\b(?!-)/g, (_, n) => { const m = Number(n) - (weOff.get("u") || 0); if (m < 1) ok = false; return `WE ${m}`; });
+    return ok ? r : null;
+  };
+  return {
+    anordnung: schluessel(o.anordnung, band),
+    grenzenPositionen: schluessel(o.grenzenPositionen, band),
+    gesperrteGrenzen: (Array.isArray(o.gesperrteGrenzen) ? o.gesperrteGrenzen : []).map(band).filter((x) => x !== null),
+    stufeJeWe: schluessel(o.stufeJeWe, (key) => {
+      const m = /^(-?\d+)\|(.*)\|(\d+)$/.exec(key);
+      if (!m) return null;
+      const n = Number(m[3]) - (typOff.get(`${m[1]}|${m[2]}`) || 0);
+      return n >= 1 ? `${m[1]}|${m[2]}|${n}` : null;
+    }),
+    tuerAufschlaege: schluessel(o.tuerAufschlaege, (key) => {
+      const teile = String(key).split("|");
+      if (teile.length < 3) return null;
+      const name = teile.slice(1, -1).join("|");
+      let lokal;
+      if (/\bWE \d/.test(name)) lokal = weLokal(name);
+      else lokal = name.endsWith(` R${k} ·WT`) ? name.replace(new RegExp(` R${k} ·WT$`), " ·WT") : null;
+      return lokal === null ? null : `${teile[0]}|${lokal}|${teile[teile.length - 1]}`;
+    }),
+  };
+}
+
+/**
+ * 86-03: rename one bar's result into the merged numbering — "WE l-n" → n + units of that
+ * storey in the bars before (row houses "WE n" over all storeys), in every string (names,
+ * door targets, boundary neighbours, warnings); the band-mode unit names "… l-n ·WT";
+ * skeleton zones of bar k ≥ 2 get " R<k>" (corridor/core names stay unique per storey);
+ * bands and boundary ids shifted by 100·(k−1); `riegel: k` on units and boundaries.
+ */
+function riegelUmbenennen(teil, k, weOff) {
+  const vers = FORM_RIEGEL.bandVersatz * (k - 1);
+  const text = (s) => s
+    .replace(/\bWE (\d+)-(\d+)\b/g, (_, l, n) => `WE ${l}-${Number(n) + (weOff.get(l) || 0)}`)
+    .replace(/\bWE (\d+)\b(?!-)/g, (_, n) => `WE ${Number(n) + (weOff.get("u") || 0)}`);
+  const tief = (v) => {
+    if (typeof v === "string") return text(v);
+    if (Array.isArray(v)) return v.map(tief);
+    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([key, w]) => [key, tief(w)]));
+    return v;
+  };
+  const zonen = teil.zonen.map((z0) => {
+    const z = tief(z0);
+    const name = String(z0.name || "");
+    if (z0.we && !name.includes("(WE")) {
+      const m2 = /^WE (\d+)-(\d+)$/.exec(String(z0.we));
+      if (m2) z.name = name.replace(/ (\d+)-(\d+) ·WT$/, (_, l, n) => ` ${l}-${Number(n) + (weOff.get(l) || 0)} ·WT`);
+      else if (/^WE \d+$/.test(String(z0.we))) z.name = name.replace(/ (\d+) ·WT$/, (_, n) => ` ${Number(n) + (weOff.get("u") || 0)} ·WT`);
+    } else if (!z0.we && k > 1) {
+      z.name = name.replace(/ ·WT$/, ` R${k} ·WT`);
+    }
+    return z;
+  });
+  const weListe = teil.weListe.map((w) => ({ ...tief(w), band: num(w.band) + vers, riegel: k }));
+  const grenzen = teil.grenzen.map((g) => ({
+    ...tief(g), band: num(g.band) + vers, riegel: k,
+    id: String(g.id).replace(/^L(\d+)-B(\d+)/, (_, l, b) => `L${l}-B${Number(b) + vers}`),
+  }));
+  return {
+    zonen, weListe, grenzen,
+    raumWarns: (teil.raumWarns || []).map((s) => { const t = text(String(s)); return k > 1 && !/^WE /.test(t) ? `Riegel ${k}: ${t}` : t; }),
+    hinweise: (teil.hinweise || []).map((s) => text(String(s))),
+    rettungswegWarnungen: Array.isArray(teil.rettungswegWarnungen) ? teil.rettungswegWarnungen.map(tief) : null,
+  };
+}
+
+/**
+ * 86-03: tessellate every bar of a decomposition and merge the results (see the section
+ * comment above). Output = tesseliere contract plus `form.riegel` and `riegel` on units and
+ * boundaries; `form.rest` = the footprint minus all bars (half-plane pieces, display only).
+ * @param {any} o tesseliere options
+ * @param {NonNullable<ReturnType<typeof riegelZerlegung>>} zerl
+ * @returns {any}
+ */
+function tesseliereRiegel(o, zerl) {
+  const nGeschosse = Math.max(1, Math.round(num(o.storeys, 1)));
+  /** @type {Map<string, number>} unit numbers used so far per storey ("u" = row houses over all storeys) */
+  const weOff = new Map();
+  /** @type {Map<string, number>} units so far per "level|typKey" (84-10 level-switch keys) */
+  const typOff = new Map();
+  const zonen = [], weListe = [], grenzen = [], raumWarns = [], hinweise = [], waende = [];
+  let rettungswegWarnungen = null;
+  let rest_m2 = 0, restNachfrage_m2 = 0, belegt = 0;
+  const riegelInfo = [];
+  zerl.riegel.forEach(({ rahmen: rf, rechteck: rk }, i) => {
+    const k = i + 1;
+    const kern = tesseliereKern({
+      ...o,
+      ...riegelEingaben(o, k, weOff, typOff),
+      footprintM: [{ x: rk.x0, z: rk.z0 }, { x: rk.x1, z: rk.z0 }, { x: rk.x1, z: rk.z1 }, { x: rk.x0, z: rk.z1 }],
+      nordwinkel: num(o.nordwinkel) + (rf.winkel * 180) / Math.PI,
+    });
+    const welt = kernInWelt(kern, rf);
+    const teil = riegelUmbenennen({ ...kern, ...welt }, k, weOff);
+    // Offsets for the next bar from this bar's LOCAL numbering.
+    const maxN = new Map();
+    for (const w of kern.weListe) {
+      const m = /^WE (\d+)-(\d+)$/.exec(String(w.we)) || /^WE ()(\d+)$/.exec(String(w.we));
+      if (!m) continue;
+      const key = m[1] === "" ? "u" : m[1];
+      maxN.set(key, Math.max(maxN.get(key) || 0, Number(m[2])));
+      const tk = `${Math.round(num(w.level))}|${w.typKey}`;
+      typOff.set(tk, (typOff.get(tk) || 0) + 1);
+    }
+    for (const [key, n] of maxN) weOff.set(key, (weOff.get(key) || 0) + n);
+    zonen.push(...teil.zonen); weListe.push(...teil.weListe); grenzen.push(...teil.grenzen);
+    raumWarns.push(...teil.raumWarns);
+    for (const h of teil.hinweise) if (!hinweise.includes(h)) hinweise.push(h);
+    if (teil.rettungswegWarnungen) rettungswegWarnungen = [...(rettungswegWarnungen || []), ...teil.rettungswegWarnungen];
+    if (Array.isArray(kern.waende)) waende.push(...kern.waende.map((w) => ({ ...w, a: welt.T(w.a), b: welt.T(w.b) })));
+    rest_m2 += num(kern.rest_m2);
+    restNachfrage_m2 += num(kern.restNachfrage_m2);
+    const L = rk.x1 - rk.x0, D = rk.z1 - rk.z0;
+    belegt += L * D;
+    riegelInfo.push({
+      nr: k,
+      rechteck: [{ x: rk.x0, z: rk.z0 }, { x: rk.x1, z: rk.z0 }, { x: rk.x1, z: rk.z1 }, { x: rk.x0, z: rk.z1 }].map(welt.T),
+      laenge_m: Math.round(L * 100) / 100, tiefe_m: Math.round(D * 100) / 100,
+      we: new Set(teil.weListe.map((w) => w.we)).size,
+    });
+  });
+  // Remainder for the display: footprint minus every bar, all in the common frame.
+  const basis = zerl.basis;
+  const inBasis = zerl.riegel.map((r) => rechteckUmrechnen(r.rechteck, r.rahmen, basis));
+  let stuecke = [bereinigen(o.footprintM).map((p) => inLokal(p, basis))];
+  for (const q of inBasis) stuecke = stuecke.flatMap((s) => restOhneRechteck(s, q));
+  const restPoly = stuecke.map((s) => s.map((p) => { const w = inWelt(p, basis); return { x: w.x, z: w.z }; }));
+  const gesamt = zerl.form.gesamt_m2;
+  const restForm_m2 = Math.max(0, gesamt - belegt);
+  const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1).replace(".", ",");
+  const anteil = Math.round((100 * belegt) / Math.max(1e-9, gesamt));
+  hinweise.push(`Form [86-03]: ${riegelInfo.length} Riegel ${riegelInfo.map((r) => `${f1(r.laenge_m)} × ${f1(r.tiefe_m)}`).join(", ")} m — ${anteil} % von ${f1(gesamt)} m² belegt, ${f1(restForm_m2)} m² Restfläche je Geschoss; jeder Riegel ist ein eigenes Haus mit eigener Erschließung. Gegenüberliegende Längsseiten halten ≥ ${f1(zerl.abstand_m)} m Abstand (2 × max(3 m; 0,4 H), BayBO Art. 6 als Richtwert [ASSUMED], kein Abstandsflächennachweis)`);
+  // Bars that touch (gable at a gable or at a long side): those units lose facade there.
+  for (let a = 0; a < inBasis.length; a++) {
+    for (let b = a + 1; b < inBasis.length; b++) {
+      const p = inBasis[a], q = inBasis[b];
+      const luecke = Math.max(p.x0 - q.x1, q.x0 - p.x1, p.z0 - q.z1, q.z0 - p.z1);
+      const ueber = Math.max(Math.min(p.x1, q.x1) - Math.max(p.x0, q.x0), Math.min(p.z1, q.z1) - Math.max(p.z0, q.z0));
+      if (Math.abs(luecke) < 0.01 && ueber > 0.5) hinweise.push(`Form [86-03]: Riegel ${b + 1} stößt an Riegel ${a + 1} (${f1(ueber)} m Brandwand) — die Wohnungen an dieser Stelle haben dort keine Fenster; Belichtung prüfen`);
+    }
+  }
+  const rb = zerl.riegel[0];
+  /** @type {any} */
+  const out = {
+    zonen, weListe, grenzen,
+    rest_m2: rest_m2 + restForm_m2 * nGeschosse,
+    rest: rest_m2 + restForm_m2 * nGeschosse,
+    restNachfrage_m2, raumWarns, hinweise,
+    form: {
+      winkel_grad: Math.round(((rb.rahmen.winkel * 180) / Math.PI) * 100) / 100,
+      rechteck: riegelInfo[0].rechteck,
+      gesamt_m2: Math.round(gesamt * 100) / 100,
+      belegt_m2: Math.round(belegt * 100) / 100,
+      rest_m2: Math.round(restForm_m2 * 100) / 100,
+      fuellgrad: Math.round((1000 * belegt) / Math.max(1e-9, gesamt)) / 1000,
+      rest: restPoly,
+      rechteckForm: false,
+      riegel: riegelInfo,
+      abstand_m: Math.round(zerl.abstand_m * 100) / 100,
+    },
+  };
+  if (rettungswegWarnungen) out.rettungswegWarnungen = rettungswegWarnungen;
+  if (waende.length) out.waende = waende;
+  return out;
+}
+
+function tesseliereKern(opts) {
   const {
     footprintM = null, storeys = 1, typ = "mittelflur", einheiten = [],
     gesperrteGrenzen = [], raumzonen = false,
@@ -1516,11 +3089,17 @@ export function tesseliere(opts) {
     // 75-14: per-door swing overrides { "<level>|<zoneName>|<idx>": "links"|"rechts" }
     // (persisted in werkstatt_layer, toggled in the focus view). Default none.
     tuerAufschlaege = null,
+    // 84-10: level switch per unit { "<level>|<typKey>|<n>": "standard"|"B"|"R" } (werkstatt_layer
+    // stufeJeWe, keys from stufeSchluessel). It beats the `stufe` of the mix entry; without
+    // both the result is byte-identical to before.
+    stufeJeWe = null,
     // 75-13: finished-floor level of the top storey in m for the lift duty
     // (MBO §39 Abs. 4: OKF > 13 m). Default (storeys − 1) · 3,0 m [ASSUMED].
     okf_m = null,
   } = opts || {};
-  const rg = /** @type {Regeln} */ (regeln && typeof regeln === "object" ? regeln : {});
+  // 84-01: doors always — room-zone mode applies the apartment layout unconditionally
+  // (effektiveRegeln); the band mode (no rooms) has nothing to give doors to.
+  const rg = effektiveRegeln(regeln, { typ, raumzonen: !!raumzonen });
   const bb = footprintBBox(footprintM);
   const nGeschosse = Math.max(1, Math.round(num(storeys, 1)));
   const kern = kernRegeln(rg, nGeschosse, okf_m === null ? (nGeschosse - 1) * 3 : num(okf_m));
@@ -1531,6 +3110,8 @@ export function tesseliere(opts) {
   const hinweise = [];
 
   const zonen = [];
+  // 84-10: entries gain `stufe` ("B"/"R") and the 61-xx band bookkeeping (_a, _b, …) — typed loosely.
+  /** @type {Array<any>} */
   const weListe = [];
   const grenzen = [];
   let rest_m2 = 0;           // 61-01-Semantik: Band-Lücken + nicht platzierbare Zielflächen
@@ -1543,14 +3124,32 @@ export function tesseliere(opts) {
       for (let i = 1; i < liste.length; i++) restNachfrage_m2 += Math.max(0, num(liste[i]?.flaeche_m2)) * nGeschosse;
     }
     const we = "WE 0-1";
-    for (let level = 0; level < nGeschosse; level++) {
-      zonen.push({
-        points: [
-          { x: bb.minX, z: bb.minZ }, { x: bb.maxX, z: bb.minZ },
-          { x: bb.maxX, z: bb.maxZ }, { x: bb.minX, z: bb.maxZ },
-        ],
-        level, name: `${e?.name || "Haus"} 0-1 ·WT`, we,
+    // 84-04: room-zone mode — the house gets rooms per storey (same rules as a
+    // Reihenhaus unit over the whole footprint; running axis = the longer side, house
+    // door on the min side of the short axis [ASSUMED street], living rooms opposite).
+    const efhRaumWarns = [];
+    const programmEfh = Array.isArray(e?.raumprogramm) ? e.raumprogramm : [];
+    if (raumzonen && programmEfh.length) {
+      const lx = bb.w >= bb.d;
+      const haus = hausZonen({
+        we, n: nGeschosse, programm: programmEfh, achse: lx ? "x" : "z",
+        rechteck: lx ? { x0: bb.minX, x1: bb.maxX, z0: bb.minZ, z1: bb.maxZ } : { x0: bb.minZ, x1: bb.maxZ, z0: bb.minX, z1: bb.maxX },
+        fassadeBei: lx ? bb.maxZ : bb.maxX, eintrag: e, rg: effektiveRegeln(regeln, { typ, raumzonen: true }),
+        tuerAufschlaege: tuerAufschlaege && typeof tuerAufschlaege === "object" ? tuerAufschlaege : null,
+        stufe: wirksameStufe(e?.stufe, `0|${e?.key}|1`, stufeJeWe),
       });
+      for (const g of haus.geschosse) zonen.push(...g.zonen);
+      efhRaumWarns.push(...haus.warns);
+    } else {
+      for (let level = 0; level < nGeschosse; level++) {
+        zonen.push({
+          points: [
+            { x: bb.minX, z: bb.minZ }, { x: bb.maxX, z: bb.minZ },
+            { x: bb.maxX, z: bb.maxZ }, { x: bb.minX, z: bb.maxZ },
+          ],
+          level, name: `${e?.name || "Haus"} 0-1 ·WT`, we,
+        });
+      }
     }
     if (e) {
       weListe.push({
@@ -1558,13 +3157,70 @@ export function tesseliere(opts) {
         fassadeLaenge_m: 2 * (bb.w + bb.d),
         flaeche_m2: bb.w * bb.d * nGeschosse,
         variante: e.variante === "gespiegelt" ? "gespiegelt" : "normal",
+        ...(wirksameStufe(e.stufe, `0|${e.key}|1`, stufeJeWe) !== "standard" ? { stufe: wirksameStufe(e.stufe, `0|${e.key}|1`, stufeJeWe) } : {}),
       });
+    }
+    if (efhRaumWarns.length) {
+      // 75-14 / 84-0x layout notes are design conflicts for the hint box (as below).
+      return { zonen, weListe, grenzen, rest_m2: restNachfrage_m2, rest: restNachfrage_m2, restNachfrage_m2, hinweise: [...hinweise, ...efhRaumWarns.filter((x) => /\[(75-14|84-0\d)\]/.test(x))], raumWarns: efhRaumWarns.filter((x) => !/\[(75-14|84-0\d)\]/.test(x)) };
     }
     return { zonen, weListe, grenzen, rest_m2: restNachfrage_m2, rest: restNachfrage_m2, restNachfrage_m2, hinweise };
   }
 
-  const skelett = erschliessungsSkelett({ footprintM, storeys, typ, kern });
+  // 84-09: gable-unit depth. Start = largest catalogue unit / building depth, clamped
+  // to KOPFWOHNUNG [ASSUMED]; then the smallest depth (0,25 m steps up to the max) at
+  // which a probe slicing of that type needs no merged rooms, drops no room and
+  // closes both strip ends — the window rooms only get the gable facade in the
+  // slicing, so area / depth alone is too shallow for 4-room types. The gable unit
+  // takes the largest type (or the first of a manual band order).
+  let kopfWunsch = 0;
+  if (rg.kopfwohnung && KOPF_TYPEN.includes(String(typ)) && liste.length) {
+    const quer = Math.min(bb.w, bb.d);
+    const kopfTyp = liste.reduce((m, e) => (num(e?.flaeche_m2) > num(m?.flaeche_m2) ? e : m), liste[0]);
+    kopfWunsch = clamp(safeDiv(num(kopfTyp?.flaeche_m2), quer), KOPFWOHNUNG.minTiefe_m, KOPFWOHNUNG.maxTiefe_m);
+    const programm = Array.isArray(kopfTyp?.raumprogramm) ? kopfTyp.raumprogramm : [];
+    if (raumzonen && programm.length && quer > 0.5) {
+      const schlecht = /zusammengelegt|Flurende \[84-06\]|entfällt|zu gering|keine Tür möglich/;
+      // Living rooms over the 75-14 aspect-ratio fail threshold count as a miss too.
+      const failVerhaeltnis = wohnungsRegeln(rg).seitenverhaeltnisFail;
+      const schlauchig = (z) => {
+        if (z.art !== "aufenthalt" || !(failVerhaeltnis > 0)) return false;
+        const xs = z.points.map((p) => p.x), zs = z.points.map((p) => p.z);
+        const a = Math.max(...xs) - Math.min(...xs), c = Math.max(...zs) - Math.min(...zs);
+        return Math.min(a, c) > 0.05 && Math.max(a, c) / Math.min(a, c) >= failVerhaeltnis;
+      };
+      for (let L = kopfWunsch; L <= KOPFWOHNUNG.maxTiefe_m + 1e-9; L += 0.25) {
+        const probe = raumSlicing({
+          rechteck: { x0: 0, x1: quer, z0: 0, z1: L }, fassadeBei: 0, achse: "x", level: 0, we: "probe",
+          nutzung: kopfTyp?.nutzung, raumartSchall: kopfTyp?.raumartSchall, eingangMitte: quer / 2,
+          // 84-10: a wheelchair gable unit (mix level R) needs the deeper R hall/strip — the
+          // depth is probed with it (a per-unit switch is not known before the placement).
+          ...(kopfTyp?.stufe === "R" ? { stufe: "R" } : {}),
+        }, programm, rg);
+        kopfWunsch = L;
+        if (!(probe.warns || []).some((w) => schlecht.test(w)) && !probe.some(schlauchig)) break;
+      }
+    }
+  }
+  const skelett = erschliessungsSkelett({ footprintM, storeys, typ, kern, kopfTiefe_m: kopfWunsch, windmuehle: !!rg.windmuehle });
   zonen.push(...skelett.flure, ...skelett.kerne);
+  // 84-03 (REGELN-BARRIEREFREI BF-16/17, DIN 18040-2 4.3.2): a gallery narrower than
+  // 1,50 m is only allowed with a 1,50 × 1,50 m turning area at least once and at most
+  // every 15 m [interpretation ASSUMED: count = max(1, ⌈length / 15⌉ − 1)]; door
+  // movement areas may count. Hint only (not drawn); room-zone mode, so the Phase-61
+  // band output stays byte-identical.
+  if (raumzonen && typ === "laubengang") {
+    const gangB = num((ERSCHLIESSUNG.laubengang || {}).flurbreite, 1.35);
+    if (gangB < LAUBENGANG_RANGIER.breite_m - 1e-9) {
+      const laenge = Math.max(bb.w, bb.d);
+      const anzahl = Math.max(1, Math.ceil(laenge / LAUBENGANG_RANGIER.abstand_m) - 1);
+      const f = (v) => v.toFixed(2).replace(".", ",");
+      hinweise.push(`Laubengang [84-03]: ${f(gangB)} m breit < ${f(LAUBENGANG_RANGIER.breite_m)} m (DIN 18040-2 4.3.2) — zulässig nur mit Rangierfläche ${f(LAUBENGANG_RANGIER.breite_m)} × ${f(LAUBENGANG_RANGIER.breite_m)} m mindestens einmal und höchstens alle ${LAUBENGANG_RANGIER.abstand_m} m: bei ${laenge.toFixed(1).replace(".", ",")} m Ganglänge ${anzahl} nötig (Bewegungsflächen vor Wohnungstüren dürfen angerechnet werden; nicht eingezeichnet) oder Gang auf ${f(LAUBENGANG_RANGIER.breite_m)} m verbreitern`);
+    }
+  }
+  if (kopfWunsch > 0 && skelett.kopf?.grund) {
+    hinweise.push(`Kopfwohnung [84-09]: ${skelett.kopf.grund} — der Gebäudeflur endet an der Außenwand (Wärmebrücke: Flur kälter als die Wohnungen); Gebäude verlängern oder Spänner wählen`);
+  }
   if (kern.aktiv) {
     // Legal basis of the lift switch: office rule > 3 storeys (D-P75-13-A) vs. the
     // building codes — both named, the stricter one is the default.
@@ -1579,14 +3235,43 @@ export function tesseliere(opts) {
     if (!skelett.kerne.length) hinweise.push(`Notwendiger Treppenraum: Typologie ${typ} hat keinen Kern — MFH oder Spänner wählen`);
   }
 
-  const reihenfolge = { sued: 0, nord: 1, west: 0, ost: 1, gesamte: 0, westq: 0, ostq: 1, suedmitte: 2, nordmitte: 3 };
+  // 84-09: gable bands last, so the band indices (manual order keys L<l>-B<i>) of
+  // the side bands stay as before.
+  const reihenfolge = { sued: 0, nord: 1, west: 0, ost: 1, gesamte: 0, westq: 0, ostq: 1, suedmitte: 2, nordmitte: 3, kopf0: 4, kopf1: 5, windS: 0, windO: 1, windN: 2, windW: 3 };
   const baender = [...skelett.baender].sort((a, b) =>
     a.level - b.level || (reihenfolge[a.seite] ?? 0) - (reihenfolge[b.seite] ?? 0));
   const bandIdxJeLevel = new Map();
   const lfdJeLevel = new Map();
 
-  const kandidatenFuer = (tiefe, bandListe) => bandListe.map((e) => {
-    const min = safeDiv(num(e?.min_m2, num(e?.flaeche_m2)), tiefe);
+  // 85: smallest unit width (m) at which the type's room programme slices WITHOUT
+  // merged window rooms — the catalogue min_m2 knows nothing about room minimum
+  // widths, and a filled band really squeezes units to it. Probe slicing in 0,25 m
+  // steps from WE_MIN_BREITE_M (cap 30 m), memoised per type and band depth.
+  const programmMin = new Map();
+  const programmMindestBreite = (e, tiefe) => {
+    const prog = Array.isArray(e?.raumprogramm) ? e.raumprogramm : [];
+    if (!prog.length || tiefe <= 0.05) return 0;
+    // 84-10: a wheelchair type (mix level R) needs more width (doors 1,01 m, bath 1,50 m,
+    // hall 1,50 m) — its own cache entry and probe.
+    const rollstuhl = e?.stufe === "R";
+    const key = `${e?.key}|${Math.round(tiefe * 100)}${rollstuhl ? "|R" : ""}`;
+    if (programmMin.has(key)) return programmMin.get(key);
+    // Only the merge of window rooms (the facade too short for the room minimums) —
+    // narrow back rows have their own fallbacks (stacking, dropped store niches).
+    // 84-10: a wheelchair type must also close its corridor end on a door and give every room
+    // a door — with 1,01 m doors (1,31 m with jambs) the narrow standard width no longer does.
+    const schlecht = rollstuhl ? /zusammengelegt|Flurende \[84-06\]|keine Tür möglich/ : /zusammengelegt/;
+    let w = WE_MIN_BREITE_M;
+    for (; w < 30; w += 0.25) {
+      const probe = raumSlicing({ rechteck: { x0: 0, x1: w, z0: 0, z1: tiefe }, fassadeBei: 0, achse: "x", level: 0, we: "probe", nutzung: e?.nutzung, raumartSchall: e?.raumartSchall, ...(rollstuhl ? { stufe: "R" } : {}) }, prog, rg);
+      if (!(probe.warns || []).some((x) => schlecht.test(x))) break;
+    }
+    programmMin.set(key, w);
+    return w;
+  };
+  // locker = true: without the programme minimum (fallback for a band that would stay empty).
+  const kandidatenFuer = (tiefe, bandListe, locker = false) => bandListe.map((e) => {
+    const min = Math.max(safeDiv(num(e?.min_m2, num(e?.flaeche_m2)), tiefe), raumzonen && typ !== "reihenhaus" && !locker ? programmMindestBreite(e, tiefe) : 0);
     const max = safeDiv(num(e?.max_m2, num(e?.flaeche_m2)), tiefe);
     let ziel = safeDiv(num(e?.flaeche_m2), tiefe);
     // 75-07 regeln.phi: WE-Rechteck breite × tiefe im goldenen Schnitt, wenn die
@@ -1594,6 +3279,17 @@ export function tesseliere(opts) {
     if (rg.phi) {
       const kand = [tiefe / PHI, tiefe * PHI].filter((v) => v >= min - 1e-9 && v <= max + 1e-9);
       if (kand.length) ziel = kand.reduce((p, q) => (Math.abs(q - ziel) < Math.abs(p - ziel) ? q : p));
+    }
+    // 84-05: a row house is at least REIHENHAUS_MIN_BREITE_M wide (room-zone mode) —
+    // area / depth alone made a 55 m² type a 3,4 m wide house on four storeys.
+    if (raumzonen && typ === "reihenhaus") {
+      return { id: e?.key, ziel: Math.max(ziel, REIHENHAUS_MIN_BREITE_M), min: Math.max(min, REIHENHAUS_MIN_BREITE_M), max: Math.max(max, REIHENHAUS_MIN_BREITE_M) };
+    }
+    // 85: with filled bands units really sit near their minimum — a 35 m² type in a
+    // 14,65 m deep gallery band became 2,4 m wide (no room for hall + bath + doors).
+    if (raumzonen) {
+      const unten = Math.max(min, WE_MIN_BREITE_M);
+      return { id: e?.key, ziel: Math.max(ziel, unten), min: unten, max: Math.max(max, unten) };
     }
     return { id: e?.key, ziel, min, max };
   });
@@ -1606,7 +3302,33 @@ export function tesseliere(opts) {
     // 61-07: every band places the catalogue in ITS order — the user may have
     // swapped units by drag. Without an override this is the catalogue order.
     const bandKey = `L${band.level}-B${bandIdx}`;
-    const liste_ = ordneEinheiten(liste, anordnungMap[bandKey]);
+    let liste_ = ordneEinheiten(liste, anordnungMap[bandKey]);
+    let locker = false; // 85: band filled with catalogue minimums (no type fit its programme width)
+    // 84-09: a gable band holds exactly one unit over its full length — the first
+    // of a manual order, else the largest type.
+    if (band.kopf && liste_.length) {
+      liste_ = [Array.isArray(anordnungMap[bandKey]) && anordnungMap[bandKey].length
+        ? liste_[0]
+        : liste_.reduce((m, e) => (num(e?.flaeche_m2) > num(m?.flaeche_m2) ? e : m), liste_[0])];
+    }
+    // 84-02: a pinwheel arm holds one unit — the type whose target area is closest to
+    // the arm area [ASSUMED], or the first of a manual band order.
+    if (band.einzel && liste_.length) {
+      const soll = num(band.laenge) * num(band.tiefe);
+      liste_ = [Array.isArray(anordnungMap[bandKey]) && anordnungMap[bandKey].length
+        ? liste_[0]
+        : liste_.reduce((m, e) => (Math.abs(num(e?.flaeche_m2) - soll) < Math.abs(num(m?.flaeche_m2) - soll) ? e : m), liste_[0])];
+    }
+    // 85: fill the band — room-zone mode repeats the (ordered) catalogue round robin
+    // while the next unit still fits at its minimum width; Phase 61 placed the
+    // catalogue once per band and left the rest empty. Band mode stays as before.
+    if (raumzonen && !band.kopf && !band.einzel && liste_.length && tiefe > 0.05) {
+      const voll = fuelleBand(liste_, kandidatenFuer(tiefe, liste_), num(band.laenge));
+      // A band no type fits at its room-programme width would stay EMPTY — then the
+      // catalogue minimums apply as before (rooms may merge, the hint says so).
+      if (voll.length) liste_ = voll;
+      else { locker = true; liste_ = fuelleBand(liste_, kandidatenFuer(tiefe, liste_, true), num(band.laenge)); }
+    }
 
     if (tiefe <= 0.05 || !liste.length) {
       // Leeres/degeneriertes Band: gesamte Bandfläche bleibt unbelegt.
@@ -1618,7 +3340,9 @@ export function tesseliere(opts) {
     if (skelett.weUeberGeschosse && band.level > 0) continue;
 
     // Pass 1: frei lösen (Breiten + Zielpositionen für die Knautschzonen).
-    const k1 = kandidatenFuer(tiefe, liste_);
+    const k1 = band.kopf || band.einzel
+      ? [{ id: liste_[0]?.key, ziel: num(band.laenge), min: num(band.laenge), max: num(band.laenge) }]
+      : kandidatenFuer(tiefe, liste_, locker);
     const lauf1 = verteileBand(band.laenge, k1);
 
     // Gesperrte Grenzen (D-P61-06): angrenzende Kandidaten VOR dem Zweitlauf
@@ -1664,7 +3388,7 @@ export function tesseliere(opts) {
     });
     let lauf = lauf1;
     if (fixiert.size || breiteFix.size) {
-      const k2 = kandidatenFuer(tiefe, liste_).map((k, i) => {
+      const k2 = kandidatenFuer(tiefe, liste_, locker).map((k, i) => {
         const b = breiteFix.has(i) ? breiteFix.get(i) : fixiert.has(i) ? lauf1.items[i].breite : null;
         return b === null ? k : { ...k, min: b, max: b, ziel: b };
       });
@@ -1733,7 +3457,10 @@ export function tesseliere(opts) {
       const orientierung = rg.himmelsrichtung ? orientierungFuerBand(band, nordwinkel).label : undefined;
       weListe.push({
         we: p.we, typKey: eintrag?.key, level: band.level, band: bandIdx,
-        fassadeLaenge_m: p.breite, flaeche_m2: p.breite * tiefe, variante,
+        // 84-09: the gable unit has three facades (gable + both long sides).
+        // 84-02: a pinwheel unit has two facades (its running side + one end).
+        fassadeLaenge_m: band.kopf ? p.breite + 2 * tiefe : band.einzel ? p.breite + tiefe : p.breite, flaeche_m2: p.breite * tiefe, variante,
+        ...(band.kopf ? { kopf: true } : {}),
         ...(orientierung ? { orientierung } : {}),
         _a: p.a, _b: p.b, _eintrag: eintrag, _tiefe: tiefe, _band: band,
       });
@@ -1796,6 +3523,18 @@ export function tesseliere(opts) {
         // (M-08 der externen Review).
         verzahnung: /** @type {?VerzahnungMeta} */ (null),
       });
+    }
+  }
+
+  // 84-02: a pinwheel Spänner has exactly four units per storey — on a large footprint
+  // they get far bigger than any catalogue type. One hint [ASSUMED threshold 1,5 ×
+  // the largest type]; the layout itself stays (the typology is the user's choice).
+  {
+    const fMax = Math.max(0, ...liste.map((e) => num(e?.flaeche_m2)));
+    const gross = weListe.filter((w) => w._band?.einzel && fMax > 0 && w.flaeche_m2 > 1.5 * fMax);
+    if (gross.length) {
+      const m = Math.max(...gross.map((w) => w.flaeche_m2));
+      hinweise.push(`Spänner [84-02]: ${gross.length} Wohnung(en) bis ${Math.round(m)} m² — mehr als das 1,5-Fache des größten Typs (${Math.round(fMax)} m²); ein Spänner hat vier Wohnungen je Geschoss, für diesen Grundriss Mittelflur/MFH wählen oder den Baukörper verkleinern`);
     }
   }
 
@@ -1915,15 +3654,40 @@ export function tesseliere(opts) {
   // aus der aktuellen Bandbreite gesliced — jede Solver-Änderung wirkt bis in
   // die Räume). Einheiten ohne raumprogramm behalten ihre Band-Zone (Tracer-
   // Verhalten, rückwärtskompatibel).
+  // 84-10: effective level of every unit (switch > mix > standard, D-P84-R). Public on
+  // weListe only for B/R, so a layer without both switches gives the same JSON as before.
+  const stufeKeys = stufeSchluessel(weListe);
+  for (const w of weListe) {
+    const s = wirksameStufe(w._eintrag?.stufe, stufeKeys.get(String(w.we)), stufeJeWe);
+    if (s !== "standard") w.stufe = s;
+  }
   const raumWarns = [];
   if (raumzonen) {
     const ersatzListe = []; // { altWe, altLevel, neuZonen }
+    /** @type {Array<{band_m:number, fensterzeile_m:number, nebenzone_m:number, verhaeltnis:number}>} */
+    const kappungen = []; // 85-02: units whose window row was cut to the aspect-ratio target
     for (const w of weListe) {
       const programm = w._eintrag?.raumprogramm;
       if (!Array.isArray(programm) || !programm.length) continue;
       const idxZone = zonen.findIndex((z) => z.we === w.we && z.level === w.level);
       if (idxZone < 0) continue;
       const band = /** @type {BandMeta} */ (w._band || {});
+      // 84-04: Reihenhaus — one unit over all storeys: rooms per storey (programme
+      // split, stair, house door at the street side, living rooms to the garden).
+      if (skelett.weUeberGeschosse) {
+        const hz = band.achse === "z";
+        const haus = hausZonen({
+          we: w.we, n: nGeschosse, programm, achse: hz ? "z" : "x",
+          rechteck: { x0: w._a, x1: w._b, z0: hz ? band.x0 : band.z0, z1: hz ? band.x1 : band.z1 },
+          // Window facade = the side opposite the street (band.zKante is the street).
+          fassadeBei: hz ? (Math.abs(num(band.zKante) - num(band.x0)) < 1e-9 ? band.x1 : band.x0) : (Math.abs(num(band.zKante) - num(band.z0)) < 1e-9 ? band.z1 : band.z0),
+          eintrag: w._eintrag, rg, tuerAufschlaege: tuerAufschlaege && typeof tuerAufschlaege === "object" ? tuerAufschlaege : null,
+          stufe: w.stufe,
+        });
+        raumWarns.push(...haus.warns);
+        for (const g of haus.geschosse) ersatzListe.push({ altWe: w.we, altLevel: g.level, neuZonen: g.zonen });
+        continue;
+      }
       const achseZ = band.achse === "z";
       const cross0 = achseZ ? band.x0 : band.z0;
       const cross1 = achseZ ? band.x1 : band.z1;
@@ -1948,9 +3712,27 @@ export function tesseliere(opts) {
         zweiFassaden: !!band.zweiFassaden,
         // 75-14: door swing overrides (only read when regeln.diele is on).
         tuerAufschlaege: tuerAufschlaege && typeof tuerAufschlaege === "object" ? tuerAufschlaege : null,
+        // 84-10: wheelchair unit (effective level R) — R door/bath/hall measures in the slicing.
+        ...(w.stufe === "R" ? { stufe: "R" } : {}),
+        // 84-09: gable unit — hall centred on the corridor axis (entrance at the corridor end).
+        ...((band.kopf || band.einzel) && band.eingangMitte !== undefined ? { eingangMitte: band.eingangMitte } : {}),
+        ...(band.einzel && band.eingangBereich ? { eingangBereich: band.eingangBereich } : {}),
       }, programm, rg);
       if (raumZonen.warns?.length) raumWarns.push(...raumZonen.warns.map((s) => `${w.we}: ${s}`));
+      const kap = /** @type {any} */ (raumZonen).kappung; // 85-02: only set when the window row was cut
+      if (kap) kappungen.push(kap);
       ersatzListe.push({ altWe: w.we, altLevel: w.level, neuZonen: raumZonen });
+    }
+    // 85-02: ONE hint for all units whose window row was cut (not one per unit).
+    if (kappungen.length) {
+      const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1).replace(".", ",");
+      const spanne = (feld) => {
+        const vs = kappungen.map((k) => k[feld]);
+        const lo = Math.min(...vs), hi = Math.max(...vs);
+        return f1(lo) === f1(hi) ? `${f1(lo)} m` : `${f1(lo)}–${f1(hi)} m`;
+      };
+      const vMax = Math.max(...kappungen.map((k) => k.verhaeltnis));
+      hinweise.push(`Tiefes Band [85-02]: Bandtiefe ${spanne("band_m")} — die Fensterräume sind auf höchstens 1 : ${f1(vMax)} gekappt (Zeilentiefe ${spanne("fensterzeile_m")}); die übrige Tiefe bildet eine innenliegende Nebenzone von ${spanne("nebenzone_m")} (Küche, Bad, Abstellraum größer als die Zielfläche). Eine geringere Gebäudetiefe vermeidet die Innenzone.`);
     }
     // Band-Zonen durch Raum-Zonen ersetzen.
     for (const { altWe, altLevel, neuZonen } of ersatzListe) {

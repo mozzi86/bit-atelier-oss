@@ -6,6 +6,9 @@ import { Button } from "@core/components/ui/button";
 import { NumberField } from "@core/components/Field";
 import { STATUS_STYLE } from "@designer/lib/compliance";
 import { useI18n } from "@core/lib/i18n";
+// 91-05: hand-over of the quantity list to the AVA (LV CSV import).
+import AvaCsvKnopf from "./AvaCsvKnopf";
+import { zeilenAusTabelle } from "@designer/lib/avaUebergabe";
 import { WT_MARKER } from "@designer/lib/tesselierung";
 import { zonenBBox } from "@designer/lib/keller";
 import BimPlan2D from "./BimPlan2D";
@@ -25,6 +28,8 @@ const FARBE = {
   technik: { fill: "#fee2e2", stroke: "#dc2626", text: "#7f1d1d" },
   fahrrad: { fill: "#f5f5f4", stroke: "#a8a29e", text: "#44403c" },
   wasch: { fill: "#dbeafe", stroke: "#2563eb", text: "#1e3a8a" },
+  // 91-02: rainwater plant room (pump/booster, filter, top-up) — sky like the cistern overlay.
+  regenwasser: { fill: "#e0f2fe", stroke: "#0369a1", text: "#075985" },
 };
 
 /**
@@ -66,6 +71,7 @@ export default function KellerabteilPlaner({
     { key: "technik_m2", label: t("Technikraum"), einheit: "m²", wert: mengen.technik_m2 },
     { key: "fahrrad_m2", label: t("Fahrradraum"), einheit: "m²", wert: mengen.fahrrad_m2 },
     { key: "wasch_m2", label: t("Waschraum"), einheit: "m²", wert: mengen.wasch_m2 },
+    ...(mengen.regenwasser_m2 > 0 ? [{ key: "regenwasser_m2", label: t("Haustechnik Regenwasser"), einheit: "m²", wert: mengen.regenwasser_m2 }] : []),
     { key: "gesamt_m2", label: t("Kellerfläche gesamt (Zonen)"), einheit: "m²", wert: mengen.gesamt_m2 },
   ];
   const persistiertAktuell = !!mengenPersistiert && JSON.stringify(mengenPersistiert) === JSON.stringify(mengen);
@@ -257,7 +263,10 @@ export default function KellerabteilPlaner({
             {/* Mengenliste — AVA-Übergabe (D-P61-10) */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">{t("Mengenliste (AVA-Übergabe)")}</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base">{t("Mengenliste (AVA-Übergabe)")}
+                  {/* gesamt_m2 = Σ of all cellar zones — a sum row, left out of the LV (would count twice) */}
+                  <AvaCsvKnopf zeilen={zeilenAusTabelle(mengenZeilen, { ohne: ["gesamt_m2"], praefix: "keller_" })} gewerk={t("Keller")} quelle={t("Kellerplaner")} datei="keller-mengen" testid="keller-mengen-csv" />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 <table className="w-full text-xs" data-testid="keller-mengen">

@@ -231,6 +231,7 @@ export function eckenAnzahl(fp) {
 
 // Wärmeübertragende Hüllfläche A_Hüll (m²).
 // [ASSUMED A10] Außenmaßbezug, ohne Attika/Dachüberstand/Laibungstiefe.
+/** @param {{umfang?: number, hoehe?: number, grundflaeche?: number, dach?: boolean, boden?: boolean}} [o] m, m, m² */
 export function huellflaeche({ umfang, hoehe, grundflaeche, dach = true, boden = true } = {}) {
   return (
     num(umfang) * num(hoehe) +
@@ -240,6 +241,7 @@ export function huellflaeche({ umfang, hoehe, grundflaeche, dach = true, boden =
 }
 
 // Außenwandfläche brutto (m²) — Öffnungen nicht abgezogen (konsistent zum Außenmaßbezug).
+/** @param {{umfang?: number, hoehe?: number}} [o] m */
 export function aussenwandflaeche({ umfang, hoehe } = {}) {
   return num(umfang) * num(hoehe);
 }

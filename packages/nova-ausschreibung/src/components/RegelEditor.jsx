@@ -78,7 +78,7 @@ export default function RegelEditor({
   position,
   regeln = [],
   elemente = [],
-  kataloge = {},
+  kataloge = /** @type {Record<string, any[]>} */ ({}),
   snapshotId = null,
   onSpeichern,
   onLoeschen,

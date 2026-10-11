@@ -37,7 +37,9 @@
 //      eigene IDS-Regeln in parse-Form (ids.js), geschrieben mit idsWriter.js (71-01);
 //      Guards nachgebildet wie befunde_layer — der Hook liegt in @designer, das
 //      @ifc nicht importieren darf).
-//      Neue Layer hier ergänzen!
+//      Neue Layer hier ergänzen — UND in @core/lib/fachlayerSchema.js (LAYER_VERSION) und
+//      .planning/FACHLAYER-SCHEMA.md (87-07: jeder Layer trägt `v` + `updatedAt`; Migration
+//      und Stempel laufen in loadBimModel/saveBimModel, nicht hier).
 //   2. Lesen NUR über loadBimModel, Schreiben NUR über saveBimModel (ein
 //      serialisierter Schreibpfad, create-on-miss geschützt) — nie bitApi
 //      direkt, sonst entstehen Duplikat-Datensätze.

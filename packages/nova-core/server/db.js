@@ -71,6 +71,16 @@ export function createDb(dbPath) {
     process.on('exit', () => {
       if (persistPending) persistNow();
     });
+    // 87-02: Ctrl-C / `concurrently --kill-others` send SIGINT/SIGTERM — on Windows
+    // that path did not always reach 'exit', and the 120 ms debounce was lost.
+    // Flush, step aside, and re-raise the signal when nobody else handles it, so
+    // the default termination still happens (a db must not keep a process alive).
+    for (const signal of ['SIGINT', 'SIGTERM']) {
+      process.once(signal, () => {
+        if (persistPending) persistNow();
+        if (process.listenerCount(signal) === 0) process.kill(process.pid, signal);
+      });
+    }
   }
 
   // Bestehende Aufrufer erwarten synchrones Verhalten NICHT — sie erwarten nur,

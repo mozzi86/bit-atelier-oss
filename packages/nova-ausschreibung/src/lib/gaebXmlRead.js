@@ -19,6 +19,10 @@
 // Tiefenlimit. Mengen über `Number()` mit `null` statt 0 bei Unlesbarkeit —
 // eine 0 wäre eine erfundene Menge.
 //
+// 90-03 (Angebotsabgabe X84 / Auftragserteilung X86): je Position zusätzlich `UP` (Einheitspreis)
+// und `IT` (Gesamtbetrag) gelesen, der Bieter aus `Award/CTR/Address`. Ohne Preis-Tag bleibt
+// `unit_price` null — eine Angebotsaufforderung (X83) hat keinen Preis, und null ist keine 0.
+//
 // Isomorph: kein window, kein DOMParser, keine Aliase.
 
 /** Obergrenzen. Ein X83 des Realprojekts ist ~200 kB; 32 MB ist reichlich. */
@@ -142,7 +146,10 @@ export function normalisiereEinheit(u, einheitenKatalog = []) {
  * @param {{einheitenKatalog?: Array}} opt
  * @returns {{positionen: Array<object>, gewerk: string|null, gewerk_nr: string|null,
  *            projekt: string|null, dp: string|null, version: string|null,
- *            titel: Array<{rno: string, lbl: string|null}>, warnungen: string[]}}
+ *            titel: Array<{rno: string, lbl: string|null}>, warnungen: string[],
+ *            bieter: {name: string|null, strasse: string|null, plz: string|null, ort: string|null}|null,
+ *            mitPreisen: boolean}}
+ *   90-03: bieter = Award/CTR/Address (X84/X86), mitPreisen = mindestens eine Position mit UP
  */
 export function readX83(xml, { einheitenKatalog = [] } = {}) {
   const positionen = [];
@@ -166,6 +173,10 @@ export function readX83(xml, { einheitenKatalog = [] } = {}) {
   let detailSpans = [];
   let outlineSpans = [];
   let ctgyOffenOhneLbl = null;
+  // 90-03: bidder (contractor) of an offer file — Award/CTR/Address/Name1…, read once.
+  /** @type {{name: string|null, strasse: string|null, plz: string|null, ort: string|null}|null} */
+  let bieter = null;
+  const imCtr = (pfad) => Array.isArray(pfad) && pfad.includes('CTR') && pfad.includes('Address');
 
   tokenize(xml, (t) => {
     if (!t.ende) {
@@ -232,6 +243,14 @@ export function readX83(xml, { einheitenKatalog = [] } = {}) {
         if (item) item.langtext = detailSpans.join('\n');
         return;
       case 'Qty': if (item) item.qty = menge(t.text); return;
+      // 90-03: unit price / item total of an offer (X84/X86). Only inside an Item — Totals of the
+      // BoQ also use <Total>, never <UP>/<IT>.
+      case 'UP': if (item) item.up = menge(t.text); return;
+      case 'IT': if (item) item.it = menge(t.text); return;
+      case 'Name1': if (imCtr(t.pfad)) { bieter = bieter || { name: null, strasse: null, plz: null, ort: null }; if (!bieter.name) bieter.name = t.text.trim() || null; } return;
+      case 'Street': if (imCtr(t.pfad)) { bieter = bieter || { name: null, strasse: null, plz: null, ort: null }; bieter.strasse = t.text.trim() || null; } return;
+      case 'PCode': if (imCtr(t.pfad)) { bieter = bieter || { name: null, strasse: null, plz: null, ort: null }; bieter.plz = t.text.trim() || null; } return;
+      case 'City': if (imCtr(t.pfad)) { bieter = bieter || { name: null, strasse: null, plz: null, ort: null }; bieter.ort = t.text.trim() || null; } return;
       case 'QU': if (item) item.unit = normalisiereEinheit(t.text, einheitenKatalog); return;
       case 'CtlgID': if (ctlg) ctlg.id = t.text.trim(); return;
       case 'CtlgCode': if (ctlg) ctlg.code = t.text.trim(); return;
@@ -268,7 +287,9 @@ export function readX83(xml, { einheitenKatalog = [] } = {}) {
             quantity: item.qty,
             unit: item.unit,
             // In einer Angebotsaufforderung gibt es keinen Preis — `null`, nicht 0.
-            unit_price: null,
+            // 90-03: im Angebot (X84) steht er in <UP>, der Gesamtbetrag in <IT>.
+            unit_price: item.up ?? null,
+            total_price: item.it ?? null,
             trade: gewerk || '',
             trade_nr: gewerkNr || null,
             din276: item.kg2018,
@@ -291,5 +312,5 @@ export function readX83(xml, { einheitenKatalog = [] } = {}) {
     if (!p.trade && gewerk) p.trade = gewerk;
     if (!p.trade_nr && gewerkNr) p.trade_nr = gewerkNr;
   }
-  return { positionen, gewerk, gewerk_nr: gewerkNr, projekt, dp, version, titel: titelAlle, warnungen };
+  return { positionen, gewerk, gewerk_nr: gewerkNr, projekt, dp, version, titel: titelAlle, warnungen, bieter, mitPreisen: positionen.some((p) => p.unit_price != null) };
 }

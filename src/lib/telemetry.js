@@ -92,6 +92,7 @@ export class WebRtcSource {
     this.config = config?.webrtc || {};
     this.pc = null;
   }
+  /** @param {{videoEl?: HTMLVideoElement|null, onStatus?: (status: string) => void}} [opt] */
   async connect({ videoEl } = {}) {
     if (!this.config.signalingUrl) {
       return { status: "not_configured", detail: "WEBRTC_SIGNALING_URL nicht gesetzt (.env)" };

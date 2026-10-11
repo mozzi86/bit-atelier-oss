@@ -361,6 +361,7 @@ export function kgOptionen(dinKatalog = []) {
   const zeilen = (dinKatalog || [])
     .filter((r) => String(r?.fassung) === '2018' && r?.code != null)
     .sort((a, b) => String(a.code).localeCompare(String(b.code)));
+  /** @type {Record<string, string>} */
   const out = {};
   for (const r of zeilen) {
     const code = String(r.code);

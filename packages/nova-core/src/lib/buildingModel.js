@@ -79,6 +79,11 @@ export const DEFAULT_FOOTPRINT = [
 ];
 
 // Erzeugt das Gebäudemodell aus Footprint + Geschossparametern.
+/**
+ * @param {{footprintM?: Array<{x: number, z: number}>|null, storeys?: number, storeyHeight?: number,
+ *          wallThickness?: number, wallComposite?: any, parapet?: {enabled: boolean, height: number}}} [q]
+ *   footprintM in Metern (x/z), storeyHeight/wallThickness in Metern
+ */
 export function createBuildingModel({ footprintM, storeys = 4, storeyHeight = 3, wallThickness = 0.3, wallComposite = null, parapet = { enabled: true, height: 1.0 } } = {}) {
   const fp = (footprintM && footprintM.length >= 3) ? footprintM : DEFAULT_FOOTPRINT;
   const n = Math.max(1, Math.round(storeys));

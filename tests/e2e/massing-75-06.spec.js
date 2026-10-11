@@ -14,9 +14,10 @@
 // und loescht ihn im finally wieder (server/db.json bleibt im Ausgangszustand;
 // Reload-Tests persistieren ueber die API, nie per Datei-Edit).
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/base.js";
 import path from "node:path";
-import { ERLAUBT_OFFLINE, resetRechteck, messen, nurLocalhost } from "./fixtures/massing.js";
+import { ERLAUBT_OFFLINE, messen, punkte, nurLocalhost } from "./fixtures/massing.js";
+import { testhausLaden, testhausFootprintSetzen } from "./fixtures/testhaus.js";
 
 const PROJEKT = "Review Testhaus";
 const STUDIO = `/ComplexDesigner?projekt=${encodeURIComponent(PROJEKT)}&tab=studio`;
@@ -155,8 +156,22 @@ test.describe("75-06 — Flurstueck, Baufeld, Baukoerper (MS-06)", () => {
       await expect(page.locator('[data-griff="ecke"]')).toHaveCount(4);
 
       // --- 4) Ausserhalb: Baukörper ueber die Baufeld-Kante -----------------
-      const m0 = await resetRechteck(page); // (10,10)-(40,30) = 30 x 20 m
+      // 87-01: the house is 70 × 16 at site (0,17)–(70,33); dragging corner 2 by
+      // 30 m fails (the parcel clamps the drag — resetRechteck left it at 67,3/30,3).
+      // Set (10,10)-(40,30) through the API in STORED (centred) metres: offset
+      // site → centred from the current record and the current site corners.
+      const zielSite = [{ x: 10, y: 10 }, { x: 40, y: 10 }, { x: 40, y: 30 }, { x: 10, y: 30 }];
+      const istSite = await punkte(page);
+      const { modell: istModell } = await testhausLaden(page.request);
+      const off = { x: istSite.pts[0].x - istModell.footprintM[0].x, y: istSite.pts[0].y - istModell.footprintM[0].z };
+      await testhausFootprintSetzen(page.request, zielSite.map((p) => ({ x: p.x - off.x, z: p.y - off.y })));
+      await page.reload();
+      await expect(page.locator('polygon[data-griff="flaeche"]')).toBeVisible({ timeout: 30000 });
+      await page.waitForTimeout(1500);
+      const m0 = await messen(page);
       expect(m0.n).toBe(4);
+      const nachher = await punkte(page);
+      nachher.pts.forEach((p, i) => expect(Math.abs(p.x - zielSite[i].x) + Math.abs(p.y - zielSite[i].y), `Ecke ${i} per API`).toBeLessThan(0.011));
       await expect(page.locator("[data-ausserhalb]")).toHaveCount(1);
       const kpiAussen = page.getByTestId("ms-kpi-ausserhalb");
       await expect(kpiAussen).toBeVisible();

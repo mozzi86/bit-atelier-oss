@@ -43,7 +43,7 @@ async function request(path, options = {}) {
     ...options,
   });
   if (!res.ok) {
-    const err = new Error(`Request failed: ${res.status}`);
+    const err = /** @type {Error & {status?: number, data?: any}} */ (new Error(`Request failed: ${res.status}`));
     err.status = res.status;
     try {
       err.data = await res.json();
@@ -101,13 +101,13 @@ function entityClient(name) {
       filter: async (query, sort) => (await import('./demoDb.js')).demoDb.filter(name, query, sort),
       get: async (id) => {
         const rec = await (await import('./demoDb.js')).demoDb.get(name, id);
-        if (!rec) { const err = new Error('Request failed: 404'); err.status = 404; throw err; }
+        if (!rec) { const err = /** @type {Error & {status?: number}} */ (new Error('Request failed: 404')); err.status = 404; throw err; }
         return rec;
       },
       create: async (data) => (await import('./demoDb.js')).demoDb.create(name, data),
       update: async (id, data) => {
         const rec = await (await import('./demoDb.js')).demoDb.update(name, id, data);
-        if (!rec) { const err = new Error('Request failed: 404'); err.status = 404; throw err; }
+        if (!rec) { const err = /** @type {Error & {status?: number}} */ (new Error('Request failed: 404')); err.status = 404; throw err; }
         return rec;
       },
       delete: async (id) => (await import('./demoDb.js')).demoDb.remove(name, id).then(() => null),
@@ -125,7 +125,21 @@ function entityClient(name) {
   };
 }
 
+/**
+ * The six methods every entity client offers (express, demo and cloud alike).
+ * @typedef {object} EntityClient
+ * @property {(sort?: string) => Promise<any[]>} list
+ * @property {(query?: Record<string, any>, sort?: string) => Promise<any[]>} filter
+ * @property {(id: string) => Promise<any>} get
+ * @property {(data: Record<string, any>) => Promise<any>} create
+ * @property {(id: string, data: Record<string, any>) => Promise<any>} update
+ * @property {(id: string) => Promise<any>} delete
+ */
+
 // Lazily create entity clients on first access so any entity name works.
+// 87-09: typed as a record so `bitApi.entities.Project.filter(…)` type-checks
+// (the Proxy itself has type `{}`, which made every entity access a tsc error).
+/** @type {Record<string, EntityClient>} */
 const entities = new Proxy(
   {},
   {
@@ -183,6 +197,7 @@ function abgelehnterPersonalClient(prop) {
   return { list: gesperrt, filter: gesperrt, get: gesperrt, create: gesperrt, update: gesperrt, delete: gesperrt };
 }
 
+/** @type {Record<string, EntityClient>} */
 const personalEntities = new Proxy(
   {},
   {
@@ -213,8 +228,9 @@ const personalDateien = {
   },
 };
 
+/** @type {Record<string, EntityClient> & { dateien: typeof personalDateien }} */
 const personal = new Proxy(
-  {},
+  /** @type {any} */ ({}),
   {
     get: (_target, prop) => {
       if (prop === 'dateien') return personalDateien;

@@ -3,7 +3,7 @@
 // ~150 ms links oberhalb (NW), liegt vollstaendig im Container, schneidet die Polygon-Bbox
 // nicht und nennt die Kante; Zeiger weg -> nach ~300 ms verschwunden.
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, punkte, resetRechteck, nurLocalhost } from "./fixtures/massing.js";
 
 const schneidet = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
@@ -60,7 +60,9 @@ test.describe("75-04 — Lehrling-Palette", () => {
     const polyBox = await page.locator('polygon[data-griff="flaeche"]').boundingBox();
     expect(schneidet(pb, polyBox), "Palette liegt nicht ueber dem Polygon").toBe(false);
     // Palette liegt links oberhalb des Zeigers.
-    expect(pb.x + pb.width).toBeLessThan(zx + 1); // 1 px Rundung an der Klemmgrenze
+    // 87-01: 2 px — the container width carries sub-pixel layout noise (868,81 vs 868,78
+    // in a serial run), so 1 px flipped the test without any change in behaviour.
+    expect(pb.x + pb.width).toBeLessThan(zx + 2);
     expect(pb.y + pb.height).toBeLessThan(zy);
 
     // Ecke: Koordinaten und Knopf "Ecke loeschen" (kein Klick).

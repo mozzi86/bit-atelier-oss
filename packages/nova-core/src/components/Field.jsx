@@ -9,7 +9,8 @@ import { Label } from "@core/components/ui/label";
  *   suffix?: string, min?: number, onBlur?: () => void }} props
  *   (typisiert, Phase 43 — vorher las tsc `onBlur` als Pflichtprop bei jedem Aufrufer)
  */
-export function NumberField({ label, value, onChange, step = "any", suffix, min, onBlur }) {
+/** @param {{label?: string, value?: any, onChange?: (v: number) => void, step?: number|string, suffix?: string, min?: number, max?: number, onBlur?: () => void}} props `min`/`max` go to the native input (spinner bounds + validity; B-87-09) — hard clamping stays with the caller, as before */
+export function NumberField({ label, value, onChange, step = "any", suffix, min, max, onBlur }) {
   // Label and field were siblings without a link: screen readers announced a bare
   // "Eingabefeld" and a click on the label did not focus the field (A11Y-I18N-03).
   const id = React.useId();
@@ -24,6 +25,7 @@ export function NumberField({ label, value, onChange, step = "any", suffix, min,
           type="number"
           step={step}
           min={min}
+          max={max}
           value={value ?? ""}
           onChange={(e) =>
             onChange(e.target.value === "" ? 0 : Number(e.target.value))

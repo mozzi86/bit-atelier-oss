@@ -366,9 +366,13 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           const czm = k.z.points.reduce((s, p) => s + p.z, 0) / k.z.points.length;
           const zeilen = [kurzRaumname(k.z.name), `${Math.round(k.area).toLocaleString("de-DE")} m²`];
           const sx = (X(cxm) - vp.sicht.x) * bildPxProU, sy = (Z(czm) - vp.sicht.y) * bildPxProU;
-          const w = 0.6 * fontPx * Math.max(...zeilen.map((s) => s.length));
-          const h = fontPx * 2;
-          return { x0: sx - w / 2, y0: sy - h / 2, x1: sx + w / 2, y1: sy + h / 2 };
+          // 87-01: the box must cover the RENDERED text, not an ideal one — bold 11 px
+          // runs ≈ 0,7 px per character, and the block hangs from the baseline at sy:
+          // ascent of line 1 above, line 2 (dy 13) plus its descent below. The old
+          // 0,6 · len × 2 · fontPx box was a few px short on both axes, so two labels
+          // passed the check and still overlapped on screen (werkstatt-75-11).
+          const w = 0.7 * fontPx * Math.max(...zeilen.map((s) => s.length));
+          return { x0: sx - w / 2, y0: sy - fontPx, x1: sx + w / 2, y1: sy + 13 + 9 * 0.3 };
         });
         const sichtbar = new Set(labelKollision(rects).map((si) => sortiert[si].i));
         // NOTE: the collision filter hides LABELS only — every zone polygon
@@ -782,6 +786,7 @@ function Schnitt({ model, storeyHeight, layerVis, unit = "m", maxSvgH = 460 }) {
 }
 
 // ---- Bemaßungslinie / Maßstab / Nordpfeil ---------------------------------
+/** @param {{x1: number, y1: number, x2: number, y2: number, label: string, vertical?: boolean}} props viewBox units */
 function DimLine({ x1, y1, x2, y2, label, vertical }) {
   const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
   return (
@@ -810,6 +815,7 @@ export function ScaleBar({ x, y, scale, laengeM = 5 }) {
 }
 
 // Editier-Griff (Handle) — Kreis (Endpunkt) oder Quadrat (Verschieben). Optional Doppelklick.
+/** @param {{x: number, y: number, square?: boolean, onDown?: (e: any) => void, onDouble?: (e: any) => void}} props viewBox units */
 function Handle({ x, y, square, onDown, onDouble }) {
   const common = { fill: "#fff", stroke: "#0d9488", strokeWidth: 1.5, style: { cursor: "move" }, onPointerDown: onDown, onDoubleClick: onDouble ? (e) => { e.stopPropagation(); onDouble(e); } : undefined };
   return square
@@ -839,6 +845,7 @@ function NorthArrow({ x, y }) {
  * @property {Array<object>} [customSlabs]
  * @property {Array<object>} [customRoofs]
  * @property {string} [unit] Längeneinheit (m | cm | mm)
+ * @property {boolean} [fuellen] 75-16: viewBox folgt der Fläche (Füllmodus)
  * @property {object} [focus] Zoom-auf-Auswahl {bbox, nonce} | {reset, nonce}
  * @property {boolean} [readOnly]
  * @property {(args: object) => any} [overlay]

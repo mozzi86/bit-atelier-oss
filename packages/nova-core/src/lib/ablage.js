@@ -23,9 +23,9 @@ const echterApi = async () => (await import("@core/api/bitApi")).bitApi;
  * (Download). Hier entsteht der Nachweis: was wurde wann wo erzeugt und wohin
  * gehört es. Eine Kopie wäre eine zweite Wahrheit, die sofort veraltet.
  *
- * @param {object} opt
- * @param {string} opt.projectId Pflicht — ohne Projekt keine Ablage
- * @param {string} opt.name Dateiname, wie er beim Nutzer liegt
+ * @param {object} [opt]
+ * @param {string} [opt.projectId] Pflicht — ohne Projekt keine Ablage (Rückgabe ok:false)
+ * @param {string} [opt.name] Dateiname, wie er beim Nutzer liegt (Pflicht, sonst ok:false)
  * @param {string} [opt.typ] `Document.type`, z. B. "Bericht", "Plan-PDF", "Brandschutz"
  * @param {string} [opt.reiter] Designer-Reiter, z. B. "brandschutz" — Alternative zu `typ`
  * @param {string} [opt.notiz] freier Vermerk (Herkunft, Fassung …)

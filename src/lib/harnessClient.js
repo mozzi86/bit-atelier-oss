@@ -154,6 +154,7 @@ export function openChat({ onEvent, onState }) {
  * @returns {{type: 'text'|'code', text: string, lang?: string}[]}
  */
 export function splitFences(text) {
+  /** @type {{type: 'text'|'code', text: string, lang?: string}[]} */
   const out = [];
   const re = /```([\w+-]*)\n([\s\S]*?)```/g;
   let last = 0;

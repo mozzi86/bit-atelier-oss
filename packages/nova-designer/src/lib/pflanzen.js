@@ -136,6 +136,7 @@ export function eignung(typ, { klima = null, licht = null } = {}) {
   const gruende = [];
   // Worst finding wins: geeignet < offen (unchecked) < bedingt < ungeeignet.
   const rang = { geeignet: 0, offen: 1, bedingt: 2, ungeeignet: 3 };
+  /** @type {"offen"|"geeignet"|"bedingt"|"ungeeignet"} */
   let status = "geeignet";
   const setze = (s) => { if (rang[s] > rang[status]) status = s; };
   if (!klima || klima.offline || klima.zone == null) {
@@ -162,6 +163,7 @@ export function eignung(typ, { klima = null, licht = null } = {}) {
  */
 export function aussenanlagenPlanChecks(layer, { footprint = [], parzelleM = null, klima = null, lichtJeElement = {} } = {}) {
   const base = layerHardened(layer);
+  /** @type {Array<{key: string, label: string, status: "offen"|"warn"|"pass", detail: string}>} */
   const items = [];
   const n = base.elemente.length;
 
@@ -175,7 +177,7 @@ export function aussenanlagenPlanChecks(layer, { footprint = [], parzelleM = nul
     items.push({ key: "klima", label: "Klimadaten", status: "offen", detail: "Offline — Eignung ohne Klimadaten" });
   }
 
-  const eign = base.elemente.map((e) => ({ e, r: eignung(e.typ, { klima, licht: lichtJeElement[e.id] || null }) }));
+  const eign = base.elemente.map((e) => ({ e, r: eignung(e.typ, { klima, licht: /** @type {any} */ (lichtJeElement[e.id] || null) }) }));
   const ungeeignet = eign.filter((x) => x.r.status === "ungeeignet").length;
   const bedingt = eign.filter((x) => x.r.status === "bedingt").length;
   items.push(n === 0

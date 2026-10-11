@@ -1,0 +1,42 @@
+{
+  "bauteile": 3,
+  "mit_qty": 2,
+  "uebersprungen": 0,
+  "klassen": {
+    "IfcSpace": {
+      "anzahl": 1,
+      "area_m2": 23.46,
+      "volume_m3": 0,
+      "length_m": 0
+    },
+    "IfcWall": {
+      "anzahl": 2,
+      "area_m2": 12.5,
+      "volume_m3": 3,
+      "length_m": 0
+    }
+  },
+  "positionen": {
+    "Wand Beton": {
+      "menge": 3,
+      "treffer": 2,
+      "gp_eur": 960
+    },
+    "Decke Beton": {
+      "menge": 0,
+      "treffer": 0,
+      "gp_eur": 0
+    },
+    "Träger": {
+      "menge": 0,
+      "treffer": 0,
+      "gp_eur": 0
+    },
+    "Räume": {
+      "menge": 23.46,
+      "treffer": 1,
+      "gp_eur": 23.46
+    }
+  },
+  "kosten_eur": 983.46
+}

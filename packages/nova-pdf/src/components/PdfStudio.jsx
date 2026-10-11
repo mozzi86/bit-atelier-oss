@@ -173,7 +173,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
         setDraftText(null);
         const bytes = dataUrlToBytes(selectedDoc.data);
         pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
-        if (cancelled) { pdfDoc.destroy(); return; }
+        if (cancelled) { /** @type {any} */ (pdfDoc).destroy(); return; }
 
         // Ebenen-Konfiguration
         let layerList = [];
@@ -186,7 +186,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
             return { id, name: g?.name || String(id), visible: g?.visible !== false };
           });
         } catch { ocgRef.current = null; }
-        if (cancelled) { pdfDoc.destroy(); return; }
+        if (cancelled) { /** @type {any} */ (pdfDoc).destroy(); return; }
 
         setLayers(layerList);
         setPdf(pdfDoc);
@@ -201,7 +201,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
     return () => {
       cancelled = true;
       try { renderTaskRef.current?.cancel(); } catch { /* noop */ }
-      if (pdfDoc) { try { pdfDoc.destroy(); } catch { /* noop */ } }
+      if (pdfDoc) { try { /** @type {any} */ (pdfDoc).destroy(); } catch { /* noop */ } }
     };
   }, [selectedDoc]);
 

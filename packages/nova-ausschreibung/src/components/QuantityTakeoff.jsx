@@ -28,6 +28,7 @@ const MODI = [
 // BIM-Mengen-Tab: filter-basierte Mengenermittlung (NOVA-AVA-Prinzip
 // Menge = WAS ∩ ZUSTAND) + bestehende 3D-Einzelauswahl als Fallback +
 // Handeingabe. Die Einzelauswahl (bim_element_ids) bleibt unverändert erhalten.
+/** @param {{building?: any, positions?: any[], onUpdate?: (...a: any[]) => any, onGenerateLv?: (...a: any[]) => any, bimModelAvailable?: boolean, filters?: any[], elements?: any[], onSaveFilter?: (...a: any[]) => any, onDeleteFilter?: (...a: any[]) => any, onSaveClassification?: (...a: any[]) => any, onRecompute?: (...a: any[]) => any}} props */
 export default function QuantityTakeoff({
   building, positions = [], onUpdate, onGenerateLv, bimModelAvailable,
   filters = [], elements = [], onSaveFilter, onDeleteFilter, onSaveClassification,

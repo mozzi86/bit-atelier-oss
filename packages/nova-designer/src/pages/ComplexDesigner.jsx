@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { bitApi } from "@core/api/bitApi";
 import { toast } from "sonner";
 import { useBimModelSync } from "@core/lib/useBimModelSync";
-import { buildingProgram } from "@core/lib/useBuildingProgram";
+import { buildingProgram, useBuildingProgram } from "@core/lib/useBuildingProgram";
 import { footprintToMeters } from "@core/lib/buildingModel";
 import { polygonAreaM2, DEFAULT_METERS_PER_PIXEL } from "@core/lib/geo";
 // 75-06 Task 2: convex hull as the union approximation of imported parcels.
@@ -468,6 +468,7 @@ export default function ComplexDesigner() {
             </button>
           </div>
         )}
+        <SyncHinweis />
 
         <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
           <CardContent className="p-0">
@@ -643,6 +644,7 @@ export default function ComplexDesigner() {
                   moebelEigene={complexData.moebel_eigene}
                   onMoeblierungChange={(m) => updateComplexData('moeblierung', m)}
                   speicherbar={!!complexData.name && !!complexData.location}
+                  standort={complexData.location || null}
                 />
               </TabsContent>
 
@@ -700,6 +702,26 @@ export default function ComplexDesigner() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+/**
+ * 87-02: the BimModel sync could not load or save this project's geometry (useBimModelSync
+ * sets `syncFehler`). Before, a failed load was silent and the 1,5 s write-back could push
+ * the store's defaults over the real footprint; now the write-back stays locked and the
+ * user sees why the plan shows defaults. Native element on purpose (tsc legacy count).
+ */
+function SyncHinweis() {
+  // The store type is the initial state; syncFehler is an optional field (useBimModelSync).
+  const { syncFehler } = /** @type {{syncFehler?: string|null}} */ (useBuildingProgram());
+  if (!syncFehler) return null;
+  const laden = syncFehler === "laden";
+  return (
+    <div data-testid="bm-sync-fehler" role="status" className="rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-4 py-2.5 text-sm">
+      <strong>{laden ? "Geometrie konnte nicht geladen werden." : "Geometrie konnte nicht gespeichert werden."}</strong>{" "}
+      {laden
+        ? "Der Plan zeigt Werkzeug-Voreinstellungen; der gespeicherte Stand wird nicht überschrieben. Verbindung prüfen und die Seite neu laden."
+        : "Drei Versuche sind fehlgeschlagen; die Änderung wird beim nächsten Bearbeiten erneut gesendet. Verbindung prüfen."}
     </div>
   );
 }

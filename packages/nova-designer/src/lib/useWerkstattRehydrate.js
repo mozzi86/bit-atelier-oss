@@ -12,11 +12,76 @@
 // Pure part: brauchtRehydrat (node-testable). React part: the hook below.
 // In:  projectId (string|null), store state via useBuildingProgram.
 // Out: buildingProgram.set({ zones }) — NEVER writes to werkstatt_layer.
+//
+// 86-01: the footprint can change while the workshop tab is NOT mounted (Studio: drag the
+// polygon) — the zones then stayed the old ones. A second effect regenerates them on a
+// footprint/storey change while ·WT zones are shown, with the layer freshly read from the
+// BimModel cache (loadBimModel — this hook's own useFachlayer copy is only read at load and
+// would rebuild an old mix). While the workshop is mounted it does that itself.
 import { useEffect, useRef } from "react";
-import { useBuildingProgram } from "@core/lib/useBuildingProgram";
+import { useBuildingProgram, buildingProgram } from "@core/lib/useBuildingProgram";
+import { loadBimModel } from "@core/lib/useBimModelSync";
 import { useFachlayer } from "@designer/lib/useFachlayer";
 import { istWerkstattZone, tesseliere } from "@designer/lib/tesselierung";
 import { WERKSTATT_DEFAULT, einheitenAnreichern } from "@designer/lib/werkstattDefaults";
+
+/** 86-01: number of mounted workshops (WohnungsWerkstatt registers itself). */
+let werkstattGemountet = 0;
+
+/**
+ * 86-01: WohnungsWerkstatt calls this once — while it is mounted it regenerates the zones
+ * itself (live effect), so the footprint follower below stays quiet.
+ * @returns {void}
+ */
+export function useWerkstattAngemeldet() {
+  useEffect(() => {
+    werkstattGemountet += 1;
+    return () => { werkstattGemountet -= 1; };
+  }, []);
+}
+
+/**
+ * The workshop zones for a persisted layer and the current building programme — the solver
+ * config is built EXACTLY like WohnungsWerkstatt.jsx does (migration guards: plain objects
+ * instead of null, nordwinkel as number, enriched units, okf from storeys × storey height),
+ * anything else would regenerate different zones than the workshop produces live.
+ * @param {object|null|undefined} layer werkstatt_layer
+ * @param {{footprintM: any, storeys?: number, storeyHeight?: number}} s building programme state
+ * @returns {Array<object>} ·WT zones
+ */
+export function werkstattZonenAusLayer(layer, s) {
+  const cfg = {
+    ...WERKSTATT_DEFAULT,
+    ...(layer || {}),
+    einheiten: einheitenAnreichern(layer?.einheiten),
+    anordnung: layer?.anordnung && typeof layer.anordnung === "object" ? layer.anordnung : {},
+    grenzenPositionen: layer?.grenzenPositionen && typeof layer.grenzenPositionen === "object" ? layer.grenzenPositionen : {},
+    regeln: layer?.regeln && typeof layer.regeln === "object" ? layer.regeln : {},
+    nordwinkel: Number.isFinite(Number(layer?.nordwinkel)) ? Number(layer.nordwinkel) : 0,
+    // 75-14: door-swing overrides (same guard as the workshop).
+    tuerAufschlaege: layer?.tuerAufschlaege && typeof layer.tuerAufschlaege === "object" ? layer.tuerAufschlaege : {},
+    // 84-10: level switch per unit (same guard as the workshop).
+    stufeJeWe: layer?.stufeJeWe && typeof layer.stufeJeWe === "object" ? layer.stufeJeWe : {},
+  };
+  return tesseliere({
+    footprintM: s.footprintM,
+    storeys: s.storeys,
+    typ: cfg.typ,
+    einheiten: cfg.einheiten,
+    gesperrteGrenzen: cfg.gesperrteGrenzen,
+    raumzonen: true,
+    anordnung: cfg.anordnung,
+    grenzenPositionen: cfg.grenzenPositionen,
+    regeln: cfg.regeln,
+    nordwinkel: cfg.nordwinkel,
+    tuerAufschlaege: cfg.tuerAufschlaege,
+    stufeJeWe: cfg.stufeJeWe,
+    // 86-01: same lift-duty input as the workshop (it passes okf_m too).
+    okf_m: (Math.max(1, Math.round(s.storeys || 1)) - 1) * (s.storeyHeight || 3),
+    // 86-05b: bar minimum of the applied proposal (same guard as the workshop; default 120).
+    riegelMinFlaeche_m2: Number(layer?.riegelMinFlaeche_m2) > 0 ? Number(layer.riegelMinFlaeche_m2) : WERKSTATT_DEFAULT.riegelMinFlaeche_m2,
+  }).zonen;
+}
 
 /**
  * Pure predicate: does the store need its workshop zones regenerated?
@@ -78,41 +143,42 @@ export function useWerkstattRehydrate(projectId) {
     if (!projectId) return;
     if (rehydratedRef.current === projectId) return; // already repaired this load
     if (!brauchtRehydrat(layer, zones, store.footprintM)) return;
-    // Rebuild the solver config EXACTLY like WohnungsWerkstatt.jsx does
-    // (migration guards: plain objects instead of null, nordwinkel as number,
-    // enriched units) — anything else would regenerate different zones than
-    // the workshop would produce live.
-    const cfg = {
-      ...WERKSTATT_DEFAULT,
-      ...(layer || {}),
-      einheiten: einheitenAnreichern(layer?.einheiten),
-      anordnung: layer?.anordnung && typeof layer.anordnung === "object" ? layer.anordnung : {},
-      grenzenPositionen: layer?.grenzenPositionen && typeof layer.grenzenPositionen === "object" ? layer.grenzenPositionen : {},
-      regeln: layer?.regeln && typeof layer.regeln === "object" ? layer.regeln : {},
-      nordwinkel: Number.isFinite(Number(layer?.nordwinkel)) ? Number(layer.nordwinkel) : 0,
-      // 75-14: door-swing overrides (same guard as the workshop).
-      tuerAufschlaege: layer?.tuerAufschlaege && typeof layer.tuerAufschlaege === "object" ? layer.tuerAufschlaege : {},
-    };
-    const ergebnis = tesseliere({
-      footprintM: store.footprintM,
-      storeys: store.storeys,
-      typ: cfg.typ,
-      einheiten: cfg.einheiten,
-      gesperrteGrenzen: cfg.gesperrteGrenzen,
-      raumzonen: true,
-      anordnung: cfg.anordnung,
-      grenzenPositionen: cfg.grenzenPositionen,
-      regeln: cfg.regeln,
-      nordwinkel: cfg.nordwinkel,
-      tuerAufschlaege: cfg.tuerAufschlaege,
-    });
+    const neu = werkstattZonenAusLayer(layer, store);
     // Keep the non-·WT zones standing (BIM-Studio rooms, quick-mode ·W zones).
     const ohneWT = zones.filter((z) => !istWerkstattZone(z));
-    const naechste = [...ohneWT, ...ergebnis.zonen];
+    const naechste = [...ohneWT, ...neu];
     // JSON guard like the workshop's live effect: identical zones → no write,
     // so a mounted workshop that already regenerated wins quietly.
     if (JSON.stringify(zones) !== JSON.stringify(naechste)) store.set({ zones: naechste });
     rehydratedRef.current = projectId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, angewendet, store.footprintM, zones.length]);
+
+  // --- 86-01: follow the footprint while the workshop is not mounted ------------------
+  // First sight of ·WT zones: they belong to the current footprint (rehydrate/workshop made
+  // them). A later change of footprint/storeys while ·WT zones are shown → regenerate, 400 ms
+  // after the last change (a drag fires many), with the freshly read layer. No ·WT zones
+  // (nothing applied, or "Entfernen") → nothing happens and the memory is reset.
+  const signatur = JSON.stringify([store.footprintM, store.storeys, store.storeyHeight]);
+  const signaturRef = useRef(/** @type {string|null} */ (null));
+  const hatWT = zones.some(istWerkstattZone);
+  useEffect(() => {
+    if (!projectId || !hatWT) { signaturRef.current = null; return undefined; }
+    if (signaturRef.current === null || signaturRef.current === signatur) { signaturRef.current = signatur; return undefined; }
+    if (werkstattGemountet > 0) { signaturRef.current = signatur; return undefined; } // the workshop regenerates itself
+    let abgebrochen = false;
+    const timer = setTimeout(async () => {
+      const modell = await loadBimModel(projectId).catch(() => null);
+      if (abgebrochen) return;
+      const frisch = modell?.werkstatt_layer;
+      const jetzt = buildingProgram.get();
+      if (!frisch || frisch.angewendet !== true || !Array.isArray(jetzt.footprintM) || jetzt.footprintM.length < 3) return;
+      const alt = Array.isArray(jetzt.zones) ? jetzt.zones : [];
+      if (!alt.some(istWerkstattZone)) return;
+      const naechste = [...alt.filter((z) => !istWerkstattZone(z)), ...werkstattZonenAusLayer(frisch, jetzt)];
+      signaturRef.current = JSON.stringify([jetzt.footprintM, jetzt.storeys, jetzt.storeyHeight]);
+      if (JSON.stringify(alt) !== JSON.stringify(naechste)) buildingProgram.set({ zones: naechste });
+    }, 400);
+    return () => { abgebrochen = true; clearTimeout(timer); };
+  }, [projectId, hatWT, signatur]);
 }

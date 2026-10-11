@@ -134,9 +134,9 @@ export const adjazenzKey = (keyA, keyB) => [keyA, keyB].sort().join("|");
  * eine pauschale Flur-Ausnahme würde die korrekte Eingabe (Hausflur als "F")
  * paradoxerweise anforderungsfrei stellen. Intra-WE-Flure mit eigenem Namen
  * sind per Klick ausnehmbar (ausgenommen).
- * @param zonen     [{points, level, name}]
- * @param raumarten { [zoneKey]: raumartId } (Default "wohnen")
- * @param ausgenommen [adjazenzKey] — vom Nutzer als „gleiche WE" markiert
+ * @param {{zonen?: Array<object>, raumarten?: Record<string, string>, ausgenommen?: Array<string>}} [q]
+ *   zonen: [{points, level, name}]; raumarten: zoneKey → raumartId (Default "wohnen");
+ *   ausgenommen: [adjazenzKey] — vom Nutzer als „gleiche WE" markiert
  */
 export function zonenAdjazenzen({ zonen = [], raumarten = {}, ausgenommen = [] } = {}) {
   const ausSet = new Set(ausgenommen || []);
@@ -209,12 +209,15 @@ export const rwUebernahme = (v) => Math.floor((Number(v) || 0) * 10) / 10;
  * Außennormalen (Umlaufrichtung wie raumklima), Lärmpegel je 4er-Sektor,
  * erforderliches R'w,ges aus Bereich + Raumart, vorhandenes R'w als Mischung
  * Wand (Katalog) + Fensteranteil der Kante.
- * @param waende   level-0-Hüllwände [{a,b,edge}] (Kanten sind je Geschoss gleich)
- * @param fensterJeKante { [edge]: m² } Fensterfläche der Kante ÜBER ALLE Geschosse
- * @param pegel    { N,O,S,W: dB(A) }
- * @param rwWand   Katalog-R'w des Hüllwand-Aufbaus (dB)
- * @param rwFenster Fenster-R'w (dB, Default 33 [ASSUMED])
- * @param raumart  strengste angrenzende Raumart für ERF_RW_AUSSEN ("wohnen")
+ * @param {{waende?: Array<object>, fensterJeKante?: Record<string, number>,
+ *          pegel?: {N?: number, O?: number, S?: number, W?: number}, northAngle?: number,
+ *          storeys?: number, storeyHeight?: number, rwWand?: number, rwFenster?: number,
+ *          raumart?: string}} [q]
+ *   waende: level-0-Hüllwände [{a,b,edge}] (Kanten sind je Geschoss gleich);
+ *   fensterJeKante: edge → Fensterfläche (m²) der Kante ÜBER ALLE Geschosse;
+ *   pegel: Lärmpegel je Sektor (dB(A)); rwWand: Katalog-R'w des Hüllwand-Aufbaus (dB);
+ *   rwFenster: Fenster-R'w (dB, Default 33 [ASSUMED]);
+ *   raumart: strengste angrenzende Raumart für ERF_RW_AUSSEN ("wohnen")
  */
 export function fassadenBewertung({
   waende = [], fensterJeKante = {}, pegel = {}, northAngle = 0,

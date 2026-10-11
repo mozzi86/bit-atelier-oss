@@ -3,7 +3,7 @@
 // KPI zeigt "1 : 1,62"; mit Alt ziehen -> keine Hilfslinie; 12 x 12 -> Hinweis "+7,42".
 // Netz: alles ausser localhost geblockt (Muster produktreife-72-01).
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/base.js";
 import { resetRechteck } from "./fixtures/massing.js";
 
 const PHI = (1 + Math.sqrt(5)) / 2;

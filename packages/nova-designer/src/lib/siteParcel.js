@@ -73,7 +73,7 @@ export function baukoerperDefaults(projektTyp) {
  *   gezeichneter Parzellen-Ring ([lng,lat], offen oder geschlossen); null/kurz
  *   → generisches Startquadrat.
  * @param {number} lat / @param {number} lng — Standort (Zentrum der Konvention).
- * @param {{ building_area?: number } | null} [projekt] — Projektdatensatz für
+ * @param {{ building_area?: number } | null} [projekt] Projektdatensatz für
  *   das generische Quadrat (72-01 A-2): Gebäudefläche in m² × 3 [ASSUMED],
  *   geclamt auf 400…20.000 m². Ohne Projekt: 1.000-m²-Annahme (3.000 m²).
  *

@@ -15,6 +15,10 @@ import { TrendingUp } from "lucide-react";
 
 const BAR_COLORS = ["#3b82f6", "#22c55e", "#eab308", "#a855f7", "#ef4444", "#6366f1"];
 
+/**
+ * @param {{agents?: Array<any>,
+ *          metrics?: {active_agents?: number, total_tasks?: number, success_rate?: number, time_saved_hours?: number}}} props
+ */
 export default function AgentPerformance({ agents = [], metrics = {} }) {
   const chartData = agents.map((a) => ({
     name: a.name.split(" ")[0],

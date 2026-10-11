@@ -7,10 +7,13 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./tests/e2e",
-  fullyParallel: true,
+  // 87-01: every massing/workshop/form spec shares ONE JSON-DB record (Review Testhaus) —
+  // serial by design; fixtures/base.js restores the house after each test.
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
+  globalSetup: "./tests/e2e/global-setup.js",
   reporter: [["html", { open: "never" }], ["list"]],
   use: {
     baseURL: "http://localhost:5173",

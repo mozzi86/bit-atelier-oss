@@ -7,7 +7,7 @@ import { Bot, User, Send, Loader2 } from "lucide-react";
 import { InvokeLLM } from "@core/integrations/Core";
 
 export default function AgentChat({ agents }) {
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState(/** @type {Array<{id: number, sender: string, agent?: string, content: string, timestamp: string}>} */ ([
     {
       id: 1,
       sender: "agent",
@@ -15,7 +15,7 @@ export default function AgentChat({ agents }) {
       content: "Hello! I'm ready to help you with design reviews, building code compliance, and architectural recommendations. What project would you like me to analyze?",
       timestamp: new Date().toISOString()
     }
-  ]);
+  ]));
   const [inputMessage, setInputMessage] = useState("");
   const [selectedAgent, setSelectedAgent] = useState("architect_advisor");
   const [isLoading, setIsLoading] = useState(false);

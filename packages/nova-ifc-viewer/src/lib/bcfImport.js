@@ -238,6 +238,7 @@ export function parseBcfZip(bytes, { maxEntpackt = MAX_ENTPACKT } = {}) {
   markups.sort(); // deterministische Topic-Reihenfolge
 
   const topics = [];
+  /** @type {Record<string, Uint8Array>} */
   const snapshots = {};
   for (const pfad of markups) {
     const ordnerName = pfad.slice(0, pfad.indexOf('/'));

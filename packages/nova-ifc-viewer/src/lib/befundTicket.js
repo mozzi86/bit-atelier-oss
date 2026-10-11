@@ -27,7 +27,7 @@ import { befundZuIssue, ticketZuBefund } from './befundSpur.js';
  * @returns {IssueApi}
  */
 function issueApi() {
-  return /** @type {{Issue: IssueApi}} */ (bitApi.entities).Issue;
+  return /** @type {{Issue: IssueApi}} */ (/** @type {any} */ (bitApi.entities)).Issue;
 }
 
 /**

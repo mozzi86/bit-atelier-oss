@@ -114,6 +114,7 @@ function matchCriterion(el, crit) {
 // (UND), remove entfernt. Beginnt ein Filter direkt mit remove_others, gilt die
 // Gesamtmenge als Startmenge.
 export function applyNovaFilter(elements, filter) {
+  /** @type {Set<any>|null} */
   let set = null;
   for (const crit of filter?.criteria || []) {
     const hits = new Set();

@@ -61,7 +61,7 @@ const seite = (name) => '/' + name;
  * @typedef {{
  *   title: string,
  *   url: string,
- *   icon: unknown,
+ *   icon: import('react').ComponentType<any>,
  *   labor?: boolean,
  *   projektfrei?: true,
  *   umfang?: 'portfolio',

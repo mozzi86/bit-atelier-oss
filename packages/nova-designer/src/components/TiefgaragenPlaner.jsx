@@ -6,6 +6,9 @@ import { Button } from "@core/components/ui/button";
 import { NumberField } from "@core/components/Field";
 import { STATUS_STYLE } from "@designer/lib/compliance";
 import { useI18n } from "@core/lib/i18n";
+// 91-05: hand-over of the quantity list to the AVA (LV CSV import).
+import AvaCsvKnopf from "./AvaCsvKnopf";
+import { zeilenAusTabelle } from "@designer/lib/avaUebergabe";
 import { WT_MARKER } from "@designer/lib/tesselierung";
 import { zonenBBox } from "@designer/lib/keller";
 import BimPlan2D from "./BimPlan2D";
@@ -42,10 +45,13 @@ const FARBE = {
  * @param {() => void} p.onAnwenden
  * @param {() => void} p.onEntfernen
  * @param {object|null} p.mengenPersistiert layer.tiefgarage.mengen (AVA hand-over)
+ * @param {{points: Array<{x:number,z:number}>, volumen_m3: number, nutzhoehe_m: number, passt: boolean|null, eingaben?: any, klimaStatus?: string}|null} [p.zisterne]
+ *   91-02: rainwater cistern UNDER the garage slab (useRegenwasser + zisternenRechteck) — drawn dashed
+ *   over the garage, it is one level below (no conflict with parking bays)
  */
 export default function TiefgaragenPlaner({
   plan, ergebnis, checks, optionen, setOptionen, aktiv, tesselierungAngewendet, kellerAktiv,
-  onAnwenden, onEntfernen, mengenPersistiert,
+  onAnwenden, onEntfernen, mengenPersistiert, zisterne = null,
 }) {
   const { t } = useI18n();
   const zonen = ergebnis?.zonen || [];
@@ -105,9 +111,11 @@ export default function TiefgaragenPlaner({
               <CardTitle className="text-base">{t("Richtwerte")} <span className="text-xs font-normal text-slate-400">[ASSUMED]</span></CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <NumberField label={kellerAktiv ? t("Garagenlänge (Rest = Keller)") : t("Garagenlänge (leer = ganzer Footprint)")}
+              {/* B-87-11 (option a): NumberField emits 0 for an emptied field, never ""/null,
+                  so 0 is the "not set" value → null = whole footprint / proof quota. */}
+              <NumberField label={kellerAktiv ? t("Garagenlänge (Rest = Keller)") : t("Garagenlänge (0 = ganzer Footprint)")}
                 suffix="m" min={0} step="0.5" value={optionen.laenge_m ?? ""}
-                onChange={(v) => setOptionen({ laenge_m: v === "" || v == null ? null : Math.max(0, v) })} />
+                onChange={(v) => setOptionen({ laenge_m: v == null || v === 0 ? null : Math.max(0, v) })} />
               <label className="block text-xs text-slate-600">
                 {t("Anordnung")}
                 <select className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800"
@@ -125,8 +133,8 @@ export default function TiefgaragenPlaner({
               <div className="grid grid-cols-2 gap-2">
                 <NumberField label={t("Rampenneigung")} suffix="%" min={2} max={50} step="1" value={pct}
                   onChange={(v) => setOptionen({ rampeNeigung: Math.max(0.02, Math.min(0.5, (Number(v) || 15) / 100)) })} />
-                <NumberField label={t("Barrierefrei (leer = Quote)")} suffix="Stk" min={0} step="1" value={optionen.barrierefreiAnzahl ?? ""}
-                  onChange={(v) => setOptionen({ barrierefreiAnzahl: v === "" || v == null ? null : Math.max(0, Math.round(v)) })} />
+                <NumberField label={t("Barrierefrei (0 = Quote)")} suffix="Stk" min={0} step="1" value={optionen.barrierefreiAnzahl ?? ""}
+                  onChange={(v) => setOptionen({ barrierefreiAnzahl: v == null || v === 0 ? null : Math.max(0, Math.round(v)) })} />
                 <NumberField label={t("Stellplätze je WE")} suffix="×" min={0} step="0.1" value={optionen.kfzSchluessel}
                   onChange={(v) => setOptionen({ kfzSchluessel: Math.max(0, v) })} />
                 <NumberField label={t("oberirdisch vorhanden")} suffix="Stk" min={0} step="1" value={optionen.oberirdisch_stk}
@@ -201,6 +209,19 @@ export default function TiefgaragenPlaner({
                         </g>
                       );
                     })}
+                    {zisterne && (() => {
+                      const d = zisterne.points.map((p, k) => `${k ? "L" : "M"}${X(p.x)},${Z(p.z)}`).join(" ") + " Z";
+                      const cx = zisterne.points.reduce((a, p) => a + X(p.x), 0) / zisterne.points.length;
+                      const cy = zisterne.points.reduce((a, p) => a + Z(p.z), 0) / zisterne.points.length;
+                      return (
+                        <g data-testid="tg-zisterne" data-volumen={zisterne.volumen_m3} data-klima={zisterne.klimaStatus ?? ""} data-we={zisterne.eingaben?.we ?? ""} data-niederschlag={zisterne.eingaben?.niederschlag_mm ?? ""} data-dach={zisterne.eingaben?.footArea_m2 ?? ""}>
+                          <path d={d} fill="#0ea5e9" fillOpacity={0.12} stroke="#0369a1" strokeWidth={1.4} strokeDasharray="5 3" />
+                          <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fontSize="8" fontWeight="600" fill="#075985">
+                            {t("Zisterne")} {zisterne.volumen_m3} m³ · {t("unter Bodenplatte")}
+                          </text>
+                        </g>
+                      );
+                    })()}
                   </g>
                 )}
               />
@@ -243,7 +264,10 @@ export default function TiefgaragenPlaner({
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">{t("Mengenliste (AVA-Übergabe)")}</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base">{t("Mengenliste (AVA-Übergabe)")}
+                  {/* nutzflaeche_m2 = bays + circulation — a sum row, left out of the LV (would count twice) */}
+                  <AvaCsvKnopf zeilen={zeilenAusTabelle(mengenZeilen, { ohne: ["nutzflaeche_m2"], praefix: "tg_" })} gewerk={t("Tiefgarage")} quelle={t("Tiefgaragen-Planer")} datei="tiefgarage-mengen" testid="tg-mengen-csv" />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 <table className="w-full text-xs" data-testid="tg-mengen">

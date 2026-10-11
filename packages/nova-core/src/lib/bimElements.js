@@ -13,6 +13,10 @@ export function modelDims(building) {
 }
 
 // One element per storey, matching the slabs the viewer renders.
+/**
+ * @returns {Array<{id: string, name: string, level: number, area: number, volume: number,
+ *                  height: number, count: number, length?: number}>} area m², volume m³, height m
+ */
 export function floorElements(building) {
   const { floors, w, d, floorH } = modelDims(building);
   const area = +(w * d).toFixed(1); // gross floor area per storey (m²)

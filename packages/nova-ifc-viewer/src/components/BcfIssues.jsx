@@ -186,10 +186,10 @@ export default function BcfIssues({ projectId, autor = "BIT-Atelier" }) {
   // gespeichert wird beides zusammen. Ohne Entwurf würde ein Statuswechsel
   // vor dem Text eine leere Antwort committen (setzeAntwort löscht bei leerem
   // Text) und der Status fiele auf den Import-Status zurück.
-  const [entwurf, setEntwurf] = useState({});
+  const [entwurf, setEntwurf] = useState(/** @type {Record<string, any>} */ ({}));
   const [warnungen, setWarnungen] = useState([]);
   // Snapshot-Blob-URLs je Topic-Guid — nur für diese Sitzung (s. Dateikopf).
-  const [snapshotUrls, setSnapshotUrls] = useState({});
+  const [snapshotUrls, setSnapshotUrls] = useState(/** @type {Record<string, string>} */ ({}));
   const snapshotUrlsRef = useRef({});
   const snapshotsFreigeben = useCallback(() => {
     for (const url of Object.values(snapshotUrlsRef.current)) URL.revokeObjectURL(url);
@@ -275,9 +275,10 @@ export default function BcfIssues({ projectId, autor = "BIT-Atelier" }) {
       setWarnungen(erg.warnungen);
       // Snapshots: alte URLs freigeben, neue anlegen (Bytes → image/png, T-71-08).
       snapshotsFreigeben();
+      /** @type {Record<string, string>} */
       const urls = {};
       for (const [guid, png] of Object.entries(erg.snapshots || {})) {
-        urls[String(guid).toLowerCase()] = URL.createObjectURL(new Blob([png], { type: "image/png" }));
+        urls[String(guid).toLowerCase()] = URL.createObjectURL(new Blob([/** @type {any} */ (png)], { type: "image/png" }));
       }
       snapshotUrlsRef.current = urls;
       setSnapshotUrls(urls);
@@ -406,7 +407,7 @@ export default function BcfIssues({ projectId, autor = "BIT-Atelier" }) {
         return;
       }
       const bytes = buildBcfZip(topics, { autor });
-      const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+      const url = URL.createObjectURL(new Blob([/** @type {any} */ (bytes)], { type: "application/octet-stream" }));
       const a = document.createElement("a");
       a.href = url;
       a.download = "antwort-issues.bcf";
@@ -419,6 +420,7 @@ export default function BcfIssues({ projectId, autor = "BIT-Atelier" }) {
   };
 
   // --- Render -------------------------------------------------------------------------
+  /** @type {any[]} */
   const topics = layer.topics || [];
 
   return (

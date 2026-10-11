@@ -15,6 +15,9 @@ import { Badge } from "@core/components/ui/badge";
 import { Button } from "@core/components/ui/button";
 import { Input } from "@core/components/ui/input";
 import { Move, Plus, PenTool, Route, Check, Undo2, Trash2, AlertTriangle, Gauge, GitBranch } from "lucide-react";
+// 91-05: hand-over of the quantity list to the AVA (LV CSV import).
+import AvaCsvKnopf from "./AvaCsvKnopf";
+import { netzZeilen } from "@designer/lib/avaUebergabe";
 import { useI18n } from "@core/lib/i18n";
 import { useProject } from "@core/lib/ProjectContext";
 import { useBuildingProgram } from "@core/lib/useBuildingProgram";
@@ -465,7 +468,9 @@ export default function TgaNetzEditor() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Gauge className="w-4 h-4" /> {t("Mengen")} <span className="text-xs font-normal text-slate-400">{t("AVA-Übergabe")}</span></CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Gauge className="w-4 h-4" /> {t("Mengen")} <span className="text-xs font-normal text-slate-400">{t("AVA-Übergabe")}</span>
+            <AvaCsvKnopf zeilen={netzZeilen(mengen)} gewerk={t("Haustechnik")} quelle={t("TGA-Netz")} datei="tga-netz-mengen" testid="tn-mengen-csv" />
+          </CardTitle></CardHeader>
           <CardContent className="text-xs space-y-2" data-testid="tn-mengen">
             {mengen.kanten_stk === 0 && mengen.knoten.length === 0 && <p className="text-slate-400">{t("Noch nichts gezeichnet.")}</p>}
             {mengen.lfm.length > 0 && (

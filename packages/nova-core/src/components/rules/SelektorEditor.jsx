@@ -7,7 +7,7 @@ import {
 } from "@core/components/ui/select";
 import { AlertTriangle, Asterisk, Info } from "lucide-react";
 import { validatePattern, MAX_PATTERN_LENGTH } from "@core/lib/rules/patternMatch";
-import { statusKey } from "@core/lib/rules/elementIndex";
+import { statusKey, statusNorm } from "@core/lib/rules/elementIndex";
 
 // SelektorEditor — EINE Oberfläche für ALLE VIER Achsen des Selektor-Schemas.
 //
@@ -29,6 +29,7 @@ import { statusKey } from "@core/lib/rules/elementIndex";
 // Alle Optionslisten kommen aus KATALOGEN bzw. dem Bauteilstand — nichts hier ist
 // eine Liste im Quelltext.
 
+/** @param {{active?: boolean, onClick?: () => void, children?: React.ReactNode, title?: string}} props */
 function Chip({ active, onClick, children, title }) {
   return (
     <button
@@ -46,6 +47,7 @@ function Chip({ active, onClick, children, title }) {
   );
 }
 
+/** @param {{titel: string, hinweis?: string, werte?: any[], gewaehlt?: any[], onToggle?: (w: any) => void, label?: (w: any) => string}} props */
 function Achse({ titel, hinweis, werte = [], gewaehlt = [], onToggle, label }) {
   const leer = !gewaehlt.length || (gewaehlt.length === 1 && gewaehlt[0] === "*");
   return (
@@ -77,6 +79,7 @@ function Achse({ titel, hinweis, werte = [], gewaehlt = [], onToggle, label }) {
 }
 
 // Muster-Eingabe mit Glob/Regex-Umschaltung und Validierung AM FELD.
+/** @param {{titel: string, hinweis?: string, wert?: any, onChange?: (v: any) => void}} props */
 function MusterFeld({ titel, hinweis, wert, onChange }) {
   const op = wert?.op === "regex" ? "regex" : "glob";
   const value = wert?.value ?? "";
@@ -165,9 +168,11 @@ export default function SelektorEditor({
   const statusOptionen = useMemo(() => {
     const rows = kataloge.StatusKonvention || [];
     const ausKatalog = rows.map((r) => ({ wert: r.pipeline ?? "?", anzeige: r.anzeige ?? r.pipeline }));
+    // B-87-08: the model carries the internal spelling ("neubau"), the catalogue offers
+    // the pipeline one ("Neubau") — compare normalised, or every status would show twice.
     const imModell = new Set((elemente || []).map((e) => statusKey(e)));
     for (const w of imModell) {
-      if (!ausKatalog.some((o) => o.wert === w)) ausKatalog.push({ wert: w, anzeige: `${w} (nur im Modell)` });
+      if (!ausKatalog.some((o) => statusNorm(o.wert) === statusNorm(w))) ausKatalog.push({ wert: w, anzeige: `${w} (nur im Modell)` });
     }
     return ausKatalog;
   }, [kataloge.StatusKonvention, elemente]);

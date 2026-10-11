@@ -7,7 +7,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { raumSlicing, TUERBREITEN, TUER_ANSCHLAG_ABSTAND } from "@designer/lib/tesselierung";
+import { raumSlicing, TUERBREITEN, TUER_ANSCHLAG_ABSTAND, TUER_ECKABSTAND_SCHRANK_M } from "@designer/lib/tesselierung";
 import {
   erreichbarkeit, erreichbarkeitJeWe, gemeinsameKante, tuerGeometrie, innenNormale, kantenVon,
   istFlurZone, ADJAZENZ_MIN_M,
@@ -50,7 +50,7 @@ describe("wohnungsErschliessung — Erschließungsgraph der Bild-Wohnung", () =>
     assert.equal(diele.tueren[0].typ, "wohnung");
   });
 
-  it("Türbreiten CITED DIN 18100: Zimmer 0,885, Bad + Wohnungstür 0,985; Anschlag 0,15 m von der Wand", () => {
+  it("Türbreiten CITED DIN 18100: Zimmer 0,885, Bad + Wohnungstür 0,985; Band 0,875 m von der Ecke (84-11)", () => {
     const zonen = nachher();
     const bad = zonen.find((z) => /^Bad/.test(z.name));
     const wohnen = zonen.find((z) => /^Wohnen/.test(z.name));
@@ -58,7 +58,10 @@ describe("wohnungsErschliessung — Erschließungsgraph der Bild-Wohnung", () =>
     assert.equal(bad.tueren[0].breite_m, 0.985);
     assert.equal(wohnen.tueren[0].breite_m, 0.885);
     assert.equal(diele.tueren[0].breite_m, 0.985);
-    assert.equal(wohnen.tueren[0].u_m, 0.15);
+    // 84-11: hinge ("links" = at u_m) 7 × 12,5 cm from the corner, wardrobe behind the leaf.
+    assert.equal(wohnen.tueren[0].u_m, TUER_ECKABSTAND_SCHRANK_M);
+    assert.equal(TUER_ECKABSTAND_SCHRANK_M, 0.875);
+    assert.equal(TUER_ANSCHLAG_ABSTAND, 0.125);
     assert.equal(TUERBREITEN.bad, 0.985);
   });
 

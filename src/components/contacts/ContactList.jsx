@@ -4,7 +4,7 @@ import { Card, CardContent } from "@core/components/ui/card";
 import { Button } from "@core/components/ui/button";
 import { Badge } from "@core/components/ui/badge";
 import { Skeleton } from "@core/components/ui/skeleton";
-import { Mail, Phone, Building, Pencil, Users } from "lucide-react";
+import { Mail, Phone, Building, Pencil, Users, MapPin } from "lucide-react";
 import { CATEGORY_LABELS, labelFor } from "./labels";
 
 const categoryColors = {
@@ -113,6 +113,12 @@ export default function ContactList({ contacts = [], isLoading, onEdit }) {
                     <Phone className="w-4 h-4 text-slate-400" />
                     <span>{contact.phone}</span>
                   </a>
+                )}
+                {(contact.address || contact.zip || contact.city) && (
+                  <div className="flex items-start gap-2" data-testid="kontakt-adresse">
+                    <MapPin className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                    <span>{[contact.address, [contact.zip, contact.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")}</span>
+                  </div>
                 )}
               </div>
             </CardContent>

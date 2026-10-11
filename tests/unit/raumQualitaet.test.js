@@ -131,7 +131,10 @@ describe("raumQualitaet — Regeln und Auflösung", () => {
 
   it("pruefe: Flur/Bad liefern keine Aufenthalts-Prüfungen; Regel aus → leere Liste", () => {
     const bad = { points: [{ x: 0, z: 0 }, { x: 1, z: 0 }, { x: 1, z: 5 }, { x: 0, z: 5 }], name: "Bad", art: "sanitaer", flaeche_m2: 5 };
-    assert.deepEqual(pruefe(bad, { regeln: { wohnungsgrundriss: true } }), []);
+    // 84-08: a bath gets ONLY the movement-area check (1,0 × 5,0 m: no 1,20 × 1,20 m → warn).
+    assert.deepEqual(pruefe(bad, { regeln: { wohnungsgrundriss: true } }).map((e) => `${e.regel}:${e.stufe}`), ["bad_bewegung:warn"]);
+    const badOk = { ...bad, points: [{ x: 0, z: 0 }, { x: 1.8, z: 0 }, { x: 1.8, z: 2.2 }, { x: 0, z: 2.2 }] };
+    assert.deepEqual(pruefe(badOk, {}).map((e) => `${e.regel}:${e.stufe}`), ["bad_bewegung:ok"]);
     const schlauch = { points: [{ x: 0, z: 0 }, { x: 2, z: 0 }, { x: 2, z: 6 }, { x: 0, z: 6 }], name: "Wohnen", art: "aufenthalt", flaeche_m2: 12 };
     assert.deepEqual(pruefe(schlauch, { regeln: {} }), []);
     const mit = pruefe(schlauch, { regeln: { wohnungsgrundriss: true } });

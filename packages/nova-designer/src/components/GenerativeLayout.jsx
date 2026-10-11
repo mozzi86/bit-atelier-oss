@@ -52,6 +52,7 @@ const VARIANT_SCHEMA = {
 // Fallback nur, solange kein Grundstück gezeichnet/gespeichert ist (KD-11).
 const SITE_AREA_FALLBACK = 3500;
 
+/** @param {{siteArea?: number|null, complexData?: any}} props `complexData` is accepted but unused — the layout reads the store (B-87-09) */
 export default function GenerativeLayout({ siteArea: siteAreaProp = null }) {
   const { projectId, project } = useProject();
   const store = useBuildingProgram(); // gemeinsame Quelle: Footprint + Geschosse

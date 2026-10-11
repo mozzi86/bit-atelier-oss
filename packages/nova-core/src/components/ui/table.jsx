@@ -1,7 +1,15 @@
 import * as React from "react";
 import { cn } from "@core/lib/utils";
 
-const Table = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.TableHTMLAttributes<HTMLTableElement> & React.RefAttributes<HTMLTableElement>>}
+ */
+const Table = React.forwardRef(
+  /**
+   * @param {React.TableHTMLAttributes<HTMLTableElement>} props
+   * @param {React.ForwardedRef<HTMLTableElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <div className="relative w-full overflow-auto">
     <table
       ref={ref}
@@ -12,12 +20,28 @@ const Table = React.forwardRef(({ className, ...props }, ref) => (
 ));
 Table.displayName = "Table";
 
-const TableHeader = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.HTMLAttributes<HTMLTableSectionElement> & React.RefAttributes<HTMLTableSectionElement>>}
+ */
+const TableHeader = React.forwardRef(
+  /**
+   * @param {React.HTMLAttributes<HTMLTableSectionElement>} props
+   * @param {React.ForwardedRef<HTMLTableSectionElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />
 ));
 TableHeader.displayName = "TableHeader";
 
-const TableBody = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.HTMLAttributes<HTMLTableSectionElement> & React.RefAttributes<HTMLTableSectionElement>>}
+ */
+const TableBody = React.forwardRef(
+  /**
+   * @param {React.HTMLAttributes<HTMLTableSectionElement>} props
+   * @param {React.ForwardedRef<HTMLTableSectionElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <tbody
     ref={ref}
     className={cn("[&_tr:last-child]:border-0", className)}
@@ -26,7 +50,15 @@ const TableBody = React.forwardRef(({ className, ...props }, ref) => (
 ));
 TableBody.displayName = "TableBody";
 
-const TableFooter = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.HTMLAttributes<HTMLTableSectionElement> & React.RefAttributes<HTMLTableSectionElement>>}
+ */
+const TableFooter = React.forwardRef(
+  /**
+   * @param {React.HTMLAttributes<HTMLTableSectionElement>} props
+   * @param {React.ForwardedRef<HTMLTableSectionElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <tfoot
     ref={ref}
     className={cn(
@@ -38,7 +70,15 @@ const TableFooter = React.forwardRef(({ className, ...props }, ref) => (
 ));
 TableFooter.displayName = "TableFooter";
 
-const TableRow = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.HTMLAttributes<HTMLTableRowElement> & React.RefAttributes<HTMLTableRowElement>>}
+ */
+const TableRow = React.forwardRef(
+  /**
+   * @param {React.HTMLAttributes<HTMLTableRowElement>} props
+   * @param {React.ForwardedRef<HTMLTableRowElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <tr
     ref={ref}
     className={cn(
@@ -50,7 +90,15 @@ const TableRow = React.forwardRef(({ className, ...props }, ref) => (
 ));
 TableRow.displayName = "TableRow";
 
-const TableHead = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.ThHTMLAttributes<HTMLTableCellElement> & React.RefAttributes<HTMLTableCellElement>>}
+ */
+const TableHead = React.forwardRef(
+  /**
+   * @param {React.ThHTMLAttributes<HTMLTableCellElement>} props
+   * @param {React.ForwardedRef<HTMLTableCellElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <th
     ref={ref}
     className={cn(
@@ -62,7 +110,15 @@ const TableHead = React.forwardRef(({ className, ...props }, ref) => (
 ));
 TableHead.displayName = "TableHead";
 
-const TableCell = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.TdHTMLAttributes<HTMLTableCellElement> & React.RefAttributes<HTMLTableCellElement>>}
+ */
+const TableCell = React.forwardRef(
+  /**
+   * @param {React.TdHTMLAttributes<HTMLTableCellElement>} props
+   * @param {React.ForwardedRef<HTMLTableCellElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <td
     ref={ref}
     className={cn(
@@ -74,7 +130,15 @@ const TableCell = React.forwardRef(({ className, ...props }, ref) => (
 ));
 TableCell.displayName = "TableCell";
 
-const TableCaption = React.forwardRef(({ className, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefExoticComponent<React.HTMLAttributes<HTMLTableCaptionElement> & React.RefAttributes<HTMLTableCaptionElement>>}
+ */
+const TableCaption = React.forwardRef(
+  /**
+   * @param {React.HTMLAttributes<HTMLTableCaptionElement>} props
+   * @param {React.ForwardedRef<HTMLTableCaptionElement>} ref
+   */
+  ({ className, ...props }, ref) => (
   <caption
     ref={ref}
     className={cn("mt-4 text-sm text-muted-foreground", className)}

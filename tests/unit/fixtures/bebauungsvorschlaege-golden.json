@@ -1,0 +1,40 @@
+{
+  "stand": "2026-10-10",
+  "faelle": {
+    "rechteck_70x16": {
+      "hash": "0bf7b00a46946ff7a0baa8394f5695392f5ff00eb29b5d414b85d46f16c5028c",
+      "anzahl": 5,
+      "ids": [
+        "v1-mittelflur-z120-18bc01b1607c4e56",
+        "v1-laubengang-z120-ce0c96d752e49bf0",
+        "v1-spaenner-z120-6d402109fa530442",
+        "v1-reihenhaus-z120-dc38911b3aab2120",
+        "v1-mfh-z120-1c9e6f0e41eb37f3"
+      ]
+    },
+    "L": {
+      "hash": "a97c14f93d36c24fd901e782e854c0845e95bfcf2655ac0f26aa8080752d91d2",
+      "anzahl": 6,
+      "ids": [
+        "v1-mittelflur-z120-e980590408c2f3af",
+        "v1-laubengang-z120-4fd1ea92dea86231",
+        "v1-spaenner-z120-4f3ed448ae9a7b9f",
+        "v1-reihenhaus-z120-1eed825ad65e385d",
+        "v1-reihenhaus-z200-7499d9e15904128a",
+        "v1-mfh-z120-fb6b88718b28826c"
+      ]
+    },
+    "U": {
+      "hash": "61d1907ee388ccf155a8163a4b49b6970d963109530b6e58f408f2b0cf962940",
+      "anzahl": 6,
+      "ids": [
+        "v1-mittelflur-z120-672a8b3bb4d3b6f0",
+        "v1-laubengang-z120-04f1bc451b009fa6",
+        "v1-spaenner-z120-85ae9f3b3cd0aa24",
+        "v1-reihenhaus-z120-5e32c9a92e944cb6",
+        "v1-reihenhaus-z200-cab91b56fccbc8dd",
+        "v1-mfh-z120-a350890058bd83a5"
+      ]
+    }
+  }
+}

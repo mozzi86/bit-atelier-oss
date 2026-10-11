@@ -3,7 +3,7 @@
 // Label, kein Raumname; Chip 1:500 -> keine Labels, Baukoerper "Name · V"; Doppelklick auf ein
 // WE-Label oeffnet den WohnungsFokus (Deep-Link ?tab=werkstatt&we=).
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, resetRechteck, nurLocalhost } from "./fixtures/massing.js";
 
 const RAUMNAMEN = /Wohnen|Schlafen|Bad|Küche|Kind|Abstell/; // Flur/Kern sind Erschliessung und werden bei 1:200 benannt

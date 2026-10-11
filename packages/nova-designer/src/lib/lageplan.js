@@ -160,6 +160,7 @@ export function loescheFlaeche(layer, id) {
  */
 export function flaechenSummen(layer) {
   const base = layerHardened(layer);
+  /** @type {Record<string, number>} */
   const out = {};
   for (const f of base.flaechen) out[f.art] = Math.round(((out[f.art] || 0) + polygonFlaecheM2(f.points)) * 10) / 10;
   return out;

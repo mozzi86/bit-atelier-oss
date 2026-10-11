@@ -1,0 +1,6 @@
+{
+  "gesamt": 0,
+  "stand": "2026-10-09",
+  "hinweis": "tsc-Fehler gesamt; darf nie steigen (scripts/tsc-baseline.mjs). Senken, wenn Fehler behoben wurden.",
+  "je_datei": {}
+}

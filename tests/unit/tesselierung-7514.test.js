@@ -1,15 +1,18 @@
 // Unit tests for the 75-14 part of packages/nova-designer/src/lib/tesselierung.js:
-// default regression against the checked-in snapshot (generated BEFORE the change,
-// tests/unit/fixtures/tesselierung-default-7514.json), the hall/door slicing of the
-// screenshot apartment and the door-swing overrides.
+// regression against the checked-in snapshot (tests/unit/fixtures/tesselierung-default-7514.json),
+// the hall/door slicing of the screenshot apartment and the door-swing overrides.
+// 84-01 (D-P84-A, doors always), 84-07 (stair core standard, entrance hall), 84-06 (corridor end), 84-09 (gable units) and 85-02 (deep bands: window row cut to the aspect-ratio target): the snapshot was REGENERATED on purpose from the
+// 84-01 code — room-zone output now always carries hall + doors. Regenerate only for
+// a deliberate behaviour change: .planning/phases/84-tueren-immer/tmp-e2e/snapshots-8401.mjs.
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
 import {
-  tesseliere, raumSlicing, wohnungsRegeln, DIELE_MASSE, TUERBREITEN, MINDESTBREITEN,
+  tesseliere, raumSlicing, wohnungsRegeln, DIELE_MASSE, TUERBREITEN, MINDESTBREITEN, FLURENDE,
 } from "@designer/lib/tesselierung";
+import { flurEnden } from "@designer/lib/wohnungsErschliessung";
 import { WERKSTATT_TYPEN } from "@designer/lib/wohnungsTypen";
 import { BILD_PROGRAMM, BILD_BAND } from "./fixtures/bildWohnung.js";
 
@@ -21,7 +24,7 @@ const STD = WERKSTATT_TYPEN.filter((t) => t.gruppe === "standard").slice(0, 3);
 const r2 = (v) => Math.round(v * 100) / 100;
 const bbox = (z) => { const xs = z.points.map((p) => p.x), zs = z.points.map((p) => p.z); return { w: Math.max(...xs) - Math.min(...xs), d: Math.max(...zs) - Math.min(...zs) }; };
 
-describe("tesselierung.js — 75-14 Default byte-gleich (Snapshot vor der Änderung)", () => {
+describe("tesselierung.js — 75-14/84-01 Regression (Snapshot 84-01)", () => {
   const faelle = {
     "fp40-mittelflur-2g-ref": { footprintM: FP40, storeys: 2, typ: "mittelflur", einheiten: REF, raumzonen: true },
     "fp40-spaenner-1g-ref": { footprintM: FP40, storeys: 1, typ: "spaenner", einheiten: REF, raumzonen: true },
@@ -29,35 +32,31 @@ describe("tesselierung.js — 75-14 Default byte-gleich (Snapshot vor der Änder
     "fp30-mfh-2g-std": { footprintM: FP30, storeys: 2, typ: "mfh", einheiten: STD, raumzonen: true },
     "fp30-mittelflur-1g-std-regeln75-07": { footprintM: FP30, storeys: 1, typ: "mittelflur", einheiten: STD, raumzonen: true, regeln: { mindestbreiten: true, phi: true, wandstaerken: true, rettungsweg: true, himmelsrichtung: true } },
   };
-  // 75-13 Task 1 replaced the Manhattan value of the EXISTING rule regeln.rettungsweg by
-  // the walked line (rettungsweg_m / _innen_m / _flur_m / _pfad / _naeherung,
-  // rettungswegWarnungen). The snapshot file stays the 2206d15 original; the one case
-  // that switches the rule on is compared WITHOUT those fields — zones, borders,
-  // hints and every other unit field must stay byte-identical.
-  const ohneRettungsweg = (r) => JSON.stringify({
-    ...r,
-    rettungswegWarnungen: undefined,
-    weListe: r.weListe.map((w) => Object.fromEntries(Object.entries(w).filter(([k]) => !k.startsWith("rettungsweg")))),
-  });
   for (const [name, opts] of Object.entries(faelle)) {
-    const rettungsweg = opts.regeln?.rettungsweg === true;
-    it(`${name}: JSON identisch zum Snapshot${rettungsweg ? " (ohne die rettungsweg_*-Felder, 75-13)" : ""}`, () => {
+    it(`${name}: JSON identisch zum Snapshot`, () => {
       assert.ok(SNAP[name], "Snapshot-Fall vorhanden");
       const neu = tesseliere(opts);
-      if (rettungsweg) {
-        assert.equal(ohneRettungsweg(neu), ohneRettungsweg(SNAP[name]));
-        assert.ok(SNAP[name].weListe.every((w) => !("rettungsweg_pfad" in w)), "Snapshot trägt noch den Manhattan-Wert");
-        assert.ok(neu.weListe.every((w) => Array.isArray(w.rettungsweg_pfad) && w.rettungsweg_pfad.length >= 2), "neu: Lauflinie mit Pfad");
-      } else {
-        assert.equal(JSON.stringify(neu), JSON.stringify(SNAP[name]));
+      assert.equal(JSON.stringify(neu), JSON.stringify(SNAP[name]));
+      if (opts.regeln?.rettungsweg === true) {
+        assert.ok(neu.weListe.every((w) => Array.isArray(w.rettungsweg_pfad) && w.rettungsweg_pfad.length >= 2), "Lauflinie mit Pfad");
       }
     });
   }
-  it("regeln {} und tuerAufschlaege {} ändern nichts; ohne Regel trägt keine Zone tueren/fensterwand", () => {
+  it("84-01: regeln {} / tuerAufschlaege {} / wohnungsgrundriss false ändern nichts — Diele + Türen sind kein Schalter mehr", () => {
     const a = tesseliere({ footprintM: FP40, storeys: 1, typ: "mittelflur", einheiten: REF, raumzonen: true });
     const b = tesseliere({ footprintM: FP40, storeys: 1, typ: "mittelflur", einheiten: REF, raumzonen: true, regeln: {}, tuerAufschlaege: {} });
+    const c = tesseliere({ footprintM: FP40, storeys: 1, typ: "mittelflur", einheiten: REF, raumzonen: true, regeln: { wohnungsgrundriss: false } });
     assert.equal(JSON.stringify(a), JSON.stringify(b));
-    assert.ok(a.zonen.every((z) => !("tueren" in z) && !("fensterwand" in z)));
+    assert.equal(JSON.stringify(a), JSON.stringify(c), "gespeichertes false aus alten Layern wird ignoriert");
+    const raeume = a.zonen.filter((z) => z.we && z.raumart !== "balkon");
+    assert.ok(raeume.length > 0);
+    assert.ok(raeume.every((z) => Array.isArray(z.tueren)), "jede Raumzone trägt tueren[]");
+    const wes = [...new Set(a.weListe.map((w) => w.we))];
+    assert.equal(a.zonen.filter((z) => z.tueren?.some((t) => t.nach === null)).length, wes.length, "eine Wohnungstür je WE");
+  });
+  it("84-01: Bandmodus (ohne Raumzonen) bleibt ohne Türen", () => {
+    const r = tesseliere({ footprintM: FP40, storeys: 1, typ: "mittelflur", einheiten: REF });
+    assert.ok(r.zonen.every((z) => !("tueren" in z)));
   });
 });
 
@@ -85,7 +84,13 @@ describe("tesselierung.js — 75-14 Diele + Türen im Zuschnitt (Bild-Wohnung)",
     assert.equal(d.art, "flur");
     assert.equal(d.raumart, "flur");
     const b = bbox(d);
-    assert.equal(r2(b.w), 7.75, "Flurstreifen über die ganze WE-Breite");
+    // 84-06: the strip no longer runs into the party wall — it stops at a 1,0 m store
+    // room whose door sits in the end wall.
+    assert.equal(r2(b.w), r2(7.75 - FLURENDE.abstellLaenge_m), "Flurstreifen bis zum Abstellraum am Ende");
+    const ab = z.find((q) => /^Abstellraum/.test(q.name));
+    assert.ok(ab, "Abstellraum am Flurende");
+    assert.equal(ab.tueren[0].nach, d.name);
+    assert.equal(ab.tueren[0].wand, 3, "Tür in der Stirnwand (Kante zum Flur)");
     // Hall part: 4 m² / dB (17 m² / 7,75 m = 2,19 m) = 1,83 m wide ≥ 1,20 m.
     const vorraumBreite = d.points[1].x - d.points[0].x;
     assert.ok(vorraumBreite >= DIELE_MASSE.minBreite);
@@ -127,10 +132,31 @@ describe("tesselierung.js — 75-14 Diele + Türen im Zuschnitt (Bild-Wohnung)",
     }
     for (const q of z.filter((x) => !x.fensterpflicht && x.art !== "flur")) {
       assert.equal(q.fensterwand, undefined);
+      // 84-06: the store room at the corridor end has its door in the end wall.
+      if (/^Abstellraum/.test(q.name)) { assert.equal(q.tueren[0].wand, 3); continue; }
       assert.equal(q.tueren[0].wand, 2, "Rückzeile: Flurseite = Kante 2");
     }
     assert.equal(z.find((q) => /^Bad/.test(q.name)).tueren[0].breite_m, 0.985);
     assert.equal(z.find((q) => /^Bad/.test(q.name)).tueren[0].typ, "bad");
+  });
+
+  it("84-06: kein Flurende an einer Trennwand — ein Ende am Abstellraum (Tür), eins am Eingang; gespiegelt ebenso", () => {
+    for (const v of [{}, { variante: "gespiegelt" }]) {
+      const z = raumSlicing({ ...BILD_BAND, ...v }, BILD_PROGRAMM, { wohnungsgrundriss: true });
+      const e = flurEnden(z);
+      assert.equal(e.length, 2);
+      assert.ok(e.every((x) => x.ok), JSON.stringify(e));
+      assert.deepEqual(e.map((x) => x.grund).sort(), ["eingang", "tuer"]);
+    }
+  });
+
+  it("84-06: MFH/Mittelflur ohne Schalter — Flurenden fast überall auf Tür/Eingang; Rest als fail + Hinweis [84-06], nie still", () => {
+    const r = tesseliere({ footprintM: FP40, storeys: 1, typ: "mittelflur", einheiten: STD, raumzonen: true });
+    const wes = [...new Set(r.zonen.filter((q) => q.we).map((q) => q.we))];
+    let blind = 0;
+    for (const we of wes) blind += flurEnden(r.zonen, { we }).filter((x) => !x.ok).length;
+    const hinweise = [...r.hinweise, ...r.raumWarns].filter((h) => /\[84-06\]/.test(h)).length;
+    assert.equal(blind, hinweise, "jedes blinde Ende hat einen Hinweis");
   });
 
   it("gespiegelt: Diele am anderen Ende, Zuschnitt sonst gleich (Flächen identisch)", () => {
@@ -155,8 +181,12 @@ describe("tesselierung.js — 75-14 Diele + Türen im Zuschnitt (Bild-Wohnung)",
   });
 
   it("zu flaches Band (< 2,40 m Fassadenreihe) und Spänner-Quadranten fallen auf den Standardzuschnitt zurück — mit Hinweis", () => {
-    const flach = raumSlicing({ ...BILD_BAND, rechteck: { x0: 0, x1: 7.75, z0: 0, z1: 5 }, fassadeBei: 5 }, BILD_PROGRAMM, { wohnungsgrundriss: true });
-    assert.ok(flach.warns.some((w) => /Bandtiefe 5,00 m zu gering/.test(w)), flach.warns.join(" | "));
+    // 84-05: the back row is capped so 2,40 m stay for the window rooms — a 5,00 m band
+    // now gets a hall; too shallow is below 1,20 + 1,20 + 2,40 = 4,80 m.
+    const fuenf = raumSlicing({ ...BILD_BAND, rechteck: { x0: 0, x1: 7.75, z0: 0, z1: 5 }, fassadeBei: 5 }, BILD_PROGRAMM, { wohnungsgrundriss: true });
+    assert.equal(fuenf.filter((q) => /Diele/.test(q.name)).length, 1, "5,00 m: Diele");
+    const flach = raumSlicing({ ...BILD_BAND, rechteck: { x0: 0, x1: 7.75, z0: 0, z1: 4.5 }, fassadeBei: 4.5 }, BILD_PROGRAMM, { wohnungsgrundriss: true });
+    assert.ok(flach.warns.some((w) => /Bandtiefe 4,50 m zu gering/.test(w)), flach.warns.join(" | "));
     assert.equal(flach.filter((q) => /Diele/.test(q.name)).length, 0);
     const sp = raumSlicing({ ...BILD_BAND, zweiFassaden: true }, BILD_PROGRAMM, { wohnungsgrundriss: true });
     assert.ok(sp.warns.some((w) => /Spänner-Quadranten/.test(w)));
@@ -167,9 +197,10 @@ describe("tesselierung.js — 75-14 Diele + Türen im Zuschnitt (Bild-Wohnung)",
     const wes = [...new Set(r.weListe.map((w) => w.we))];
     assert.equal(r.zonen.filter((z) => /Diele/.test(z.name)).length, wes.length, "eine Diele je WE");
     assert.equal(r.zonen.filter((z) => z.tueren?.some((t) => t.nach === null)).length, wes.length, "eine Wohnungstür je WE");
-    assert.ok(r.hinweise.some((h) => /\[75-14\]/.test(h)));
     assert.equal(r.raumWarns.filter((h) => /\[75-14\]/.test(h)).length, 0, "nicht doppelt in raumWarns");
-    assert.ok(r.hinweise.some((h) => /zusammengelegt/.test(h) && /Bandtiefe 12,10 m/.test(h)));
+    // 85 (Band füllen): units are at least as wide as their room programme needs —
+    // the former "zusammengelegt" hints of this deep band are gone.
+    assert.ok(!r.hinweise.some((h) => /zusammengelegt/.test(h)), r.hinweise.filter((h) => /zusammengelegt/.test(h)).slice(0, 1).join(""));
     assert.equal(wohnungsRegeln({ wohnungsgrundriss: true }).aktiv, true);
   });
 });

@@ -565,6 +565,9 @@ const DICT = {
     "Bezug:": "Reference:",
     "Ticket „{titel}“": "Ticket “{titel}”",
     "z. B. Zusätzliche Tiefgaragenstellplätze": "e.g. additional underground parking spaces",
+    // Tiefgaragen-Planer (B-87-11): 0 means "not set" because NumberField emits 0 for an emptied field.
+    "Garagenlänge (0 = ganzer Footprint)": "Garage length (0 = whole footprint)",
+    "Barrierefrei (0 = Quote)": "Accessible spaces (0 = quota)",
     "Kein aktives Projekt – bitte wählen Sie oben in der Kopfzeile ein Projekt.":
       "No active project – please select a project in the header.",
     "Der Nachtrag wird dem aktiven Projekt zugeordnet. Ein anderes Projekt wählen Sie oben in der Kopfzeile.":

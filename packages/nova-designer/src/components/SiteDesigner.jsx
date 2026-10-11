@@ -173,7 +173,7 @@ function LageplanKarte({
     for (const a of areas) {
       a.points.forEach((p, idx) => {
         const m = new maplibregl.Marker({ element: vertexElement(), draggable: true })
-          .setLngLat(canvasPointToLngLat(p, loc.lat, loc.lng))
+          .setLngLat(/** @type {[number, number]} */ (canvasPointToLngLat(p, loc.lat, loc.lng)))
           .addTo(map);
         m.on("drag", () => {
           // Live-Vorschau direkt in der Source — Commit erst am Drag-Ende.

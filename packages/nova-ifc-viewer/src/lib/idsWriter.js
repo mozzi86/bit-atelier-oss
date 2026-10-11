@@ -52,7 +52,7 @@ export function xmlEscape(text) {
 /**
  * Normalisiert einen Facetten-Wert in die Parse-Form { art, … }.
  * @param {*} wert Kurzform {simple}|{enumeration}|{pattern} oder Parse-Form
- * @returns {{art:string}|null}
+ * @returns {null|{art: string, wert?: any, base?: string, enumeration?: any, pattern?: any, patternQuelle?: any, patternFehler?: any, bounds?: any, length?: any}}
  */
 function normalisiereWert(wert) {
   if (wert == null) return null;

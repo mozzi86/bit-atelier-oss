@@ -12,7 +12,7 @@ const API_BASE = import.meta.env?.VITE_API_BASE_URL || '/api';
 /**
  * Ask TypeSafe. Throws an Error carrying the server's plain-text `error`
  * (503 without key, 400 invalid, 502 upstream) — callers show it as is.
- * @param {{ state: unknown, questions: Record<string, object> }} params
+ * @param {{ state?: unknown, questions?: Record<string, object> }} [params]
  * @returns {Promise<{ model: string, answers: Record<string, object>, usage?: object }>}
  */
 export async function urteile({ state, questions } = {}) {

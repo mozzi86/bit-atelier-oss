@@ -13,6 +13,8 @@
 import { netzHardened, kantenLaenge, KNOTEN_ARTEN } from "@designer/lib/tgaNetz";
 import { abflussFlaeche, PSI_DACH, PSI_BEFESTIGT, PSI_GRUEN } from "@designer/lib/landscape";
 import { layerHardened as lageplanHardened, flaechenSummen } from "@designer/lib/lageplan";
+// 91-01: rainwater harvesting lives in its own lib; the layer part `nutzung` is stored here.
+import { NUTZUNG_DEFAULT, nutzungHardened } from "@designer/lib/regenwassernutzung";
 
 // null and "" must fall back to the DEFAULT, not to zero: Number(null) is 0 and passes
 // isFinite, so a stored `kanalsohle_m: null` used to mean "sewer invert at ground level"
@@ -35,6 +37,8 @@ export const ENTW_DEFAULT = {
   regen: { r5_100: 800, r30_100: 300, qAb_ls: 5, dauer_min: 30 },
   dach: { ablaeufe: [], notueberlaeufe: [], gefaelle_pct: 2, dmin_m: 0.12 },
   rueckhalt: { elemente: [], flaechen: [] },
+  // 91-01 (user 10.10.2026: rainwater reuse is mandatory) — additive, see regenwassernutzung.js.
+  nutzung: NUTZUNG_DEFAULT,
 };
 /** Backwater measures ([ASSUMED] mapping to DIN EN 13564 backwater valve / DIN EN 12050 lifting plant). */
 export const RUECKSTAU_MASSNAHMEN = {
@@ -59,6 +63,7 @@ export function layerHardened(layer) {
     regen: { r5_100: Math.max(0, num(g.r5_100, 800)), r30_100: Math.max(0, num(g.r30_100, 300)), qAb_ls: Math.max(0, num(g.qAb_ls, 5)), dauer_min: Math.max(1, num(g.dauer_min, 30)) },
     dach: { ablaeufe: pts(d.ablaeufe, "ab"), notueberlaeufe: pts(d.notueberlaeufe, "no"), gefaelle_pct: Math.max(0.5, num(d.gefaelle_pct, 2)), dmin_m: Math.max(0.02, num(d.dmin_m, 0.12)) },
     rueckhalt: lageplanHardened(l.rueckhalt),
+    nutzung: nutzungHardened(l.nutzung),
   };
 }
 
@@ -220,6 +225,7 @@ export function notentwaesserung({ r5_100 = 800, aDach = 0, nAblaeufe = 0, nNot 
   const qAbl = rnd(num(nAblaeufe) * ABLAUF_DN100_LS);
   const qNotErf = rnd(Math.max(0, qDach - qAbl));
   const qNotVorh = rnd(num(nNot) * NOTUEBERLAUF_LS);
+  /** @type {"offen"|"warn"|"pass"} */
   let status = "offen";
   if (aDach > 0 && nAblaeufe > 0) status = nNot > 0 && qNotVorh >= qNotErf ? "pass" : "warn";
   return { qDach_ls: qDach, qAblaeufe_ls: qAbl, qNotErf_ls: qNotErf, qNotVorh_ls: qNotVorh, status };
@@ -257,6 +263,7 @@ export const REGEN_TYPEN = Object.fromEntries(REGEN_KATALOG.flatMap((g) => g.typ
 export function rueckhaltVolumen(rueckhalt) {
   const l = lageplanHardened(rueckhalt);
   const s = flaechenSummen(l);
+  /** @type {Record<string, number>} */
   const je = {};
   for (const [art, m2] of Object.entries(s)) { const a = REGEN_ARTEN[art]; if (a) je[art] = rnd(m2 * a.m3JeM2, 1); }
   let zist = 0, zisternen = 0;
@@ -274,6 +281,7 @@ export function rueckhaltVolumen(rueckhalt) {
  * @returns {Array<{ key: string, label: string, status: "pass"|"warn"|"offen", detail: string }>}
  */
 export function entwaesserungChecks({ sw = null, gl = null, rueckstau = null, bilanz = null, rueckhalt = null, not = null, dachform = "flach" } = {}) {
+  /** @type {Array<{key: string, label: string, status: "offen"|"warn"|"pass", detail: string}>} */
   const items = [];
   items.push(sw && sw.sumDU > 0
     ? { key: "schmutzwasser", label: "Schmutzwasser", status: "pass", detail: `ΣDU ${sw.sumDU} → Q_ww ${sw.qww_ls} l/s → Grundleitung DN ${sw.dn} bei ≥ ${sw.gefaelleMin_pct} %` }

@@ -148,8 +148,11 @@ describe("tesselierung.js — Rettungsweg als Lauflinie (75-13 Task 1)", () => {
       assert.ok(w.laenge_m > RETTUNGSWEG_MAX);
       assert.equal(w.vorschlag_m, Math.ceil((w.laenge_m - RETTUNGSWEG_MAX) * 2) / 2);
       assert.match(w.text, /Rettungsweg .* > 35 m/);
-      assert.match(w.text, /Treppenraum-Erweiterung um/);
+      // 84-01: with doors the end units can exceed what 6 m of extension saves —
+      // those name the second stair enclosure instead.
+      assert.match(w.text, /Treppenraum-Erweiterung um|zweiten Treppenraum vorsehen/);
     }
+    assert.ok(r.rettungswegWarnungen.some((w) => /Treppenraum-Erweiterung um/.test(w.text)));
     assert.ok(!r.hinweise.some((h) => /Rettungsweg .* > 35 m/.test(h)), "kein Hinweis mehr");
   });
 
@@ -247,11 +250,30 @@ describe("75-17 innenwegUeberTueren — Tür-/Raumgraph", () => {
     }
   });
 
-  it("Tesselierung ohne Türdaten: Näherung ist markiert und steht im Warnungstext", () => {
+  it("84-01: MFH ohne jeden Schalter — Rettungsweg aller WE über Türen, keine Näherung", () => {
     const FP70 = [{ x: -35, z: -8 }, { x: 35, z: -8 }, { x: 35, z: 8 }, { x: -35, z: 8 }];
     const r = tesseliere({ footprintM: FP70, storeys: 1, typ: "mfh", einheiten: STD, raumzonen: true, regeln: { rettungsweg: true, treppenraum: true } });
-    assert.ok(r.weListe.every((w) => w.rettungsweg_innen_naeherung === true && w.rettungsweg_innen_art !== "tueren"));
-    assert.ok(r.rettungswegWarnungen.length > 0);
-    assert.ok(r.rettungswegWarnungen.every((x) => x.text.includes("[Näherung innen: ")));
+    assert.ok(r.weListe.every((w) => w.rettungsweg_innen_art === "tueren" && !("rettungsweg_innen_naeherung" in w)));
+    assert.ok(r.rettungswegWarnungen.every((x) => !x.text.includes("[Näherung innen: ")));
+  });
+
+  it("Spänner hat seit 84-02 Türdaten: Rettungsweg über Türen, keine Näherung", () => {
+    const FP40 = [{ x: -20, z: -13 }, { x: 20, z: -13 }, { x: 20, z: 13 }, { x: -20, z: 13 }];
+    const r = tesseliere({ footprintM: FP40, storeys: 1, typ: "spaenner", einheiten: STD, raumzonen: true, regeln: { rettungsweg: true } });
+    assert.ok(r.weListe.length === 4 && r.weListe.every((w) => w.rettungsweg_innen_art === "tueren" && !("rettungsweg_innen_naeherung" in w)));
+  });
+
+  it("Tesselierung ohne Türdaten (diele: false): Näherung ist markiert und steht im Warnungstext", () => {
+    const FP40 = [{ x: -20, z: -13 }, { x: 20, z: -13 }, { x: 20, z: 13 }, { x: -20, z: 13 }];
+    const r = tesseliere({ footprintM: FP40, storeys: 1, typ: "mittelflur", einheiten: STD, raumzonen: true, regeln: { rettungsweg: true, rettungswegMax: 5, diele: false } });
+    // An explicit diele: false still switches the door records off (single values override, 84-01).
+    const ohneTueren = r.weListe.filter((w) => w.rettungsweg_innen_art !== "tueren");
+    assert.ok(ohneTueren.length > 0);
+    assert.ok(ohneTueren.every((w) => w.rettungsweg_innen_naeherung === true));
+    const ohneNamen = new Set(ohneTueren.map((w) => w.we));
+    const warnOhne = r.rettungswegWarnungen.filter((x) => ohneNamen.has(x.we));
+    assert.ok(warnOhne.length > 0);
+    assert.ok(warnOhne.every((x) => x.text.includes("[Näherung innen: ")));
+    assert.ok(r.rettungswegWarnungen.filter((x) => !ohneNamen.has(x.we)).every((x) => !x.text.includes("[Näherung innen: ")));
   });
 });

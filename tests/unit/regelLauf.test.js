@@ -100,7 +100,9 @@ test("Δ-Guard: unter der Schwelle gilt es NICHT als Änderung", () => {
 
 test("0 Treffer und Menge 0 sind BENANNTE Zustände, nicht leere Zellen", () => {
   const daneben = wandRegel();
-  daneben.selektor.zustand.status = ["neubau"]; // Casing — greift nicht
+  // B-87-08: "neubau" would now MATCH (status axis normalised) — use a status the
+  // three walls really do not have.
+  daneben.selektor.zustand.status = ["Abbruch"];
   const z = laufFuerPosition({ id: "a", quantity: 30, regeln: [daneben] }, drei, {
     snapshot_id: SNAP,
   }).lauf.je_position[0];

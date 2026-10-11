@@ -23,6 +23,7 @@ const DEFAULT_ITEMS = [
   { use: "wohnen", area: 70, count: 48 },
 ];
 
+/** @param {{icon: any, label: string, value: any, sub?: any, tint?: string}} props */
 const Stat = ({ icon: Icon, label, value, sub, tint }) => (
   <div className="rounded-lg bg-slate-50 p-3">
     <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1"><Icon className={`w-3.5 h-3.5 ${tint}`} /> {label}</div>

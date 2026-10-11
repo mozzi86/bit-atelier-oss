@@ -160,6 +160,22 @@ export default function IfcImportPanel({ onUse, active = false, count = 0, onRes
               </div>
             )}
 
+            {/* 87-02: skipped entries used to vanish in empty catches — now the user sees
+                that the sums are incomplete before using the model as a quantity source. */}
+            {parsed.kennzahlen?.uebersprungen?.gesamt > 0 && (
+              <p className="text-xs text-amber-700" data-testid="ifc-uebersprungen">
+                <AlertTriangle className="w-3 h-3 mr-1 inline" />
+                {nf.format(parsed.kennzahlen.uebersprungen.gesamt)} Einträge wurden beim Lesen übersprungen
+                ({[["quantities", "Mengen"], ["properties", "Eigenschaften"], ["relationen", "Zuordnungen"], ["definitionen", "Definitionen"], ["elemente", "Bauteile"], ["sonstige", "Material/Struktur"]]
+                  .filter(([k]) => parsed.kennzahlen.uebersprungen[k] > 0)
+                  .map(([k, label]) => `${nf.format(parsed.kennzahlen.uebersprungen[k])} ${label}`).join(", ")}) —
+                <strong> Mengen und Zuordnungen sind unvollständig</strong>; Datei im Autorensystem prüfen
+                {parsed.kennzahlen.uebersprungen.beispiele?.length > 0 && (
+                  <> (z. B. {parsed.kennzahlen.uebersprungen.beispiele.map((b) => `#${b.id ?? "?"}`).join(", ")})</>
+                )}.
+              </p>
+            )}
+
             {parsed.kennzahlen?.ohne_status > 0 && (
               <p className="text-xs text-amber-700">
                 {nf.format(parsed.kennzahlen.ohne_status)} Bauteile führen keinen Umbau-Status.

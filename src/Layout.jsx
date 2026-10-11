@@ -58,6 +58,8 @@ import KuerzelHilfe from "./components/KuerzelHilfe";
 import { aktionenFuer, passtKuerzel, parseKuerzel, abonnieren, aktionenVersion } from "@core/lib/aktionen";
 import { SERVERLOS, DATENQUELLE } from "@core/lib/umgebung";
 import { useAuth } from "@core/lib/AuthContext";
+// 92-01: self-update of the downloaded app.
+import UpdateHinweis from "@/components/update/UpdateHinweis";
 
 // Navigationsliste: eine Quelle für Seitenleiste UND Befehlspalette (65-05).
 // Siehe src/navigation.js.
@@ -581,6 +583,8 @@ function LayoutInner({ children }) {
                 First in <main>: the "Weiter mit" bar stays directly before the
                 legal footer (72-09 contract). */}
             <Seitenwechsel />
+            {/* 92-01: update banner of the local app (renders nothing in cloud/serverless builds). */}
+            <UpdateHinweis />
             {zustand === "inhalt" && children}
             {zustand === "laden" && <HuelleLaedt />}
             {zustand === "fehler" && <VerbindungsFehler fehler={fehler} onErneut={erneutLaden} />}

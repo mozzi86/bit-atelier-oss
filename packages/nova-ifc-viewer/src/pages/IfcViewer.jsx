@@ -47,7 +47,7 @@ const AUFBAU = { szene: 0, mesh: 0 };
 // (Weisung JB 26.08.2026). Gilt nur für Serverdateien; lokale Uploads über den
 // Datei-Knopf sind nach einem Reload nicht wiederherstellbar und bleiben außen vor.
 const AUTOLOAD_KEY = "bit-atelier.ifc.autoload.v1";
-if (typeof window !== "undefined") window.__ifcAufbau = AUFBAU;
+if (typeof window !== "undefined") /** @type {any} */ (window).__ifcAufbau = AUFBAU;
 
 const fmt = (n, d = 0) => Number(n ?? 0).toLocaleString("de-DE", { maximumFractionDigits: d });
 const fmtDate = (ms) => new Date(ms).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
@@ -164,7 +164,8 @@ export default function IfcViewer({ embedded = false }) {
       const now = performance.now();
       if (now - lastFps >= 1000) {
         if (fpsRef.current) {
-          const heap = performance.memory ? ` · Heap ${fmt(performance.memory.usedJSHeapSize / 1048576)} MB` : "";
+          // performance.memory is Chrome-only and not in lib.dom → cast
+          const heap = /** @type {any} */ (performance).memory ? ` · Heap ${fmt(/** @type {any} */ (performance).memory.usedJSHeapSize / 1048576)} MB` : "";
           fpsRef.current.textContent = `${frames} FPS${heap}`;
         }
         frames = 0;

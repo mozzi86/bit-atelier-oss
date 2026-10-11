@@ -36,6 +36,18 @@ const Section_ = ({ title, children }) => (
 );
 
 // Renders a print-ready report. `data` is gathered by the Reports page.
+/**
+ * @typedef {object} ReportOptions
+ * @property {boolean} [includeDrawings]
+ * @property {{office?: string, tagline?: string, address?: string, contact?: string}} [briefkopf]
+ * @property {string} [date] ISO
+ * @property {string} [period] free text (status report)
+ * @property {string} [occasion] (protocol)
+ * @property {string} [participants] comma-separated
+ * @property {{condition?: string, temperature?: number|string, wind?: string, [k: string]: any}} [weather]
+ * @property {any} [k] further per-type options
+ */
+/** @param {{docRef?: any, project: any, data: any, type: string, options?: ReportOptions}} props */
 export default function ReportDocument({ docRef, project, data, type, options = {} }) {
   const { t } = useI18n();
   if (!project) return null;

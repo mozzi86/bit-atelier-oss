@@ -9,7 +9,8 @@
 // „Review Testhaus" angelegt und am Ende wieder gelöscht (db.json ist nicht
 // git-getrackt, aber das Testprojekt soll sauber bleiben).
 
-import { test, expect, request } from "@playwright/test";
+import { request } from "@playwright/test";
+import { test, expect } from "./fixtures/base.js";
 
 const API = "http://localhost:3001/api/";
 const PROJEKT = "Review Testhaus";
@@ -57,6 +58,15 @@ async function positionOhneKg(api, projectId) {
   return (await res.json()).id;
 }
 
+// 87-01: a run that timed out never reached its finally — drop test positions of
+// earlier runs first, otherwise their chips make the count assertions fail.
+async function alteTestpositionenLoeschen(api) {
+  const alle = await (await api.get("entities/LVPosition")).json();
+  for (const p of Array.isArray(alle) ? alle : []) {
+    if (JSON.stringify(p).includes("(76-03 Test)")) await api.delete(`entities/LVPosition/${p.id}`);
+  }
+}
+
 async function aufraeumen(api, id) {
   if (id) await api.delete(`entities/LVPosition/${id}`);
 }
@@ -65,6 +75,7 @@ test.describe("76-03 Kostengruppen-Vorschlag (TypeSafe)", () => {
   test("Formular: KG vorschlagen füllt Select + Hinweis; Tabelle: Chip → Klick schreibt 391", async ({ page }) => {
     const api = await request.newContext({ baseURL: API });
     const projekt = await testprojekt(api);
+    await alteTestpositionenLoeschen(api);
     const posId = await positionOhneKg(api, projekt.id);
     const warnungen = [];
     page.on("console", (m) => {
@@ -83,8 +94,8 @@ test.describe("76-03 Kostengruppen-Vorschlag (TypeSafe)", () => {
       await page.getByRole("tab", { name: /Leistungsverzeichnis/ }).waitFor({ timeout: 30000 });
 
       // --- Formular ---------------------------------------------------------
-      // LVTable.jsx:143 — der Anlege-Knopf heißt schlicht „Position".
-      await page.getByRole("button", { name: /^\s*Position\s*$/ }).first().click();
+      // LVTable.jsx:165 — since 72-15 the button reads „Position anlegen" (87-01).
+      await page.getByRole("button", { name: /^\s*Position( anlegen)?\s*$/ }).first().click();
       const dialog = page.getByRole("dialog").or(page.locator("form").filter({ hasText: "DIN 276 Kostengruppe" })).first();
       await dialog.getByPlaceholder("Beton Bodenplatte C25/30").fill("Bauzaun");
       await dialog.getByPlaceholder("Stahlbeton Bodenplatte, d=40cm").fill("Bauzaun H 2m aufstellen");
@@ -130,6 +141,7 @@ test.describe("76-03 Kostengruppen-Vorschlag (TypeSafe)", () => {
   test("Server 503 (kein Schlüssel): Toast mit Klartext, nichts geschrieben, kein Chip", async ({ page }) => {
     const api = await request.newContext({ baseURL: API });
     const projekt = await testprojekt(api);
+    await alteTestpositionenLoeschen(api);
     const posId = await positionOhneKg(api, projekt.id);
     try {
       await netzBlocken(page, (route) =>

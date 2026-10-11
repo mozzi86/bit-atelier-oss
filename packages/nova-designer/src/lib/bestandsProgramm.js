@@ -46,7 +46,7 @@ export function dinGruppe(klassifikation) {
 /**
  * Raumprogramm aus einem BimSnapshot ableiten.
  *
- * @param {{elemente?: Array<object>}|null} snapshot Bauteilstand (BimSnapshot-Entität)
+ * @param {{elemente?: Array<object>, name?: string}|null} snapshot Bauteilstand (BimSnapshot-Entität)
  * @param {Array<object>} [asrRaeume] optionale Raumdatenblatt-Sätze; liefern über die
  *   GUID echte Raumnamen dazu (rein informativ — die Zuordnung entscheidet die DIN-Gruppe)
  * @returns {{items: Array<{use,area,count}>, gruppen: Array<object>,

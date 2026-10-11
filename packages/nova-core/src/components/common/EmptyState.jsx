@@ -6,6 +6,7 @@ import { Inbox } from "lucide-react";
  * Einheitlicher Leerzustand (DESIGN-SPEC): zentrierter Block, getöntes Icon-Feld,
  * freundlicher Text, optionale Aktion. Dark-fähig.
  */
+/** @param {{icon?: any, title: string, description?: React.ReactNode, action?: React.ReactNode, className?: string}} props */
 export default function EmptyState({ icon: Icon = Inbox, title, description, action, className = "" }) {
   return (
     <Card className={`border-0 shadow-sm ${className}`}>

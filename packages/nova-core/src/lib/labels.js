@@ -202,7 +202,7 @@ const DACH_CITIES = [
 
 /**
  * Klimazone aus dem Standort-Text ableiten (A-8).
- * @param {string|null|undefined} standort Project.location — Freitext
+ * @param {string|{address?: string, city?: string, country?: string}|null|undefined} standort Project.location — Freitext
  *   („Stadt, Land") oder Objekt mit address/city/country
  * @returns {string|null} Zonen-Key ("temperate" für DACH) oder null, wenn
  *   nichts erkannt wurde — das Feld bleibt dann leer (kein Ratespiel).

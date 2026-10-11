@@ -36,7 +36,9 @@ export default function Masskette({
 }) {
   const pxJeM = SCALE / (px(1) || 1); // screen px per metre
   const { teil, gesamt: ges } = kettenPaar({ punkte, offsetM, seite, pxJeM, schrift: schriftPx, format, gesamt });
-  if (!teil.texte.length) return null;
+  // No piece at all → nothing to draw. Zoomed out the part numbers may all be
+  // dropped (masskette.js `ausgelassen`) while slashes and the total stay.
+  if (teil.hilfslinien.length < 2) return null;
   const L = ({ a, b }, key, breite) => <line key={key} x1={X(a.x)} y1={Z(a.z)} x2={X(b.x)} y2={Z(b.z)} strokeWidth={breite} />;
   const kette = (g, prefix) => (
     <g key={prefix} data-kette={prefix}>
@@ -62,7 +64,7 @@ export default function Masskette({
     </g>
   );
   return (
-    <g data-testid={testid} data-masskette stroke={farbe} strokeLinecap="butt" style={{ pointerEvents: "none" }} {...daten}>
+    <g data-testid={testid} data-masskette data-ausgelassen={teil.ausgelassen || undefined} stroke={farbe} strokeLinecap="butt" style={{ pointerEvents: "none" }} {...daten}>
       {kette(teil, "teil")}
       {ges && kette(ges, "gesamt")}
     </g>

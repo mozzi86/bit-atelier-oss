@@ -22,6 +22,7 @@ import { num } from "./avaUtils";
 // nützlich, aber sie sind nicht dasselbe — und ein Muster, das nur „IfcWall +
 // NetSideArea" merkt, kann Trennwand 150 und Vorsatzschale 125 nicht
 // unterscheiden. Die Badge „Kurzform" sagt das, statt es zu verschweigen.
+/** @param {{muster?: any[], elemente?: any[], positionen?: any[], zielPositionId?: string|null, onAnwenden?: (...a: any[]) => any, onLoeschen?: (id: string) => any}} props */
 export default function MusterBibliothek({
   muster = [],
   elemente = [],

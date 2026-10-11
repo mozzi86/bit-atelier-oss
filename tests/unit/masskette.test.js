@@ -150,3 +150,33 @@ describe("masskette — Kollision und Gesamtkette", () => {
     assert.equal(ketteGeometrie({ punkte: null }).hilfslinien.length, 0);
   });
 });
+
+// Nutzer 07.10.2026 („bemaßung verliert sich … am ende … beim rauszoomen“): 70-m-Fassade
+// mit Fenstern 1,40 / Pfeilern 2,10, weit herausgezoomt — die Außenreihe lief als Fächer
+// weit über das Kettenende hinaus.
+describe("masskette — herausgezoomt: keine Außenreihe über das Kettenende hinaus", () => {
+  const punkte = [{ x: 0, z: 0 }];
+  for (let x = 0, i = 0; x < 70 - 1e-9; i += 1) { x = Math.min(70, x + (i % 2 ? 2.1 : 1.4)); punkte.push({ x: +x.toFixed(2), z: 0 }); }
+
+  it("bei 3 px/m fallen die nicht passenden Teilmaße weg; kein Text liegt hinter dem Kettenende", () => {
+    const k = ketteGeometrie({ punkte, offsetM: 0.7, seite: 1, pxJeM: 3, schrift: 9 });
+    assert.ok(k.ausgelassen > 0, "Teilmaße ausgelassen");
+    assert.equal(k.aussenReihe, false);
+    assert.ok(k.texte.every((t) => !t.aussen && !t.hinweis), "keine Leitlinien mehr");
+    assert.ok(k.texte.every((t) => t.x <= 70 + 1e-6), "kein Text hinter x = 70 m");
+    assert.equal(k.striche.length, punkte.length, "Schrägstriche bleiben");
+  });
+
+  it("die Gesamtkette (70,00) bleibt, auch wenn alle Teilmaße weggefallen sind", () => {
+    const { teil, gesamt } = kettenPaar({ punkte, offsetM: 0.7, seite: 1, pxJeM: 3, schrift: 9 });
+    assert.equal(teil.texte.length, 0);
+    assert.ok(gesamt, "Gesamtkette vorhanden");
+    assert.deepEqual(gesamt.texte.map((t) => t.text), ["70,00"]);
+  });
+
+  it("hineingezoomt (40 px/m) passen die Zahlen wieder — nichts ausgelassen", () => {
+    const k = ketteGeometrie({ punkte, offsetM: 0.7, seite: 1, pxJeM: 40, schrift: 9 });
+    assert.equal(k.ausgelassen, 0);
+    assert.equal(k.texte.length, punkte.length - 1);
+  });
+});

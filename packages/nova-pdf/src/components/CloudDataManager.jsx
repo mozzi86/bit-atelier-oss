@@ -25,6 +25,7 @@ import { dokumentAblegen, pfadText } from "@core/lib/ablage";
 // Ehrlichkeitsregel: Was (noch) nicht geht — Dateien hochladen — ist als
 // deaktivierter Knopf MIT Begründung sichtbar, nicht als Attrappe, die nichts tut.
 
+/** @param {{selectedProject?: any, projects?: any[]}} props `projects` is passed by BitAegis but unused here */
 export default function CloudDataManager({ selectedProject }) {
   const navigate = useNavigate();
   const projectId = selectedProject?.id || null;

@@ -14,7 +14,10 @@ import { isoSzeneAusModell } from "@designer/lib/isoKamera";
 
 const FP30 = [{ x: -15, z: -10 }, { x: 15, z: -10 }, { x: 15, z: 10 }, { x: -15, z: 10 }];
 const STD = WERKSTATT_TYPEN.filter((t) => t.gruppe === "standard").slice(0, 3);
-const basis = { footprintM: FP30, storeys: 2, typ: "mfh", einheiten: STD, raumzonen: true };
+// 84-07: MFH now always carries the stair core + ground-floor entrance hall, which
+// moves the units; the balcony geometry is typology-independent, so the corridor
+// typology without a core keeps the expected unit numbers (WE 0-1 / 0-4).
+const basis = { footprintM: FP30, storeys: 2, typ: "mittelflur", einheiten: STD, raumzonen: true };
 const mit = (balkon, regeln = {}) => tesseliere({ ...basis, regeln: { balkon, ...regeln } });
 const balkone = (r) => r.zonen.filter((z) => z.raumart === "balkon");
 const ext = (pts) => ({ x0: Math.min(...pts.map((p) => p.x)), x1: Math.max(...pts.map((p) => p.x)), z0: Math.min(...pts.map((p) => p.z)), z1: Math.max(...pts.map((p) => p.z)) });
@@ -23,11 +26,15 @@ const near = (a, b, eps = 1e-6) => Math.abs(a - b) < eps;
 describe("regeln.balkon — Geometrie (75-13 Task 3)", () => {
   const r = mit({ "st-1zi|Wohnen/Schlafen": true });
 
-  it("ein Balkon je Einheit des Typs und Geschoss (2 Einheiten × 2 Geschosse = 4), Zone raumart balkon mit we/level/raum", () => {
+  it("ein Balkon je Einheit des Typs und Geschoss, Zone raumart balkon mit we/level/raum", () => {
+    // 85 (Band füllen): the type repeats along the band — one balcony per unit of the
+    // type on every storey, whatever the count.
     const b = balkone(r);
-    assert.equal(b.length, 4);
-    assert.deepEqual(b.map((z) => z.we).sort(), ["WE 0-1", "WE 0-4", "WE 1-1", "WE 1-4"]);
-    assert.deepEqual(b.map((z) => z.level).sort(), [0, 0, 1, 1]);
+    const einheiten = r.weListe.filter((w) => w.typKey === "st-1zi");
+    assert.ok(einheiten.length >= 4, String(einheiten.length));
+    assert.equal(b.length, einheiten.length);
+    assert.deepEqual(b.map((z) => z.we).sort(), einheiten.map((w) => w.we).sort());
+    assert.equal(b.filter((z) => z.level === 0).length, b.filter((z) => z.level === 1).length);
     assert.ok(b.every((z) => z.art === "balkon" && z.fensterpflicht === false && /^Wohnen\/Schlafen/.test(z.raum)));
     assert.match(b[0].name, /^Balkon Wohnen\/Schlafen \(WE \d-\d\) ·WT$/);
   });

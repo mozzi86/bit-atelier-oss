@@ -131,8 +131,9 @@ export default function ModelCheck() {
 
   // --- Schritt 2: Regeln + IDS ----------------------------------------------
   const [regelAktiv, setRegelAktiv] = useState(() => STANDARD_REGELN.map(() => true));
-  const [toleranzMm, setToleranzMm] = useState(1); // Bagatellfilter in mm
-  const [clearanceMm, setClearanceMm] = useState(0); // 0 = kein Abstands-Check
+  // Both hold the raw input string while typing; Number() is applied when the run starts.
+  const [toleranzMm, setToleranzMm] = useState(/** @type {number|string} */ (1)); // Bagatellfilter in mm
+  const [clearanceMm, setClearanceMm] = useState(/** @type {number|string} */ (0)); // 0 = kein Abstands-Check
   const [duplikate, setDuplikate] = useState(true);
 
   const idsInputRef = useRef(null);
@@ -522,7 +523,7 @@ export default function ModelCheck() {
       const iter = clashPairsIter(elemente, optionen);
       let schritt = iter.next();
       while (!schritt.done) {
-        if (schritt.value?.typ === "fortschritt") setFortschritt(schritt.value);
+        if (schritt.value?.typ === "fortschritt") setFortschritt(/** @type {any} */ (schritt.value));
         // Yield an den Browser — UI (Fortschrittsbalken) bleibt responsiv.
         await new Promise((r) => setTimeout(r, 0));
         schritt = iter.next();

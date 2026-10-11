@@ -27,6 +27,8 @@ import WeatherPanel from "../components/site/WeatherPanel";
 import { useWeather } from "../components/site/useWeather";
 import { computeDispatch, AREA_POINTS } from "../components/site/dispatch";
 import BimTaskPanel from "../components/site/BimTaskPanel";
+// 90-09: Planner Excel import into this Gantt + large-format Gantt PDF.
+import PlannerGanttWerkzeuge from "../components/site/PlannerGanttWerkzeuge";
 import TelemetryPanel from "../components/site/TelemetryPanel";
 import AuditLogPanel from "../components/site/AuditLogPanel";
 import FourDFiveD from "../components/site/FourDFiveD";
@@ -402,6 +404,7 @@ export default function SiteControl() {
           </TabsContent>
 
           <TabsContent value="schedule" className="mt-4">
+            <PlannerGanttWerkzeuge tasks={tasks} projectId={projectId} project={project} onReload={loadTasks} />
             <GanttSchedule tasks={tasks} onAddTask={() => setShowTaskForm(true)} />
           </TabsContent>
 

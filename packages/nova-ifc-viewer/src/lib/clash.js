@@ -382,6 +382,7 @@ function sammleKandidaten(grid, sMin0, sMin1, sMin2, sMax0, sMax1, sMax2) {
 // 7) elementsIntersect — Broadphase (AABB + Bagatellfilter) -> Narrowphase (Tri/Tri)
 // ---------------------------------------------------------------------------
 
+/** @param {any} elA @param {any} elB @param {{tolerance?: number, gridA?: any, gridB?: any}} [o] tolerance in m */
 export function elementsIntersect(elA, elB, { tolerance = 0.001, gridA, gridB } = {}) {
   const boxA = elA && istAabb(elA.aabb) ? elA.aabb : aabbOf(elA && elA.tris);
   const boxB = elB && istAabb(elB.aabb) ? elB.aabb : aabbOf(elB && elB.tris);

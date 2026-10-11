@@ -72,7 +72,10 @@ export default function AtelierDeveloper() {
   const loadDashboardData = async () => {
     setIsLoading(true);
     try {
-      const projectsData = await Project.list('-updated_date', 10);
+      // B-87-12: list(sort) takes no limit (express, demo and supabase all ignored the
+      // old second argument). All projects are needed anyway: total_projects counts them,
+      // the list below shows the first five by updated_date.
+      const projectsData = await Project.list('-updated_date');
       setProjects(projectsData);
       
       // Calculate KPIs (mock data for now)

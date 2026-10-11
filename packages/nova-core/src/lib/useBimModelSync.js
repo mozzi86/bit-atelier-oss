@@ -22,6 +22,27 @@ import { useEffect, useRef } from "react";
 import { bitApi } from "@core/api/bitApi";
 import { buildingProgram, useBuildingProgram } from "@core/lib/useBuildingProgram";
 import { zonenNachLoad } from "@core/lib/zonenNachLoad";
+// 87-07: layer schema versions live at the ONE read/write path, so every hook
+// (useFachlayer, useSketchLayer, BcfIssues, IdsEditor, LieferpaketKarte) gets
+// migrated blobs on load and stamped blobs (v, updatedAt) on save without edits.
+import { LAYER_VERSION, migrateLayer, stempelFuerSave } from "@core/lib/fachlayerSchema";
+
+/**
+ * 87-07: migrate every registered layer field of a loaded record to its current
+ * schema version (see fachlayerSchema.js). Returns the same object when nothing changed.
+ * @param {any} m BimModel record or null
+ * @returns {any}
+ */
+export function migriereLayerDesDatensatzes(m) {
+  if (!m || typeof m !== "object") return m;
+  let out = m;
+  for (const feld of Object.keys(LAYER_VERSION)) {
+    if (m[feld] == null) continue;
+    const r = migrateLayer(feld, m[feld]);
+    if (r.migriert) out = out === m ? { ...m, [feld]: r.wert } : { ...out, [feld]: r.wert };
+  }
+  return out;
+}
 
 // Datensatz-Autorität je Projekt: { projectId, id, load } (load = laufendes/
 // erledigtes Laden als Promise, damit mehrere Leser EINEN Request teilen).
@@ -43,7 +64,7 @@ export function loadBimModel(projectId) {
     record.id = null;
     record.load = bitApi.entities.BimModel.filter({ project_id: projectId })
       .then((rows) => {
-        const m = (rows || [])[0] || null;
+        const m = migriereLayerDesDatensatzes((rows || [])[0] || null);
         if (record.projectId === projectId) record.id = m?.id || null;
         return m;
       })
@@ -67,7 +88,9 @@ export function saveBimModel(projectId, patch) {
     if (!projectId) return null;
     if (record.projectId !== projectId || (!record.id && !record.load)) await loadBimModel(projectId);
     else if (record.load) await record.load;
+    // 87-07: registered layer fields leave with their schema version and a time stamp.
     const data = { project_id: projectId, ...patch };
+    for (const feld of Object.keys(data)) if (LAYER_VERSION[feld] !== undefined) data[feld] = stempelFuerSave(feld, data[feld]);
     let ergebnis;
     if (record.id) {
       ergebnis = await bitApi.entities.BimModel.update(record.id, data);
@@ -104,6 +127,11 @@ export function useBimModelSync(projectId, opts = {}) {
   const bp = useBuildingProgram();
   const loadingRef = useRef(false);
   const lastLoaded = useRef("");
+  // 87-02: the project whose record was LOADED successfully. Until then the store only
+  // holds defaults — and the write-back below must never push those to the server
+  // (a transient load failure used to be followed, 1,5 s later, by a save of 4 storeys
+  // and a null footprint over the real geometry).
+  const geladenRef = useRef(null);
   // Predicate lives in a ref: callers pass an inline arrow, and a new identity
   // per render must not re-trigger the load effect.
   const behaltenRef = useRef(opts.zonenBehalten);
@@ -137,10 +165,16 @@ export function useBimModelSync(projectId, opts = {}) {
           }),
         };
         lastLoaded.current = JSON.stringify([patch.footprintM, patch.storeys, patch.storeyHeight, patch.unit]);
-        buildingProgram.set(patch);
+        geladenRef.current = projectId;
+        buildingProgram.set({ ...patch, syncFehler: null });
         letztesSyncProjekt = projectId;
-      } catch { /* offline: Store behält Defaults */ }
-      finally { setTimeout(() => { loadingRef.current = false; }, 50); }
+      } catch (err) {
+        // 87-02: offline / server away — the store keeps its defaults, the write-back
+        // stays locked (geladenRef) and the user gets to see why nothing is there.
+        geladenRef.current = null;
+        console.warn(`[bimModel] Laden fehlgeschlagen für Projekt ${projectId}: ${err?.message || err} — Geometrie wird nicht zurückgeschrieben`);
+        if (!cancelled) buildingProgram.set({ syncFehler: "laden" });
+      } finally { setTimeout(() => { loadingRef.current = false; }, 50); }
     })();
     return () => { cancelled = true; };
   }, [projectId]);
@@ -148,15 +182,30 @@ export function useBimModelSync(projectId, opts = {}) {
   // Programm-Felder debounced zurückschreiben (nur wenn wirklich geändert).
   // Elementfelder schreibt BitBimStudio über denselben saveBimModel-Pfad.
   useEffect(() => {
-    if (!projectId || loadingRef.current) return;
+    // 87-02: never before a successful load of THIS project (see geladenRef).
+    if (!projectId || loadingRef.current || geladenRef.current !== projectId) return;
     const sig = JSON.stringify([bp.footprintM, bp.storeys, bp.storeyHeight, bp.unit]);
     if (sig === lastLoaded.current) return;
+    let abgebrochen = false;
     const t = setTimeout(async () => {
-      try {
-        await saveBimModel(projectId, { footprintM: bp.footprintM, storeys: bp.storeys, storeyHeight: bp.storeyHeight, unit: bp.unit });
-        lastLoaded.current = sig;
-      } catch { /* nächster Versuch beim nächsten Change */ }
+      // 87-02: three attempts with backoff (0,5 / 1 / 1,5 s), then say so instead of
+      // waiting silently for the next change.
+      for (let versuch = 1; versuch <= 3 && !abgebrochen; versuch += 1) {
+        try {
+          await saveBimModel(projectId, { footprintM: bp.footprintM, storeys: bp.storeys, storeyHeight: bp.storeyHeight, unit: bp.unit });
+          lastLoaded.current = sig;
+          if (buildingProgram.get().syncFehler === "speichern") buildingProgram.set({ syncFehler: null });
+          return;
+        } catch (err) {
+          if (versuch === 3) {
+            console.warn(`[bimModel] Speichern fehlgeschlagen für Projekt ${projectId} (3 Versuche): ${err?.message || err}`);
+            if (!abgebrochen) buildingProgram.set({ syncFehler: "speichern" });
+          } else {
+            await new Promise((r) => setTimeout(r, 500 * versuch));
+          }
+        }
+      }
     }, 1500);
-    return () => clearTimeout(t);
+    return () => { abgebrochen = true; clearTimeout(t); };
   }, [projectId, bp.footprintM, bp.storeys, bp.storeyHeight, bp.unit]);
 }

@@ -1,0 +1,215 @@
+{
+  "stand": "2026-10-10",
+  "faelle": {
+    "rechteck_70x16|mittelflur": {
+      "hash": "908c238341696a87f897835eac93e927b5b8e1798d1e6893de08500fcbedfc35",
+      "we": 72,
+      "zonen": 476,
+      "riegel": 1
+    },
+    "rechteck_70x16|mfh": {
+      "hash": "d6997321b8bb856fc39ba5c18b0d9998b0f19d34216b83ef98a6e034bb3efd41",
+      "we": 64,
+      "zonen": 445,
+      "riegel": 1
+    },
+    "rechteck_70x16|laubengang": {
+      "hash": "5f01bd196189e71483662cb0a685de48171fe8b7c59273e111e13e4172369657",
+      "we": 44,
+      "zonen": 292,
+      "riegel": 1
+    },
+    "rechteck_70x16|spaenner": {
+      "hash": "45586f8223e68a4f7ab64d5ea8e7e81ccde8a9a59fa2cc905a191ef994b20e3f",
+      "we": 16,
+      "zonen": 144,
+      "riegel": 1
+    },
+    "rechteck_70x16|reihenhaus": {
+      "hash": "b016e6d433fb82e71bc10b3efa9b3164ce891696fe8900ea012840ccff203d2c",
+      "we": 11,
+      "zonen": 220,
+      "riegel": 1
+    },
+    "rechteck_40x16_gedreht_23|mittelflur": {
+      "hash": "7783050a0bfb3355a8cd7ff8d8348848d9ba704e38e8c48d6ceaf71b2aa54ca2",
+      "we": 40,
+      "zonen": 276,
+      "riegel": 1
+    },
+    "rechteck_40x16_gedreht_23|mfh": {
+      "hash": "a892e334bd58b964610eaad0ae6149661cb11ba8c6064aed9e1f3b11f99af6d9",
+      "we": 40,
+      "zonen": 260,
+      "riegel": 1
+    },
+    "rechteck_40x16_gedreht_23|laubengang": {
+      "hash": "da36dd761c4f490d0bdeb491d0ef377ec2f1d86f7971795baf1b97ef93df42be",
+      "we": 24,
+      "zonen": 164,
+      "riegel": 1
+    },
+    "rechteck_40x16_gedreht_23|spaenner": {
+      "hash": "b29262521a630bdbdbd24c99b50d7345f0f0c7d4ec50ec2dc90c847893e9e616",
+      "we": 16,
+      "zonen": 144,
+      "riegel": 1
+    },
+    "rechteck_40x16_gedreht_23|reihenhaus": {
+      "hash": "817885f1f293bdc9c2b730639b3a909208b0db18dc03497a2fde08cb0ab9a287",
+      "we": 6,
+      "zonen": 120,
+      "riegel": 1
+    },
+    "L|mittelflur": {
+      "hash": "9789a326f3b1177a59a8313ee17bdfb75b6e521f87f8c21fc906005d3e9da51c",
+      "we": 72,
+      "zonen": 472,
+      "riegel": 2
+    },
+    "L|mfh": {
+      "hash": "8e947cab5b526bdb375d1979cf076fc2159d11c17b742c6473787b294efb1bcb",
+      "we": 77,
+      "zonen": 480,
+      "riegel": 2
+    },
+    "L|laubengang": {
+      "hash": "2b0422fb3aece75a03643576ad835e41f930fbed522a4f3a03b43a8822491364",
+      "we": 44,
+      "zonen": 276,
+      "riegel": 2
+    },
+    "L|spaenner": {
+      "hash": "321568ad72fe7ab20c80be8364736c9503aeacd7b85571dfb4bbf25ac92f2b2d",
+      "we": 32,
+      "zonen": 284,
+      "riegel": 2
+    },
+    "L|reihenhaus": {
+      "hash": "1b4c97eb3876b0b22f36c86f649a7fd32d4ef8a6abca157762ae72a92c3ea591",
+      "we": 12,
+      "zonen": 241,
+      "riegel": 2
+    },
+    "L_lang|mittelflur": {
+      "hash": "c7ba3b064a2a7f549dbad285c4a2ead5fad3dd980d916d9ac163a2c1c4ff1454",
+      "we": 104,
+      "zonen": 656,
+      "riegel": 2
+    },
+    "L_lang|mfh": {
+      "hash": "7b924e3c280f4ce5282a4c89c2abec91168e39d8e808c75a3e3c0e9fc55fdc9d",
+      "we": 93,
+      "zonen": 629,
+      "riegel": 2
+    },
+    "L_lang|laubengang": {
+      "hash": "bdde6a3fa0a2f31ced9c9f6550e27c1c055f2e86fb0b369a66a29b9ba37e85ed",
+      "we": 64,
+      "zonen": 400,
+      "riegel": 2
+    },
+    "L_lang|spaenner": {
+      "hash": "b0a05b1ee4773a182703966cb63413cc220e4edede0ac964a8cd76a9fa598bcd",
+      "we": 32,
+      "zonen": 288,
+      "riegel": 2
+    },
+    "L_lang|reihenhaus": {
+      "hash": "3057fb3565e38f16ce2728cdccf6b086a5c6f4229993b7402abdaff4b3f73d30",
+      "we": 17,
+      "zonen": 341,
+      "riegel": 2
+    },
+    "U|mittelflur": {
+      "hash": "649f1ba1027e4dcead205b317f7e66ab1cb274874c45e1fc0eda2fe03abf7007",
+      "we": 112,
+      "zonen": 724,
+      "riegel": 3
+    },
+    "U|mfh": {
+      "hash": "6513f40fe281fe80246cbb689b55004284930c5a55c896b84bca9c91e15876dc",
+      "we": 119,
+      "zonen": 729,
+      "riegel": 3
+    },
+    "U|laubengang": {
+      "hash": "ab1c56d3a2b63474463ac861deda8b5763cd4fe898d47eb4f8a9b313452a26e2",
+      "we": 68,
+      "zonen": 432,
+      "riegel": 3
+    },
+    "U|spaenner": {
+      "hash": "88982e84989943f2acb6781b21ebcb6763f39c95f9b18965d063205a5a03dcac",
+      "we": 48,
+      "zonen": 424,
+      "riegel": 3
+    },
+    "U|reihenhaus": {
+      "hash": "a3b2d1c8fcc2f49c5b4b1cc451b4b3626ec52cf54e4cfd8fac0546587dfd3212",
+      "we": 18,
+      "zonen": 362,
+      "riegel": 3
+    },
+    "fuenfeck|mittelflur": {
+      "hash": "a368c9fb638fd84306f2ed956cf9a6fae4c8bf5001ba4e3249b37d3fe062e060",
+      "we": 80,
+      "zonen": 512,
+      "riegel": 4
+    },
+    "fuenfeck|mfh": {
+      "hash": "ffd97ce61216c80c40aa8ed5b403fc71d08213984c81755d2b95b2748c8282df",
+      "we": 69,
+      "zonen": 441,
+      "riegel": 4
+    },
+    "fuenfeck|laubengang": {
+      "hash": "5ac2821188d6091694b86814a7e6963bb29bb48e9486b9ae347473d7e796775e",
+      "we": 52,
+      "zonen": 316,
+      "riegel": 4
+    },
+    "fuenfeck|spaenner": {
+      "hash": "db03f9962a57ca4e264b3708af21665b9bcb9b8b2f3e1ab3c81a2b13d2a11759",
+      "we": 64,
+      "zonen": 424,
+      "riegel": 4
+    },
+    "fuenfeck|reihenhaus": {
+      "hash": "52168c52092b0245f1650e1c30be2d23b92b7a3318ebcf55db80848642b6abce",
+      "we": 13,
+      "zonen": 261,
+      "riegel": 4
+    },
+    "trapez|mittelflur": {
+      "hash": "2a3a4bbdb25f78c75a3e921457ddd6b42d8448a907711f74e6e5c16329e436c6",
+      "we": 48,
+      "zonen": 316,
+      "riegel": 1
+    },
+    "trapez|mfh": {
+      "hash": "584a18fdb561aae52523c3714d2d1d8a6b516b7efd68240ad2e39c9d1f4c7c84",
+      "we": 43,
+      "zonen": 295,
+      "riegel": 1
+    },
+    "trapez|laubengang": {
+      "hash": "1f67ba9b11b9f9cacefa4b38113da5b14720ecbd404bd4e1a597fb2531dc7d36",
+      "we": 32,
+      "zonen": 196,
+      "riegel": 1
+    },
+    "trapez|spaenner": {
+      "hash": "cbd9b3e75bcdff733d8c618953a0f62dae48d08048e15e9240d38ce7159199bc",
+      "we": 16,
+      "zonen": 143,
+      "riegel": 1
+    },
+    "trapez|reihenhaus": {
+      "hash": "3f0f4463448771b21284a3ddc181af61c6d2fc2efacff2bc70c90bd99cbf6028",
+      "we": 8,
+      "zonen": 160,
+      "riegel": 1
+    }
+  }
+}

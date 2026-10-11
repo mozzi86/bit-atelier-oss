@@ -204,6 +204,7 @@ export function uWerteDach({ dmin_m = DMIN_DEFAULT_M, dmax_m = DMIN_DEFAULT_M, a
  * @returns {Array<{key:string,label:string,status:"pass"|"warn"|"offen",detail:string}>}
  */
 export function gefaelleChecks(plan, { dachform = "flach", nNot = 0 } = {}) {
+  /** @type {Array<{key: string, label: string, status: "offen"|"warn"|"pass", detail: string}>} */
   const items = [];
   if (dachform !== "flach") {
     items.push({ key: "dachform", label: "Dachform", status: "offen", detail: `Dachform „${dachform}“ — die Gefälledämmung gilt für Flachdächer` });

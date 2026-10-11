@@ -1,0 +1,51 @@
+# Gates auf jedem Push und Pull Request (Plan 87-03).
+#
+# Bis hierhin liefen Lint, Unit-Tests, Build und Typecheck nur auf dem Rechner des
+# Owners bzw. in den Nacht-Agenten — „Gates grün“ war ein Selbstbericht. Dieser
+# Workflow macht die vier Gates aus CLAUDE.md („Definition of Done“) zu einem
+# Status, den jeder Commit auf GitHub bekommt. Die Sperrliste (keine echten
+# Projekt-/Kundennamen, tests/unit/projektneutral.test.js) läuft als Teil der
+# Unit-Tests über die Hash-Datei im Repo — die Klartextliste wird nicht gebraucht.
+#
+# E2E (Playwright, ~8 min seriell) läuft getrennt und nachts: .github/workflows/e2e.yml.
+name: Gates
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: Lint · Unit · Build · tsc-Baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Abhängigkeiten
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit-Tests (inkl. Sperrliste und i18n-Abdeckung)
+        run: npm run test:unit
+
+      - name: Build
+        run: |
+          npx vite build > build.log 2>&1; EXIT=$?
+          tail -n 30 build.log
+          exit $EXIT
+
+      - name: tsc-Baseline (Fehlerzahl darf nicht steigen)
+        run: node scripts/tsc-baseline.mjs --je-datei

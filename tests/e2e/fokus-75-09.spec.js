@@ -21,7 +21,7 @@
 // NIE "Entwurf speichern" klicken (Review Testhaus hat keinen BuildingComplex-
 // Datensatz, ComplexDesigner.jsx braucht Name + Standort).
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, schalteRegel } from "./fixtures/massing.js";
 
 const SEITE_WERKSTATT = "/ComplexDesigner?projekt=Review%20Testhaus&tab=werkstatt";
@@ -280,7 +280,9 @@ test.describe("75-09 Wohnung 1:50 im WohnungsFokus", () => {
     await page.locator('button:has([data-katalog-typ="tuer_885"])').first().dispatchEvent("click");
     await page.waitForTimeout(400);
     await expect(ebene.locator("[data-tuer]")).toHaveCount(1);
-    await expect(page.locator("[data-tuer-bogen]")).toHaveCount(1);
+    // 84-01: the plan doors (75-14, now always on) also draw swing arcs — count only
+    // the furniture layer's door here.
+    await expect(ebene.locator("[data-tuer-bogen]")).toHaveCount(1);
     const tuerAttrs = await ebene.locator("[data-tuer]").first().evaluate((e) => ({
       tuer: e.getAttribute("data-tuer"), lichte: e.getAttribute("data-lichte"),
     }));

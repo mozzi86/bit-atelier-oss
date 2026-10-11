@@ -127,6 +127,21 @@ async function openWithPdfjs(bytes) {
   }
 }
 
+/**
+ * pdfjs-Dokument freigeben. Seit pdfjs-dist 6 hat PDFDocumentProxy kein destroy() mehr —
+ * freigegeben wird über den Ladeauftrag (loadingTask.destroy()). Der alte Aufruf
+ * pdf.destroy() warf „pdf.destroy is not a function“ und brach „PDF komprimieren“ und
+ * „PDF zu Bildern“ nach dem Rendern ab (gefunden in 90-01). Fehler beim Freigeben sind
+ * unkritisch (Ergebnis liegt schon vor) und werden nicht weitergereicht.
+ * @param {any} pdf PDFDocumentProxy
+ */
+function schliessePdfjs(pdf) {
+  try {
+    if (pdf?.loadingTask && typeof pdf.loadingTask.destroy === "function") pdf.loadingTask.destroy();
+    else if (typeof pdf?.destroy === "function") pdf.destroy();
+  } catch { /* release only — the result is already computed */ }
+}
+
 /** Seitenanzahl eines PDFs (für Range-Validierung in der UI). */
 export async function getPageCount(bytes) {
   const doc = await loadPdf(bytes);
@@ -233,7 +248,11 @@ export async function addPageNumbers(
   return doc.save();
 }
 
-/** Text-Wasserzeichen auf jede Seite — standardmäßig diagonal (45 Grad) und mittig. */
+/**
+ * Text-Wasserzeichen auf jede Seite — standardmäßig diagonal (45 Grad) und mittig.
+ * @param {Uint8Array} bytes
+ * @param {{text?: string, opacity?: number, fontSize?: number, color?: any, diagonal?: boolean}} [o]
+ */
 export async function addWatermark(
   bytes,
   { text, opacity = 0.15, fontSize = 60, color = rgb(0.6, 0.6, 0.6), diagonal = true } = {}
@@ -267,6 +286,7 @@ export async function addWatermark(
 }
 
 /** Dokument-Metadaten setzen. keywords: String ("a, b") oder Array. */
+/** @param {Uint8Array} bytes @param {{title?: string, author?: string, subject?: string, keywords?: string|string[]}} [meta] */
 export async function setPdfMetadata(bytes, { title, author, subject, keywords } = {}) {
   const doc = await loadPdf(bytes);
   if (title != null) doc.setTitle(title);
@@ -330,6 +350,8 @@ export async function imagesToPdf(files) {
 /**
  * PDF → PNG-data-URLs (eine je Seite). scale 2 = ca. 144 dpi.
  * onProgress(seite, gesamt) wird vor jeder Seite aufgerufen.
+ * @param {Uint8Array} bytes
+ * @param {{scale?: number, onProgress?: (seite: number, gesamt: number) => void}} [o]
  */
 export async function pdfToImages(bytes, { scale = 2, onProgress } = {}) {
   const pdf = await openWithPdfjs(bytes);
@@ -350,7 +372,7 @@ export async function pdfToImages(bytes, { scale = 2, onProgress } = {}) {
     }
     return out;
   } finally {
-    pdf.destroy();
+    schliessePdfjs(pdf);
   }
 }
 
@@ -361,6 +383,8 @@ export async function pdfToImages(bytes, { scale = 2, onProgress } = {}) {
  * EHRLICHER HINWEIS: Das rastert das Dokument neu — Text ist danach nicht mehr
  * selektier- oder durchsuchbar. Bei text-lastigen PDFs kann die Datei sogar
  * größer werden; der Gewinn entsteht vor allem bei scan-/bildlastigen PDFs.
+ * @param {Uint8Array} bytes
+ * @param {{quality?: number, scale?: number, onProgress?: (seite: number, gesamt: number) => void}} [o]
  */
 export async function compressPdf(bytes, { quality = 0.6, scale = 1.3, onProgress } = {}) {
   const pdf = await openWithPdfjs(bytes);
@@ -384,7 +408,7 @@ export async function compressPdf(bytes, { quality = 0.6, scale = 1.3, onProgres
     }
     return out.save();
   } finally {
-    pdf.destroy();
+    schliessePdfjs(pdf);
   }
 }
 

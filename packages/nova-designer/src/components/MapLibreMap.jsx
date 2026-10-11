@@ -41,7 +41,24 @@ export function whenLayersReady(map, fn) {
   return () => map.off("bit:layers-ready", fn);
 }
 
+/**
+ * @typedef {object} MapLibreMapProps
+ * @property {{lat: number, lng: number}} center map centre, WGS84 — required
+ * @property {number} [zoom]
+ * @property {"normal"|"satellite"|string} [styleKey]
+ * @property {number} [pitch] degrees
+ * @property {number} [bearing] degrees
+ * @property {boolean} [interactive]
+ * @property {boolean} [navControl]
+ * @property {boolean} [marker]
+ * @property {boolean} [markerDraggable]
+ * @property {(lat: number, lng: number) => void} [onPick]
+ * @property {(map: any) => void} [onLayersReady]
+ * @property {boolean} [baseLayers]
+ * @property {string} [className]
+ */
 const MapLibreMap = forwardRef(function MapLibreMap(
+  /** @type {MapLibreMapProps} */
   {
     center, // {lat, lng} — Pflicht; Änderungen folgen per easeTo (kein Remount)
     zoom = 14,
@@ -114,9 +131,9 @@ const MapLibreMap = forwardRef(function MapLibreMap(
     map.on("error", (e) => {
       if (fallbackTriedRef.current) return;
       const msg = String(e?.error?.message || "");
-      if (!map.isStyleLoaded() && (msg.includes("style") || e?.sourceId == null)) {
+      if (!map.isStyleLoaded() && (msg.includes("style") || /** @type {any} */ (e)?.sourceId == null)) {
         fallbackTriedRef.current = true;
-        map.setStyle(OSM_RASTER_FALLBACK);
+        map.setStyle(/** @type {any} */ (OSM_RASTER_FALLBACK));
       }
     });
 

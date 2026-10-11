@@ -1,7 +1,15 @@
 import * as React from "react";
 import { cn } from "@core/lib/utils";
 
-const Textarea = React.forwardRef(({ className, ...props }, ref) => {
+/**
+ * @type {React.ForwardRefExoticComponent<React.TextareaHTMLAttributes<HTMLTextAreaElement> & React.RefAttributes<HTMLTextAreaElement>>}
+ */
+const Textarea = React.forwardRef(
+  /**
+   * @param {React.TextareaHTMLAttributes<HTMLTextAreaElement>} props
+   * @param {React.ForwardedRef<HTMLTextAreaElement>} ref
+   */
+  ({ className, ...props }, ref) => {
   return (
     <textarea
       className={cn(

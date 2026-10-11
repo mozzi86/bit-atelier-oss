@@ -41,6 +41,7 @@ const CONSTRAINT_LABELS = {
  *   (debounced + Unmount-Flush). Der projektbewusste Host ist
  *   PlanSketchStudio (@designer) mit useSketchLayer → BimModel-Feld.
  */
+/** @param {{initialJson?: any, onPersist?: (json: any) => void}} props */
 export default function SketchStudio({ initialJson, onPersist }) {
   const { t } = useI18n();
   const sketchRef = useRef(null);

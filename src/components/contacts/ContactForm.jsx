@@ -8,17 +8,23 @@ import { Textarea } from "@core/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@core/components/ui/select";
 import { Save } from "lucide-react";
 import { CATEGORY_LABELS, labelFor } from "./labels";
+import { useI18n } from "@core/lib/i18n";
 
 // Rohwerte der Kategorie (DB-Werte) — Anzeige läuft über CATEGORY_LABELS.
 const CATEGORIES = ["client", "engineer", "consultant", "manufacturer", "contractor", "internal"];
 
 export default function ContactForm({ contact, onSubmit, onCancel }) {
+  const { t } = useI18n();
   const [formData, setFormData] = useState(contact || {
     name: "",
     role: "",
     company: "",
     email: "",
     phone: "",
+    // Postal address (optional; read by the participant list 90-07 and the VHB form filler 90-06).
+    address: "",
+    zip: "",
+    city: "",
     category: "client",
     notes: ""
   });
@@ -64,6 +70,20 @@ export default function ContactForm({ contact, onSubmit, onCancel }) {
               <div className="space-y-1">
                 <Label htmlFor="phone">Telefon</Label>
                 <Input id="phone" value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} />
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <Label htmlFor="address">{t("Straße und Hausnummer")}</Label>
+                <Input id="address" value={formData.address || ""} onChange={(e) => handleChange('address', e.target.value)} autoComplete="street-address" />
+              </div>
+              <div className="grid grid-cols-3 gap-2 md:col-span-2">
+                <div className="space-y-1">
+                  <Label htmlFor="zip">{t("PLZ")}</Label>
+                  <Input id="zip" value={formData.zip || ""} onChange={(e) => handleChange('zip', e.target.value)} autoComplete="postal-code" inputMode="numeric" />
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <Label htmlFor="city">{t("Ort")}</Label>
+                  <Input id="city" value={formData.city || ""} onChange={(e) => handleChange('city', e.target.value)} autoComplete="address-level2" />
+                </div>
               </div>
               <div className="space-y-1">
                 <Label>Kategorie</Label>

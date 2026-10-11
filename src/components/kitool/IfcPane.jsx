@@ -23,7 +23,7 @@ const fmtBytes = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 
  */
 export default function IfcPane({ pfad, onClose }) {
   const { t } = useI18n();
-  const [info, setInfo] = useState({ zustand: 'prüfe' });
+  const [info, setInfo] = useState(/** @type {{zustand: string, text?: string, bytes?: number}} */ ({ zustand: 'prüfe' }));
   const [kopiert, setKopiert] = useState(false);
   const url = fileUrl(pfad);
   const viewerZiel = `${createPageUrl('IfcViewer')}?url=${encodeURIComponent(url)}`;

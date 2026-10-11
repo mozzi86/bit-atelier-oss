@@ -174,11 +174,11 @@ export function pruefePaar(position, fremd, basisEp, schwellen, einheitenKatalog
 /**
  * Die Ernte über ein ganzes Fremd-LV → Preisschichten + Bilanz.
  *
- * @param {{positionen: Array<object>, fremd: Object<string, object>,
+ * @param {{positionen?: Array<object>, fremd?: Object<string, object>,
  *          basis?: Object<string, {ep?: number}>, uebernahmeKatalog?: Array<object>,
  *          einheitenKatalog?: Array<object>, projekt_nr?: string,
  *          quelle?: string, stand?: string|null,
- *          schluessel?: (p: object) => string}} q
+ *          schluessel?: (p: object) => string}} [q]
  * @returns {{schichten: Array<object>, bilanz: object, zeilen: Array<object>,
  *            warnungen: Array<string>}}
  */

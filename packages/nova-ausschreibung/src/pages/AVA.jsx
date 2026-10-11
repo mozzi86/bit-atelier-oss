@@ -86,7 +86,7 @@ export default function AVA() {
   const [snapshots, setSnapshots] = useState([]);
   // Büroweite Kataloge in EINEM Request (GET /api/catalogs). Das dreistellige DIN 276
   // kommt daraus — nicht aus einer Konstante im Code, sonst ist es nicht pflegbar.
-  const [kataloge, setKataloge] = useState({});
+  const [kataloge, setKataloge] = useState(/** @type {Record<string, any[]>} */ ({}));
   const [selectedTenderId, setSelectedTenderId] = useState(null);
   // Active tab lives in ?tab= behind the hash: a switch pushes a history entry
   // (Back returns to the previous tab), reload keeps it, ?projekt stays untouched.
@@ -383,6 +383,7 @@ export default function AVA() {
   }, [preisSchichten]);
 
   const indexReihen = useMemo(() => {
+    /** @type {Record<string, any>} */
     const out = {};
     for (const r of kataloge.Preisindexreihe || []) out[r.id ?? r.reihe] = r;
     return out;
@@ -612,6 +613,12 @@ export default function AVA() {
     toast.success("Angebot erfasst");
     reload(projectId);
   };
+  // 90-04: store the Prüfvermerk (bid.pruefung) — additive field, nothing else of the bid changes.
+  const updateBid = async (id, data) => {
+    await bitApi.entities.Bid.update(id, data);
+    toast.success("Angebot aktualisiert");
+    reload(projectId);
+  };
   const award = async (tender, bid) => {
     const tBids = bids.filter((b) => b.tender_id === tender.id);
     await Promise.all([
@@ -688,6 +695,7 @@ export default function AVA() {
     return res.lauf;
   }, [regelnJePosition, elements, aktiverSnapshot, kataloge, projectId]);
 
+  /** @param {object} regel @param {{snapshotId?: string}} [opt] */
   const speichereRegel = async (regel, { snapshotId } = {}) => {
     if (!regelPosition) return;
     try {
@@ -985,7 +993,8 @@ export default function AVA() {
           <TabsContent value="prices" className="pt-4">
             <PriceComparison
               tender={selectedTender} positions={positions} bids={bids} contacts={contacts}
-              onCreateBid={createBid} onAward={award} priceRefs={priceRefs}
+              onCreateBid={createBid} onUpdateBid={updateBid} onAward={award} priceRefs={priceRefs}
+              projekt={project} onUpdateTender={updateTender}
             />
             <div className="mt-4">
               <PriceReferencePanel priceRefs={priceRefs} onSyncTed={syncTed} onImportDoee={importDoee} />

@@ -8,6 +8,7 @@ const STROKE = "#334155";
 const THIN = "#94a3b8";
 const DIM = "#64748b";
 
+/** @param {{x1: number, y1: number, x2: number, y2: number, label: string, vertical?: boolean}} props */
 function DimLine({ x1, y1, x2, y2, label, vertical }) {
   return (
     <g>

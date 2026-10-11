@@ -53,7 +53,16 @@ import {
   CheckCircle2,
   FileText,
   Play,
+  LayoutTemplate,
+  Lock,
 } from "lucide-react";
+// 90-02: "PDF unveränderbar" — flatten (pure lib) or image PDF (compressPdf raster path).
+import UnveraenderbarOptionen from "./UnveraenderbarOptionen";
+import { formularAbflachen } from "@pdf/lib/unveraenderbar";
+// 90-01: title block tool (Plankopf) — options form + pure drawing lib.
+import PlankopfOptionen, { plankopfStart, plankopfZeilenFuer } from "./PlankopfOptionen";
+import { plankopfAufPdf, PLANKOPF_MASSE } from "@pdf/lib/plankopf";
+import { useBriefkopf } from "@core/lib/useBriefkopf";
 import {
   dataUrlToBytes,
   bytesToDataUrl,
@@ -105,10 +114,12 @@ const TOOLS = [
   // Kategorie: Optimieren (violet)
   { key: "compress", title: "PDF komprimieren", desc: "Dateigröße durch Neu-Rasterung reduzieren", icon: FileArchive, color: "violet", action: "Komprimieren" },
   // Kategorie: Prüfen & Anmerken (amber)
+  { key: "unveraenderbar", title: "PDF unveränderbar", desc: "Formular abflachen oder als Bild-PDF — Inhalt und Layout bleiben 1:1, bearbeiten geht nicht mehr", icon: Lock, color: "violet", action: "Unveränderbar machen" },
+  { key: "plankopf", title: "Plankopf setzen", desc: "Plankopf oder neutralen Anlagen-Plankopf (LV/Ausschreibung) unten rechts setzen", icon: LayoutTemplate, color: "amber", action: "Plankopf setzen" },
   { key: "annotate", title: "Kommentieren & Anmerken", desc: "PDF im Studio markieren und kommentieren", icon: PenLine, color: "amber", action: "Im Studio öffnen" },
 ];
 
-const SINGLE_SOURCE_TOOLS = ["split", "extract", "remove", "rotate", "pagenumbers", "watermark", "metadata", "pdf2img", "compress"];
+const SINGLE_SOURCE_TOOLS = ["split", "extract", "remove", "rotate", "pagenumbers", "watermark", "metadata", "pdf2img", "compress", "plankopf", "unveraenderbar"];
 
 const isPdfDoc = (d) => d && (d.mime === "application/pdf" || /\.pdf$/i.test(d.name || ""));
 const stem = (name) => String(name || "Dokument").replace(/\.pdf$/i, "");
@@ -166,6 +177,9 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
   const [wmOpacity, setWmOpacity] = useState(15); // Prozent
   const [meta, setMeta] = useState({ title: "", author: "", subject: "", keywords: "" });
   const [quality, setQuality] = useState(60); // Prozent
+  const [plankopf, setPlankopf] = useState(plankopfStart); // 90-01
+  const [puModus, setPuModus] = useState(/** @type {"abflachen"|"rastern"} */ ("abflachen")); // 90-02
+  const { briefkopf } = useBriefkopf();
 
   // Ablauf
   const [busy, setBusy] = useState(false);
@@ -325,6 +339,35 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
           out = [{ name: `${srcStem}_komprimiert.pdf`, mime: "application/pdf", bytes }];
           break;
         }
+        case "unveraenderbar": {
+          // 90-02: flatten = pdf-lib (text stays searchable); rastern = every page an image through the
+          // existing compressPdf path at scale 2 (≈ 144 dpi) and JPEG 92 % [ASSUMED] — 1:1 look.
+          const b = getSourceBytes(source);
+          const bytes = puModus === "rastern"
+            ? await compressPdf(b, { quality: 0.92, scale: 2, onProgress })
+            : (await formularAbflachen(b)).bytes;
+          out = [{ name: `${srcStem}_unveraenderbar.pdf`, mime: "application/pdf", bytes }];
+          break;
+        }
+        case "plankopf": {
+          // 90-01: rows from project + office profile (neutral: no office data at all).
+          const b = getSourceBytes(source);
+          const seiten = plankopf.seiten.trim() ? parsePageRanges(plankopf.seiten, await getPageCount(b)) : null;
+          const r = await plankopfAufPdf(b, {
+            zeilen: plankopfZeilenFuer(project, briefkopf, plankopf),
+            seiten,
+            neutral: plankopf.neutral,
+            ...(plankopf.neutral ? { abdecken: { w_mm: PLANKOPF_MASSE.breite_mm + PLANKOPF_MASSE.rand_mm, h_mm: plankopf.abdeckH_mm } } : {}),
+          });
+          // The white cover only hides the old block; its text stays in the content stream. A neutral
+          // attachment must not carry the office's name → re-raster (existing compressPdf path,
+          // scale 2 ≈ 144 dpi, JPEG 92 % [ASSUMED]).
+          const fertig = plankopf.neutral && plankopf.rastern !== false
+            ? await compressPdf(r.bytes, { quality: 0.92, scale: 2, onProgress })
+            : r.bytes;
+          out = [{ name: `${srcStem}_${plankopf.neutral ? "Anlage" : "Plankopf"}.pdf`, mime: "application/pdf", bytes: fertig }];
+          break;
+        }
         default:
           throw new Error("Unbekanntes Werkzeug.");
       }
@@ -374,6 +417,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
 
   const resultSize = (r) => (r.bytes ? r.bytes.length : Math.round((r.dataUrl.length * 3) / 4));
 
+  /** @param {{accept?: string, multiple?: boolean, onChange?: (e: any) => void, label: string}} props */
   const UploadButton = ({ accept, multiple, onChange, label }) => (
     <label className="inline-flex">
       <input type="file" accept={accept} multiple={multiple} className="hidden" onChange={onChange} />
@@ -589,6 +633,28 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
             <Input value={wmText} onChange={(e) => { setWmText(e.target.value); resetOutput(); }} placeholder="z. B. ENTWURF" />
           </div>
           {sliderRow("Deckkraft", wmOpacity, setWmOpacity, 5, 60, " %")}
+        </div>
+      );
+      break;
+
+    case "unveraenderbar":
+      runDisabled = busy || !source;
+      body = (
+        <div className="space-y-3">
+          {singleSourcePicker}
+          <UnveraenderbarOptionen ladeBytes={() => (source ? getSourceBytes(source) : null)}
+            quelleKey={source ? (source.kind === "doc" ? `doc:${source.doc.id}` : `up:${source.name}:${source.bytes.length}`) : ""}
+            modus={puModus} onModus={(m) => { setPuModus(m); resetOutput(); }} />
+        </div>
+      );
+      break;
+
+    case "plankopf":
+      runDisabled = busy || !source;
+      body = (
+        <div className="space-y-3">
+          {singleSourcePicker}
+          <PlankopfOptionen project={project} wert={plankopf} onChange={(w) => { setPlankopf(w); resetOutput(); }} />
         </div>
       );
       break;

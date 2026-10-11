@@ -79,7 +79,7 @@ export { xmlEntschaerfen, xmlDurchlaufen } from '@core/lib/xmlMini';
  * @param {Uint8Array|ArrayBuffer} daten
  * @param {{maxEntpackt?: number, mitFormeln?: boolean}} opt
  * @returns {{blaetter: Array, blattNamen: string[], definedNames: Object,
- *            dxfs: Array, sharedStrings: string[], warnungen: string[]}}
+ *            dxfs: Array, sharedStrings: string[], warnungen: string[], dateien: string[]}}
  */
 export function leseArbeitsmappe(daten, { maxEntpackt = MAX_ENTPACKT } = {}) {
   const bytes = alsBytes(daten);
@@ -298,7 +298,7 @@ export const KA2020_PROFIL = Object.freeze({
  *
  * @param {Uint8Array|ArrayBuffer} daten Rohbytes der XLSX
  * @param {object} profil Import-Profil (Default `KA2020_PROFIL`)
- * @param {{gewerk_nr?: string|null}} opt
+ * @param {{gewerk_nr?: string|null, maxEntpackt?: number}} [opt]
  * @returns {{summe: number|null, positionen: Object, gelesen: number,
  *            uebersprungen: number, warnungen: string[], profil: object}}
  */

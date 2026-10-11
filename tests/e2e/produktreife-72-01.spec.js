@@ -16,7 +16,8 @@
 // initialisiert und der Klick-Handler sich anmeldet. „Entwurf speichern" wird
 // NICHT geklickt; db.json bleibt ab dem Hash-Startpunkt unverändert.
 
-import { test, expect, request } from "@playwright/test";
+import { request } from "@playwright/test";
+import { test, expect } from "./fixtures/base.js";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";

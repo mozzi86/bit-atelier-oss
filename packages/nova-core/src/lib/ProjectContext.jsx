@@ -25,7 +25,7 @@ function readUrlProjectParam() {
 // URL ohne Navigation aktualisieren; leere Id entfernt den Param.
 function writeUrlProjectParam(id) {
   try {
-    const u = new URL(window.location);
+    const u = new URL(/** @type {any} */ (window.location));
     if (id) u.searchParams.set(URL_PARAM, id);
     else u.searchParams.delete(URL_PARAM);
     window.history.replaceState({}, "", u);

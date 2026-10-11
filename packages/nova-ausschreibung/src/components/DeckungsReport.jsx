@@ -18,7 +18,7 @@ import { num } from "./avaUtils";
 // fachlich Bauteile ab, tragen aber keine GUID. Eine Zahl allein würde entweder
 // sie unterschlagen oder eine Verknüpfung behaupten, die es nicht gibt. Die
 // Definition steht sichtbar darüber, nicht im Quelltext.
-export default function DeckungsReport({ elemente = [], positionen = [], kataloge = {} }) {
+export default function DeckungsReport({ elemente = [], positionen = [], kataloge = /** @type {Record<string, any[]>} */ ({}) }) {
   const [filterText, setFilterText] = useState("");
   const [nurUngedeckt, setNurUngedeckt] = useState(true);
 

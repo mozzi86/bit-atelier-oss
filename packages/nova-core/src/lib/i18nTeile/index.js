@@ -36,6 +36,20 @@ import { EN as MASSING_STUDIO } from "./massing-studio.js";
 import { EN as MODELCHECK_EXPORT } from "./modelcheck-export.js";
 // Plan 83-02: open source — feedback dialog, registration request, footer link.
 import { EN as OPEN_SOURCE } from "./open-source.js";
+// Plan 86-05b: workshop tab "Vorschläge" (building proposals) + figure labels.
+import { EN as WERKSTATT_VORSCHLAEGE } from "./werkstatt-vorschlaege.js";
+import { EN as PDF_PLANKOPF } from "./pdf-plankopf.js";
+import { EN as REGENWASSER } from "./regenwasser.js";
+import { EN as AVA_ANGEBOTIMPORT } from "./ava-angebotimport.js";
+import { EN as AVA_ANGEBOTPRUEFUNG } from "./ava-angebotpruefung.js";
+import { EN as AVA_VERGABEVORSCHLAG } from "./ava-vergabevorschlag.js";
+import { EN as BETEILIGTE } from "./beteiligte.js";
+import { EN as AVA_VHB } from "./ava-vhb.js";
+import { EN as AVA_KOSTENKG } from "./ava-kostenkg.js";
+import { EN as PLANNER_GANTT } from "./planner-gantt.js";
+import { EN as PROTOKOLL } from "./protokoll.js";
+import { EN as KONTAKT_ADRESSE } from "./kontakt-adresse.js";
+import { EN as SELBST_UPDATE } from "./selbst-update.js";
 
 /**
  * English entries of all dictionary parts (German source text → English).
@@ -65,4 +79,17 @@ export const TEILE_EN = Object.freeze({
   ...MASSING_STUDIO,
   ...MODELCHECK_EXPORT,
   ...OPEN_SOURCE,
+  ...WERKSTATT_VORSCHLAEGE,
+  ...PDF_PLANKOPF,
+  ...REGENWASSER,
+  ...AVA_ANGEBOTIMPORT,
+  ...AVA_ANGEBOTPRUEFUNG,
+  ...AVA_VERGABEVORSCHLAG,
+  ...BETEILIGTE,
+  ...AVA_VHB,
+  ...AVA_KOSTENKG,
+  ...PLANNER_GANTT,
+  ...PROTOKOLL,
+  ...KONTAKT_ADRESSE,
+  ...SELBST_UPDATE,
 });

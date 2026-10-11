@@ -21,6 +21,7 @@ const DEFAULT_MIX = [
   { type: "t4", share: 10, area: 112 },
 ];
 
+/** @param {{icon: any, label: string, value: any, sub?: any, tint?: string}} props */
 const Stat = ({ icon: Icon, label, value, sub, tint }) => (
   <div className="rounded-lg bg-slate-50 p-3">
     <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1"><Icon className={`w-3.5 h-3.5 ${tint}`} /> {label}</div>
@@ -29,7 +30,7 @@ const Stat = ({ icon: Icon, label, value, sub, tint }) => (
   </div>
 );
 
-// Rapid residential feasibility (Spacio-style): auto unit mix + compliance check.
+// Rapid residential feasibility: auto unit mix + compliance check.
 // Fallback nur, solange kein Grundstück gezeichnet/gespeichert ist (KD-11).
 const SITE_AREA_FALLBACK = 3500;
 

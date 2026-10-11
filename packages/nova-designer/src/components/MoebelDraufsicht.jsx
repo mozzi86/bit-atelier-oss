@@ -77,6 +77,7 @@ export function MoebelLegende() {
 //              x/y = neue Mitte in Metern, ungerastert — der Aufrufer rastert (verschiebeItem)
 //   onItemRotate (id) — Phase 43: Doppelklick auf ein Möbel
 //   oeffnungen [{kind, a:{x,z}, b:{x,z}, width}] — Phase 43: Segmente aus raumOeffnungen.js
+/** @param {{polygon: Array<{x: number, z: number}>, items?: any[], selectable?: boolean, onSelect?: (...a: any[]) => any, selectedId?: any, band?: any, kollisionIds?: any[], maxW?: number, maxH?: number, onItemMove?: (...a: any[]) => any, onItemRotate?: (...a: any[]) => any, oeffnungen?: any[]}} props m */
 export default function MoebelDraufsicht({
   polygon, items = [], selectable = false, onSelect, selectedId = null, band = null,
   kollisionIds = [], maxW = 560, maxH = 260, onItemMove, onItemRotate, oeffnungen = [],

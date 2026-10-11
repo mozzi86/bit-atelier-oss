@@ -441,7 +441,7 @@ export function fensterSegmente(oeffnungen) {
  * NOTE: blocking is a FOCUS-UI decision only — kollisionsWarnungen/moebelChecks (ASR,
  * interior fit-out) keep warning instead of blocking (liability: warn, never fail).
  * @param {Array<object>} items existing items of the zone (may contain the candidate's old state)
- * @param {{id:string,typ:string,x:number,y:number,rot?:number}} candidate item (centre in m)
+ * @param {{id:string,typ:string,x:number,y:number,rot?:number}} kandidat item (centre in m)
  * @param {Array<{x:number,z:number}>} polygon zone points (metres)
  * @param {{fenster?:Array<{a:{x:number,z:number},b:{x:number,z:number}}>}} [opt] window segments
  * @returns {null|{grund:"tuer_nicht_an_wand"|"ausserhalb"|"kollision"|"vor_fenster", mitId?:string, text:string}}
@@ -560,6 +560,7 @@ const STUFEN_LABEL = { standard: "Standard", B: "B", R: "R" };
  */
 export function wohnMoebelChecks(items, polygon, stufe = STUFE_DEFAULT, { fenster = [] } = {}) {
   const liste = (items || []).filter((it) => it && moebelById(it.typ)); // T-75-09-02: skip junk
+  /** @type {Array<{status:"warn", itemId:string, art:string, text:string}>} */
   const warnungen = [];
   const stufenText = STUFEN_LABEL[stufe] || STUFEN_LABEL.standard;
   const bands = new Map(liste.map((it) => [it.id, bewegungsflaechen(it, stufe)]));
@@ -808,6 +809,7 @@ function wandReihenfolge(bb, fenster, bezug = null) {
     }
   });
   const reihen = { N: 0, O: 1, S: 2, W: 3 }; // plan tie-break order
+  /** @type {Array<{wand:string, rot:number, laenge:number, entlang:"x"|"y"}>} */
   const waende = [
     { wand: "N", rot: 0, laenge: bb.x1 - bb.x0, entlang: "x" },
     { wand: "S", rot: 180, laenge: bb.x1 - bb.x0, entlang: "x" },
@@ -950,7 +952,7 @@ export function platziereTyp(zone, items, typId, { stufe = STUFE_DEFAULT, fenste
 
   // Wall cascade (beds, wardrobes, sofa, kitchen counter, desk — everything else).
   for (const { wand, rot, entlang } of wandReihenfolge(bb, fenster, bezug)) {
-    for (const pos of ["mitte", "links", "rechts"]) {
+    for (const pos of /** @type {Array<"mitte"|"links"|"rechts">} */ (["mitte", "links", "rechts"])) {
       const p = wandKandidat(wand, rot, entlang, bb, { b: typ.b, t: typ.t }, pos);
       const k = versuch(p.x, p.y, p.rot);
       if (k) return k;

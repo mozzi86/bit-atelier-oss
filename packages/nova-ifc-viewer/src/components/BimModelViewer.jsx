@@ -21,6 +21,7 @@ const PRIORITY_COLORS = {
   critical: 0xb91c1c,
 };
 
+/** @param {{building?: any, issues?: any[], selectedIssueId?: string|null, addMode?: boolean, onSelectIssue?: (...a: any[]) => any, onPlaceIssue?: (...a: any[]) => any, elementMode?: boolean, selectedElementIds?: any[], highlightElementIds?: any[], onToggleElement?: (...a: any[]) => any, comments?: any[], commentMode?: boolean, selectedCommentId?: string|null, onSelectComment?: (...a: any[]) => any, onPlaceComment?: (...a: any[]) => any}} props */
 export default function BimModelViewer({
   building,
   issues = [],
@@ -45,9 +46,9 @@ export default function BimModelViewer({
   const { zones } = useBuildingProgram();
   const zoneList = Array.isArray(zones) ? zones : [];
   // Keep mutable scene refs across renders without re-creating the scene.
-  const state = useRef({});
+  const state = useRef(/** @type {Record<string, any>} */ ({})); // three.js handles + groups (87-09)
   // Latest callbacks/flags for use inside the persistent event handlers.
-  const handlers = useRef({});
+  const handlers = useRef(/** @type {Record<string, any>} */ ({})); // latest callbacks for the pointer handler
   handlers.current = { addMode, onSelectIssue, onPlaceIssue, elementMode, onToggleElement, commentMode, onSelectComment, onPlaceComment };
 
   const floors = Math.max(1, Math.round(building?.floors || 5));
@@ -96,6 +97,7 @@ export default function BimModelViewer({
     const floorH = 3;
     const buildingGroup = new THREE.Group();
     const pickTargets = [];
+    /** @type {Record<string, any>} */
     const slabByEl = {}; // elementId -> slab mesh (for highlight sync)
     for (let i = 0; i < floors; i++) {
       const slab = new THREE.Mesh(

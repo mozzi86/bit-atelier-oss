@@ -180,7 +180,7 @@ export default function Dashboard() {
   const fertig = projects.filter((p) => ["completed", "operation"].includes(statusVon(p))).length;
   const flaeche = projects.reduce((s, p) => s + projectArea(p), 0);
   const faellig = projects.filter((p) => {
-    const d = p.completion_date ? (new Date(p.completion_date) - Date.now()) / 864e5 : null;
+    const d = p.completion_date ? (/** @type {any} */ (new Date(p.completion_date)) - Date.now()) / 864e5 : null;
     return d != null && d >= 0 && d < 180 && statusVon(p) !== "completed";
   }).length;
 

@@ -21,6 +21,7 @@ export function getPositionLink() {
 export function clearPositionLink() {
   current = null;
 }
+/** @param {(link: any) => void} fn @returns {() => void} unsubscribe (usable as effect cleanup) */
 export function onPositionLink(fn) {
   subs.add(fn);
   return () => subs.delete(fn);
@@ -39,6 +40,7 @@ export function setTakeoffTarget(pos) {
 export function getTakeoffTarget() {
   return takeoffTarget;
 }
+/** @param {(ziel: any) => void} fn @returns {() => void} unsubscribe (usable as effect cleanup) */
 export function onTakeoffTarget(fn) {
   targetSubs.add(fn);
   return () => targetSubs.delete(fn);
@@ -47,5 +49,5 @@ export function onTakeoffTarget(fn) {
 // Dev-Zugang: erlaubt, eine GUID-Auswahl von außen (Browser-Konsole) zu
 // markieren — z. B. „alle verknüpften Türen“. Nur im Dev-Build aktiv.
 if (import.meta.env.DEV && typeof window !== "undefined") {
-  window.__ifcLink = { showPositionInModel, getPositionLink };
+  /** @type {any} */ (window).__ifcLink = { showPositionInModel, getPositionLink };
 }

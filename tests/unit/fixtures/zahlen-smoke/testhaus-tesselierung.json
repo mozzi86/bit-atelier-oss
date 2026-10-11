@@ -1,0 +1,26 @@
+{
+  "mittelflur": {
+    "we_eg": 18,
+    "wohnflaeche_eg_m2": 1015.6,
+    "rest_m2": 0,
+    "hinweise": 0
+  },
+  "mfh": {
+    "we_eg": 16,
+    "wohnflaeche_eg_m2": 951.7,
+    "rest_m2": 0,
+    "hinweise": 1
+  },
+  "spaenner": {
+    "we_eg": 4,
+    "wohnflaeche_eg_m2": 1058.5,
+    "rest_m2": 0,
+    "hinweise": 5
+  },
+  "laubengang": {
+    "we_eg": 11,
+    "wohnflaeche_eg_m2": 995.47,
+    "rest_m2": 120.13,
+    "hinweise": 2
+  }
+}
