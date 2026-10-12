@@ -2,11 +2,11 @@
 // shortcut target) — as DATA, never against the
 // real registry or the real ~/.local/share:
 //   - BIT-Atelier-Installer.cmd: the two pure PowerShell functions between "# ZUORDNUNG-START/-ENDE"
-//     (registry entries + "does the open command still point to this installation?") run in powershell/pwsh
+//     (registry entries + "does the open command still point to this installation?") run in Windows PowerShell
 //     with a placeholder install folder; static checks that the writes go to HKCU only, that the install
 //     registers after the shortcuts and the uninstall removes only through the ownership check;
 //   - install.sh: datei_zuordnen/datei_entfernen run in sh with HOME and ZIEL inside a temp folder.
-// Skipped when powershell/pwsh or sh is not available.
+// The PowerShell parts run on Windows only; skipped elsewhere and when powershell or sh is not available.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -40,7 +40,10 @@ describe("installer: .bitproj association (93-10)", () => {
   });
 
   it("registry entries and ownership check (PowerShell, no registry access)", (t) => {
-    const prog = process.platform === "win32" ? "powershell" : "pwsh";
+    // Windows-only: the functions build C:\ paths and read %SystemRoot%; pwsh on Linux has neither,
+    // so Join-Path yields nothing there (seen in the v1.2.0 release run on ubuntu-latest).
+    if (process.platform !== "win32") { t.skip("Windows installer functions (drive letters, %SystemRoot%)"); return; }
+    const prog = "powershell";
     if (!gibt(prog, ["-NoProfile", "-Command", "exit 0"])) { t.skip(`${prog} not available`); return; }
     const skript = [
       "iex $env:BIT_REIN",
@@ -70,7 +73,10 @@ describe("installer: .bitproj association (93-10)", () => {
   });
 
   it("shortcut target: hidden start when the release has it, start-windows.cmd otherwise (93-11)", (t) => {
-    const prog = process.platform === "win32" ? "powershell" : "pwsh";
+    // Windows-only: the functions build C:\ paths and read %SystemRoot%; pwsh on Linux has neither,
+    // so Join-Path yields nothing there (seen in the v1.2.0 release run on ubuntu-latest).
+    if (process.platform !== "win32") { t.skip("Windows installer functions (drive letters, %SystemRoot%)"); return; }
+    const prog = "powershell";
     if (!gibt(prog, ["-NoProfile", "-Command", "exit 0"])) { t.skip(`${prog} not available`); return; }
     // A throw-away app folder: Verknuepfung-Ziel only checks whether tools\bit-atelier.ps1 exists.
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "bit-9311-lnk-"));
