@@ -11,9 +11,11 @@ import {
 } from "@core/components/ui/select";
 import { FileCheck, Loader2, Sparkles } from "lucide-react";
 import { InvokeLLM } from "@core/integrations/Core";
+import { useI18n } from "@core/lib/i18n";
 
 // Free-form AI data analysis console backed by the LLM proxy.
 export default function DataAnalysis({ agents = [] }) {
+  const { t } = useI18n();
   const [agentId, setAgentId] = useState(agents[0]?.id || "");
   const [input, setInput] = useState(
     "Analysiere die Kostenentwicklung dieses Wohnbauprojekts und nenne 3 Optimierungspotenziale."
@@ -47,7 +49,7 @@ export default function DataAnalysis({ agents = [] }) {
       <CardContent className="space-y-4">
         <div className="grid md:grid-cols-[1fr_2fr] gap-3">
           <Select value={agentId} onValueChange={setAgentId}>
-            <SelectTrigger>
+            <SelectTrigger aria-label={t("Agent")}>
               <SelectValue placeholder="Agent wählen..." />
             </SelectTrigger>
             <SelectContent>

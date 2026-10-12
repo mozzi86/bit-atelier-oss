@@ -8,7 +8,7 @@
 //
 // In:  footprintM — the building footprint in world metres (any polygon the fit accepts);
 //      basis — the workshop inputs WITHOUT layout-bound fields: gesperrteGrenzen, anordnung,
-//      grenzenPositionen, tuerAufschlaege and stufeJeWe are dropped here, because they belong
+//      grenzenPositionen, tuerAufschlaege, stufeJeWe and raumGrenzen (75-12) are dropped here, because they belong
 //      to the layout the user has today, not to a proposal (86-05a-PLAN, Arch condition 2).
 // Out: Vorschlag[] (see typedef below), figures via kennzahlen(), order via
 //      sortiereVorschlaege(); KENNZAHLEN is the register the UI (86-05b) renders from.
@@ -83,7 +83,7 @@ export const VARIANTEN_ACHSEN = {
 export const BASIS_FELDER = ["storeys", "einheiten", "raumzonen", "regeln", "nordwinkel", "okf_m"];
 
 /** Layout-bound workshop fields — dropped from the base (they belong to the previous layout). */
-export const LAYOUT_FELDER = ["gesperrteGrenzen", "anordnung", "grenzenPositionen", "tuerAufschlaege", "stufeJeWe"];
+export const LAYOUT_FELDER = ["gesperrteGrenzen", "anordnung", "grenzenPositionen", "tuerAufschlaege", "stufeJeWe", "raumGrenzen", "geschosseJeRiegel"];
 
 /**
  * Register of the figures: key, German label (i18n key in the UI), unit, default sort
@@ -341,7 +341,7 @@ export function erzeugeVorschlaege(footprintM, basis, optionen = {}) {
  * tessellation (unit list, boundaries, upper storeys). Small enough to cross a Worker
  * boundary (structured clone) and to keep per card. Pure.
  * @param {Vorschlag} v
- * @returns {{id: string, typologie: Vorschlag["typologie"], parameter: Vorschlag["parameter"], algoVersion: number, footprintHash: string, riegel: number, kennzahlen: Record<string, Kennzahl>, hatFails: boolean, zonenEG: Array<{points: Array<{x:number, z:number}>, name: string, we: string|null, raumart: string|null, art: string|null}>, riegelUmrisse: Array<Array<{x:number, z:number}>>, rest: Array<Array<{x:number, z:number}>>, ursprung: string|null}}
+ * @returns {{id: string, typologie: Vorschlag["typologie"], parameter: Vorschlag["parameter"], algoVersion: number, footprintHash: string, riegel: number, kennzahlen: Record<string, Kennzahl>, hatFails: boolean, zonenEG: Array<{points: Array<{x:number, z:number}>, name: string, we: string|null, raumart: string|null, art: string|null}>, riegelUmrisse: Array<Array<{x:number, z:number}>>, rechteckUmriss: Array<{x:number, z:number}>|null, rest: Array<Array<{x:number, z:number}>>, ursprung: string|null}}
  */
 export function kartenDaten(v) {
   const r = v?.ergebnis && typeof v.ergebnis === "object" ? v.ergebnis : {};
@@ -360,6 +360,8 @@ export function kartenDaten(v) {
       .filter((z) => z && Math.round(num(z.level)) === 0 && Array.isArray(z.points) && z.points.length >= 3)
       .map((z) => ({ points: z.points.map((p) => ({ x: num(p.x), z: num(p.z) })), name: String(z.name || ""), we: z.we ?? null, raumart: z.raumart ?? null, art: z.art ?? null })),
     riegelUmrisse: Array.isArray(form.riegel) ? form.riegel.map((b) => (Array.isArray(b.rechteck) ? b.rechteck : [])) : [],
+    // 75-10: outline of a single fitted body (86-01) — the variant evaluation needs its perimeter (A/V).
+    rechteckUmriss: Array.isArray(form.rechteck) ? form.rechteck : null,
     rest: Array.isArray(form.rest) ? form.rest : [],
     ursprung: v?.ursprung ? String(v.ursprung) : null,
   };
@@ -525,6 +527,9 @@ export function uebernehmeVorschlag(cfg, vorschlag, optionen = {}) {
     riegelMinFlaeche_m2: num(v.typologie?.zerlegung?.minFlaeche_m2, FORM_RIEGEL.minFlaeche_m2),
     gewaehlterVorschlag: vorschlagKompakt({ ...v, typologie: { ...v.typologie, erschliessung: typ } }, optionen.jetzt),
   };
+  // 86-04: proposals are computed with the automatic decomposition — a perimeter block chosen
+  // before would make the applied layout differ from the card.
+  if (c.zerlegung === "rand") neu.zerlegung = "auto";
   /** @type {Record<string, number> & {gesamt: number}} */
   const verworfen = { gesamt: 0 };
   for (const feld of LAYOUT_FELDER) {

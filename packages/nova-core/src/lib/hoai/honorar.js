@@ -188,6 +188,23 @@ export function lpStand(hoaiPlan, projekt, leistungsbild = "gebaeude") {
 }
 
 /**
+ * 73-12: value of the existing building fabric to be reworked (mitzuverarbeitende Bausubstanz) that
+ * counts towards the chargeable costs — HOAI 2021 § 4 Abs. 3 with § 2 Abs. 7: "angemessen zu
+ * berücksichtigen", value determined per object at the cost calculation and agreed in text form.
+ * Only for service profiles with a conversion surcharge (their table basis is € of chargeable
+ * costs); added after the § 33 KG-400 rule [ASSUMED: the mvb is not part of the "sonstige
+ * anrechenbare Kosten" that set the KG-400 cap — counter-read before a contract relies on it].
+ * @param {Record<string, any>} vertrag Honorarvertrag (`mvb_euro` in €)
+ * @param {{umbau_max_prozent?: number}|null|undefined} info service-profile info
+ * @returns {number} € (0 when not applicable)
+ */
+export function mvbAnrechenbar(vertrag, info) {
+  if (typeof info?.umbau_max_prozent !== "number") return 0;
+  const mvb = Number(vertrag?.mvb_euro);
+  return Number.isFinite(mvb) && mvb > 0 ? mvb : 0;
+}
+
+/**
  * The fee contract's amounts and LPH split — the one calculator behind both
  * phase 79 (invoices) and phase 81 (offers/contracts). A Pauschale takes
  * precedence and computes even without a table (E-13); otherwise a profile
@@ -219,9 +236,12 @@ export function honorarVertrag(vertrag, optionen = {}) {
 
   const info = leistungsbildInfo(vertrag.leistungsbild, optionen);
   const kostenregel = info?.kostenregel === "p33" ? "p33" : "manuell";
-  const bezugswert = kostenregel === "p33"
+  const ohneBestand = kostenregel === "p33"
     ? anrechenbareKosten({ kg300_euro: vertrag.kg300_euro, kg400_euro: vertrag.kg400_euro, sonstige_euro: vertrag.sonstige_euro })
     : (typeof vertrag.bezugswert === "number" ? vertrag.bezugswert : 0);
+  const mvb = mvbAnrechenbar(vertrag, info);
+  // Only round when mvb is added — ha-based tables (Flächenplanung) carry decimals that must stay.
+  const bezugswert = mvb ? rundeCent(ohneBestand + mvb) : ohneBestand;
   const positionProzent = typeof vertrag.satz_position_prozent === "number" ? vertrag.satz_position_prozent : 0;
   const basis = honorarAusTafel(bezugswert, vertrag.honorarzone, positionProzent, vertrag.leistungsbild, optionen);
 

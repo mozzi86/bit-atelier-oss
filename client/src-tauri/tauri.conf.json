@@ -1,0 +1,74 @@
+{
+  "$schema": "../../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "BIT-Atelier",
+  "mainBinaryName": "BIT-Atelier",
+  "version": "../../package.json",
+  "identifier": "de.bit-atelier.app",
+  "build": {
+    "frontendDist": "../../dist-lokal-client",
+    "beforeBuildCommand": "npm run build:client",
+    "beforeDevCommand": { "script": "npm run build:client", "wait": true }
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "BIT-Atelier",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 640,
+        "center": true,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self' 'wasm-unsafe-eval'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: blob: https:",
+        "font-src": "'self' data:",
+        "media-src": "'self' data: blob:",
+        "worker-src": "'self' blob:",
+        "frame-src": "'self' blob: data:",
+        "connect-src": "'self' ipc: http://ipc.localhost data: blob: https: http://127.0.0.1:* http://localhost:*",
+        "object-src": "'none'",
+        "base-uri": "'self'",
+        "form-action": "'self'"
+      },
+      "dangerousDisableAssetCspModification": ["style-src"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "BIT-Atelier",
+    "copyright": "MIT License",
+    "license": "MIT",
+    "category": "Productivity",
+    "shortDescription": "BIT-Atelier – Bauprojekt-Plattform, lokal auf diesem Gerät",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["German", "English"]
+      }
+    },
+    "fileAssociations": [
+      {
+        "ext": ["bitproj"],
+        "name": "BIT-Atelier-Projekt",
+        "description": "BIT-Atelier-Projektdatei",
+        "role": "Editor",
+        "mimeType": "application/x-bitproj"
+      }
+    ]
+  }
+}

@@ -73,19 +73,43 @@ export function istWinAnsi(zeichen) {
 }
 
 /**
+ * Phase 81 (81-03): transliterations tried before the "?" fallback when the
+ * caller asks for `umschrift` — names from Central/Eastern Europe and Turkey
+ * and the few symbols a fee letter uses. Anything else falls back to the
+ * character without its accents (NFD) when THAT is WinAnsi, then to "?".
+ * @type {Readonly<Record<string, string>>}
+ */
+const UMSCHRIFT = Object.freeze({
+  "Ş": "S", "ş": "s", "Ł": "L", "ł": "l", "Ř": "R", "ř": "r", "Ğ": "G", "ğ": "g", "İ": "I", "ı": "i",
+  "Đ": "D", "đ": "d", "Ħ": "H", "ħ": "h",
+  "→": "->", "←": "<-", "↔": "<->", "≤": "<=", "≥": ">=", "≠": "!=", "✓": "x", "✔": "x", "✗": "x", "−": "-",
+});
+
+/**
  * Replaces every character outside WinAnsi with "?" (iterates by code point,
  * so a surrogate pair is one replacement, not two).
+ * Phase 81 (81-03) adds the option `umschrift`: a transliteration first (Ş→S,
+ * Ł→L, ź→z, →→"->", ≤→"<=", ✓→"x" …), "?" only when none exists; the result
+ * then also lists the replaced characters (`zeichen`, each once, in order of
+ * appearance). Without the option the result is exactly 79's.
  * @param {string} text
- * @returns {{text: string, ersetzt: number}}
+ * @param {{umschrift?: boolean}} [optionen]
+ * @returns {{text: string, ersetzt: number, zeichen?: string[]}} ersetzt = number of replaced characters
  */
-export function ersetzeNichtWinAnsi(text) {
+export function ersetzeNichtWinAnsi(text, { umschrift = false } = {}) {
   let ersetzt = 0;
+  /** @type {string[]} */
+  const liste = [];
   const zeichen = Array.from(String(text ?? "")).map((z) => {
     if (istWinAnsi(z)) return z;
     ersetzt += 1;
-    return "?";
+    if (!umschrift) return "?";
+    if (!liste.includes(z)) liste.push(z);
+    if (UMSCHRIFT[z] !== undefined) return UMSCHRIFT[z];
+    const ohneAkzent = z.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return ohneAkzent && Array.from(ohneAkzent).every(istWinAnsi) ? ohneAkzent : "?";
   });
-  return { text: zeichen.join(""), ersetzt };
+  return umschrift ? { text: zeichen.join(""), ersetzt, zeichen: liste } : { text: zeichen.join(""), ersetzt };
 }
 
 /**

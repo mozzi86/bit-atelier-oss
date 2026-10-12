@@ -2,18 +2,31 @@
 // Geschosshöhe und Einheit. Massing-Studio, Gebäudemodell (BIT-BIM), Kennzahlen,
 // Raumprogramm, Machbarkeit und Kosten lesen/schreiben hier — „alles ist verbunden".
 import { useSyncExternalStore } from "react";
+import { footprintQuelleGezeichnet } from "./footprintQuelle.js";
 
 // footprintM: zentriertes Meter-Polygon [{x,z}] oder null (=> Default 20×14).
 // zones: gespiegelte Räume aus dem Gebäudemodell [{points:[{x,z}],level,name}].
 // costEstimate: Kostenschätzung aus dem Kosten-Tab { total, bgf, perM2 } oder null
 //   — wird von der AVA-Kostenkontrolle als Budget-Referenz gelesen.
-let state = { footprintM: null, storeys: 4, storeyHeight: 3, unit: "m", zones: [], costEstimate: null };
+// footprintQuelle (73-05): provenance of footprintM ({ art: "gemessen"|"gezeichnet", … }, footprintQuelle.js)
+//   or null (unknown, legacy). A change of footprintM WITHOUT its own provenance is a drawing edit and turns
+//   it into "gezeichnet" — a measured outline that someone moved is no longer measured.
+// achseM (86-07): user-drawn centre line of the building as a polyline [{x,z}] in the SAME centred
+//   metres as footprintM (origin = footprint bbox centre), or null (no axis). Drawn in the massing
+//   studio, read by the workshop tessellation (bars along the axis); persisted with the programme.
+let state = { footprintM: null, footprintQuelle: null, achseM: null, storeys: 4, storeyHeight: 3, unit: "m", zones: [], costEstimate: null };
 const listeners = new Set();
 const emit = () => listeners.forEach((l) => l());
 
 export const buildingProgram = {
   get: () => state,
-  set: (patch) => { state = { ...state, ...patch }; emit(); },
+  set: (patch) => {
+    let p = patch;
+    if (p && "footprintM" in p && !("footprintQuelle" in p) && JSON.stringify(p.footprintM) !== JSON.stringify(state.footprintM)) {
+      p = { ...p, footprintQuelle: p.footprintM ? footprintQuelleGezeichnet() : null };
+    }
+    state = { ...state, ...p }; emit();
+  },
   subscribe: (l) => { listeners.add(l); return () => listeners.delete(l); },
 };
 

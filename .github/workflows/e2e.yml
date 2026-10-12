@@ -7,6 +7,11 @@
 # Seed legt die Demo-Projekte an, das Global-Setup das Testhaus aus
 # tests/e2e/fixtures/testhaus-record.json (B-87-05). Lokal NICHT seeden, solange
 # der Server läuft — er hält die DB im Speicher.
+#
+# Barrierefreiheit (93-02): tests/e2e/axe-93-02.spec.js läuft hier mit (WCAG 2.1 AA über
+# alle Modulseiten, rot nur bei neuen Verstößen gegen tests/e2e/axe-basis.json). Ohne
+# die devDependency @axe-core/playwright überspringt sie sich — siehe
+# docs/BARRIEREFREIHEIT-PRUEFUNG.md.
 name: E2E
 
 on:

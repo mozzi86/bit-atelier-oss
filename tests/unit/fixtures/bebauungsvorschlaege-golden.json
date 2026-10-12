@@ -1,5 +1,5 @@
 {
-  "stand": "2026-10-10",
+  "stand": "2026-10-12",
   "faelle": {
     "rechteck_70x16": {
       "hash": "0bf7b00a46946ff7a0baa8394f5695392f5ff00eb29b5d414b85d46f16c5028c",
@@ -13,7 +13,7 @@
       ]
     },
     "L": {
-      "hash": "a97c14f93d36c24fd901e782e854c0845e95bfcf2655ac0f26aa8080752d91d2",
+      "hash": "6d50c1d1f81fb561d81fbfbdfa2efe60e981705786b44b29a01c6587857cf57d",
       "anzahl": 6,
       "ids": [
         "v1-mittelflur-z120-e980590408c2f3af",
@@ -25,7 +25,7 @@
       ]
     },
     "U": {
-      "hash": "61d1907ee388ccf155a8163a4b49b6970d963109530b6e58f408f2b0cf962940",
+      "hash": "866e85bd6d963811bbf3d7413f27f443254aaa95486f39a0f9642d9b72625c67",
       "anzahl": 6,
       "ids": [
         "v1-mittelflur-z120-672a8b3bb4d3b6f0",

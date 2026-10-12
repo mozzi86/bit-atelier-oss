@@ -2,10 +2,17 @@ import React from 'react';
 import { MotionConfig } from 'framer-motion';
 import { Toaster } from "@core/components/ui/toaster"
 import UpdateHinweis from './demo/UpdateHinweis.jsx';
+// 93-10: a double-clicked .bitproj — the local edition arrives with ?import=<token>, the desktop client
+// asks its shell. Lazy: the preview dialog pulls the import/export dialogs, which the first paint never needs.
+const DateiOeffnenEmpfang = React.lazy(() => import('./components/dateiOeffnen/DateiOeffnenEmpfang.jsx'));
+// Captured once at page load: the route "/" redirects to /Dashboard and drops the query string before the
+// lazy receiver has mounted.
+const START_SUCHE = typeof window !== 'undefined' ? window.location.search : '';
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@core/lib/query-client'
 import { BrowserRouter, HashRouter, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import { SERVERLOS, DATENQUELLE } from '@core/lib/umgebung';
+import { istOeffentlicherWeg } from '@core/lib/oeffentlicheWege';
 
 // Hash routing wherever there is no server to route (the client build lokal,
 // served from a sub-path such as /app/ and inside the Tauri shell): a static
@@ -17,9 +24,12 @@ import { exportProjekt } from '@core/api/projektDatei';
 import Layout from '@/Layout';
 import { AuthProvider, useAuth } from '@core/lib/AuthContext';
 import { ProjectProvider } from '@core/lib/ProjectContext';
+import { ZugriffProvider } from '@core/lib/ZugriffContext.jsx';
+import { ladeZugriffsdaten } from '@/lib/zugriffLader.js';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Seitenwechsel from '@/components/Seitenwechsel';
 import { useI18n } from '@core/lib/i18n';
+import BueroTor from '@/components/buero/BueroTor.jsx';
 
 // Route-level code splitting (Phase 65-01). Every page is a lazy chunk so the
 // first paint only carries the shell: React, the router, the layout and the
@@ -45,6 +55,8 @@ const AtelierDeveloper = React.lazy(() => import('./pages/AtelierDeveloper'));
 const SiteControl = React.lazy(() => import('./pages/SiteControl'));
 const AVA = React.lazy(() => import('@ava/pages/AVA'));
 const Reports = React.lazy(() => import('./pages/Reports'));
+// Phase 88: detailed design & site (plan list, openings, sampling, H&S).
+const Werkplanung = React.lazy(() => import('./pages/Werkplanung'));
 const ModelVersions = React.lazy(() => import('@ifc/pages/ModelVersions'));
 const ModelCheck = React.lazy(() => import('@ifc/pages/ModelCheck'));
 const IfcViewer = React.lazy(() => import('@ifc/pages/IfcViewer'));
@@ -54,6 +66,13 @@ const Accounting = React.lazy(() => import('./pages/Accounting'));
 // Phase 80: personnel and the one settings page (menu group "Büro").
 const People = React.lazy(() => import('./pages/People'));
 const Settings = React.lazy(() => import('./pages/Settings'));
+// Phase 81: time, fees and controlling (menu group "Zeit & Honorar").
+const TimeTracking = React.lazy(() => import('./pages/TimeTracking'));
+const Fees = React.lazy(() => import('./pages/Fees'));
+const Controlling = React.lazy(() => import('./pages/Controlling'));
+const Deadlines = React.lazy(() => import('./pages/Deadlines'));
+const Absences = React.lazy(() => import('./pages/Absences'));
+const Correspondence = React.lazy(() => import('./pages/Correspondence'));
 // Login + password reset (57-02 Task 4) — @core pages, lazy like every route.
 const Anmeldung = React.lazy(() => import('@core/pages/Anmeldung'));
 const PasswortZuruecksetzen = React.lazy(() => import('@core/pages/PasswortZuruecksetzen'));
@@ -65,20 +84,12 @@ const Datenschutz = React.lazy(() => import('@core/pages/Datenschutz'));
 const Nutzungsbedingungen = React.lazy(() => import('@core/pages/Nutzungsbedingungen'));
 const Rueckerstattung = React.lazy(() => import('@core/pages/Rueckerstattung'));
 const Cookies = React.lazy(() => import('@core/pages/Cookies'));
+const Barrierefreiheit = React.lazy(() => import('@core/pages/Barrierefreiheit'));
+// Bidder portal (74-01 Task 14): the whole app for external roles in the cloud build.
+const BieterPortal = React.lazy(() => import('./pages/BieterPortal'));
 
-/** Routes that render outside the auth gate. One list, so a page cannot be
- *  routed without also being let through — that mismatch is how /impressum
- *  would end up redirecting to the login. */
-const RECHTSWEGE = [
-  '/anmeldung',
-  '/registrieren',
-  '/passwort-zuruecksetzen',
-  '/impressum',
-  '/datenschutz',
-  '/nutzungsbedingungen',
-  '/rueckerstattung',
-  '/cookies',
-];
+// Routes that render outside the auth gate: the list lives in @core so a unit
+// test can check that every entry also has a <Route> below (57-06 Task 8).
 // Add page imports here
 
 /**
@@ -155,6 +166,7 @@ const HauptApp = () => {
     <Route path="/SiteControl" element={<SiteControl />} />
     <Route path="/AVA" element={<AVA />} />
     <Route path="/Reports" element={<Reports />} />
+    <Route path="/Werkplanung" element={<Werkplanung />} />
     <Route path="/ModelVersions" element={<ModelVersions />} />
     <Route path="/ModelCheck" element={<ModelCheck />} />
     <Route path="/IfcViewer" element={<IfcViewer />} />
@@ -167,6 +179,23 @@ const HauptApp = () => {
     <Route path="/Personal" element={<UmleitungMitSuche to="/People" />} />
     <Route path="/Settings" element={<Settings />} />
     <Route path="/Einstellungen" element={<UmleitungMitSuche to="/Settings" />} />
+    {/* Phase 81 (E-01): English routes, German aliases keep ?tab —
+        /Zeiterfassung?tab=freigabe lands on /TimeTracking?tab=approval. */}
+    <Route path="/TimeTracking" element={<TimeTracking />} />
+    <Route path="/Fees" element={<Fees />} />
+    <Route path="/Controlling" element={<Controlling />} />
+    <Route path="/Zeiterfassung" element={<UmleitungMitSuche to="/TimeTracking" />} />
+    <Route path="/Honorar" element={<UmleitungMitSuche to="/Fees" />} />
+    <Route path="/Auftrag" element={<UmleitungMitSuche to="/Fees" />} />
+    <Route path="/Projektcontrolling" element={<UmleitungMitSuche to="/Controlling" />} />
+    {/* Phase 82 (E-01): English routes, German aliases keep ?tab —
+        /Schriftverkehr?tab=postbuch lands on /Correspondence?tab=register. */}
+    <Route path="/Deadlines" element={<Deadlines />} />
+    <Route path="/Absences" element={<Absences />} />
+    <Route path="/Correspondence" element={<Correspondence />} />
+    <Route path="/Fristen" element={<UmleitungMitSuche to="/Deadlines" />} />
+    <Route path="/Abwesenheiten" element={<UmleitungMitSuche to="/Absences" />} />
+    <Route path="/Schriftverkehr" element={<UmleitungMitSuche to="/Correspondence" />} />
     {/* Add your page Route elements here */}
     <Route path="*" element={<PageNotFound />} />
     </Routes>
@@ -180,7 +209,7 @@ const HauptApp = () => {
 const projektSichern = () => exportProjekt();
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, isAuthenticated } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, isAuthenticated, user } = useAuth();
   const location = useLocation();
 
   // Login and password reset live OUTSIDE the gate (57-02, review correction
@@ -200,7 +229,7 @@ const AuthenticatedApp = () => {
   // is wrong. Signed-in users therefore also see them without the <Layout>
   // shell — one code path instead of two, and the page carries its own way
   // back. /zugang does NOT join here; that is Task 3.
-  if (RECHTSWEGE.includes(location.pathname)) {
+  if (istOeffentlicherWeg(location.pathname)) {
     return (
       <>
       <ModulFehlergrenze key={location.pathname} pfad={location.pathname}>
@@ -214,6 +243,7 @@ const AuthenticatedApp = () => {
           <Route path="/nutzungsbedingungen" element={<Nutzungsbedingungen />} />
           <Route path="/rueckerstattung" element={<Rueckerstattung />} />
           <Route path="/cookies" element={<Cookies />} />
+          <Route path="/barrierefreiheit" element={<Barrierefreiheit />} />
         </Routes>
       </React.Suspense>
       </ModulFehlergrenze>
@@ -248,6 +278,23 @@ const AuthenticatedApp = () => {
     return <Navigate to="/anmeldung" replace />;
   }
 
+  // External roles (bidder/investor/gast, 74-01) never get the office shell:
+  // every non-public path renders the bidder portal. The database is the real
+  // boundary (0011) — this keeps the office modules from even asking.
+  // `user.extern` is true only for an EXISTING membership with an external
+  // role (rollen.js). Before migration 0006 the live schema allows only
+  // admin/mitglied, so the portal cannot appear there; a user without any
+  // membership keeps the office shell and its "no office assigned" message.
+  if (DATENQUELLE === 'supabase' && user?.extern === true) {
+    return (
+      <ModulFehlergrenze key="bieterportal" pfad={location.pathname}>
+        <React.Suspense fallback={<Ladeanzeige />}>
+          <BieterPortal />
+        </React.Suspense>
+      </ModulFehlergrenze>
+    );
+  }
+
   return <HauptApp />;
 };
 
@@ -271,18 +318,29 @@ function App() {
   // chunk back until motion has arrived, one extra round trip.
   return (
     <MotionConfig reducedMotion="user">
+    {/* 93-03: office mode — an unpaired LAN device gets the pairing page instead of the app;
+        host and paired devices get the app plus the header marker (express build only). */}
+    <BueroTor>
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
+        {/* 82-02: access (roles, "Ansicht als") before the project list — the
+            project view filters the projects (AuthProvider > ZugriffProvider > ProjectProvider). */}
+        <ZugriffProvider lade={ladeZugriffsdaten}>
         <ProjectProvider>
           {inhalt}
           {/* Registers the service worker and shows the update strip of the
               serverless build; it positions itself fixed, so it needs no layout
               slot (70-01). */}
           {SERVERLOS && <UpdateHinweis />}
+          {(SERVERLOS || (DATENQUELLE === 'express' && /[?&]import=/.test(START_SUCHE))) && (
+            <React.Suspense fallback={null}><DateiOeffnenEmpfang suche={START_SUCHE} /></React.Suspense>
+          )}
         </ProjectProvider>
+        </ZugriffProvider>
         <Toaster />
       </QueryClientProvider>
     </AuthProvider>
+    </BueroTor>
     </MotionConfig>
   )
 }

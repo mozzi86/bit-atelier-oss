@@ -54,6 +54,14 @@ export const LOESCH_REGELN = Object.freeze({
   Personaldokument: { bezug: null, aufbewahrung: null, modus: "sperren", norm: null }, // folgt dem Besitzer, s. Kommentar unten
   Fristquittung: { bezug: null, aufbewahrung: null, modus: "loeschen", norm: null },
   Loeschprotokoll: { bezug: null, aufbewahrung: "aufbewahrung_loeschprotokoll_jahre", modus: "loeschen", norm: "Art. 5 Abs. 2 DSGVO" },
+  // Phase 81 (81-01): cost rates are derived from the payroll account and follow its
+  // retention. [ASSUMED] — the alternative "delete with the person" would turn the
+  // controlling of old projects into "without cost rate". Rates of the virtual owner
+  // (mitarbeiter_id "inhaber", E-17) belong to no person and are not part of a request.
+  Kostensatz: { bezug: "mitarbeiter_id", aufbewahrung: "aufbewahrung_lohnkonto_jahre", modus: "sperren", norm: "aus der Gehaltsaenderung abgeleitet, folgt deren Frist (§ 41 Abs. 1 S. 9 EStG) [ASSUMED]" },
+  // Phase 82 (82-01, DS-10): absences are payroll records (days off, sick days as a
+  // duration) — they follow the payroll-account period, then they are deleted.
+  Abwesenheit: { bezug: "mitarbeiter_id", aufbewahrung: "aufbewahrung_lohnkonto_jahre", modus: "loeschen", norm: "Fehlzeiten als Lohnunterlage (§ 41 Abs. 1 EStG) [ASSUMED], Krankheit nur als Dauer (Art. 9 DSGVO)" },
 });
 
 // DS-10-Wächter, sofort beim Laden des Moduls geprüft (nicht erst im Test) —
@@ -111,6 +119,8 @@ export function personAuskunft(subjekt, daten, dateien = {}) {
   const vorgaenge = Array.isArray(daten?.Personalvorgang) ? daten.Personalvorgang : [];
   const dokumente = Array.isArray(daten?.Personaldokument) ? daten.Personaldokument : [];
   const bewerbungen = Array.isArray(daten?.Bewerbung) ? daten.Bewerbung : [];
+  const kostensaetze = Array.isArray(daten?.Kostensatz) ? daten.Kostensatz : [];
+  const abwesenheiten = Array.isArray(daten?.Abwesenheit) ? daten.Abwesenheit : [];
 
   if (istObjekt(subjekt) && typeof subjekt.mitarbeiterId === "string") {
     const mitarbeiterId = subjekt.mitarbeiterId;
@@ -125,6 +135,10 @@ export function personAuskunft(subjekt, daten, dateien = {}) {
       Personalvorgang: vorgaenge.filter((v) => v?.mitarbeiter_id === mitarbeiterId),
       Personaldokument: eigeneDokumente,
       Bewerbung: bewerbung ? [bewerbung] : [],
+      // Phase 81: derived cost rates of the person (personnel storage class, E-14).
+      Kostensatz: kostensaetze.filter((k) => k?.mitarbeiter_id === mitarbeiterId),
+      // Phase 82: the person's absences (right of access, Art. 15 DSGVO).
+      Abwesenheit: abwesenheiten.filter((a) => a?.mitarbeiter_id === mitarbeiterId),
     };
     return { schema: 1, art: "auskunft", erstellt, person: mitarbeiter, datensaetze, dokumente: dokumenteAus(eigeneDokumente, dateien) };
   }
@@ -254,6 +268,12 @@ export function loeschPlan(subjekt, anlass, daten, heute, regelWert) {
     for (const g of eigeneGehaelter) {
       const eintrag = { entitaet: "Gehaltsaenderung", id: g.id };
       if (lohnkontoBis && heute < lohnkontoBis) sperren.push({ ...eintrag, bis: lohnkontoBis, grund: "Lohnkonto-Aufbewahrungsfrist", norm: /** @type {string} */ (LOESCH_REGELN.Gehaltsaenderung.norm) });
+      else loeschen.push(eintrag);
+    }
+    // Phase 81: cost rates follow the payroll-account period (LOESCH_REGELN.Kostensatz).
+    for (const k of (Array.isArray(daten?.Kostensatz) ? daten.Kostensatz : []).filter((x) => x?.mitarbeiter_id === mitarbeiterId)) {
+      const eintrag = { entitaet: "Kostensatz", id: k.id };
+      if (lohnkontoBis && heute < lohnkontoBis) sperren.push({ ...eintrag, bis: lohnkontoBis, grund: "folgt der Lohnkonto-Frist", norm: /** @type {string} */ (LOESCH_REGELN.Kostensatz.norm) });
       else loeschen.push(eintrag);
     }
 

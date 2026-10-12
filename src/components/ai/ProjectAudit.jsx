@@ -11,6 +11,8 @@ import { InvokeLLM } from "@core/integrations/Core";
 import { gp, eur0 } from "@ava/components/avaUtils";
 import { hoaiProgress, projectArea } from "@core/lib/projectModel";
 import { useProject } from "@core/lib/ProjectContext";
+import { useI18n } from "@core/lib/i18n";
+import { screeningAussage, SCREENING_TITEL } from "@core/lib/energieScreening";
 
 const SEVERITY = {
   hoch: { label: "Hoch", color: "bg-rose-100 text-rose-700 border-rose-200", dot: "bg-rose-500" },
@@ -60,6 +62,7 @@ const AUDIT_SCHEMA = {
 // every dimension and propose concrete optimisation potential.
 export default function ProjectAudit() {
   const { projectId, project } = useProject();
+  const { t } = useI18n();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [facts, setFacts] = useState(null);
@@ -98,35 +101,21 @@ export default function ProjectAudit() {
     try {
       const f = await gatherFacts(projectId);
       setFacts(f);
-      const ctx = {
-        projekt: f.project?.name,
-        auftraggeber: f.project?.client,
-        status: f.project?.status,
-        hoai_phase: f.project?.hoai_phase,
-        flaeche_m2: f.area,
-        energieziel: f.project?.energy_target,
-        nachhaltigkeit: f.project?.sustainability_rating,
-        fertigstellung: f.project?.completion_date,
-        kostenanschlag_eur: Math.round(f.estimate),
-        lv_positionen: f.lv.length,
-        ausschreibungen: f.tenders.length,
-        angebote: f.bids.length,
-        offene_tickets: f.openIssues.length,
-        kritische_tickets: f.critical.length,
-        bim_themen: f.openIssues.slice(0, 8).map((i) => `${i.priority}: ${i.title}`),
-        vorgaenge: f.tasks.length,
-        ueberfaellige_vorgaenge: f.overdue.length,
-        geg: f.energy?.geg_compliance
-          ? { besteht: f.energy.geg_compliance.passes_geg, faktor: f.energy.geg_compliance.compliance_factor }
-          : null,
-      };
+      // 78-12: the server builds the project context itself from exactly this project (recipe
+      // "projektAudit" in packages/nova-core/server/llmKontext.js); ticket titles travel as data blocks.
+      // The facts gathered above only feed the KPI chips.
       const prompt =
         `Du bist ein erfahrener Bau- und Projektcontrolling-Experte (HOAI, GEG, DIN 276, BIM). ` +
-        `Analysiere dieses Bauprojekt ganzheitlich anhand der folgenden harten Projektdaten und bewerte ` +
-        `jede Dimension (Kosten, Energie/GEG, Termine, BIM-Qualität, Nachhaltigkeit) von 0-100. ` +
+        `Analysiere dieses Bauprojekt ganzheitlich anhand der unten folgenden harten Projektdaten und bewerte ` +
+        `jede Dimension (Kosten, Energie, Termine, BIM-Qualität, Nachhaltigkeit) von 0-100. ` +
+        `Die Energiewerte stammen aus einem Screening mit Richtwerten, nicht aus einem GEG-Nachweis — ` +
+        `behaupte keine GEG-Erfüllung. ` +
         `Nenne konkrete, umsetzbare Optimierungspotenziale mit geschätztem Einsparpotenzial in Euro. ` +
-        `Antworte auf Deutsch.\n\nProjektdaten:\n${JSON.stringify(ctx, null, 2)}`;
-      const res = await InvokeLLM({ prompt, response_json_schema: AUDIT_SCHEMA, add_context_from_internet: false });
+        `Antworte auf Deutsch.`;
+      const res = await InvokeLLM({
+        prompt, response_json_schema: AUDIT_SCHEMA, add_context_from_internet: false,
+        projekt_id: projectId, kontext: "projektAudit",
+      });
       const obj = typeof res === "string" ? JSON.parse(res) : res;
       setResult(obj);
     } catch (e) {
@@ -170,11 +159,12 @@ export default function ProjectAudit() {
             { icon: AlertTriangle, label: "Offene Tickets", value: facts.openIssues.length, tint: "bg-amber-100 text-amber-700" },
             { icon: AlertTriangle, label: "Kritisch/Hoch", value: facts.critical.length, tint: "bg-rose-100 text-rose-700" },
             { icon: CalendarClock, label: "Überfällig", value: facts.overdue.length, tint: "bg-rose-100 text-rose-700" },
-            { icon: Zap, label: "GEG", value: facts.energy?.geg_compliance ? (facts.energy.geg_compliance.passes_geg ? "✓" : "✗") : "—", tint: "bg-emerald-100 text-emerald-700" },
+            // Liability: a screening against a guide value, never a GEG proof (energieScreening.js).
+            { icon: Zap, label: t(SCREENING_TITEL), titel: t(screeningAussage(facts.energy?.geg_compliance).text), value: { eingehalten: "✓", ueberschritten: "✗", offen: "—" }[screeningAussage(facts.energy?.geg_compliance).stand], tint: "bg-emerald-100 text-emerald-700" },
           ].map((k, i) => (
             <Card key={i} className="border-0 shadow-sm"><CardContent className="p-3 flex items-center gap-2">
               <div className={`p-2 rounded-lg ${k.tint}`}><k.icon className="w-4 h-4" /></div>
-              <div className="min-w-0"><div className="text-lg font-bold text-slate-800 leading-none">{k.value}</div><div className="text-[11px] text-slate-500 truncate">{k.label}</div></div>
+              <div className="min-w-0"><div className="text-lg font-bold text-slate-800 leading-none">{k.value}</div><div className="text-[11px] text-slate-500 truncate" title={k.titel}>{k.label}</div></div>
             </CardContent></Card>
           ))}
         </div>
@@ -185,7 +175,7 @@ export default function ProjectAudit() {
       {!result && !loading && !error && (
         <Card><CardContent className="p-10 text-center text-slate-400">
           <Brain className="w-10 h-10 mx-auto mb-3 text-slate-300" />
-          Wähle ein Projekt und starte die ganzheitliche KI-Bewertung — Kosten, Energie/GEG, Termine, BIM-Qualität und Nachhaltigkeit inkl. konkreter Optimierungspotenziale.
+          Wähle ein Projekt und starte die ganzheitliche KI-Bewertung — Kosten, Energie (Screening, kein GEG-Nachweis), Termine, BIM-Qualität und Nachhaltigkeit inkl. konkreter Optimierungspotenziale.
         </CardContent></Card>
       )}
 

@@ -25,7 +25,7 @@ import crypto from "node:crypto";
 const DB_PFAD = path.resolve("server/db.json");
 // Trailing slash ist Pflicht: new URL("entities/…", base) schneidet ohne ihn
 // das letzte Pfadsegment ("api") ab (WHATWG-Resolution).
-const API = "http://localhost:3001/api/";
+const API = `http://localhost:${Number(process.env.API_PORT) || 3001}/api/`;
 // Minimaler, gültiger MapLibre-Style (leer) — reicht, damit die Map "load"
 // feuert und onLayersReady/click-Handler laufen. Keine Tiles, kein Netz.
 const LEER_STYLE = JSON.stringify({ version: 8, sources: {}, layers: [] });

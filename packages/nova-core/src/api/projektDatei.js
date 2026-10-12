@@ -19,146 +19,14 @@
 // extension never lies.
 
 import { demoDbAuslesen, demoDbErsetzen, letzteSicherungSetzen } from './demoDb.js';
+// 93-10: the pure half (format, parser, area filter, merges) lives in projektDateiFormat.js so the
+// local server can validate double-clicked files with the same parser. Re-exported here unchanged.
+import { DATEI_ENDUNG, serialisiereProjekt, entferneBereiche, vorschau, parseProjektDatei } from './projektDateiFormat.js';
 
-/** Current file format version. Bump only with a migration in leseProjekt(). */
-export const SCHEMA = 1;
-export const DATEI_ENDUNG = '.bitproj';
-
-/**
- * Builds the export object.
- * 79-12 (E-07): `art`/`bereiche` are optional and generic — this module has no
- * idea what an "area" is, it only stores what the caller (src/lib/exportBereiche.js,
- * which DOES know the entity lists) already decided. Omitted, the file looks
- * exactly like one written before this plan (byte-compatible).
- * @param {Record<string, object[]>} daten all collections
- * @param {string} [projektname] name shown in the import preview
- * @param {{art?: "sicherung"|"weitergabe", bereiche?: string[]}} [optionen]
- * @returns {{schema: number, app: string, exportiert: string, projektname: string, art?: string, bereiche?: string[], daten: Record<string, object[]>}}
- */
-export function serialisiereProjekt(daten, projektname = 'BIT-Atelier-Demo', { art, bereiche } = {}) {
-  return {
-    schema: SCHEMA,
-    app: 'bit-atelier-demo',
-    exportiert: new Date().toISOString(),
-    projektname,
-    art,
-    bereiche,
-    daten,
-  };
-}
-
-/**
- * Drops whole collections, and Setting rows with the given keys, from a data
- * snapshot before it is serialised (E-07: an export for a specialist planner
- * or client must not carry the office's own books at all — not even filtered
- * to zero rows, which would still leak the schema and any leftover Setting).
- * Returns a new object; `daten` itself is never mutated.
- * @param {Record<string, object[]>} daten
- * @param {string[]} ohne collection names to drop entirely
- * @param {string[]} ohneSettingKeys `Setting.key` values to drop from the Setting rows
- * @returns {Record<string, object[]>}
- */
-function entferneBereiche(daten, ohne, ohneSettingKeys) {
-  if (!ohne.length && !ohneSettingKeys.length) return daten;
-  const raus = new Set(ohne);
-  /** @type {Record<string, object[]>} */
-  const ergebnis = {};
-  for (const [entity, rows] of Object.entries(daten)) {
-    if (raus.has(entity)) continue; // key left out entirely (presence-based import, see exportBereiche.js)
-    if (entity === 'Setting' && ohneSettingKeys.length) {
-      ergebnis[entity] = (rows || []).filter((r) => !ohneSettingKeys.includes(r?.key));
-      continue;
-    }
-    ergebnis[entity] = rows;
-  }
-  return ergebnis;
-}
-
-/**
- * Record counts per collection, for the preview before an import overwrites
- * anything. 79-12: also reports `art`/`bereiche` — a file written before this
- * plan has neither, and is read as a full backup (`art: "sicherung"`), because
- * that is exactly what every file used to be.
- * @param {object} obj parsed project object
- * @returns {{projektname: string, exportiert: string, anzahl: Record<string, number>, gesamt: number, art: "sicherung"|"weitergabe", bereiche: string[]}}
- */
-export function vorschau(obj) {
-  /** @type {Record<string, number>} */
-  const anzahl = {};
-  let gesamt = 0;
-  for (const [entity, rows] of Object.entries(obj?.daten || {})) {
-    const n = Array.isArray(rows) ? rows.length : 0;
-    anzahl[entity] = n;
-    gesamt += n;
-  }
-  return {
-    projektname: obj?.projektname || '(ohne Namen)',
-    exportiert: obj?.exportiert || '(ohne Datum)',
-    anzahl,
-    gesamt,
-    art: obj?.art === 'weitergabe' ? 'weitergabe' : 'sicherung',
-    bereiche: Array.isArray(obj?.bereiche) ? obj.bereiche : [],
-  };
-}
-
-/**
- * True when the bytes start with the gzip magic number.
- * @param {Uint8Array} bytes
- */
-function istGzip(bytes) {
-  return bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
-}
-
-/**
- * Parses a project file, transparently handling the gzipped and the plain form.
- * Rejects anything that is not a v1 project file — a half-applied import would
- * be worse than none.
- * @param {ArrayBuffer|Uint8Array} roh
- * @returns {Promise<object>} the parsed project object
- * @throws {Error} with a message meant for the user
- */
-export async function parseProjektDatei(roh) {
-  const bytes = roh instanceof Uint8Array ? roh : new Uint8Array(roh);
-  if (!bytes.length) throw new Error('Die Datei ist leer.');
-
-  let text;
-  if (istGzip(bytes)) {
-    if (typeof DecompressionStream === 'undefined') {
-      throw new Error(
-        'Die Datei ist komprimiert, dieser Browser kann sie nicht entpacken. ' +
-          'Bitte in einem aktuellen Browser öffnen.',
-      );
-    }
-    // Cast: TS kennt Uint8Array hier nicht als BlobPart, der Browser schon.
-    const strom = new Blob([/** @type {BlobPart} */ (bytes)])
-      .stream()
-      .pipeThrough(new DecompressionStream('gzip'));
-    text = await new Response(strom).text();
-  } else {
-    text = new TextDecoder().decode(bytes);
-  }
-
-  let obj;
-  try {
-    obj = JSON.parse(text);
-  } catch {
-    throw new Error('Die Datei ist keine gültige Projektdatei (JSON nicht lesbar).');
-  }
-
-  if (obj?.app !== 'bit-atelier-demo') {
-    throw new Error('Diese Datei stammt nicht aus der BIT-Atelier-Demo.');
-  }
-  if (obj?.schema !== SCHEMA) {
-    throw new Error(
-      `Dateiversion ${obj?.schema ?? '?'} wird von dieser Fassung nicht gelesen ` +
-        `(erwartet: ${SCHEMA}). Bitte mit der Fassung öffnen, die sie geschrieben hat.`,
-    );
-  }
-  if (!obj?.daten || typeof obj.daten !== 'object') {
-    throw new Error('Die Projektdatei enthält keine Daten.');
-  }
-  return obj;
-}
+export {
+  SCHEMA, DATEI_ENDUNG, serialisiereProjekt, entferneBereiche, vorschau, parseProjektDatei,
+  mitBehaltenem, projekteIn, vorhandeneProjekte, kopieAnfuegen,
+} from './projektDateiFormat.js';
 
 /**
  * Packs the current demo state into a Blob.
@@ -168,12 +36,12 @@ export async function parseProjektDatei(roh) {
  * Called with no options this is byte-compatible with every file written
  * before this plan.
  * @param {string} [projektname]
- * @param {{ohne?: string[], ohneSettingKeys?: string[], art?: "sicherung"|"weitergabe", bereiche?: string[]}} [optionen]
+ * @param {{ohne?: string[], ohneSettingKeys?: string[], ohneDokumentBereiche?: string[], art?: "sicherung"|"weitergabe", bereiche?: string[]}} [optionen]
  * @returns {Promise<{blob: Blob, dateiname: string, obj: object}>}
  */
-export async function projektAlsBlob(projektname, { ohne = [], ohneSettingKeys = [], art, bereiche } = {}) {
+export async function projektAlsBlob(projektname, { ohne = [], ohneSettingKeys = [], ohneDokumentBereiche = [], art, bereiche } = {}) {
   const volleDaten = await demoDbAuslesen();
-  const daten = entferneBereiche(volleDaten, ohne, ohneSettingKeys);
+  const daten = entferneBereiche(volleDaten, ohne, ohneSettingKeys, ohneDokumentBereiche);
   const obj = serialisiereProjekt(daten, projektname, { art, bereiche });
   const text = JSON.stringify(obj);
   const tag = new Date().toISOString().slice(0, 10);
@@ -240,9 +108,9 @@ export async function leseProjektDatei(datei) {
  * 69-13: returns demoDbErsetzen's report ({schnappschuss, schnappschussFehler})
  * so the caller can surface a failed automatic snapshot honestly.
  * @param {object} obj result of leseProjektDatei().obj
- * @param {{behalte?: string[], behalteSettingKeys?: string[]}} [optionen]
+ * @param {{behalte?: string[], behalteSettingKeys?: string[], behalteDokumentBereiche?: string[]}} [optionen]
  * @returns {Promise<{schnappschuss: object|null, schnappschussFehler: string|null}>}
  */
-export async function uebernehmeProjekt(obj, { behalte = [], behalteSettingKeys = [] } = {}) {
-  return demoDbErsetzen(obj.daten, 'vor Import', { behalte, behalteSettingKeys });
+export async function uebernehmeProjekt(obj, { behalte = [], behalteSettingKeys = [], behalteDokumentBereiche = [] } = {}) {
+  return demoDbErsetzen(obj.daten, 'vor Import', { behalte, behalteSettingKeys, behalteDokumentBereiche });
 }

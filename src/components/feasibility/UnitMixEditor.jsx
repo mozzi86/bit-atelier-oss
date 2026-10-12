@@ -5,11 +5,13 @@ import { Input } from "@core/components/ui/input";
 import { Stat } from "@core/components/Field";
 import { Home, Plus, Trash2 } from "lucide-react";
 import { useBuildingProgram, programMetrics } from "@core/lib/useBuildingProgram";
+import { useI18n } from "@core/lib/i18n";
 
 const normalize = (data) => (Array.isArray(data) ? data : Object.values(data || {}));
 
 // Wohnungsmix-Editor. data = [{ type, count, area, rent_sqm }]
 export default function UnitMixEditor({ data, massingData, onChange }) {
+  const { t } = useI18n();
   const store = useBuildingProgram();
   const pm = programMetrics(store);
   const rows = normalize(data);
@@ -67,7 +69,7 @@ export default function UnitMixEditor({ data, massingData, onChange }) {
                 <Input type="number" value={r.count} onChange={(e) => update(i, { count: Number(e.target.value) })} />
                 <Input type="number" value={r.area} onChange={(e) => update(i, { area: Number(e.target.value) })} />
                 <Input type="number" value={r.rent_sqm} onChange={(e) => update(i, { rent_sqm: Number(e.target.value) })} />
-                <Button variant="ghost" size="icon" className="text-red-500" onClick={() => removeRow(i)}>
+                <Button aria-label={t("Zeile entfernen")} variant="ghost" size="icon" className="text-red-500" onClick={() => removeRow(i)}>
                   <Trash2 className="w-4 h-4" />
                 </Button>
               </div>

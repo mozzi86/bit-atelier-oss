@@ -1,0 +1,40 @@
+# Desktop shell of BIT-Atelier (Phase 70-02): a Tauri v2 window around the
+# serverless `lokal` build. The shell carries no domain logic — everything the
+# user sees is the same web app as the installable PWA. See client/README.md.
+[package]
+name = "bit-atelier-client"
+version = "1.1.0"
+description = "BIT-Atelier desktop client (Tauri shell around the lokal build)"
+authors = ["BIT-Atelier"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.90"
+
+[lib]
+# The `_lib` suffix avoids a name clash between the lib and the bin target on
+# Windows (cargo issue 8519); cdylib/staticlib keep the mobile targets possible.
+name = "bit_atelier_client_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# 70-03: native folder picker for the storage location (called from our own
+# command in ablage.rs; the plugin's JS commands are not granted).
+tauri-plugin-dialog = "2"
+
+# Single instance is a desktop concept; the plugin does not build for mobile.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2"
+
+[profile.release]
+# Size over speed: the shell does nothing CPU-heavy, the web app runs in WebView2.
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

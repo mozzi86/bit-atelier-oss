@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import FormModal from "@core/components/common/FormModal";
 import { buttonVariants } from "@core/components/ui/button";
 import { fileToDataUrl } from "@core/lib/pdf";
+import { inhaltAblegen, blobIdNeu } from "@core/lib/speicherOrt";
 import { useI18n } from "@core/lib/i18n";
 import { betraegeAusBrutto, betraegeAusNetto, KATEGORIEN, kategorieText, STEUERFAELLE, steuerfallVorschlag } from "@/lib/accounting/ausgaben.js";
 import { belegDatensatz, belegVerweisSetzen } from "@/lib/accounting/belege.js";
@@ -147,7 +148,9 @@ export default function AusgabeFormular({ bh, eintrag, onClose }) {
       // A newly picked (not yet persisted) receipt needs the invoice's id first.
       if (beleg && !beleg.id) {
         const belegDatei = { name: beleg.name, type: beleg.mime, size: beleg.groesse };
-        const neuerBeleg = await bh.speichere("Beleg", belegDatensatz(belegDatei, beleg.data, { typ: "Eingangsrechnung", id: gespeichert.id }));
+        const ablage = await inhaltAblegen(beleg.data, { blobId: blobIdNeu("beleg"), art: "beleg" });
+        if (ablage.hinweis) toast.info(ablage.hinweis);
+        const neuerBeleg = await bh.speichere("Beleg", belegDatensatz(belegDatei, ablage.inline, { typ: "Eingangsrechnung", id: gespeichert.id }, ablage.blob));
         gespeichert = await bh.speichere("Eingangsrechnung", belegVerweisSetzen(gespeichert, neuerBeleg.id));
       } else if (belegEntfernt && belegVorhanden) {
         await bh.loesche("Beleg", belegVorhanden.id);

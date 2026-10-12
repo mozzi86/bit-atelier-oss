@@ -14,11 +14,15 @@ import { useProject } from "@core/lib/ProjectContext";
 import { autoEnvOpenings } from "@designer/lib/autoOpenings";
 import { useSiteClimate } from "@designer/lib/useSiteClimate";
 import { usePlanModel } from "@designer/lib/usePlanModel";
+import PruefZeile from "@designer/components/PruefZeile";
+import { mitAbweichungen } from "@designer/lib/abweichung";
+import { bauartVon } from "@core/lib/bauart";
 import { useFachlayer } from "@designer/lib/useFachlayer";
 import {
   fensterZuRaeumen, screeningJeGeschoss, raumklimaChecks,
   klimaregionAusKlima, bauartVorschlag, FC_OPTIONEN,
 } from "@designer/lib/raumklima";
+import { useI18n } from "@core/lib/i18n";
 
 const de1 = (n) => (Number(n) || 0).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const de3 = (n) => (Number(n) || 0).toLocaleString("de-DE", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -41,6 +45,7 @@ const LAYER_DEFAULT = {
 };
 
 export default function RaumklimaPlanner() {
+  const { t } = useI18n();
   const { project } = useProject();
   const plan = usePlanModel(project?.id);
   const klima = useSiteClimate(project?.location);
@@ -145,7 +150,7 @@ export default function RaumklimaPlanner() {
           <div className="space-y-1">
             <div className="text-xs text-slate-500">Klimaregion</div>
             <Select value={cfg.klimaregion || "auto"} onValueChange={(v) => set({ klimaregion: v === "auto" ? null : v })}>
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("Klimaregion")} className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="auto">{`Automatisch${regionAuto ? ` (${regionAuto})` : ""}`}</SelectItem>
                 <SelectItem value="A">A — sommerkühl</SelectItem>
@@ -157,7 +162,7 @@ export default function RaumklimaPlanner() {
           <div className="space-y-1">
             <div className="text-xs text-slate-500">Bauart</div>
             <Select value={cfg.bauart || "auto"} onValueChange={(v) => set({ bauart: v === "auto" ? null : v })}>
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("Bauart")} className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="auto">{`Automatisch (${bauartAuto})`}</SelectItem>
                 <SelectItem value="leicht">leicht</SelectItem>
@@ -169,7 +174,7 @@ export default function RaumklimaPlanner() {
           <div className="space-y-1">
             <div className="text-xs text-slate-500">Nachtlüftung</div>
             <Select value={cfg.nachtlueftung} onValueChange={(v) => set({ nachtlueftung: v })}>
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("Nachtlüftung")} className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ohne">ohne</SelectItem>
                 <SelectItem value="erhoeht">erhöht (n ≥ 2/h)</SelectItem>
@@ -180,7 +185,7 @@ export default function RaumklimaPlanner() {
           <div className="space-y-1">
             <div className="text-xs text-slate-500">Sonnenschutz (F_c)</div>
             <Select value={cfg.fcId} onValueChange={(v) => set({ fcId: v })}>
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("Sonnenschutz (F_c)")} className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {FC_OPTIONEN.map((o) => (
                   <SelectItem key={o.id} value={o.id}>{`${o.name} (${o.fc.toLocaleString("de-DE")})`}</SelectItem>
@@ -191,7 +196,7 @@ export default function RaumklimaPlanner() {
           <div className="space-y-1">
             <div className="text-xs text-slate-500">Verglasung</div>
             <Select value={cfg.sonnenschutzglas ? "ssg" : "std"} onValueChange={(v) => set({ sonnenschutzglas: v === "ssg" })}>
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("Verglasung")} className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="std">Standard (g 0,6)</SelectItem>
                 <SelectItem value="ssg">Sonnenschutzglas (g ≤ 0,4)</SelectItem>
@@ -268,19 +273,11 @@ export default function RaumklimaPlanner() {
           <CardTitle className="text-base flex items-center gap-2"><Wind className="w-4 h-4" /> Prüfungen (Richtwerte)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {checks.items.map((it) => {
-            const st = RK_STATUS[it.status] || RK_STATUS.offen;
-            return (
-              <div key={it.key} className="flex items-center gap-3 rounded-lg border p-2">
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${st.dot}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-slate-800">{it.label}</div>
-                  <div className="text-xs text-slate-500">{it.detail}</div>
-                </div>
-                <Badge className={st.color}>{st.label}</Badge>
-              </div>
-            );
-          })}
+          {/* 73-13: documented deviations overlay the checks; notes live in raumklima_layer.abweichungen. */}
+          {mitAbweichungen(checks.items, layer?.abweichungen).items.map((it) => (
+            <PruefZeile key={it.key} it={it} styles={RK_STATUS} bauart={bauartVon(project).bauart}
+              onVermerk={(key, v) => setLayer({ ...layer, abweichungen: { ...(layer?.abweichungen || {}), [key]: v || undefined } })} />
+          ))}
           <div className="text-xs text-slate-400 pt-1">
             {fenster.length} Hüllfenster berücksichtigt (platzierte + Auto-Fenster; Innenwand-Öffnungen ohne solaren Eintrag).
           </div>

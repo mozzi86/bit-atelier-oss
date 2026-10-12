@@ -4,11 +4,12 @@ import { Badge } from "@core/components/ui/badge";
 import { Button } from "@core/components/ui/button";
 import { Input } from "@core/components/ui/input";
 import { Label } from "@core/components/ui/label";
-import { Info, Lock, Sparkles, Loader2 } from "lucide-react";
+import { Info, Lock, Sparkles, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n } from "@core/lib/i18n";
 import { rangfolge } from "@core/lib/rules/priceStack";
 import { kgVorschlaege } from "@ava/lib/kgVorschlag";
+import { offeneKgListe } from "@ava/lib/kgVerdichtung";
 import { kennzahlen, zaehler, schwellenAus, AMPEL_NA, summen } from "@ava/lib/preisschichten";
 import { eur, num, dinLabel } from "./avaUtils";
 
@@ -67,19 +68,26 @@ export default function KostenberechnungTabelle({
   const [datum, setDatum] = useState(preisstand);
   const { t } = useI18n();
 
-  // --- Kostengruppen-Vorschlag über TypeSafe (Phase 76-03) --------------------
-  // Vorschläge liegen NUR im UI-Zustand (positionId → Vorschlag). Geschrieben
-  // wird eine Position erst durch den Klick auf ihren Chip — nie alle auf einmal
-  // (T-33-23: eine Kostengruppe bewegt Geld, der Nutzer bleibt Verantwortlicher).
+  // --- Kostengruppen-Vorschlag: Regeln zuerst, TypeSafe nur für die offene Liste
+  // (76-03, zurückgebaut in 76-07 nach D-P76-03). Vorschläge liegen NUR im
+  // UI-Zustand (positionId → Vorschlag). Geschrieben wird eine Position erst durch
+  // den Klick auf ihren Chip — nie alle auf einmal (T-33-23: eine Kostengruppe
+  // bewegt Geld, der Nutzer bleibt Verantwortlicher).
+  // Rules are condensed from the already assigned positions of this LV; TypeSafe
+  // is only reachable after the user opened the open list (76-04: 18.5 % hits
+  // without office conventions — a weak helper, not a first resort).
   const [kgVorschlag, setKgVorschlag] = useState({});
   const [kgBusy, setKgBusy] = useState(false);
+  const [offenAuf, setOffenAuf] = useState(false);
   const ohneKg = useMemo(() => positionen.filter((p) => !(p.din276 || p.kg2018) && p.id != null), [positionen]);
+  const kgListe = useMemo(() => offeneKgListe(positionen), [positionen]);
+  const offenOhneTs = kgListe.offen.filter((p) => !kgVorschlag[p.id]);
 
   const fehlendeVorschlagen = async () => {
     setKgBusy(true);
     try {
       const jeGewerk = new Map();
-      for (const p of ohneKg) {
+      for (const p of kgListe.offen) {
         const g = p.trade || "";
         if (!jeGewerk.has(g)) jeGewerk.set(g, []);
         jeGewerk.get(g).push(p);
@@ -98,6 +106,16 @@ export default function KostenberechnungTabelle({
       toast.error(e?.message || String(e));
     }
     setKgBusy(false);
+  };
+
+  const regelAnnehmen = async (p, r) => {
+    if (!onUpdate || !r?.kg2018) return;
+    await onUpdate(p.id, {
+      din276: r.kg2018,
+      din276_fassung: "2018",
+      din276_confidence: r.confidence,
+      din276_hinweis: `Regel · ${r.regel}`,
+    });
   };
 
   const vorschlagAnnehmen = async (p, v) => {
@@ -174,22 +192,52 @@ export default function KostenberechnungTabelle({
           <CardTitle className="text-base">Kostenberechnung — Kostenanschlag 2020 (fix) vs. Kostenstand heute</CardTitle>
           {ohneKg.length > 0 && (
             <Button
-              type="button" variant="outline" size="sm" onClick={fehlendeVorschlagen} disabled={kgBusy}
-              aria-label={t("Fehlende KG vorschlagen")} data-testid="kg-fehlende-vorschlagen"
+              type="button" variant="outline" size="sm" onClick={() => setOffenAuf((x) => !x)}
+              aria-expanded={offenAuf} aria-controls="kg-offene-liste" data-testid="kg-offene-liste-umschalten"
             >
-              {kgBusy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
-              {t("Fehlende KG vorschlagen")} ({ohneKg.length})
+              {offenAuf ? <ChevronDown className="w-3 h-3 mr-1" /> : <ChevronRight className="w-3 h-3 mr-1" />}
+              {t("Ohne Kostengruppe")}: {ohneKg.length} · {t("per Regel")} {Object.keys(kgListe.perRegel).length} · {t("offen")} {kgListe.offen.length}
             </Button>
           )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {offenAuf && ohneKg.length > 0 && (
+          <div id="kg-offene-liste" className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2 text-xs" data-testid="kg-offene-liste">
+            <p className="text-slate-600">
+              {t("Regeln zuerst: Vorschläge aus den bereits zugeordneten Positionen dieses LV erscheinen als Chip „Regel“ in der Spalte KG. Offen bleiben Positionen, die keine Regel trifft.")}
+            </p>
+            {kgListe.offen.length === 0 ? (
+              <p className="text-slate-500">{t("Keine offenen Positionen — alle tragen einen Regel-Vorschlag.")}</p>
+            ) : (
+              <>
+                <ul className="list-disc pl-5 max-h-40 overflow-y-auto">
+                  {kgListe.offen.map((p) => (
+                    <li key={p.id}><span className="font-mono">{p.oz}</span> {p.short_text || p.title}</li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button" variant="outline" size="sm" onClick={fehlendeVorschlagen} disabled={kgBusy || offenOhneTs.length === 0}
+                    aria-label={t("Offene Liste per TypeSafe vorschlagen")} data-testid="kg-fehlende-vorschlagen"
+                  >
+                    {kgBusy ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+                    {t("Offene Liste per TypeSafe vorschlagen")} ({kgListe.offen.length})
+                  </Button>
+                  <span className="text-slate-500">
+                    {t("Gemessen 21.09.2026: ohne Bürokonventionen trifft TypeSafe 18,5 % der Kostengruppen — nur ein Hinweis, keine Zuordnung.")}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
         {/* --- Preisstand-Regler: ein DATUM ------------------------------- */}
         <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-2">
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <Label className="text-xs">Preisstand (Datum, nicht Faktor)</Label>
-              <Input
+              <Input aria-label={t("Preisstand (Datum, nicht Faktor)")}
                 type="month"
                 value={datum}
                 onChange={(e) => { setDatum(e.target.value); onPreisstand?.(e.target.value); }}
@@ -304,6 +352,21 @@ export default function KostenberechnungTabelle({
                         <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
                           {z.p.din276 || z.p.kg2018 || (() => {
                             const v = kgVorschlag[z.p.id];
+                            const r = kgListe.perRegel[String(z.p.id)];
+                            if (!v && r) {
+                              return (
+                                <button
+                                  type="button"
+                                  className={`rounded border px-1.5 py-0.5 text-xs ${CHIP_KLASSE[r.confidence] || CHIP_KLASSE.niedrig}`}
+                                  title={`${r.regel} — ${t("Regel-Vorschlag übernehmen")}`}
+                                  onClick={() => regelAnnehmen(z.p, r)}
+                                  disabled={!onUpdate}
+                                  data-testid="kg-regel-chip"
+                                >
+                                  {t("Regel")} {r.kg2018}
+                                </button>
+                              );
+                            }
                             if (!v) return "—";
                             if (v.kg2018 == null) {
                               return (

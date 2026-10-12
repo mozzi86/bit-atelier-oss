@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ablage-liste"
+description = "Enables the ablage_liste command without any pre-configured scope."
+commands.allow = ["ablage_liste"]
+
+[[permission]]
+identifier = "deny-ablage-liste"
+description = "Denies the ablage_liste command without any pre-configured scope."
+commands.deny = ["ablage_liste"]

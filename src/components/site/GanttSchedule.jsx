@@ -6,6 +6,8 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { CalendarRange, Plus, Bell, Building2, User } from "lucide-react";
 import { taskTiming, pendingNotifications, formatLead } from "./notifications";
+// 89-05: click on a task opens it for editing; badge with predecessor findings.
+import { vorgaengerPruefung } from "@/lib/planung/bauablauf";
 
 const DAY = 24 * 3600 * 1000;
 
@@ -19,7 +21,7 @@ function barColor(timing) {
   return phaseBar[timing.phase] || "bg-slate-400";
 }
 
-export default function GanttSchedule({ tasks = [], onAddTask }) {
+export default function GanttSchedule({ tasks = [], onAddTask, onEditTask = null }) {
   const now = new Date();
   const notifiedRef = useRef(false);
 
@@ -46,6 +48,7 @@ export default function GanttSchedule({ tasks = [], onAddTask }) {
   }
 
   const notifications = useMemo(() => pendingNotifications(tasks, now), [tasks]);
+  const kettenBefunde = useMemo(() => vorgaengerPruefung(tasks), [tasks]);
 
   // Fire toasts once for due notifications.
   useEffect(() => {
@@ -117,7 +120,10 @@ export default function GanttSchedule({ tasks = [], onAddTask }) {
               return (
                 <div key={task.id} className="flex items-center gap-2">
                   <div className="w-[252px] shrink-0">
-                    <div className="text-sm font-medium truncate">{task.name}</div>
+                    {onEditTask ? (
+                      <button type="button" className="text-sm font-medium truncate text-left hover:underline max-w-full" data-testid="gantt-task" data-name={task.name}
+                        onClick={() => onEditTask(task)}>{task.name}</button>
+                    ) : <div className="text-sm font-medium truncate">{task.name}</div>}
                     <div className="text-xs text-slate-500 flex items-center gap-1 truncate">
                       <User className="w-3 h-3" /> {task.assignee_name} · {task.company_name}
                     </div>
@@ -148,6 +154,9 @@ export default function GanttSchedule({ tasks = [], onAddTask }) {
                     )}
                     {timing.phase === "active" && <Badge className="bg-blue-100 text-blue-800 text-[10px]">läuft</Badge>}
                     {timing.phase === "done" && <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">fertig</Badge>}
+                    {(kettenBefunde.get(String(task.id)) || []).some((h) => h.stufe === "warn") && (
+                      <Badge className="bg-amber-100 text-amber-800 text-[10px] ml-1" title={(kettenBefunde.get(String(task.id)) || []).map((h) => h.text).join(" · ")}>⚠</Badge>
+                    )}
                   </div>
                 </div>
               );

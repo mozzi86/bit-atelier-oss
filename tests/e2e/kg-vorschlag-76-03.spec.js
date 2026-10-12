@@ -1,4 +1,4 @@
-// Headless-Nachweis 76-03: Kostengruppen-Vorschlag über TypeSafe — im Formular
+// Headless-Nachweis 76-03 (since 76-07: TypeSafe only behind the open list): Kostengruppen-Vorschlag über TypeSafe — im Formular
 // und in der Kostenberechnungstabelle, als Vorschlag, der erst durch Klick wirkt.
 //
 // Netz: alles außer localhost geblockt; /api/integrations/typesafe wird per
@@ -12,7 +12,7 @@
 import { request } from "@playwright/test";
 import { test, expect } from "./fixtures/base.js";
 
-const API = "http://localhost:3001/api/";
+const API = `http://localhost:${Number(process.env.API_PORT) || 3001}/api/`;
 const PROJEKT = "Review Testhaus";
 const KURZTEXT = "Bauzaun H 2m aufstellen und raeumen (76-03 Test)";
 
@@ -108,8 +108,15 @@ test.describe("76-03 Kostengruppen-Vorschlag (TypeSafe)", () => {
       // --- Tabelle -----------------------------------------------------------
       await page.getByRole("tab", { name: /Kostenberechnung/ }).dispatchEvent("mousedown");
       await page.getByRole("tab", { name: /Kostenberechnung/ }).click();
+      // 76-07 (D-P76-03): the TypeSafe button sits behind the open list of the rules —
+      // invisible until the list is opened, and only for positions no rule hits.
+      const umschalter = page.getByTestId("kg-offene-liste-umschalten");
+      await expect(umschalter).toBeVisible({ timeout: 15000 });
+      await expect(page.getByTestId("kg-fehlende-vorschlagen")).toHaveCount(0);
+      await umschalter.click();
+      await expect(page.getByTestId("kg-offene-liste")).toContainText(KURZTEXT);
       const knopf = page.getByTestId("kg-fehlende-vorschlagen");
-      await expect(knopf).toBeVisible({ timeout: 15000 });
+      await expect(knopf).toBeVisible();
       await knopf.click();
       const chip = page.getByTestId("kg-chip").first();
       await expect(chip).toContainText("Vorschlag 391 (0,91)", { timeout: 10000 });
@@ -151,6 +158,7 @@ test.describe("76-03 Kostengruppen-Vorschlag (TypeSafe)", () => {
       await page.getByRole("tab", { name: /Kostenberechnung/ }).waitFor({ timeout: 30000 });
       await page.getByRole("tab", { name: /Kostenberechnung/ }).dispatchEvent("mousedown");
       await page.getByRole("tab", { name: /Kostenberechnung/ }).click();
+      await page.getByTestId("kg-offene-liste-umschalten").click();
       await page.getByTestId("kg-fehlende-vorschlagen").click();
       await expect(page.getByText(/TYPESAFE_API_KEY fehlt/)).toBeVisible({ timeout: 10000 });
       await expect(page.getByTestId("kg-chip")).toHaveCount(0);
@@ -158,6 +166,42 @@ test.describe("76-03 Kostengruppen-Vorschlag (TypeSafe)", () => {
       expect(pos.din276 || "").toBe("");
     } finally {
       await aufraeumen(api, posId);
+    }
+  });
+  test("76-07 Regeln zuerst: Regel-Chip aus den zugeordneten Positionen, kein TypeSafe-Aufruf", async ({ page }) => {
+    const api = await request.newContext({ baseURL: API });
+    const projekt = await testprojekt(api);
+    await alteTestpositionenLoeschen(api);
+    const ids = [];
+    const anlegen = async (oz, text, kg) => {
+      const res = await api.post("entities/LVPosition", {
+        data: { project_id: projekt.id, oz, trade: "Rohbau 76-07", title: text, short_text: text, unit: "m", quantity: 1, din276: kg, din276_fassung: "2018" },
+      });
+      expect(res.ok()).toBeTruthy();
+      ids.push((await res.json()).id);
+    };
+    try {
+      let aufrufe = 0;
+      await netzBlocken(page, (route) => { aufrufe += 1; return route.fulfill({ status: 503, body: "{}" }); });
+      await anlegen("76.07.1", "Mauerwerk KS 24 cm (76-03 Test)", "331");
+      await anlegen("76.07.2", "Mauerwerk KS 17,5 cm (76-03 Test)", "331");
+      await anlegen("76.07.3", "Bauzaun stellen (76-03 Test)", "391");
+      await anlegen("76.07.4", "Bauzaun abbauen (76-03 Test)", "");
+      await page.goto(`/AVA?projekt=${encodeURIComponent(PROJEKT)}`);
+      await page.getByRole("tab", { name: /Kostenberechnung/ }).waitFor({ timeout: 30000 });
+      await page.getByRole("tab", { name: /Kostenberechnung/ }).dispatchEvent("mousedown");
+      await page.getByRole("tab", { name: /Kostenberechnung/ }).click();
+      const zeile = page.locator("tr", { hasText: "Bauzaun abbauen (76-03 Test)" });
+      await expect(zeile.getByTestId("kg-regel-chip")).toHaveText(/Regel 391/, { timeout: 15000 });
+      await page.getByTestId("kg-offene-liste-umschalten").click();
+      await expect(page.getByTestId("kg-offene-liste")).not.toContainText("Bauzaun abbauen");
+      await zeile.getByTestId("kg-regel-chip").click();
+      await expect.poll(async () => (await (await api.get(`entities/LVPosition/${ids[3]}`)).json()).din276, { timeout: 10000 }).toBe("391");
+      const pos = await (await api.get(`entities/LVPosition/${ids[3]}`)).json();
+      expect(pos.din276_hinweis).toMatch(/^Regel · /);
+      expect(aufrufe).toBe(0);
+    } finally {
+      for (const id of ids) await api.delete(`entities/LVPosition/${id}`);
     }
   });
 });

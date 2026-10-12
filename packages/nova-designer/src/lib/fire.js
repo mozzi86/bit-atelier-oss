@@ -12,6 +12,8 @@
 // coerced (num). OKF (Fußbodenoberkante höchstes Geschoss) wird NIE mit der
 // Gesamthöhe verwechselt — fire.js rechnet nur mit dem übergebenen okf-Wert.
 
+import { OFFEN, konzeptAuswertung } from "@designer/lib/pruefStatus";
+
 // Härtende Division: nie durch <0.1 teilen (gegen 0/leer/negativ).
 const safeDiv = (a, b) => a / Math.max(0.1, b);
 // Defensive, nicht-negative Zahl.
@@ -159,9 +161,12 @@ export function feuerwehrplanStatus(bestandteile = {}) {
   return { erfuellt, gesamt, vollstaendig: erfuellt === gesamt };
 }
 
-// Plausibilitäts-Checks (Konzept) — bewusst NUR "pass"/"warn", NIE "fail" (Haftung):
+// Plausibilitäts-Checks (Konzept) — bewusst NUR "pass"/"warn"/"offen", NIE "fail" (Haftung):
 // Richtwerte dürfen nicht als prüffähiges Brandschutzkonzept / bestandene Abnahme
 // erscheinen (T-18-04). Genau 7 Items.
+// 72-04: a missing input (OKF 0, escape route length 0, footprint 0, parapet unknown) is
+// "offen", never "pass" — before, "kein Hochhaus" and "Fluchtweg ≤ 35 m" were green for an
+// empty form. "offen" and not "warn": nothing is violated, the input is missing.
 /** @param {Record<string, any>} [o] okf (m), groessteNE (m²), freistehend, nutzung, laengsteFlucht (m), maxFluchtweg (m), anleiterArt, bruestung (m), flaecheJeTr (m²), footArea (m²), bmaMode, schutzumfang */
 export function brandChecks({
   okf = 0, groessteNE = 0, freistehend = false, nutzung = "wohnen",
@@ -187,36 +192,47 @@ export function brandChecks({
   const bmaErforderlich = bmaMode === "auto" ? (hochhaus || sb.ist) : bmaMode === "ja";
   const fwpErf = fwpMode === "auto" ? feuerwehrplanErforderlich(bmaErforderlich, sb.ist) : fwpMode === "ja";
   const fwStatus = feuerwehrplanStatus(feuerwehrBestandteile);
+  const hoeheErfasst = num(okf) > 0;
+  const fluchtErfasst = num(laengsteFlucht) > 0;
+  // Without a height the automatic BMA duty cannot be derived (high-rise is the main
+  // trigger) — "keine Pflicht" would be a silent pass. A Sonderbau trigger from the use
+  // still counts, it does not depend on the height.
+  const bmaOffen = bmaMode === "auto" && !bmaErforderlich && !hoeheErfasst;
+  const fwpOffen = fwpMode === "auto" && !fwpErf && bmaOffen;
 
   const items = [
     {
       key: "gk",
       label: "Gebäudeklasse & Feuerwiderstand (Richtwert)",
-      status: num(okf) > 0 ? "pass" : "warn",
-      detail: num(okf) > 0
+      status: hoeheErfasst ? "pass" : OFFEN,
+      detail: hoeheErfasst
         ? `Gebäudeklasse GK ${gk} — ${feuerwiderstand(gk)} (nur größte NE geprüft — Summe/Anzahl NE offen)`
         : "OKF / Geschosse pflegen (Gebäudemodell)",
     },
     {
       key: "hochhaus",
       label: "Hochhaus-Erkennung (Richtwert)",
-      status: hochhaus ? "warn" : "pass",
-      detail: hochhaus
-        ? "Hochhaus (OKF > 22 m) — MHHR/Sonderbau-Verfahren, Prüfsachverständige:r erforderlich"
-        : "kein Hochhaus (OKF ≤ 22 m)",
+      status: !hoeheErfasst ? OFFEN : hochhaus ? "warn" : "pass",
+      detail: !hoeheErfasst
+        ? "OKF fehlt — Hochhaus-Grenze 22 m nicht prüfbar"
+        : hochhaus
+          ? "Hochhaus (OKF > 22 m) — MHHR/Sonderbau-Verfahren, Prüfsachverständige:r erforderlich"
+          : "kein Hochhaus (OKF ≤ 22 m)",
     },
     {
       key: "fluchtweg",
       label: "Fluchtweglänge (Konzept)",
-      status: fluchtwegOk(laengsteFlucht, maxFluchtweg) ? "pass" : "warn",
-      detail: fluchtwegOk(laengsteFlucht, maxFluchtweg)
-        ? `längste ≈ ${de(laengsteFlucht)} m ≤ ${de(maxFluchtweg)} m zulässig`
-        : `Fluchtweglänge ≈ ${de(laengsteFlucht)} m über zulässigem Stichmaß (${de(maxFluchtweg)} m)`,
+      status: !fluchtErfasst ? OFFEN : fluchtwegOk(laengsteFlucht, maxFluchtweg) ? "pass" : "warn",
+      detail: !fluchtErfasst
+        ? "längste Fluchtweglänge fehlt — eingeben oder im Plan zeichnen"
+        : fluchtwegOk(laengsteFlucht, maxFluchtweg)
+          ? `längste ≈ ${de(laengsteFlucht)} m ≤ ${de(maxFluchtweg)} m zulässig`
+          : `Fluchtweglänge ≈ ${de(laengsteFlucht)} m über zulässigem Stichmaß (${de(maxFluchtweg)} m)`,
     },
     {
       key: "rettungsweg2",
       label: "2. Rettungsweg (Konzept)",
-      status: rw2Ok ? "pass" : "warn",
+      status: rw2Ok ? "pass" : (anleiterArt !== "nein" && !bruErfasst ? OFFEN : "warn"),
       detail: rw2Ok
         ? "2. Rettungsweg baulich/über Anleiterung zulässig"
         : (anleiterArt !== "nein" && !bruErfasst
@@ -226,7 +242,7 @@ export function brandChecks({
     {
       key: "treppenraeume",
       label: "Notwendige Treppenräume (Richtwert)",
-      status: num(footArea) > 0 ? "pass" : "warn",
+      status: num(footArea) > 0 ? "pass" : OFFEN,
       detail: num(footArea) > 0
         ? `${de(erfTr)} notwendige Treppenräume`
         : "Grundfläche/Gebäudemodell pflegen",
@@ -234,8 +250,10 @@ export function brandChecks({
     {
       key: "bma",
       label: "Brandmeldeanlage / BMZ (Richtwert)",
-      status: !bmaErforderlich || (bmaErforderlich && schutzumfang) ? "pass" : "warn",
-      detail: !bmaErforderlich
+      status: bmaOffen ? OFFEN : !bmaErforderlich || (bmaErforderlich && schutzumfang) ? "pass" : "warn",
+      detail: bmaOffen
+        ? "OKF fehlt — BMA-Pflicht nicht ableitbar"
+        : !bmaErforderlich
         ? "keine BMA-Pflicht abgeleitet"
         : (schutzumfang
           ? `BMA erforderlich — ${SCHUTZUMFANG[schutzumfang]?.label || schutzumfang}, ≈ ${de(melderAnzahl(ueberwachteFlaeche, flaecheJeMelder))} Melder`
@@ -244,8 +262,10 @@ export function brandChecks({
     {
       key: "feuerwehrplaene",
       label: "Feuerwehrpläne DIN 14095 (Konzept)",
-      status: !fwpErf || (fwpErf && fwStatus.vollstaendig) ? "pass" : "warn",
-      detail: !fwpErf
+      status: fwpOffen ? OFFEN : !fwpErf || (fwpErf && fwStatus.vollstaendig) ? "pass" : "warn",
+      detail: fwpOffen
+        ? "OKF fehlt — Pflicht zu Feuerwehrplänen nicht ableitbar"
+        : !fwpErf
         ? "keine Feuerwehrpläne erforderlich"
         : (fwStatus.vollstaendig
           ? `Feuerwehrpläne vollständig (${fwStatus.erfuellt}/${fwStatus.gesamt})`
@@ -253,10 +273,7 @@ export function brandChecks({
     },
   ];
 
-  const score = Math.round((items.filter((i) => i.status === "pass").length / Math.max(1, items.length)) * 100);
-  const warns = items.filter((i) => i.status === "warn").length;
-  const verdict = warns > 0 ? "Konzept mit Hinweisen" : "Konzept plausibel";
-  return { items, score, warns, verdict };
+  return konzeptAuswertung(items);
 }
 
 /**

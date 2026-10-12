@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-datei-stand"
+description = "Enables the datei_stand command without any pre-configured scope."
+commands.allow = ["datei_stand"]
+
+[[permission]]
+identifier = "deny-datei-stand"
+description = "Denies the datei_stand command without any pre-configured scope."
+commands.deny = ["datei_stand"]

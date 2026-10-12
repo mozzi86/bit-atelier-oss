@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ablage-ordner-anlegen"
+description = "Enables the ablage_ordner_anlegen command without any pre-configured scope."
+commands.allow = ["ablage_ordner_anlegen"]
+
+[[permission]]
+identifier = "deny-ablage-ordner-anlegen"
+description = "Denies the ablage_ordner_anlegen command without any pre-configured scope."
+commands.deny = ["ablage_ordner_anlegen"]

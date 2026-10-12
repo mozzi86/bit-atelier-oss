@@ -268,3 +268,26 @@ export function recolorElements(merged, colorForEid) {
     }
   }
 }
+
+/**
+ * Show/hide elements of the merged mesh by rewriting its index buffer (89-04, status visibility).
+ * A hidden element keeps its index range, but every one of its triangles is collapsed onto its
+ * first vertex (zero area): nothing is drawn, the raycast finds nothing, and the face→element
+ * lookup (`expressIdAtFaceIndex`) stays valid because no offset moves. `merged.index` itself is
+ * never touched — it is the source for recolouring and the ghost highlight.
+ * @param {{ index: ArrayLike<number>, ranges: Array<{ eid: number, start: number, count: number }> }} merged
+ * @param {Uint32Array|Uint16Array|number[]} zielIndex index array of the rendered geometry (same length as merged.index)
+ * @param {(eid: number) => boolean} istSichtbar visibility per expressId
+ * @returns {number} number of hidden element ranges
+ */
+export function sichtbarkeitAnwenden(merged, zielIndex, istSichtbar) {
+  const { index, ranges } = merged;
+  let ausgeblendet = 0;
+  for (const r of ranges) {
+    const sichtbar = istSichtbar(r.eid);
+    if (!sichtbar) ausgeblendet += 1;
+    const leer = index[r.start];
+    for (let i = r.start; i < r.start + r.count; i++) zielIndex[i] = sichtbar ? index[i] : leer;
+  }
+  return ausgeblendet;
+}

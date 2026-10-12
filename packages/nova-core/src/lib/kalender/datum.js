@@ -7,6 +7,11 @@
 //
 // In:  date strings (the first 10 characters count) and numbers.
 // Out: date strings, numbers; null for invalid input. Import-free.
+//
+// Phase 81 (81-01) adds, without changing anything above: isoTag (the Berlin
+// calendar day of a TIMESTAMP via Intl — for days the UTC rule is the same, for
+// a timer start at 23:30 Berlin time it is not), plusJahre, isoWoche, wochenTage
+// (ISO 8601 weeks for the time-tracking grid) and datumText (display only).
 
 const TAG_MS = 86400000;
 
@@ -178,4 +183,85 @@ export function heuteLokal(jetzt = new Date()) {
   const m = String(jetzt.getMonth() + 1).padStart(2, "0");
   const d = String(jetzt.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+// --- Phase 81 (81-01): Berlin day of a timestamp, years, ISO weeks ----------
+
+/** Berlin calendar formatter, created once ('en-CA' formats as YYYY-MM-DD). */
+const BERLIN_TAG = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" });
+
+/**
+ * Calendar day in Berlin of a value: a plain 'YYYY-MM-DD' stays as it is, a
+ * timestamp (ISO string with time, milliseconds or Date) is converted with Intl
+ * in the time zone Europe/Berlin — never with the device's local getters (79's
+ * source guard), so the result is the same on every device and under TZ=UTC.
+ * '2026-06-19T22:00:00Z' → '2026-06-20' (summer time, UTC+2).
+ * @param {string|number|Date} wert day, ISO timestamp, epoch milliseconds or Date
+ * @returns {string|null} 'YYYY-MM-DD', null for unparsable input
+ */
+export function isoTag(wert) {
+  if (typeof wert === "string" && /^\d{4}-\d{2}-\d{2}$/.test(wert)) return parseTag(wert);
+  if (wert === null || wert === undefined || wert === "") return null;
+  const d = wert instanceof Date ? wert : new Date(/** @type {any} */ (wert));
+  if (Number.isNaN(d.getTime())) return null;
+  const teile = Object.fromEntries(BERLIN_TAG.formatToParts(d).map((p) => [p.type, p.value]));
+  return parseTag(`${teile.year}-${teile.month}-${teile.day}`);
+}
+
+/**
+ * Adds years with the month-end capping of plusMonate (2028-02-29 + 5 → 2033-02-28).
+ * @param {string} tagIso 'YYYY-MM-DD'
+ * @param {number} jahre years, may be negative
+ * @returns {string|null}
+ */
+export function plusJahre(tagIso, jahre) {
+  if (!Number.isFinite(jahre)) return null;
+  return plusMonate(tagIso, Math.trunc(jahre) * 12);
+}
+
+/**
+ * ISO 8601 week of a day: the week belongs to the year of its Thursday, weeks
+ * start on Monday. 2026-09-28 → {jahr: 2026, woche: 40}; 2027-01-01 → {2026, 53}.
+ * @param {string} tagIso 'YYYY-MM-DD'
+ * @returns {{jahr: number, woche: number}|null}
+ */
+export function isoWoche(tagIso) {
+  const s = parseTag(tagIso);
+  if (!s) return null;
+  const wt = /** @type {number} */ (wochentag(s));
+  const isoWt = wt === 0 ? 7 : wt; // Monday 1 … Sunday 7
+  const donnerstag = /** @type {string} */ (plusTage(s, 4 - isoWt));
+  const jahr = /** @type {number} */ (jahrVon(donnerstag));
+  const woche = 1 + Math.floor(/** @type {number} */ (tageZwischen(tag(jahr, 1, 1), donnerstag)) / 7);
+  return { jahr, woche };
+}
+
+/**
+ * The seven days Monday–Sunday of an ISO week. Week 1 is the week with
+ * January 4th (ISO 8601). wochenTage(2026, 40) → 2026-09-28 … 2026-10-04.
+ * @param {number} jahr ISO week-numbering year
+ * @param {number} woche week 1–53
+ * @returns {string[]} seven 'YYYY-MM-DD', empty for invalid input
+ */
+export function wochenTage(jahr, woche) {
+  if (!Number.isInteger(jahr) || !Number.isInteger(woche) || woche < 1 || woche > 53) return [];
+  const jan4 = tag(jahr, 1, 4);
+  const wt = /** @type {number} */ (wochentag(jan4));
+  const montag1 = /** @type {string} */ (plusTage(jan4, -((wt === 0 ? 7 : wt) - 1)));
+  const start = /** @type {string} */ (plusTage(montag1, (woche - 1) * 7));
+  return Array.from({ length: 7 }, (_, i) => /** @type {string} */ (plusTage(start, i)));
+}
+
+/**
+ * Display text of a day: German '28.09.2026', English '28/09/2026'
+ * (en-GB order, the app's English locale). Display only — store ISO.
+ * @param {string} tagIso 'YYYY-MM-DD'
+ * @param {string} [sprache] 'de' (default) or 'en'
+ * @returns {string} '' for an invalid date
+ */
+export function datumText(tagIso, sprache = "de") {
+  const s = parseTag(tagIso);
+  if (!s) return "";
+  const [y, m, d] = [s.slice(0, 4), s.slice(5, 7), s.slice(8, 10)];
+  return sprache === "en" ? `${d}/${m}/${y}` : `${d}.${m}.${y}`;
 }

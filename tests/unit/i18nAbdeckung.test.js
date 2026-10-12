@@ -28,6 +28,12 @@ import { rechtsRueckweg } from "@core/lib/seitenLink";
 import { englischePaareAlle } from "./helpers/woerterbuch.mjs";
 import { REGELWERKE } from "@/lib/settings/regelwerke.js";
 import { REGEL_PRUEFTEXTE } from "@core/lib/regelwerk.js";
+import { AGENDA_GRUPPEN, TERMIN_ARTEN } from "@core/lib/kalender/termin.js";
+import { MODUL_LABELS, ROLLEN_LABELS, STUFEN_LABELS } from "@core/lib/rechte.js";
+import { ABNAHME_KATEGORIEN, ABNAHME_REGELN, SICHERHEIT_ARTEN } from "@core/lib/kalender/abnahme.js";
+import { BEREICHE as BRIEF_BEREICHE, POST_KANAL, POST_RICHTUNG, SCHREIBEN_STATUS } from "@core/lib/brief/status.js";
+import { ABWESENHEIT_ARTEN, ABWESENHEIT_STATUS } from "@/lib/abwesenheit/abwesenheit.js";
+import { QUELLEN } from "@/lib/termine/quellenRegistry.js";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 const ALTLAST = new URL("./i18n-en-altlast.json", import.meta.url);
@@ -119,6 +125,11 @@ function benutzteSchluessel() {
   for (const k of tabellenTexte("src/lib/accounting/reiter.js", "BUCHHALTUNG_REITER", ["label"])) merke(k, "src/lib/accounting/reiter.js");
   for (const k of tabellenTexte("packages/nova-core/src/lib/hoai/leistungsbilder.js", "LEISTUNGSBILDER", ["label"])) merke(k, "packages/nova-core/src/lib/hoai/leistungsbilder.js");
   for (const k of tabellenTexte("src/lib/accounting/einstellungen.js", "REGEL_TABELLE", ["label"])) merke(k, "src/lib/accounting/einstellungen.js");
+  // 81-01: tab labels of /TimeTracking, /Fees and /Controlling (the rule book zeit_honorar
+  // is covered through REGELWERKE below).
+  for (const k of tabellenTexte("src/lib/zeit/reiter.js", "ZEIT_REITER", ["label"])) merke(k, "src/lib/zeit/reiter.js");
+  for (const k of tabellenTexte("src/lib/honorar/reiter.js", "HONORAR_REITER", ["label"])) merke(k, "src/lib/honorar/reiter.js");
+  for (const k of tabellenTexte("src/lib/controlling/reiter.js", "CONTROLLING_REITER", ["label"])) merke(k, "src/lib/controlling/reiter.js");
   // 80-01: tab labels and hints of /People, area titles and descriptions of
   // /Settings, and every rule book of the registry (group title, rule labels,
   // sections, option labels, hints) — a group phase 81 adds is covered at once.
@@ -138,6 +149,22 @@ function benutzteSchluessel() {
   // 83-03: AI presets and connection types (LlmConnections.jsx passes label to t()).
   for (const k of tabellenTexte("packages/nova-core/src/lib/kiVorlagen.js", "KI_VORLAGEN", ["label"])) merke(k, "packages/nova-core/src/lib/kiVorlagen.js");
   for (const k of tabellenTexte("packages/nova-core/src/lib/kiVorlagen.js", "KI_TYPEN", ["label"])) merke(k, "packages/nova-core/src/lib/kiVorlagen.js");
+  // 82-01: tab labels of /Deadlines, /Absences, /Correspondence and the label tables of
+  // phase 82 (module import, pattern REGELWERKE); the rule groups fristen/kalender are
+  // covered through REGELWERKE above.
+  for (const [datei, name] of [["src/lib/termine/reiter.js", "FRISTEN_REITER"], ["src/lib/abwesenheit/reiter.js", "ABWESENHEIT_REITER"], ["src/lib/schriftverkehr/reiter.js", "SCHRIFT_REITER"]]) {
+    for (const k of tabellenTexte(datei, name, ["label"])) merke(k, datei);
+  }
+  const labelsVon = (/** @type {Record<string, any>} */ tabelle, /** @type {string} */ datei) => {
+    for (const v of Object.values(tabelle)) merke(typeof v === "string" ? v : v.label, datei);
+  };
+  labelsVon(TERMIN_ARTEN, "packages/nova-core/src/lib/kalender/termin.js");
+  for (const g of AGENDA_GRUPPEN) merke(g.label, "packages/nova-core/src/lib/kalender/termin.js");
+  for (const t of [ROLLEN_LABELS, MODUL_LABELS, STUFEN_LABELS]) labelsVon(t, "packages/nova-core/src/lib/rechte.js");
+  for (const t of [ABNAHME_REGELN, ABNAHME_KATEGORIEN, SICHERHEIT_ARTEN]) labelsVon(t, "packages/nova-core/src/lib/kalender/abnahme.js");
+  for (const t of [SCHREIBEN_STATUS, POST_RICHTUNG, POST_KANAL, BRIEF_BEREICHE]) labelsVon(t, "packages/nova-core/src/lib/brief/status.js");
+  for (const t of [ABWESENHEIT_ARTEN, ABWESENHEIT_STATUS]) labelsVon(t, "src/lib/abwesenheit/abwesenheit.js");
+  for (const q of QUELLEN) merke(q.label, "src/lib/termine/quellenRegistry.js");
   // 86-05b: figure labels of the proposal cards (VorschlagKarte passes k.label to t()).
   for (const k of tabellenTexte("packages/nova-designer/src/lib/bebauungsvorschlaege.js", "KENNZAHLEN", ["label"])) merke(k, "packages/nova-designer/src/lib/bebauungsvorschlaege.js");
   return schluessel;

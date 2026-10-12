@@ -10,9 +10,12 @@
 //      allows on an issued invoice (grundlagen.schreibschutzVerletzt).
 
 import React from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { buttonVariants } from "@core/components/ui/button";
 import { useI18n } from "@core/lib/i18n";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
+import { schreibenLink } from "@/lib/schriftverkehr/deepLink.js";
 import { tageZwischen } from "@core/lib/kalender/datum.js";
 import {
   basiszinsStandWarnung, faelligeMahnstufe, forderungAm, mahnTabelle, naechsteMahnstufe, ueberfaellige,
@@ -89,6 +92,8 @@ function stufenGueltig(stufen) {
  */
 export default function MahnwesenAbschnitt({ bh, projektId }) {
   const { t } = useI18n();
+  // 82-05: second entry to the same dunning text (79's mahnTextFelder) — edit it as a letter in the correspondence.
+  const schriftverkehr = useZugriff().darf("schriftverkehr", "voll");
   const alle = React.useMemo(() => bh.daten.Ausgangsrechnung || [], [bh.daten.Ausgangsrechnung]);
   const vertraege = bh.daten.Honorarvertrag || [];
   const liste = React.useMemo(() => (projektId ? alle.filter((r) => r.project_id === projektId) : alle), [alle, projektId]);
@@ -236,6 +241,12 @@ export default function MahnwesenAbschnitt({ bh, projektId }) {
                           onClick={() => setMahnungFuer({ zeile: z, stufe: /** @type {number} */ (z.faelligeStufe?.stufe) })}>
                           {t("Mahnung Stufe {n} erstellen").replace("{n}", String(z.faelligeStufe.stufe))}
                         </button>
+                      )}
+                      {schriftverkehr && (z.faelligeStufe || z.letzteStufe) && (
+                        <Link className={`${buttonVariants({ variant: "outline", size: "sm" })} ml-1`} data-testid="mahnung-schriftverkehr"
+                          to={schreibenLink({ neu: "mahnung", bezug: { typ: "rechnung", id: z.rechnung.id }, stufe: /** @type {number} */ (z.faelligeStufe?.stufe ?? z.letzteStufe?.stufe) })}>
+                          {t("Im Schriftverkehr bearbeiten")}
+                        </Link>
                       )}
                     </td>
                   </tr>

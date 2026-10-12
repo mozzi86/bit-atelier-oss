@@ -277,6 +277,23 @@ function markupXml(topic, meta) {
 }
 
 /**
+ * 88-01: camera position and unit direction from {pos, ziel} (metres), or null when
+ * either triple is not finite or both points coincide (no direction).
+ * @param {unknown} kamera
+ * @returns {{pos: number[], dir: number[]}|null}
+ */
+function kameraAus(kamera) {
+  const k = /** @type {any} */ (kamera);
+  const ok = (v) => Array.isArray(v) && v.length === 3 && v.every((x) => Number.isFinite(Number(x)));
+  if (!k || !ok(k.pos) || !ok(k.ziel)) return null;
+  const pos = k.pos.map(Number);
+  const d = k.ziel.map((x, i) => Number(x) - pos[i]);
+  const l = Math.hypot(d[0], d[1], d[2]);
+  if (!(l > 0)) return null;
+  return { pos, dir: d.map((x) => x / l) };
+}
+
+/**
  * viewpoint.bcfv je Topic. Guid MUSS identisch mit der Viewpoints-Guid im Markup sein.
  * Components-Sequenz: ViewSetupHints? -> Selection? -> Visibility(PFLICHT!) -> Coloring?.
  * Visibility ist Pflicht, SOBALD <Components> existiert (minOccurs=1 in visinfo.xsd).
@@ -300,13 +317,21 @@ function viewpointXml(topic) {
     teile.push("  </Components>");
   }
 
-  // Neutrale Perspektiv-Kamera: schaut von (10,-10,10) Richtung Ursprung, Z nach oben.
+  // 88-01 additive: topic.kamera = {pos:[x,y,z], ziel:[x,y,z]} (metres, IFC model
+  // coordinates, Z up) aims the camera at a point (e.g. an opening). Without it the
+  // output stays byte-identical: neutral camera from (10,-10,10) towards the origin.
+  const kam = kameraAus(topic.kamera);
   // Alle vier Kinder (ViewPoint/Direction/UpVector/FieldOfView) sind Pflicht.
   teile.push("  <PerspectiveCamera>");
-  teile.push("    <CameraViewPoint><X>10.0</X><Y>-10.0</Y><Z>10.0</Z></CameraViewPoint>");
-  teile.push(
-    "    <CameraDirection><X>-0.5773502691896258</X><Y>0.5773502691896258</Y><Z>-0.5773502691896258</Z></CameraDirection>"
-  );
+  if (kam) {
+    teile.push(`    <CameraViewPoint><X>${kam.pos[0]}</X><Y>${kam.pos[1]}</Y><Z>${kam.pos[2]}</Z></CameraViewPoint>`);
+    teile.push(`    <CameraDirection><X>${kam.dir[0]}</X><Y>${kam.dir[1]}</Y><Z>${kam.dir[2]}</Z></CameraDirection>`);
+  } else {
+    teile.push("    <CameraViewPoint><X>10.0</X><Y>-10.0</Y><Z>10.0</Z></CameraViewPoint>");
+    teile.push(
+      "    <CameraDirection><X>-0.5773502691896258</X><Y>0.5773502691896258</Y><Z>-0.5773502691896258</Z></CameraDirection>"
+    );
+  }
   teile.push("    <CameraUpVector><X>0.0</X><Y>0.0</Y><Z>1.0</Z></CameraUpVector>");
   teile.push("    <FieldOfView>60</FieldOfView>");
   teile.push("  </PerspectiveCamera>");
@@ -331,6 +356,7 @@ function viewpointXml(topic) {
  *   ifcGuids      optional: 22er-IFC-GlobalIds der betroffenen Bauteile (-> Viewpoint-Components)
  *   kommentare    optional (71-04): [{ guid?, datum?, autor?, text, viewpointGuid? }]
  *                 -> <Comment>-Elemente, Guid fehlt = deterministisch abgeleitet
+ *   kamera        optional (88-01): {pos:[x,y,z], ziel:[x,y,z]} in metres -> PerspectiveCamera
  *   creationDate / creationAuthor / modifiedDate / modifiedAuthor optional (71-04):
  *   importierte Werte bleiben erhalten; Defaults kommen aus meta
  * @param {Object} [meta]
@@ -377,6 +403,8 @@ export function buildBcfZip(topics, meta = {}) {
       creationAuthor: roh.creationAuthor || "",
       modifiedDate: roh.modifiedDate || "",
       modifiedAuthor: roh.modifiedAuthor || "",
+      // 88-01 additive: optional camera aimed at a point (see viewpointXml).
+      kamera: roh.kamera || null,
     };
 
     // ZIP-Pfade: Forward-Slashes, ohne fuehrenden Slash (Windows-Falle: keine Backslashes!)

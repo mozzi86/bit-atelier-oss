@@ -1,0 +1,85 @@
+{
+  "hinweis": "Bekannte axe-Verstöße je Seite (Regel → Anzahl Knoten). Nur schrumpfen lassen: docs/BARRIEREFREIHEIT-PRUEFUNG.md",
+  "tags": [
+    "wcag2a",
+    "wcag2aa",
+    "wcag21a",
+    "wcag21aa"
+  ],
+  "seiten": {
+    "/Dashboard": {
+      "color-contrast": 1,
+      "svg-img-alt": 5
+    },
+    "/Projects": {
+      "color-contrast": 4,
+      "nested-interactive": 5
+    },
+    "/Reports": {
+      "scrollable-region-focusable": 1
+    },
+    "/Deadlines": {
+      "color-contrast": 1
+    },
+    "/RealEstateFeasibility": {
+      "aria-progressbar-name": 4,
+      "color-contrast": 1
+    },
+    "/ComplexDesigner": {
+      "color-contrast": 6
+    },
+    "/Werkplanung": {
+      "color-contrast": 6
+    },
+    "/ModelCheck": {
+      "color-contrast": 2
+    },
+    "/BimViewer": {
+      "color-contrast": 1
+    },
+    "/ModelVersions": {
+      "color-contrast": 1
+    },
+    "/AVA": {
+      "color-contrast": 8
+    },
+    "/Finance": {
+      "color-contrast": 2
+    },
+    "/AIDashboard": {
+      "color-contrast": 5
+    },
+    "/TimeTracking": {
+      "color-contrast": 1
+    },
+    "/Fees": {
+      "color-contrast": 1
+    },
+    "/Controlling": {
+      "color-contrast": 1
+    },
+    "/Accounting": {
+      "color-contrast": 1
+    },
+    "/People": {
+      "color-contrast": 1,
+      "link-in-text-block": 1
+    },
+    "/Absences": {
+      "color-contrast": 1
+    },
+    "/AddressBook": {
+      "color-contrast": 1
+    },
+    "/Correspondence": {
+      "color-contrast": 1
+    },
+    "/Settings": {
+      "color-contrast": 1
+    },
+    "/BitAegis": {
+      "color-contrast": 1
+    },
+    "/barrierefreiheit": {}
+  }
+}

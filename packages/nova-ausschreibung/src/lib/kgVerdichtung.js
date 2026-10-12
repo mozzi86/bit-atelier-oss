@@ -232,10 +232,67 @@ export function pruefeReproduktion(zuordnungen = [], regeln = []) {
 }
 
 /**
+ * "Rules first" for LV positions without a cost group (76-07, decision D-P76-03).
+ *
+ * Rules are condensed from the positions of the SAME bill of quantities that already
+ * carry a cost group (`verdichte`, trade = `gewerk_nr`) — the office knowledge that
+ * is actually present, no catalogue guessed. Each position without a cost group is
+ * then run through `ordneZu`:
+ *  - a keyword rule hits → rule proposal (still a proposal: written only on the
+ *    user's click, T-33-23);
+ *  - only the trade's majority rule (fallback) would apply, or nothing → OPEN LIST.
+ *    The fallback is deliberately not counted: it is the majority of the trade,
+ *    not a statement about this position (see `ordneZu`).
+ * Only the open list may be handed to TypeSafe (measured 76-04: 18.5 % hits
+ * without office conventions vs. 96.8 % for the rules).
+ *
+ * Pure function, no network.
+ *
+ * @param {Array<{id?: any, trade?: string, short_text?: string, title?: string,
+ *   din276?: string, din276_fassung?: string, kg2018?: string, kg2008?: string,
+ *   din276_2008?: string}>} positionen LV positions of one project
+ * @returns {{ regeln: Array<object>, perRegel: Record<string, {kg2018: string, kg2008: string|null,
+ *   confidence: string, regel: string, herkunft: string}>, offen: Array<object> }}
+ *   `perRegel` keyed by position id; `offen` = positions without cost group and without rule hit
+ */
+export function offeneKgListe(positionen = []) {
+  const kg2018Von = (p) => p?.kg2018 || (p?.din276_fassung === '2008' ? null : p?.din276) || null;
+  const zuordnungen = (positionen || [])
+    .filter((p) => kg2018Von(p))
+    .map((p) => ({
+      gewerk_nr: p.trade || '',
+      oz: /** @type {any} */ (p).oz ?? null,
+      kurztext: p.short_text || p.title || '',
+      kg2018: kg2018Von(p),
+      kg2008: p.kg2008 || p.din276_2008 || null,
+    }));
+  const { regeln } = verdichte(zuordnungen);
+  /** @type {Record<string, any>} */
+  const perRegel = {};
+  const offen = [];
+  for (const p of positionen || []) {
+    if (p?.id == null || p.din276 || p.kg2018) continue;
+    const r = ordneZu({ gewerk_nr: p.trade || '', kurztext: p.short_text || p.title || '' }, regeln);
+    if (r.regel && !r.regel.fallback && r.kg2018) {
+      perRegel[String(p.id)] = {
+        kg2018: r.kg2018,
+        kg2008: r.kg2008 ?? null,
+        confidence: r.confidence,
+        regel: r.regel.name,
+        herkunft: 'Regel',
+      };
+    } else {
+      offen.push(p);
+    }
+  }
+  return { regeln, perRegel, offen };
+}
+
+/**
  * Den LLM-Auftrag für unbelegte Kurztexte aufbereiten.
  *
  * Bewusst KEIN Netzaufruf hier: diese Datei bleibt isomorph und testbar. Der
- * Aufrufer schickt `prompt`/`response_json_schema` an `invokeLLM` (bestehender
+ * Aufrufer schickt `prompt`/`daten`/`response_json_schema` an `invokeLLM` (bestehender
  * `llmRouter`) und gibt die Antwort an `vorschlagUebernehmen` weiter.
  *
  * Der Prompt sagt dem Modell ausdrücklich, dass „unbekannt" eine erlaubte Antwort
@@ -251,9 +308,14 @@ export function llmAuftrag(kurztexte = [], dinKatalog = [], gewerk = null) {
       + 'WICHTIG: Wenn die Zuordnung nicht eindeutig aus dem Kurztext folgt, antworte mit '
       + '"kg2018": null und "confidence": "niedrig". Eine geratene Kostengruppe ist schädlicher '
       + 'als keine — sie wird als Kostenzuordnung weiterverarbeitet.\n\n'
-      + (gewerk ? `Gewerk: ${gewerk}\n\n` : '')
       + `Erlaubte Codes:\n${codes.join('\n')}\n\n`
-      + `Kurztexte:\n${(kurztexte || []).map((t, i) => `${i + 1}. ${t}`).join('\n')}`,
+      + 'Die Kurztexte (nummeriert) und das Gewerk stehen im Datenblock „LV-Kurztexte“.',
+    // 78-12: short texts and trade come from tender files (GAEB, other parties) — data, not instructions.
+    daten: [{
+      quelle: 'LV-Kurztexte',
+      text: (gewerk ? `Gewerk: ${gewerk}\n\n` : '')
+        + (kurztexte || []).map((t, i) => `${i + 1}. ${t}`).join('\n'),
+    }],
     response_json_schema: {
       type: 'object',
       properties: {

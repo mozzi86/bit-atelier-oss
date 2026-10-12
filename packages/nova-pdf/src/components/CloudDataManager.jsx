@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { sichtbareDokumente } from "@core/lib/rechte.js";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@core/components/ui/card';
 import { Button } from '@core/components/ui/button';
@@ -14,6 +16,7 @@ import {
   ORDNER_VORLAGE, kinderVon, dateienIn, pfadZu, nachfahren, pruefeName, zielPfadFuer,
 } from "@core/lib/ordnerBaum";
 import { dokumentAblegen, pfadText } from "@core/lib/ablage";
+import { useI18n } from "@core/lib/i18n";
 
 // Cloud-Daten = Projektablage.
 //
@@ -27,10 +30,14 @@ import { dokumentAblegen, pfadText } from "@core/lib/ablage";
 
 /** @param {{selectedProject?: any, projects?: any[]}} props `projects` is passed by BitAegis but unused here */
 export default function CloudDataManager({ selectedProject }) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const projectId = selectedProject?.id || null;
   const [ordner, setOrdner] = useState([]);
-  const [dokumente, setDokumente] = useState([]);
+  // 82-02: only documents the role may see (Document.bereich: personnel, accounting, correspondence, fee PDFs).
+  const zugriff = useZugriff();
+  const [rohDokumente, setDokumente] = useState([]);
+  const dokumente = useMemo(() => sichtbareDokumente(rohDokumente, zugriff), [rohDokumente, zugriff]);
   const [aktuell, setAktuell] = useState(null); // null = Wurzel
   const [laedt, setLaedt] = useState(false);
   const [neuerName, setNeuerName] = useState('');
@@ -302,7 +309,7 @@ export default function CloudDataManager({ selectedProject }) {
                         </Badge>
                       )}
                     </button>
-                    <button type="button" onClick={() => ordnerLoeschen(o)} title="Ordner löschen (nur wenn leer)"
+                    <button aria-label={t("Ordner löschen")} type="button" onClick={() => ordnerLoeschen(o)} title="Ordner löschen (nur wenn leer)"
                       className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 transition-opacity">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

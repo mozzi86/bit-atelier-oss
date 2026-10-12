@@ -23,6 +23,7 @@ import { useBuildingProgram, polygonAreaM } from "@core/lib/useBuildingProgram";
 import { moebelById, moebelChecks } from "@designer/lib/moebel";
 import MoebelDraufsicht from "./MoebelDraufsicht";
 import { moebelFuerZone, setzeEigeneTypen } from "@designer/lib/moebel";
+import { useI18n } from "@core/lib/i18n";
 
 const de = (n) => Math.round(Number(n) || 0).toLocaleString("de-DE");
 const de1 = (n) => (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 1 });
@@ -115,6 +116,7 @@ function AsrCheckliste({ punkte, status, onToggle }) {
 
 // --- Raum-Card (eine Card je Raum, Vorlagen-Layout) ---------------------------------------
 function RoomCard({ zone, ov, checkStatus, setRoom, setCheck, moebel }) {
+  const { t } = useI18n();
   const key = roomKey(zone);
   const nutzung = ov.nutzung || "sonstige";
   const punkte = useMemo(() => checklistFuer(nutzung), [nutzung]);
@@ -192,7 +194,7 @@ function RoomCard({ zone, ov, checkStatus, setRoom, setCheck, moebel }) {
           <div className="space-y-1 col-span-2">
             <label className="text-xs text-slate-500">Nutzungsart (treibt Sollwert-Vorbelegung)</label>
             <Select value={nutzung} onValueChange={onNutzung}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("Nutzungsart (treibt Sollwert-Vorbelegung)")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Object.entries(NUTZUNGSARTEN).map(([k, v]) => (
                   <SelectItem key={k} value={k}>{v.label}</SelectItem>
@@ -224,7 +226,7 @@ function RoomCard({ zone, ov, checkStatus, setRoom, setCheck, moebel }) {
                 value={kpi.konformitaet}
                 onValueChange={(v) => setRoom(key, (r) => ({ ...r, konformitaet: v, konformitaetDirty: true }))}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("ASR-Konformität")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ja">ja</SelectItem>
                   <SelectItem value="nein">nein</SelectItem>
@@ -258,7 +260,7 @@ function RoomCard({ zone, ov, checkStatus, setRoom, setCheck, moebel }) {
               value={bewegungsSeite}
               onValueChange={(v) => setRoom(key, (r) => ({ ...r, bewegungsSeite: v }))}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("Benutzerseite (Bewegungsfläche)")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Object.entries(SEITEN).map(([k, v]) => (
                   <SelectItem key={k} value={k}>{v}</SelectItem>
@@ -316,6 +318,7 @@ function RoomCard({ zone, ov, checkStatus, setRoom, setCheck, moebel }) {
 }
 
 export default function AsrRaumdatenblatt({ complexData }) {
+  const { t } = useI18n();
   // Raumquelle READ-only aus der gemeinsamen Quelle — nie zurückschreiben.
   const { zones } = useBuildingProgram();
   // Möblierung read-only aus dem Innenausbau-Reiter (complexData.moeblierung).
@@ -555,7 +558,7 @@ export default function AsrRaumdatenblatt({ complexData }) {
               <div className="font-semibold text-slate-800 flex items-center gap-2">
                 <ListTodo className="w-4 h-4" /> Offene Punkte ({offenePunkte.length})
               </div>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setOffenePanel(false)}>
+              <Button aria-label={t("Offene Punkte schließen")} type="button" variant="ghost" size="sm" onClick={() => setOffenePanel(false)}>
                 <X className="w-4 h-4" />
               </Button>
             </div>

@@ -20,6 +20,7 @@ import {
   wirkung, verfahrensvergleich, wbChecks,
 } from "@designer/lib/thermalBridges";
 import { useBuildingProgram, programMetrics, footprintWD } from "@core/lib/useBuildingProgram";
+import { useI18n } from "@core/lib/i18n";
 
 // de-DE-Formatter: de ganzzahlig (kWh/a, m², W/K) · de1 (m, kW, %) · de2 (ψ) · de3 (ΔU_WB).
 // Ohne de3 würde ein ΔU_WB von 0,046 als „0“ erscheinen.
@@ -45,6 +46,7 @@ const JA_NEIN = [
 ];
 
 export default function WaermebrueckenPlanner() {
+  const { t } = useI18n();
   // --- Panel-State (alle Keys mit "waermebruecken:"-Präfix — modulweiter panelCache) ----
   const [verfahren, setVerfahren] = usePanelState("waermebruecken:verfahren", "pauschal");
   const [bauzustand, setBauzustand] = usePanelState("waermebruecken:bauzustand", "neubau");
@@ -252,7 +254,7 @@ export default function WaermebrueckenPlanner() {
             <div>
               <div className="text-xs text-slate-500 mb-1">Verfahren</div>
               <Select value={verfahren} onValueChange={onVerfahren}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("Verfahren")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(VERFAHREN).map(([k, v]) => (
                     <SelectItem key={k} value={k}>{v.label}</SelectItem>
@@ -266,7 +268,7 @@ export default function WaermebrueckenPlanner() {
               <div>
                 <div className="text-xs text-slate-500 mb-1">Bauzustand</div>
                 <Select value={bauzustand} onValueChange={setBauzustand}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Bauzustand")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="neubau">Neubau</SelectItem>
                     <SelectItem value="bestand">Bestand (Sanierung)</SelectItem>
@@ -276,7 +278,7 @@ export default function WaermebrueckenPlanner() {
               <div>
                 <div className="text-xs text-slate-500 mb-1">Innendämmung &gt; 50 % Außenwandfläche mit einbindenden Massivdecken</div>
                 <Select value={innendaemmung} onValueChange={onInnendaemmung}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Innendämmung > 50 % Außenwandfläche mit einbindenden Massivdecken")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {JA_NEIN.map((o) => <SelectItem key={o.v} value={o.v}>{o.label}</SelectItem>)}
                   </SelectContent>
@@ -308,7 +310,7 @@ export default function WaermebrueckenPlanner() {
               <div>
                 <div className="text-xs text-slate-500 mb-1">Dachfläche im Bezug</div>
                 <Select value={dachImBezug} onValueChange={(v) => { setDachImBezug(v); setAHuellDirty(false); }}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Dachfläche im Bezug")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {JA_NEIN.map((o) => <SelectItem key={o.v} value={o.v}>{o.label}</SelectItem>)}
                   </SelectContent>
@@ -317,7 +319,7 @@ export default function WaermebrueckenPlanner() {
               <div>
                 <div className="text-xs text-slate-500 mb-1">Bodenplatte bzw. Kellerdecke im Bezug</div>
                 <Select value={bodenImBezug} onValueChange={(v) => { setBodenImBezug(v); setAHuellDirty(false); }}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Bodenplatte bzw. Kellerdecke im Bezug")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {JA_NEIN.map((o) => <SelectItem key={o.v} value={o.v}>{o.label}</SelectItem>)}
                   </SelectContent>
@@ -350,7 +352,7 @@ export default function WaermebrueckenPlanner() {
             <div>
               <div className="text-xs text-slate-500 mb-1">Gebäudestandard (Referenzbasis)</div>
               <Select value={standard} onValueChange={onStandard}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("Gebäudestandard (Referenzbasis)")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(GEBAEUDESTANDARDS).map(([k, v]) => (
                     <SelectItem key={k} value={k}>{v.label}</SelectItem>
@@ -451,7 +453,7 @@ export default function WaermebrueckenPlanner() {
               <div>
                 <div className="text-xs text-slate-500 mb-1">Keller vorhanden</div>
                 <Select value={keller} onValueChange={setKeller}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Keller vorhanden")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {JA_NEIN.map((o) => <SelectItem key={o.v} value={o.v}>{o.label}</SelectItem>)}
                   </SelectContent>
@@ -460,7 +462,7 @@ export default function WaermebrueckenPlanner() {
               <div>
                 <div className="text-xs text-slate-500 mb-1">Dachform</div>
                 <Select value={dachform} onValueChange={setDachform}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Dachform")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="flach">Flachdach (Attika)</SelectItem>
                     <SelectItem value="steil">Steildach (Traufe/Ortgang)</SelectItem>
@@ -500,7 +502,7 @@ export default function WaermebrueckenPlanner() {
                   <div className="md:col-span-3">
                     <div className="text-xs text-slate-500 mb-1">Ausführungsqualität</div>
                     <Select value={r.qualitaet} onValueChange={(q) => onQualitaet(r.key, q)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={t("Ausführungsqualität")}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {Object.entries(AUSFUEHRUNG).map(([k, v]) => (
                           <SelectItem key={k} value={k}>{v.label}</SelectItem>

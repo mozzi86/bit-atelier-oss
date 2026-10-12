@@ -33,6 +33,9 @@ import { usePanelState } from "@core/lib/usePanelState";
 import { useSvgDrag } from "@core/lib/useSvgDrag";
 import { NumberField } from "@core/components/Field";
 import { STATUS_STYLE } from "@designer/lib/compliance";
+import PruefZeile from "@designer/components/PruefZeile";
+import { mitAbweichungen } from "@designer/lib/abweichung";
+import { bauartVon } from "@core/lib/bauart";
 import { useFachlayer } from "@designer/lib/useFachlayer";
 import { usePlanModel } from "@designer/lib/usePlanModel";
 import { DEFAULT_SANITAER_JE_WE } from "@designer/lib/hvac";
@@ -345,7 +348,8 @@ export default function EntwaesserungPlanner({ complexData = null } = {}) {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid md:grid-cols-[1fr_220px] gap-3">
-            <div tabIndex={0} className="outline-none" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && selDach) { e.preventDefault(); loescheDach(); } if (e.key === "Escape") setSelDach(null); }}>
+            <div tabIndex={0} role="group" aria-label={t("Plan-Zeichenfläche")} className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && selDach) { e.preventDefault(); loescheDach(); } if (e.key === "Escape") setSelDach(null); }}>
+              <p className="mb-1 text-[11px] text-slate-500">{t("Tastatur: Entf löscht die Auswahl, Esc bricht das Zeichnen ab.")}</p>
               <BimPlan2D
                 model={plan.model}
                 mode="grundriss"
@@ -479,7 +483,8 @@ export default function EntwaesserungPlanner({ complexData = null } = {}) {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className={`grid gap-3 ${regenWerkzeug === "zisterne" ? "lg:grid-cols-[1fr_240px]" : ""}`}>
-            <div tabIndex={0} className="outline-none" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && selRH) { e.preventDefault(); loescheRH(); } if (e.key === "Escape") { setDraft([]); setSelRH(null); } }}>
+            <div tabIndex={0} role="group" aria-label={t("Plan-Zeichenfläche")} className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && selRH) { e.preventDefault(); loescheRH(); } if (e.key === "Escape") { setDraft([]); setSelRH(null); } }}>
+              <p className="mb-1 text-[11px] text-slate-500">{t("Tastatur: Entf löscht die Auswahl, Esc bricht das Zeichnen ab.")}</p>
               <LageplanPlan
                 plan={plan}
                 parzelleM={parzelleM}
@@ -626,13 +631,11 @@ export default function EntwaesserungPlanner({ complexData = null } = {}) {
           <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Gauge className="w-4 h-4" /> {t("Prüfungen")}</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             <div className="space-y-1.5" data-testid="ew-checks">
-              {checks.map((c) => { const st = T_STATUS[c.status] || T_STATUS.offen; return (
-                <div key={c.key} className="flex items-center gap-2 rounded-lg border p-2" data-status={c.status}>
-                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${st.dot}`} />
-                  <div className="flex-1 min-w-0"><div className="text-sm font-medium text-slate-800">{c.label}</div><div className="text-[11px] text-slate-500">{c.detail}</div></div>
-                  <Badge className={`${st.color} shrink-0`}>{st.label}</Badge>
-                </div>
-              ); })}
+              {/* 73-13: documented deviations overlay the checks; notes live in entwaesserung_layer.abweichungen. */}
+              {mitAbweichungen(checks, entwRaw?.abweichungen).items.map((c) => (
+                <PruefZeile key={c.key} it={c} styles={T_STATUS} bauart={bauartVon(project).bauart}
+                  onVermerk={(key, v) => setEntwRaw({ ...entwRaw, abweichungen: { ...(entwRaw?.abweichungen || {}), [key]: v || undefined } })} />
+              ))}
             </div>
           </CardContent>
         </Card>

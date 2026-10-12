@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-datei-ausstehend"
+description = "Enables the datei_ausstehend command without any pre-configured scope."
+commands.allow = ["datei_ausstehend"]
+
+[[permission]]
+identifier = "deny-datei-ausstehend"
+description = "Denies the datei_ausstehend command without any pre-configured scope."
+commands.deny = ["datei_ausstehend"]

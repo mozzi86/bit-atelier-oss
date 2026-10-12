@@ -12,6 +12,7 @@ import {
 import { Stat } from "@core/components/Field";
 import { Zap, Plus, Trash2 } from "lucide-react";
 import { useBuildingProgram, programMetrics } from "@core/lib/useBuildingProgram";
+import { useI18n } from "@core/lib/i18n";
 
 const SYSTEM_TYPES = [
   "Wärmepumpe (Sole)",
@@ -25,6 +26,7 @@ const SYSTEM_TYPES = [
 
 // Manage energy systems. complexData.energy_systems = [{ type, capacity_kw, coverage }]
 export default function EnergyPlanner({ complexData, onEnergySystemsChange }) {
+  const { t } = useI18n();
   const systems = complexData?.energy_systems || [];
   const store = useBuildingProgram();
   const pm = programMetrics(store);
@@ -70,7 +72,7 @@ export default function EnergyPlanner({ complexData, onEnergySystemsChange }) {
 
       <div className="flex items-center gap-2">
         <label className="text-xs text-slate-500">Beheizte Fläche (BGF) m²</label>
-        <Input
+        <Input aria-label={t("Beheizte Fläche (BGF) m²")}
           type="number"
           className="w-32 h-8"
           value={heatedArea}
@@ -93,14 +95,14 @@ export default function EnergyPlanner({ complexData, onEnergySystemsChange }) {
           {systems.map((s, i) => (
             <div key={i} className="grid grid-cols-[2fr_1fr_1fr_auto] gap-3 items-center">
               <Select value={s.type} onValueChange={(v) => upd(i, { type: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("Art des Energiesystems")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {SYSTEM_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Input type="number" value={s.capacity_kw} onChange={(e) => upd(i, { capacity_kw: Number(e.target.value) })} placeholder="kW" />
               <Input type="number" step="0.05" value={s.coverage} onChange={(e) => upd(i, { coverage: Number(e.target.value) })} placeholder="Deckung 0–1" />
-              <Button variant="ghost" size="icon" className="text-red-500" onClick={() => remove(i)}>
+              <Button aria-label={t("Energiesystem entfernen")} variant="ghost" size="icon" className="text-red-500" onClick={() => remove(i)}>
                 <Trash2 className="w-4 h-4" />
               </Button>
             </div>

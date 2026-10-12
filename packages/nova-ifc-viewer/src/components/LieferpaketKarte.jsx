@@ -16,7 +16,12 @@
 // In (props): projectId, projekt {name, client}, modell {fileName, buffer,
 //   parsed, geo, quelle}, ergebnis (Prüflauf), reportRef (Druckvorlage),
 //   briefkopf, baueBcf() → Uint8Array|null, onLieferInfo(info) → der
-//   Prüfbericht zieht daraus seinen Abschnitt „Lieferung".
+//   Prüfbericht zieht daraus seinen Abschnitt „Lieferung"; seit 66-15 auch den
+//   ganzen Plan (`plan`, sollIst) für „Befunde je Bauabschnitt" — ModelCheck liest
+//   ihn nur, Schreiber des Layers bleibt allein diese Karte (KD-17).
+// 66-15: Spalte „Geschosse" je Lieferung (Feld `geschosse`, lieferung_layer v2) —
+//   welche Modellgeschosse der Abschnitt umfasst; leer = gleichnamiges Geschoss
+//   oder ganzes Gebäude.
 // Out: UI; Seiteneffekte: lieferung_layer, ZIP-Download, Ablage „Nachweis".
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -158,6 +163,17 @@ export default function LieferpaketKarte({
     [zeilen, gewaehltId, layer, heute],
   );
   const [beauftragung, setBeauftragung] = useState("");
+  // 66-15: storey names of the loaded model (import list, else the geometry elements).
+  const modellGeschosse = useMemo(() => {
+    const aus = Array.isArray(modell?.parsed?.storeys) ? modell.parsed.storeys : [];
+    const geo = (modell?.geo?.elemente || []).map((e) => e?.storey).filter(Boolean);
+    return [...new Set([...aus, ...geo].map(String))];
+  }, [modell]);
+  /** Toggle one storey of a delivery's section. */
+  const geschossUmschalten = (l, g) => {
+    const alt = Array.isArray(l.geschosse) ? l.geschosse : [];
+    aendern(l.id, { geschosse: alt.includes(g) ? alt.filter((x) => x !== g) : [...alt, g] });
+  };
 
   const anlegen = () => {
     const { layer: neu, lieferung } = lieferungAnlegen(layer, { termin: heute, log: 300 });
@@ -204,12 +220,13 @@ export default function LieferpaketKarte({
   useEffect(() => {
     onLieferInfo({
       lieferung: gewaehlt,
+      plan: zeilen,
       dateiname: dateiname.name,
       fachsicht: layer.fachsicht,
       herkunft: t("geladene Datei, kein Neu-Export (Stufe A)"),
       warnungen: [...(originalPruefung?.warnungen || []), ...(namePruefung?.warnungen || [])],
     });
-  }, [gewaehlt, dateiname, layer.fachsicht, originalPruefung, namePruefung, onLieferInfo, t]);
+  }, [gewaehlt, zeilen, dateiname, layer.fachsicht, originalPruefung, namePruefung, onLieferInfo, t]);
 
   // --- Paket erzeugen ---------------------------------------------------------------
   const [busy, setBusy] = useState(false);
@@ -337,6 +354,7 @@ export default function LieferpaketKarte({
                     <th className="py-1 pr-2">Nr.</th>
                     <th className="py-1 pr-2">{t("Termin")}</th>
                     <th className="py-1 pr-2">{t("Bauabschnitt")}</th>
+                    <th className="py-1 pr-2">{t("Geschosse")}</th>
                     <th className="py-1 pr-2">LoG</th>
                     <th className="py-1 pr-2">{t("Status")}</th>
                     <th className="py-1 pr-2">{t("Soll/Ist")}</th>
@@ -356,6 +374,26 @@ export default function LieferpaketKarte({
                       </td>
                       <td className="py-1 pr-2">
                         <Input value={l.bauabschnitt} onChange={(e) => aendern(l.id, { bauabschnitt: e.target.value })} className="h-7 w-32 text-xs" placeholder="BA" />
+                      </td>
+                      <td className="py-1 pr-2">
+                        {/* 66-15: storeys of the section — saved names that are not in the
+                            loaded model stay listed (another model version may have them). */}
+                        <details className="relative" data-testid={`geschosse-${l.nr}`}>
+                          <summary className="cursor-pointer select-none text-slate-600 max-w-[10rem] truncate">
+                            {(l.geschosse || []).length ? l.geschosse.join(", ") : t("alle / gleichnamig")}
+                          </summary>
+                          <div className="absolute z-10 mt-1 min-w-[12rem] rounded-md border border-slate-200 bg-white p-2 shadow">
+                            {[...new Set([...modellGeschosse, ...(l.geschosse || [])])].length === 0 && (
+                              <p className="text-slate-400">{t("Kein Geschoss im Modell.")}</p>
+                            )}
+                            {[...new Set([...modellGeschosse, ...(l.geschosse || [])])].map((g) => (
+                              <label key={g} className="flex items-center gap-1.5 py-0.5">
+                                <input type="checkbox" checked={(l.geschosse || []).includes(g)} onChange={() => geschossUmschalten(l, g)} />
+                                <span>{g}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </details>
                       </td>
                       <td className="py-1 pr-2">
                         <select className={selectKlasse} value={l.log} onChange={(e) => aendern(l.id, { log: Number(e.target.value) })}>

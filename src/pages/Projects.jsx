@@ -1,5 +1,7 @@
 import { seitenWurzel } from "@core/lib/utils";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { projekteNachZugriff } from "@core/lib/rechte.js";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { bitApi } from "@core/api/bitApi";
 import { Button } from "@core/components/ui/button";
@@ -11,6 +13,10 @@ import { useProject } from "@core/lib/ProjectContext";
 import { createPageUrl } from "@core/utils";
 import { normalisiereProjekte } from "@core/lib/labels";
 import { useI18n } from "@core/lib/i18n";
+import { useBestaetigung } from "@core/lib/useBestaetigung";
+import { BUERO_CLOUD_FREIGABE, DATENQUELLE } from "@core/lib/umgebung";
+import { datumText, heuteLokal } from "@core/lib/kalender/datum.js";
+import { istArchiviert, ladeLoeschDaten, loeschSperre } from "@/lib/projektLoeschschutz.js";
 
 import ProjectForm from "../components/projects/ProjectForm";
 import ProjectGrid from "../components/projects/ProjectGrid";
@@ -18,8 +24,27 @@ import ProjectGrid from "../components/projects/ProjectGrid";
 import Startpfad from "../components/projects/Startpfad";
 import ProjectFilters from "../components/projects/ProjectFilters";
 
+/** Fills {key} placeholders after translation. */
+const fuellen = (/** @type {string} */ text, /** @type {Record<string, any>} */ werte) => text.replace(/\{(\w+)\}/g, (_, k) => String(werte[k] ?? ""));
+
+/**
+ * Plural label of a guard reason (literal t() calls for the EN guard).
+ * @param {(k: string) => string} t
+ * @param {string} entitaet
+ * @returns {string}
+ */
+function grundText(t, entitaet) {
+  if (entitaet === "Zeitbuchung") return t("Zeitbuchungen");
+  if (entitaet === "Honorarangebot") return t("Honorarangebote");
+  if (entitaet === "Honorarvertrag") return t("Architektenverträge");
+  return t("Ausgangsrechnungen");
+}
+
 export default function Projects() {
-  const [projects, setProjects] = useState([]);
+  // 82-02: the role's project view (same filter as ProjectContext) — applied on render, so "Ansicht als" needs no reload.
+  const zugriff = useZugriff();
+  const [rohProjekte, setProjects] = useState([]);
+  const projects = useMemo(() => projekteNachZugriff(rohProjekte, zugriff), [rohProjekte, zugriff]);
   const [filteredProjects, setFilteredProjects] = useState([]);
   // 72-01 A-9 (Befund N-13): /Projects?neu=1 öffnet das Formular direkt —
   // der Dashboard-Button „Neues Projekt" verlinkt hierher.
@@ -42,7 +67,8 @@ export default function Projects() {
   // werden — sonst arbeitet der Nutzer unbemerkt im alten weiter.
   const { setProjectId, reloadProjects } = useProject();
   // 72-08 (N-02): the h1 is the menu title (src/navigation.js), same key.
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const bestaetige = useBestaetigung();
 
   useEffect(() => {
     loadProjects();
@@ -71,7 +97,8 @@ export default function Projects() {
   };
 
   const filterProjects = () => {
-    let filtered = projects;
+    // 81-06: archived projects leave the grid; they are listed under "Archiviert".
+    let filtered = projects.filter((p) => !istArchiviert(p));
 
     // Search filter — 72-01 A-7: fehlende Felder (z. B. kein Auftraggeber)
     // dürfen die Suche nicht mit einem TypeError abbrechen lassen.
@@ -153,8 +180,42 @@ export default function Projects() {
     }
   };
 
+  // 81-06 (D-P81-30): archive instead of delete; restore clears the field.
+  const setzeArchiv = async (project, datum) => {
+    try {
+      await bitApi.entities.Project.update(project.id, { archiviert_am: datum });
+      toast.success(fuellen(datum ? t("Projekt „{name}“ archiviert") : t("Projekt „{name}“ wiederhergestellt"), { name: project.name }));
+      reloadProjects?.();
+      loadProjects();
+    } catch (err) {
+      toast.error(fuellen(t("Archivieren fehlgeschlagen: {fehler}"), { fehler: err?.message || err }));
+    }
+  };
+
   // 72-01 A-11 (Befund N-17): Projekt löschen mit Rückfrage im Klartext.
+  // 81-06 (BUERO-03): first the deletion guard — time bookings, fee offers,
+  // contracts and invoices have retention duties, such a project is archived
+  // instead (the dialog has no delete button). The guard reads 81 data only
+  // through the 81 storage layer and nothing on a locked data path (E-03).
   const handleDelete = async (project) => {
+    let daten;
+    try {
+      daten = await ladeLoeschDaten(bitApi, project.id, { datenquelle: DATENQUELLE, cloudFreigabe: BUERO_CLOUD_FREIGABE });
+    } catch (err) {
+      toast.error(fuellen(t("Löschprüfung fehlgeschlagen — nichts gelöscht: {fehler}"), { fehler: err?.message || err }));
+      return;
+    }
+    const sperre = loeschSperre(project.id, daten);
+    if (sperre.gesperrt) {
+      const gruende = sperre.gruende.map((g) => `${grundText(t, g.entitaet)}: ${g.anzahl}`).join(", ");
+      const archivieren = await bestaetige({
+        titel: fuellen(t("„{name}“ kann nicht gelöscht werden"), { name: project.name }),
+        text: `${t("Stundennachweise, Verträge und Rechnungen sind aufbewahrungspflichtig.")} ${gruende}. ${t("Archivieren blendet das Projekt in der Projektwahl aus; alle Daten bleiben erhalten.")}`,
+        bestaetigen: t("Archivieren"),
+      });
+      if (archivieren) await setzeArchiv(project, heuteLokal());
+      return;
+    }
     const ok = window.confirm(`Projekt „${project.name}" wirklich löschen? Zugehörige Daten (Entwürfe, LV, Issues) bleiben als Waisen erhalten.`);
     if (!ok) return;
     try {
@@ -244,6 +305,23 @@ export default function Projects() {
           onEdit={handleEdit}
           onDelete={handleDelete}
         />
+
+        {/* 81-06: archived projects, collapsed, with "Wiederherstellen". */}
+        {projects.some(istArchiviert) && (
+          <details className="rounded-lg border border-slate-200 p-3 dark:border-slate-700" data-testid="projekte-archiviert">
+            <summary className="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-200">
+              {fuellen(t("Archiviert ({n})"), { n: projects.filter(istArchiviert).length })}
+            </summary>
+            <ul className="mt-2 space-y-2">
+              {projects.filter(istArchiviert).map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span>{p.name} <span className="text-slate-500">· {t("archiviert am")} {datumText(p.archiviert_am, lang)}</span></span>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setzeArchiv(p, null)}>{t("Wiederherstellen")}</Button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </div>
     </div>
   );

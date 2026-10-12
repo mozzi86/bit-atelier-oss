@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { bitApi } from "@core/api/bitApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Button } from "@core/components/ui/button";
@@ -7,7 +7,10 @@ import { Input } from "@core/components/ui/input";
 import { Progress } from "@core/components/ui/progress";
 import { toast } from "sonner";
 import { useProject } from "@core/lib/ProjectContext";
+import { mitVerlauf } from "@core/lib/leistungsstand.js";
+import { heuteLokal } from "@core/lib/kalender/datum.js";
 import { CalendarClock, Minus, Plus, Save, RotateCcw, Eraser } from "lucide-react";
+import { useI18n } from "@core/lib/i18n";
 
 // HOAI-Leistungsphasen 1–9. Der Fortschritt je LP wird eingegeben und
 // projektbezogen persistiert (Entität HoaiPlan, Muster wie SpaceProgram /
@@ -53,6 +56,7 @@ const deDateTime = (iso) => {
 };
 
 export default function ProjectPlanner({ selectedProject }) {
+  const { t } = useI18n();
   // Persistenz hängt am globalen aktuellen Projekt (wie FoerderPlanner /
   // SpaceProgram). `selectedProject` ist der Komplex-Datensatz und liefert
   // nur den Titel-Zusatz.
@@ -65,12 +69,17 @@ export default function ProjectPlanner({ selectedProject }) {
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [laden, setLaden] = useState(false);
+  // Phase 81-05 (D-P81-17), additive spot in this Hermes file: the stored monthly
+  // history travels with every save so the project controlling can show the earned
+  // value per month; this tab stays the only progress editor.
+  const verlaufRef = useRef(/** @type {any[]} */ ([]));
 
   // Gespeicherten Stand des aktuellen Projekts laden; ohne Datensatz die
   // Vorbelegung aus der Projektphase zeigen (sichtbar als „Vorbelegung").
   useEffect(() => {
     let abgebrochen = false;
     const reset = () => {
+      verlaufRef.current = [];
       setRecId(null);
       setProgress(vorbelegung(lp));
       setGespeichertAm(null);
@@ -85,6 +94,7 @@ export default function ProjectPlanner({ selectedProject }) {
         if (r && Array.isArray(r.progress)) {
           const werte = Array.from({ length: 9 }, (_, i) => normWert(r.progress[i]));
           setRecId(r.id);
+          verlaufRef.current = Array.isArray(r.verlauf) ? r.verlauf : [];
           setProgress(werte);
           setGespeichertAm(r.updated_date || r.created_date || null);
           setDirty(false);
@@ -122,11 +132,12 @@ export default function ProjectPlanner({ selectedProject }) {
     if (!projectId) { toast.error("Kein Projekt gewählt — Fortschritt kann nicht gespeichert werden"); return; }
     setBusy(true);
     try {
-      const payload = { project_id: projectId, progress };
+      const payload = { project_id: projectId, progress, verlauf: mitVerlauf(verlaufRef.current, progress, heuteLokal()).verlauf };
       const r = recId
         ? await bitApi.entities.HoaiPlan.update(recId, payload)
         : await bitApi.entities.HoaiPlan.create(payload);
       if (r?.id) setRecId(r.id);
+      verlaufRef.current = payload.verlauf;
       setGespeichertAm(r?.updated_date || r?.created_date || new Date().toISOString());
       setDirty(false);
       toast.success("HOAI-Fortschritt gespeichert");
@@ -213,13 +224,13 @@ export default function ProjectPlanner({ selectedProject }) {
                 <Badge className={color}>{label}</Badge>
               </div>
               <div className="flex gap-1">
-                <Button variant="outline" size="icon" className="h-7 w-7" title="−10 %" onClick={() => adjust(i, -10)}>
+                <Button aria-label={t("Um 10 % verringern")} variant="outline" size="icon" className="h-7 w-7" title="−10 %" onClick={() => adjust(i, -10)}>
                   <Minus className="w-3.5 h-3.5" />
                 </Button>
-                <Button variant="outline" size="icon" className="h-7 w-7" title="+10 %" onClick={() => adjust(i, 10)}>
+                <Button aria-label={t("Um 10 % erhöhen")} variant="outline" size="icon" className="h-7 w-7" title="+10 %" onClick={() => adjust(i, 10)}>
                   <Plus className="w-3.5 h-3.5" />
                 </Button>
-                <Button
+                <Button aria-label={t("Auf „nicht erfasst“ setzen")}
                   variant="outline"
                   size="icon"
                   className="h-7 w-7 text-slate-400"

@@ -1,5 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// PORT / API_PORT (+ API_ORIGINS=http://localhost:<PORT>) run the suite beside a local install
+// that already holds 3001, e.g. PORT=5183 API_PORT=3011 API_ORIGINS=http://localhost:5183.
+const BASIS = `http://localhost:${Number(process.env.PORT) || 5173}`;
+
 /**
  * Playwright-Konfiguration für NovaConstruct.
  * Startet automatisch den Dev-Stack (Express :3001 + Vite :5173) über `npm run dev`
@@ -16,7 +20,7 @@ export default defineConfig({
   globalSetup: "./tests/e2e/global-setup.js",
   reporter: [["html", { open: "never" }], ["list"]],
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: BASIS,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
@@ -28,7 +32,7 @@ export default defineConfig({
   ],
   webServer: {
     command: "npm run dev",
-    url: "http://localhost:5173",
+    url: BASIS,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

@@ -9,6 +9,7 @@ import {
 } from "@core/components/ui/select";
 import { AlertTriangle, Database, Loader2, CloudDownload, FileUp, FlaskConical } from "lucide-react";
 import { korridorText } from "@ava/lib/priceReference";
+import { useI18n } from "@core/lib/i18n";
 
 // Quelle → Badge-Darstellung (Lizenz-Attribution pro Zelle, Pflicht 2011/833/EU).
 const SOURCE_BADGE = {
@@ -26,6 +27,7 @@ const tEur = (v) => `${Math.round((v || 0) / 1000).toLocaleString("de-DE")} T€
 // Preisreferenz-Panel: TED-Sync, DÖE-CSV-Import, Demo-Seed + Benchmark-Zellen-Tabelle.
 // Los-Summen-Benchmarks — NIE €/Einheit, keine Kalkulationsgrundlage (Phase 28).
 export default function PriceReferencePanel({ priceRefs = [], onSyncTed, onImportDoee }) {
+  const { t } = useI18n();
   const currentYear = new Date().getFullYear();
   const [tedYear, setTedYear] = useState(String(currentYear - 1));
   const [doeeYear, setDoeeYear] = useState(String(currentYear - 1));
@@ -75,7 +77,7 @@ export default function PriceReferencePanel({ priceRefs = [], onSyncTed, onImpor
               <div className="flex-1">
                 <Label className="text-xs">Jahr</Label>
                 <Select value={tedYear} onValueChange={setTedYear}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Jahr")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["2024", "2025", "2026"].map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
                   </SelectContent>
@@ -92,7 +94,7 @@ export default function PriceReferencePanel({ priceRefs = [], onSyncTed, onImpor
             <div className="font-medium text-sm flex items-center gap-1.5"><FileUp className="w-4 h-4 text-emerald-600" /> DÖE-Monatspaket (CSV)</div>
             <div>
               <Label className="text-xs">Jahr</Label>
-              <Input type="number" value={doeeYear} onChange={(e) => setDoeeYear(e.target.value)} />
+              <Input aria-label={t("Jahr")} type="number" value={doeeYear} onChange={(e) => setDoeeYear(e.target.value)} />
             </div>
             <div className="space-y-1 text-xs">
               <label className="block">tender.csv<input type="file" accept=".csv" onChange={setFile("tenderFile")} className="block w-full text-xs" /></label>

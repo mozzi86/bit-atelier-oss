@@ -1,4 +1,7 @@
-// Constraint-Zeichner (Labor; formerly "BIT Sketcher") — parametrisches 2D-Zeichnen nach FreeCAD-Sketcher-Vorbild
+// Skizze (72-05, variant a; formerly "Constraint-Zeichner (Labor)", before that "BIT Sketcher"):
+// a real sketch tool — freehand ink with pen pressure, pen widths, colours and eraser
+// (lib/freihand.js) — with the parametric constraint drawing as its second MODE.
+// The constraint mode: parametrisches 2D-Zeichnen nach FreeCAD-Sketcher-Vorbild
 // auf FreeCADs eigenem Constraint-Solver (planegcs als WASM, LGPL — siehe
 // THIRD-PARTY-LICENSES.md). Vorarbeit für Phase 34 „Plan-Werkstatt":
 // Geometrie zeichnen → Constraints setzen → Solver hält alles konsistent,
@@ -11,8 +14,10 @@ import { Button } from "@core/components/ui/button";
 import { useI18n } from "@core/lib/i18n";
 import {
   MousePointer2, Dot, Slash, Circle as CircleIcon, Trash2, Eraser,
-  AlignStartVertical, AlignStartHorizontal, Ruler, Lock, Spline, TriangleRight,
+  AlignStartVertical, AlignStartHorizontal, Ruler, Lock, Spline, TriangleRight, PenLine, FileX,
 } from "lucide-react";
+import { bytesVon, DB_MAX_BYTES } from "@core/lib/speicherOrt";
+import { STIFTBREITEN, STIFTFARBEN, glaetten, vereinfachen, kompakt, radiereTreffer } from "../lib/freihand.js";
 import { Sketch, CONSTRAINT_GLYPHS } from "../lib/sketchModel.js";
 import { runSolve } from "../lib/solveCore.js";
 import SketchCanvas from "../components/SketchCanvas.jsx";
@@ -54,7 +59,14 @@ export default function SketchStudio({ initialJson, onPersist }) {
 
   const [version, setVersion] = useState(0);
   const [epoche, setEpoche] = useState(0); // remountet den Canvas bei Sketch-Austausch (Draft/View-Reset)
-  const [tool, setTool] = useState("select");
+  // 72-05: two modes of one editor — freehand ink (default) and the constraint drawing.
+  // `?modus=constraint` opens the constraint mode directly (link "In der Skizze öffnen" in the
+  // floor plan of the building model edits constraints, not ink).
+  const startModus = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("modus") === "constraint"
+    ? "constraint" : "freihand";
+  const [modus, setModus] = useState(startModus);
+  const [tool, setTool] = useState(startModus === "constraint" ? "select" : "freihand");
+  const [stift, setStift] = useState({ breite: "mittel", farbe: STIFTFARBEN[0] });
   const [selection, setSelection] = useState(() => new Set());
   const [lastSolve, setLastSolve] = useState(null);
   const [solverStatus, setSolverStatus] = useState("lädt…");
@@ -173,6 +185,28 @@ export default function SketchStudio({ initialJson, onPersist }) {
 
   const onDragEnd = () => resolve(); // Diagnose/DOF ohne Drag-Constraints auffrischen
 
+  // ---- 72-05 Freihand ----
+  // Raw samples → stream-lined → simplified to a tenth of the pen width (invisible at that
+  // width, keeps the sketch layer small) → compact [x, y, p]. Ink never touches the solver.
+  const onAddStroke = (roh) => {
+    const breite = STIFTBREITEN[stift.breite] ?? STIFTBREITEN.mittel;
+    const punkte = kompakt(vereinfachen(glaetten(roh), breite * 0.1));
+    if (!punkte.length) return;
+    sketch.addStroke(punkte, { breite, farbe: stift.farbe });
+    bump();
+  };
+  const onErase = (w, radius_m) => {
+    const ids = radiereTreffer(sketch.strokes.values(), w, radius_m);
+    for (const id of ids) sketch.deleteGeometry(id);
+    if (ids.length) bump();
+  };
+  const modusWechseln = (m) => {
+    setModus(m);
+    setTool(m === "freihand" ? "freihand" : "select");
+  };
+  // Storage rule (speicherOrt.js): the sketch lives in a database field — say it when it outgrows 256 KB.
+  const skizzeBytes = useMemo(() => bytesVon(sketch.serialize()), [sketch, version]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const onSelect = (id, additiv) => {
     setSelection((alt) => {
       const neu = new Set(additiv ? alt : []);
@@ -273,19 +307,24 @@ export default function SketchStudio({ initialJson, onPersist }) {
     bump();
   };
 
-  const istLeer = sketch.points.size === 0 && sketch.circles.size === 0;
+  const istLeer = sketch.points.size === 0 && sketch.circles.size === 0 && sketch.strokes.size === 0;
   const statusFarbe =
     lastSolve == null || istLeer ? "bg-slate-100 text-slate-600"
     : lastSolve.conflicting.length || !lastSolve.applied ? "bg-rose-100 text-rose-700"
     : lastSolve.dof === 0 ? "bg-emerald-100 text-emerald-700"
     : "bg-amber-100 text-amber-700";
 
-  const werkzeuge = [
-    { id: "select", icon: MousePointer2, label: "Auswahl / Ziehen" },
-    { id: "point", icon: Dot, label: "Punkt" },
-    { id: "line", icon: Slash, label: "Linienzug" },
-    { id: "circle", icon: CircleIcon, label: "Kreis" },
-  ];
+  const werkzeuge = modus === "freihand"
+    ? [
+      { id: "freihand", icon: PenLine, label: t("Stift") },
+      { id: "radierer", icon: Eraser, label: t("Radierer") },
+    ]
+    : [
+      { id: "select", icon: MousePointer2, label: "Auswahl / Ziehen" },
+      { id: "point", icon: Dot, label: "Punkt" },
+      { id: "line", icon: Slash, label: "Linienzug" },
+      { id: "circle", icon: CircleIcon, label: "Kreis" },
+    ];
 
   const constraintButtons = [
     { label: "Koinzident", glyph: CONSTRAINT_GLYPHS.coincident, aktiv: sel.punkte.length === 2, tu: () => addConstraint({ type: "coincident", a: sel.punkte[0], b: sel.punkte[1] }) },
@@ -307,12 +346,20 @@ export default function SketchStudio({ initialJson, onPersist }) {
           {/* h1 = menu name (N-02 name table: no "BIT" prefix); "Labor" as a
               separate tag, like the Labor group it sits in. */}
           <h1 className="text-2xl font-bold">
-            {t("Constraint-Zeichner")}{" "}
+            {t("Skizze")}{" "}
             <span className="text-sm font-normal text-slate-400">({t("Labor")})</span>
           </h1>
           <p className="text-sm text-slate-500">
-            {t("Parametrisches Zeichnen nach FreeCAD-Vorbild — Constraints werden vom GCS-Solver (WASM) live gehalten. Ziehen verformt regelkonform.")}
+            {modus === "freihand"
+              ? t("Freihand mit Stift: Druck steuert die Strichstärke, Radierer entfernt ganze Striche (auch die Radiertaste des Stifts).")
+              : t("Parametrisches Zeichnen nach FreeCAD-Vorbild — Constraints werden vom GCS-Solver (WASM) live gehalten. Ziehen verformt regelkonform.")}
           </p>
+          <div className="mt-2 inline-flex rounded-lg border border-slate-200 p-0.5" role="group" aria-label={t("Modus")}>
+            {[["freihand", t("Freihand")], ["constraint", t("Constraint-Modus")]].map(([m, l]) => (
+              <Button key={m} type="button" size="sm" variant={modus === m ? "default" : "ghost"} aria-pressed={modus === m}
+                data-testid={`modus-${m}`} onClick={() => modusWechseln(m)}>{l}</Button>
+            ))}
+          </div>
         </div>
         <div className={`px-3 py-1.5 rounded-full text-xs font-semibold ${statusFarbe}`}>
           {lastSolve == null
@@ -340,6 +387,7 @@ export default function SketchStudio({ initialJson, onPersist }) {
               size="icon"
               title={w.label}
               aria-label={w.label}
+              data-testid={`werkzeug-${w.id}`}
               onClick={() => setTool(w.id)}
             >
               <w.icon className="w-4 h-4" />
@@ -350,7 +398,7 @@ export default function SketchStudio({ initialJson, onPersist }) {
             <Trash2 className="w-4 h-4" />
           </Button>
           <Button variant="outline" size="icon" title="Alles löschen" aria-label="Alles löschen" onClick={allesLoeschen}>
-            <Eraser className="w-4 h-4" />
+            <FileX className="w-4 h-4" />
           </Button>
         </div>
 
@@ -370,11 +418,47 @@ export default function SketchStudio({ initialJson, onPersist }) {
             onAddCircle={onAddCircle}
             onDragPoint={onDragPoint}
             onDragEnd={onDragEnd}
+            onAddStroke={onAddStroke}
+            onErase={onErase}
+            stift={{ breite: STIFTBREITEN[stift.breite] ?? STIFTBREITEN.mittel, farbe: stift.farbe }}
           />
         </div>
 
         {/* rechtes Panel (Phone: unter dem Canvas) */}
         <div className="flex flex-col gap-3 lg:overflow-y-auto">
+          {modus === "freihand" && (
+            <Card data-testid="stift-karte">
+              <CardContent className="p-4 space-y-3">
+                <p className="text-xs uppercase tracking-wider text-slate-400">{t("Stift")}</p>
+                <div className="grid grid-cols-3 gap-1.5" role="group" aria-label={t("Strichstärke")}>
+                  {[["fein", t("fein")], ["mittel", t("mittel")], ["breit", t("breit")]].map(([k, l]) => (
+                    <Button key={k} type="button" size="sm" variant={stift.breite === k ? "default" : "outline"} aria-pressed={stift.breite === k}
+                      data-testid={`stift-breite-${k}`} onClick={() => { setStift((s) => ({ ...s, breite: k })); setTool("freihand"); }}
+                      className="flex flex-col h-auto py-1.5 gap-1">
+                      <span className="block rounded-full bg-current" style={{ width: "70%", height: Math.max(1, STIFTBREITEN[k] * 40) }} />
+                      <span className="text-[11px]">{l}</span>
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex gap-2" role="group" aria-label={t("Farbe")}>
+                  {STIFTFARBEN.map((f) => (
+                    <button key={f} type="button" aria-label={`${t("Farbe")} ${f}`} aria-pressed={stift.farbe === f} data-testid={`stift-farbe-${f.slice(1)}`}
+                      onClick={() => { setStift((s) => ({ ...s, farbe: f })); setTool("freihand"); }}
+                      className={`h-7 w-7 rounded-full border-2 ${stift.farbe === f ? "border-teal-500 ring-2 ring-teal-200" : "border-white shadow"}`}
+                      style={{ background: f }} />
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-500" data-testid="stift-info" data-striche={sketch.strokes.size}>
+                  {t("Striche")}: {sketch.strokes.size} · {t("Stiftbreite bei 1:100")}: {(STIFTBREITEN[stift.breite] * 10).toLocaleString("de-DE")} mm
+                </p>
+                {skizzeBytes > DB_MAX_BYTES && (
+                  <p className="text-[11px] text-amber-700" data-testid="skizze-gross">
+                    {t("Die Skizze ist größer als 256 KB — sie liegt im Datensatz des Projekts. Alte Striche radieren oder aufteilen.")}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
           {massDialog && (
             <MassDialog
               key={massDialog.nonce}

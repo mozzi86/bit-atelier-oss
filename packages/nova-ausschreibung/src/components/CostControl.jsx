@@ -10,6 +10,12 @@ import { useBuildingProgram } from "@core/lib/useBuildingProgram";
 import { benchmarkFor, korridorText } from "@ava/lib/priceReference";
 // 90-10: per-KG cost control with Excel export template and budget-increase request.
 import KostenJeKgKarte from "./KostenJeKgKarte";
+// 88-03: change order review path (demanded / checked / released, VOB/B § 2 Abs. 5/6).
+import NachtragPruefpfadKarte from "./NachtragPruefpfadKarte";
+// 88-08: the six stages of cost determination (DIN 276:2018-12 3.4) + ceiling traffic light.
+import KostenstaendeKarte from "./KostenstaendeKarte";
+import { kostenJeKg } from "@ava/lib/kostenJeKg";
+import { nachtragsSummen } from "@core/lib/nachtraege";
 
 const DIN_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4", "#ec4899", "#84cc16"];
 
@@ -83,6 +89,18 @@ export default function CostControl({ positions, tenders, bids, measurements, ch
   const totBilled = byTrade.reduce((s, r) => s + r.billed, 0);
   const awardedEstimate = byTrade.reduce((s, r) => s + (r.award > 0 ? r.estimate : 0), 0);
   const savings = awardedEstimate - totAward; // positive = under budget
+
+  // 88-08 live values of the cost stages (euros net), used while no snapshot is recorded:
+  // Kostenanschlag = award + not yet awarded estimate (90-10 prognosis); final cost
+  // (vorläufig) = billed + approved/completed change orders — only once something is billed.
+  const prognose = kostenJeKg({ positions, tenders, bids, measurements }).reduce((s, z) => s + z.prognose, 0);
+  const genehmigteNachtraege = nachtragsSummen(changeOrders || []).genehmigt.summe;
+  const liveStaende = {
+    kostenberechnung: costEstimate?.total > 0 ? costEstimate.total : null,
+    kostenvoranschlag: totEstimate,
+    kostenanschlag: totAward > 0 ? prognose : null,
+    kostenfeststellung: totBilled > 0 ? totBilled + genehmigteNachtraege : null,
+  };
   const savingsPct = awardedEstimate ? (savings / awardedEstimate) * 100 : 0;
 
   return (
@@ -112,6 +130,10 @@ export default function CostControl({ positions, tenders, bids, measurements, ch
           Vergabesumme inkl. genehmigter Nachträge: {eur0(totAward + coSum)}
         </p>
       )}
+
+      <KostenstaendeKarte live={liveStaende} />
+
+      <NachtragPruefpfadKarte changeOrders={changeOrders || []} />
 
       <Card>
         <CardHeader className="pb-2">

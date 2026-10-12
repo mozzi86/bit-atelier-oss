@@ -2,7 +2,12 @@
 // Entity-CRUD und den LLM-Proxy. Extrahiert 1:1 aus server/index.js (Phase 31).
 // Pfade OHNE /api-Präfix — die Kompositionswurzel mountet unter '/api'.
 import express from 'express';
-import { invokeLLM, callConnection, PROVIDER_DEFAULTS } from './llm.js';
+import { invokeLLM, callConnection, PROVIDER_DEFAULTS, zielUrlFuer } from './llm.js';
+import {
+  KI_EINSTELLUNG_ENTITY, kiEinstellungenLesen, kiEinstellungenSchreiben, nurLokalPruefen, modelleAbrufen,
+} from './llmLokal.js';
+import { istLoopbackUrl } from '../src/lib/kiLokal.js';
+import { mitProjektKontext } from './llmKontext.js';
 import { KATALOG_ENTITAETEN } from './catalog-seed.js';
 import { PERSONAL_ENTITAETEN } from '../src/api/personalEntitaeten.js';
 
@@ -36,7 +41,7 @@ export function authRouter() {
  *   gesperrt: string[] }} sorted by name; anzahl = number of records
  */
 export function entitaetenUebersicht(db) {
-  const gesperrt = [LLM_ENTITY, ...PERSONAL_ENTITAETEN];
+  const gesperrt = [LLM_ENTITY, KI_EINSTELLUNG_ENTITY, ...PERSONAL_ENTITAETEN];
   const roh = db._raw() || {};
   const entitaeten = Object.keys(roh)
     .filter((name) => !gesperrt.includes(name) && Array.isArray(roh[name]))
@@ -49,6 +54,20 @@ export function entitaetenUebersicht(db) {
   return { entitaeten, gesperrt };
 }
 
+/**
+ * Whether an update was made on an outdated copy (93-03, office mode with several devices): the body carries
+ * the `updated_date` the client loaded, and the stored record is newer. Without `updated_date` in the body
+ * nothing can be said — false. ISO timestamps of db.js compare as strings.
+ * @param {{updated_date?: string}} gespeichert stored record
+ * @param {unknown} body request body
+ * @returns {boolean}
+ */
+export function veralteterStand(gespeichert, body) {
+  const geladen = body && typeof body === 'object' ? /** @type {any} */ (body).updated_date : undefined;
+  if (typeof geladen !== 'string' || typeof gespeichert?.updated_date !== 'string') return false;
+  return geladen < gespeichert.updated_date;
+}
+
 export function entitiesRouter(db) {
   const r = express.Router();
 
@@ -56,6 +75,10 @@ export function entitiesRouter(db) {
   // gesperrt — Verwaltung nur über /llm/connections (maskierte Antworten).
   r.use('/entities/LlmConnection', (_req, res) => {
     res.status(403).json({ error: 'LlmConnection nur über /api/llm/connections verwaltbar' });
+  });
+  // 93-12: the AI switches ("Nur lokale KI" …) — a generic write could switch the guard off unvalidated.
+  r.use(`/entities/${KI_EINSTELLUNG_ENTITY}`, (_req, res) => {
+    res.status(403).json({ error: 'KI-Einstellungen nur über /api/llm/einstellungen' });
   });
 
   // Plan 80-02 (D-P80-A #4): Personal-Entitäten dürfen den generischen
@@ -129,8 +152,12 @@ export function entitiesRouter(db) {
   });
 
   r.put('/entities/:entity/:id', (req, res) => {
+    const vorher = db.get(req.params.entity, req.params.id);
+    const hinweis = vorher && veralteterStand(vorher, req.body);
     const record = db.update(req.params.entity, req.params.id, req.body || {});
     if (!record) return res.status(404).json({ error: 'Not found' });
+    // 93-03: last write still wins; the client only learns that it replaced a newer version.
+    if (hinweis) res.setHeader('X-Bit-Hinweis', 'zwischenzeitlich-geaendert');
     res.json(record);
   });
 
@@ -183,18 +210,64 @@ function activeConnection(db) {
   }
 }
 
-// db ist optional (Abwärtskompatibilität): ohne db keine Verbindungs-Verwaltung.
-export function llmRouter(db) {
+/**
+ * 78-12: record source for the server-built project context (llmKontext.js) on the local JSON db.
+ * Reads only the named project and rows whose project_id equals it; llmKontext filters the rows again.
+ * @param {{ get: (entity: string, id: string) => any, filter: (entity: string, query: object) => any[] }} db
+ * @returns {import('./llmKontext.js').KontextQuelle}
+ */
+export function lokaleKontextQuelle(db) {
+  return {
+    projekt: async (id) => db.get('Project', id),
+    liste: async (entity, projektId) => db.filter(entity, { project_id: projektId }),
+  };
+}
+
+/**
+ * Merge the form values of /llm/test and /llm/modelle with a stored connection (RC-04: the stored key
+ * only travels to the target it was stored for).
+ * @param {any} db
+ * @param {Record<string, any>} body request body ({id?, provider, base_url, model, api_key})
+ * @returns {{ conn?: any, fehler?: string }}
+ */
+function verbindungAusBody(db, body) {
+  if (!body.id) return { conn: body };
+  const stored = db.get(LLM_ENTITY, body.id);
+  if (!stored) return { fehler: 'Verbindung nicht gefunden' };
+  if (!body.api_key && zielGeaendert(stored, body)) {
+    return { fehler: 'Anbieter oder Basis-URL geändert — bitte den API-Schlüssel erneut eingeben. Der gespeicherte Schlüssel wird für ein anderes Ziel nicht verwendet.' };
+  }
+  // Formularwerte überschreiben Gespeichertes; leerer Key = gespeicherten nutzen.
+  return { conn: { ...stored, ...body, api_key: body.api_key || stored.api_key } };
+}
+
+/** Timeout of the test prompt against a LOCAL server, ms. [ASSUMED] 10 min: the first call loads the model. */
+const LOKALER_TEST_MS = 10 * 60 * 1000;
+
+/**
+ * LLM proxy + connection management. db is optional (backwards compatible): without it only
+ * invoke-llm (env keys / offline mock) is offered.
+ * 93-12: opt.onEinstellungen(neu, alt) runs after PUT /llm/einstellungen (server/index.js restarts the
+ * managed harness so it picks up "Nur lokale KI").
+ * @param {any} [db] createDb() store
+ * @param {{ onEinstellungen?: (neu: any, alt: any) => void }} [opt]
+ * @returns {import('express').Router}
+ */
+export function llmRouter(db, opt = {}) {
   const r = express.Router();
 
   r.post('/integrations/invoke-llm', async (req, res) => {
     try {
       const conn = db ? activeConnection(db) : null;
-      const result = await invokeLLM(req.body || {}, conn);
+      // 78-12: { projekt_id, kontext } → the server builds the context from exactly that project.
+      const params = await mitProjektKontext(req.body || {}, db ? lokaleKontextQuelle(db) : null);
+      // 93-12: "Nur lokale KI" is enforced here, server-side, for every AI feature of the app.
+      const result = await invokeLLM(params, conn, { nurLokal: kiEinstellungenLesen(db).nur_lokal });
       res.json(result);
     } catch (err) {
       console.error('InvokeLLM error:', err.message || err);
-      res.status(500).json({ error: err.message || 'LLM invocation failed' });
+      const status = Number(err?.status) >= 400 && Number(err?.status) < 600 ? Number(err.status) : 500;
+      res.status(status).json({ error: err.message || 'LLM invocation failed' });
     }
   });
 
@@ -256,40 +329,48 @@ export function llmRouter(db) {
       res.json({ success: true });
     });
 
-    // Verbindungstest: Mini-Prompt, 15 s Timeout. Offline-Konvention:
-    // immer HTTP 200 mit { ok:false, fehler } bei Nichterreichbarkeit.
+    // Verbindungstest: Mini-Prompt. Offline-Konvention: immer HTTP 200 mit { ok:false, fehler }.
+    // 93-12: a LOCAL target is tested in two steps — the model list first (8 s: is the server running,
+    // which models are there), then the prompt with a long timeout (the first call loads the model into
+    // memory; minutes on a 10 GB card). Cloud targets keep the 15 s. "Nur lokale KI" refuses non-local
+    // targets before any request. Closing the browser request aborts the upstream call.
     r.post('/llm/test', async (req, res) => {
-      const body = req.body || {};
-      let conn;
-      if (body.id) {
-        const stored = db.get(LLM_ENTITY, body.id);
-        if (!stored) return res.json({ ok: false, fehler: 'Verbindung nicht gefunden' });
-        // RC-04: der gespeicherte Schlüssel reist nur an das Ziel, für das er
-        // gespeichert wurde.
-        if (!body.api_key && zielGeaendert(stored, body)) {
-          return res.json({
-            ok: false,
-            fehler: 'Anbieter oder Basis-URL geändert — bitte den API-Schlüssel erneut eingeben. Der gespeicherte Schlüssel wird für ein anderes Ziel nicht verwendet.',
-          });
-        }
-        // Formularwerte überschreiben Gespeichertes; leerer Key = gespeicherten nutzen.
-        conn = { ...stored, ...body, api_key: body.api_key || stored.api_key };
-      } else {
-        conn = body;
-      }
+      const { conn, fehler: bodyFehler } = verbindungAusBody(db, req.body || {});
+      if (bodyFehler) return res.json({ ok: false, fehler: bodyFehler });
       if (!conn.provider) return res.json({ ok: false, fehler: 'Anbieter fehlt' });
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 15000);
+      const ziel = zielUrlFuer(conn);
+      try {
+        nurLokalPruefen(ziel, kiEinstellungenLesen(db).nur_lokal);
+      } catch (err) {
+        return res.json({ ok: false, fehler: err.message, gesperrt: true });
+      }
+      const lokal = istLoopbackUrl(ziel);
       const t0 = Date.now();
+      /** @type {string[]|undefined} */
+      let modelle;
+      if (lokal) {
+        const liste = await modelleAbrufen({ ...conn, base_url: conn.base_url || PROVIDER_DEFAULTS[conn.provider] || '' });
+        if (!liste.ok) return res.json({ ok: false, fehler: liste.fehler, lokal, dauer_ms: Date.now() - t0 });
+        modelle = liste.modelle;
+        if (conn.model && modelle.length && !modelle.includes(conn.model)) {
+          return res.json({ ok: false, lokal, modelle, dauer_ms: Date.now() - t0, fehler: `Server läuft, aber das Modell „${conn.model}“ ist dort nicht vorhanden. Vorhanden: ${modelle.slice(0, 8).join(', ')}` });
+        }
+      }
+
+      const timeoutMs = lokal ? LOKALER_TEST_MS : 15000;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      res.on('close', () => { if (!res.writableFinished) controller.abort(); });
       try {
         const antwort = await callConnection(
           conn,
           { prompt: 'Antworte nur mit dem Wort: OK' },
-          { signal: controller.signal }
+          { signal: controller.signal, timeoutMs }
         );
         res.json({
           ok: true,
+          lokal,
+          modelle,
           modell: conn.model || '(Standard)',
           antwort: String(antwort).slice(0, 200),
           dauer_ms: Date.now() - t0,
@@ -297,11 +378,40 @@ export function llmRouter(db) {
       } catch (err) {
         const fehler =
           err.name === 'AbortError'
-            ? 'Zeitüberschreitung (15 s) — Endpoint nicht erreichbar'
+            ? `Zeitüberschreitung (${Math.round(timeoutMs / 1000)} s) — Endpoint nicht erreichbar`
             : err.message || 'Verbindung fehlgeschlagen';
-        res.json({ ok: false, fehler, dauer_ms: Date.now() - t0 });
+        if (!res.writableEnded) res.json({ ok: false, lokal, modelle, fehler, dauer_ms: Date.now() - t0 });
       } finally {
         clearTimeout(timer);
+      }
+    });
+
+    // 93-12: model discovery for the connection form (GET /v1/models resp. /api/tags).
+    r.post('/llm/modelle', async (req, res) => {
+      const { conn, fehler } = verbindungAusBody(db, req.body || {});
+      if (fehler) return res.json({ ok: false, modelle: [], fehler });
+      if (!conn.provider) return res.json({ ok: false, modelle: [], fehler: 'Anbieter fehlt' });
+      try {
+        res.json(await modelleAbrufen({ ...conn, base_url: conn.base_url || PROVIDER_DEFAULTS[conn.provider] || '' }, { nurLokal: kiEinstellungenLesen(db).nur_lokal }));
+      } catch (err) {
+        res.json({ ok: false, modelle: [], fehler: err.message, gesperrt: Boolean(err.nurLokal) });
+      }
+    });
+
+    // 93-12: AI switches. GET answers with the catalog's date only — the catalog itself travels through
+    // /api/ki/katalog (server/kiLokalRouter.js).
+    const oeffentlich = (e) => ({ ...e, katalog: e.katalog ? { stand: e.katalog.stand } : null });
+    r.get('/llm/einstellungen', (_req, res) => res.json(oeffentlich(kiEinstellungenLesen(db))));
+    r.put('/llm/einstellungen', (req, res) => {
+      // benchmark and katalog are written by the server itself (kiLokalRouter), never by the form.
+      const { benchmark: _b, katalog: _k, ...patch } = req.body || {};
+      const alt = kiEinstellungenLesen(db);
+      try {
+        const neuWert = kiEinstellungenSchreiben(db, patch);
+        try { opt.onEinstellungen?.(neuWert, alt); } catch (e) { console.error('[ki] onEinstellungen:', e?.message || e); }
+        res.json(oeffentlich(neuWert));
+      } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
       }
     });
 

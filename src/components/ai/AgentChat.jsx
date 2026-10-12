@@ -5,8 +5,10 @@ import { Input } from "@core/components/ui/input";
 import { Badge } from "@core/components/ui/badge";
 import { Bot, User, Send, Loader2 } from "lucide-react";
 import { InvokeLLM } from "@core/integrations/Core";
+import { useI18n } from "@core/lib/i18n";
 
 export default function AgentChat({ agents }) {
+  const { t } = useI18n();
   const [messages, setMessages] = useState(/** @type {Array<{id: number, sender: string, agent?: string, content: string, timestamp: string}>} */ ([
     {
       id: 1,
@@ -193,7 +195,7 @@ export default function AgentChat({ agents }) {
                 disabled={isLoading}
                 className="flex-1"
               />
-              <Button 
+              <Button aria-label={t("Nachricht senden")} 
                 onClick={handleSendMessage} 
                 disabled={!inputMessage.trim() || isLoading}
                 className="px-4"

@@ -12,15 +12,15 @@
 // (Rules of Hooks) and the diff in ComplexDesigner.jsx stays small.
 //
 // In:  nothing (static data + lucide icon components).
-// Out: DESIGNER_BEREICHE (5 areas), DESIGNER_REITER (30 tabs), TAB_ALIAS,
-//      and the lookups the page needs.
+// Out: DESIGNER_BEREICHE (5 areas), DESIGNER_REITER (31 tabs), TAB_ALIAS,
+//      BESTAND_LESART (73-02) and the lookups the page needs.
 
 import {
   MapPin, Boxes, ClipboardList, ShieldCheck, Building, Mountain, Frame, Trees,
   Thermometer, Flame, ClipboardCheck, Accessibility, Volume2,
   ThermometerSnowflake, Layers, ThermometerSun, HandCoins, LayoutTemplate,
   Puzzle, Sofa, Sun, Sparkles, CheckSquare, Calculator, Plug, CalendarRange,
-  Droplets, LifeBuoy,
+  Droplets, LifeBuoy, ScanLine,
 } from "lucide-react";
 
 /**
@@ -37,7 +37,7 @@ export const DESIGNER_BEREICHE = Object.freeze([
 ]);
 
 /**
- * All 30 tabs of the Komplex-Designer.
+ * All 31 tabs of the Komplex-Designer (30 until 73-09 added "bauaufnahme").
  *
  * `key` MUST equal the <TabsContent value="…"> in ComplexDesigner.jsx — store
  * fields, deep links and the headless suites hang on these strings, so they are
@@ -68,6 +68,10 @@ export const DESIGNER_REITER = Object.freeze([
     braucht: ["Koordinaten"], liefert: ["Klimadaten"], stand: "richtwert" },
 
   // --- 2 Baukörper --------------------------------------------------------
+  // 73-09: the survey of an existing building — deliveries, georeference, provenance tiles. Visible in
+  // both kinds of work (extensions on existing buildings start with a survey too).
+  { key: "bauaufnahme", label: "Bauaufnahme", icon: ScanLine, bereich: "baukoerper",
+    braucht: [], liefert: ["Bauaufnahme", "Georeferenz"], stand: "offen" },
   { key: "studio", label: "Massing-Studio", icon: Boxes, bereich: "baukoerper",
     braucht: ["Parzelle"], liefert: ["Baukörper", "GRZ/GFZ", "BGF"], stand: "modell" },
   { key: "massing", label: "Baufeld-Planung", icon: Building, bereich: "baukoerper",
@@ -127,6 +131,30 @@ export const DESIGNER_REITER = Object.freeze([
 ]);
 
 /**
+ * 73-02: second reading of the registry for existing-building projects (bauartVon → "bestand"). In a
+ * refurbishment the MEASUREMENT creates the geometry, so tabs that build on the design model read the
+ * survey instead, and the room-based checks read the rooms of the survey model (IfcSpace). Only `braucht`
+ * and `stand` change — keys, labels, areas and order stay, and NO tab is hidden (BEST-02: extension,
+ * topping-up and courtyard infill are everyday refurbishment work). The five site tabs have no entry on
+ * purpose: they read the same in both kinds of work — the probe that the distinction is technical, not
+ * cosmetic. stand "gemessen" = works on measured geometry (fourth badge, BEST-03).
+ * @type {Readonly<Record<string, { braucht: string[], stand?: 'modell'|'richtwert'|'offen'|'gemessen' }>>}
+ */
+export const BESTAND_LESART = Object.freeze({
+  bauaufnahme: { braucht: ["Aufmaß / Scan"], stand: "gemessen" },
+  bim: { braucht: ["Bauaufnahme"], stand: "gemessen" },
+  buildings: { braucht: ["Bauaufnahme"], stand: "gemessen" },
+  program: { braucht: ["Bauaufnahme"], stand: "gemessen" },
+  statics: { braucht: ["Bauaufnahme"] },
+  interiors: { braucht: ["Räume aus IfcSpace"] },
+  haustechnik: { braucht: ["Räume aus IfcSpace"] },
+  brandschutz: { braucht: ["Geschosse", "Räume aus IfcSpace"] },
+  asr: { braucht: ["Räume aus IfcSpace"] },
+  barrierefreiheit: { braucht: ["Räume aus IfcSpace"] },
+  raumklima: { braucht: ["Räume aus IfcSpace", "Fenster"] },
+});
+
+/**
  * German deep-link aliases → internal tab keys (moved here from
  * ComplexDesigner.jsx:89 in 72-02 — one source). `/EnergyAnalysis` redirects to
  * `?tab=energie` since 72-01 A-13.
@@ -139,7 +167,7 @@ const NACH_KEY = new Map(DESIGNER_REITER.map((r) => [r.key, r]));
 
 /**
  * @param {string} key tab key
- * @returns {boolean} true when the key is one of the 30 registered tabs
+ * @returns {boolean} true when the key is one of the registered tabs
  */
 export function istGueltigerTab(key) {
   return NACH_KEY.has(key);
@@ -158,10 +186,14 @@ export function bereichFuerTab(key) {
 
 /**
  * @param {string} key tab key
+ * @param {"neubau"|"bestand"} [bauart] kind of work (73-02); omitted or "neubau" returns the registry entry
+ *   itself (byte-identical to before), "bestand" a copy with the second reading of BESTAND_LESART
  * @returns {object|null} the registry entry (label, icon, braucht, liefert, stand)
  */
-export function reiterFuerTab(key) {
-  return NACH_KEY.get(key) ?? null;
+export function reiterFuerTab(key, bauart) {
+  const r = NACH_KEY.get(key) ?? null;
+  if (!r || bauart !== "bestand" || !BESTAND_LESART[key]) return r;
+  return { ...r, ...BESTAND_LESART[key], bauart: "bestand" };
 }
 
 /**
@@ -174,7 +206,9 @@ export function reiterImBereich(bereichId) {
 }
 
 /**
- * Resolves a `?tab=` URL parameter: alias first, then validity.
+ * Resolves a `?tab=` URL parameter: alias first, then validity. Deep-link guard (73-02): an unknown or
+ * invalid key returns null and the page falls back to the first tab instead of an empty card; since no tab
+ * is hidden in either kind of work (BEST-02), the kind of work does not change the result.
  * @param {string|null|undefined} param raw URL value
  * @returns {string|null} a valid tab key, or null (caller falls back to 'site')
  */

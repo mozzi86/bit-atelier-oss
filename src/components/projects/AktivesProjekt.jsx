@@ -13,6 +13,10 @@
 //      empty (startpfadRegel.js); otherwise "Weiter im Projekt" (three core
 //      modules) and "Offene Punkte" (open tickets → BIM viewer, open change
 //      orders → finance), with an honest empty text at zero.
+//      In the head the controlling chip of phase 81-05 (AmpelChip.jsx): only with
+//      an architect's contract, loaded through the 81 storage layer.
+//      72-07: below it the project file (ProjektChronik) — the last events of the
+//      project from existing records, "alle anzeigen" opens the rest.
 
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -26,7 +30,9 @@ import { statusInfo } from "@core/lib/projectModel";
 import { nachtraegeDesProjekts, offeneNachtraege } from "@core/lib/nachtraege";
 import LoadingState from "@core/components/common/LoadingState";
 import Startpfad from "./Startpfad";
+import ProjektAmpelChip from "@/components/controlling/AmpelChip.jsx";
 import { zeigeStartpfad } from "./startpfadRegel";
+import ProjektChronik from "./ProjektChronik";
 
 /** Fills {key} placeholders after translation, so the dictionary key keeps them. */
 const fuellen = (text, werte) => text.replace(/\{(\w+)\}/g, (_, k) => String(werte[k] ?? ""));
@@ -89,6 +95,8 @@ export default function AktivesProjekt() {
         <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
         {t(st.label)}
       </span>
+      {/* 81-05: controlling light, only with a contract; queries nothing on a locked data path (E-03). */}
+      <ProjektAmpelChip projectId={projectId} />
     </div>
   );
 
@@ -129,6 +137,10 @@ export default function AktivesProjekt() {
     <section aria-labelledby="aktives-projekt-titel" data-testid="aktives-projekt">
       {kopf}
       {inhalt}
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h3 className="font-semibold text-slate-800 mb-2">{t("Projektakte")}</h3>
+        <ProjektChronik projectId={projectId} />
+      </div>
     </section>
   );
 }

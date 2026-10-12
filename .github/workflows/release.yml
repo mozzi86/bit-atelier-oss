@@ -2,6 +2,9 @@
 # The zip contains the full source plus the prebuilt dist/, so the start scripts only run
 # `npm ci --omit=dev` on the user's machine. The asset name is version-free on purpose:
 # the website links to releases/latest/download/BIT-Atelier.zip.
+# 92-04: the release notes are the CHANGELOG.md section of the tagged version (tools/changelog-abschnitt.mjs),
+# the install instructions follow as a second paragraph below a marker the in-app update banner cuts at.
+# A tag without its CHANGELOG section stops before anything is built.
 name: release
 
 on:
@@ -22,8 +25,16 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Changelog section of this version
+        run: node tools/changelog-abschnitt.mjs "${GITHUB_REF_NAME#v}" > /dev/null
+
       - name: Install
         run: npm ci --no-audit --no-fund
+
+      # 92-08 (lever Nr. 146): the zip makes every user's machine run `npm ci --omit=dev` from this lock
+      # file — no release ships a runtime package with a known high or critical advisory.
+      - name: Audit runtime packages
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Gates
         run: |
@@ -32,6 +43,10 @@ jobs:
 
       - name: Build the client
         run: npm run build
+
+      # 93-09: no release ships a client that grew past budget.json.
+      - name: Size budget
+        run: node scripts/groessen-budget.mjs
 
       - name: Assemble BIT-Atelier.zip
         run: |
@@ -46,6 +61,27 @@ jobs:
           cp installer/BIT-Atelier-Installer.cmd installer/install.sh .
           ls -l BIT-Atelier.zip BIT-Atelier.zip.sha256 BIT-Atelier-Installer.cmd install.sh
 
+      - name: Release notes from CHANGELOG.md
+        run: |
+          set -euo pipefail
+          node tools/changelog-abschnitt.mjs "${GITHUB_REF_NAME#v}" > notes.md
+          # The marker line must stay exactly like NOTIZ_MARKE in server/selbstUpdate.js.
+          cat >> notes.md <<'EOF'
+
+          <!-- bit-atelier:installation -->
+          ---
+
+          **Installation**
+
+          - **Windows:** download `BIT-Atelier-Installer.cmd` and double-click it (installs to your user folder, creates shortcuts, no admin rights). Deutsch: Installer herunterladen und doppelklicken.
+          - **macOS / Linux:** `curl -fsSL https://github.com/mozzi86/bit-atelier-oss/releases/latest/download/install.sh | sh`
+          - **Manual / von Hand:** unzip `BIT-Atelier.zip` and start `start-windows.cmd` or `./start.sh`.
+          - Requires **Node.js 22.9 or newer**. An installed app shows new versions and updates itself from inside the app.
+          - **Uninstall / Entfernen:** Start menu → BIT-Atelier entfernen, or `BIT-Atelier-Installer.cmd /entfernen`; macOS/Linux `sh ~/BIT-Atelier/installer/install.sh --entfernen`.
+          EOF
+          printf -- '- SHA-256 of BIT-Atelier.zip: `%s`\n\nUse at your own risk — see LICENSE.\n' "$(cut -d' ' -f1 BIT-Atelier.zip.sha256)" >> notes.md
+          cat notes.md
+
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -54,4 +90,4 @@ jobs:
           gh release delete "$GITHUB_REF_NAME" --yes 2>/dev/null || true
           gh release create "$GITHUB_REF_NAME" BIT-Atelier.zip BIT-Atelier.zip.sha256 BIT-Atelier-Installer.cmd install.sh \
             --title "BIT-Atelier $GITHUB_REF_NAME" \
-            --notes "Windows: download BIT-Atelier-Installer.cmd and double-click it (installs to your user folder, creates shortcuts, no admin rights). macOS/Linux: curl -fsSL https://github.com/mozzi86/bit-atelier-oss/releases/latest/download/install.sh | sh. Manual: unzip BIT-Atelier.zip and start start-windows.cmd or ./start.sh. Requires Node.js 22.9+. An installed app shows new versions and updates itself from inside the app. Use at your own risk — see LICENSE."
+            --notes-file notes.md

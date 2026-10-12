@@ -6,6 +6,7 @@ const iso = (d) => new Date(d).toISOString();
 export const projects = [
   {
     id: 'proj-1',
+    build_kind: 'neubau',
     name: 'Stadtquartier Nordhang',
     client: 'Stadtwerke Musterstadt',
     location: { city: 'Frankfurt', country: 'DE', address: 'Am Nordhang 12', lat: 50.17, lng: 8.63 },
@@ -23,6 +24,7 @@ export const projects = [
   },
   {
     id: 'proj-2',
+    build_kind: 'neubau',
     name: 'Bürocampus Parkseite',
     client: 'Beispiel Immobilien GmbH',
     location: { city: 'Frankfurt', country: 'DE', address: 'Parkstraße 40', lat: 50.11, lng: 8.66 },
@@ -40,6 +42,7 @@ export const projects = [
   },
   {
     id: 'proj-3',
+    build_kind: 'neubau',
     name: 'Wohnpark am See',
     client: 'Wohnbau Süd eG',
     location: { city: 'München', country: 'DE', address: 'Uferweg 8', lat: 48.14, lng: 11.58 },
@@ -57,6 +60,7 @@ export const projects = [
   },
   {
     id: 'proj-4',
+    build_kind: 'sanierung',
     name: 'Sanierung Altstadthof',
     client: 'Privat - Bauherrschaft A',
     location: { city: 'Nürnberg', country: 'DE', address: 'Altstadtgasse 22', lat: 49.45, lng: 11.07 },
@@ -97,5 +101,37 @@ export const settings = [
     },
     created_date: iso('2026-08-23T09:00:00'),
     updated_date: iso('2026-08-23T09:00:00'),
+  },
+];
+
+// 73-06 (BEST-16): survey model state of the refurbishment showcase (proj-4) so the existing-building
+// path can be shown without an own IFC file: rooms (IfcSpace with DIN 277 group) for "Raumprogramm aus
+// Bestand", walls with status AND Erfassungsgrad (73-04) for the quantity pots (73-08). Elements inline —
+// snapshotElemente (73-03) reads inline before blob; the shape of each element is mapToClassifiedElements'.
+// All names and figures are invented placeholders.
+const raum = (guid, name, din, area, geschoss) => ({ id: guid, guid, kind: 'space', ifc_klasse: 'IfcSpace', name, klassifikation: din, geschoss, status: 'bestand', erfassung: 'gemessen', mengen: { area, volume: 0, length: 0, count: 1 } });
+const wand = (guid, geschoss, status, erfassung, area, kg = 'KG 330', schicht = 'Klinker') => ({ id: guid, guid, kind: 'wall', ifc_klasse: 'IfcWall', geschoss, status, erfassung, kg, gewerk: 'Rohbau', schicht, mengen: { area, volume: 0, length: 0, count: 1 } });
+export const bimSnapshots = [
+  {
+    id: 'snap-4', project_id: 'proj-4', name: 'Aufmaß Altstadthof (Beispiel)', quelle: 'IFC-Import', datei: 'aufmass-beispiel.ifc',
+    schema: 'IFC4', geschosse: ['KG', 'EG', '1.OG', 'DG'], anzahl: 14, ohne_status: 1, ohne_geschoss: 0,
+    erzeugt_am: '2025-06-02T09:00:00.000Z', created_date: '2025-06-02T09:00:00.000Z', updated_date: '2025-06-02T09:00:00.000Z',
+    elemente_blob: null,
+    elemente: [
+      raum('sp-01', 'Wohnen EG', 'DIN 277: 1 Wohnen und Aufenthalt', 42.5, 'EG'),
+      raum('sp-02', 'Küche EG', 'DIN 277: 1 Wohnen und Aufenthalt', 14.2, 'EG'),
+      raum('sp-03', 'Büro 1.OG', 'DIN 277: 2 Büroarbeit', 38.0, '1.OG'),
+      raum('sp-04', 'Besprechung 1.OG', 'DIN 277: 2 Büroarbeit', 21.4, '1.OG'),
+      raum('sp-05', 'Lager KG', 'DIN 277: 4 Lagern, Verteilen und Verkaufen', 30.1, 'KG'),
+      raum('sp-06', 'Atelier DG', 'DIN 277: 1 Wohnen und Aufenthalt', 55.0, 'DG'),
+      wand('w-01', 'EG', 'bestand', 'gemessen', 120),
+      wand('w-02', 'EG', 'abbruch', 'gemessen', 36),
+      wand('w-03', '1.OG', 'bestand', 'altplan', 110),
+      wand('w-04', '1.OG', 'abbruch', 'angenommen', 300),
+      wand('w-05', 'DG', 'neubau', 'gemessen', 48, 'KG 340', 'Gipskarton'),
+      wand('w-06', 'KG', 'bestand', 'angenommen', 90),
+      wand('w-07', 'KG', 'bestand', 'abgeleitet', 64),
+      { id: 'w-08', guid: 'w-08', kind: 'wall', ifc_klasse: 'IfcWall', geschoss: 'DG', status: null, erfassung: null, kg: 'KG 330', gewerk: 'Rohbau', schicht: null, mengen: { area: 22, volume: 0, length: 0, count: 1 } },
+    ],
   },
 ];

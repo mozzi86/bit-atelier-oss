@@ -20,8 +20,11 @@ import {
 import { motion } from "framer-motion";
 import { useProject } from "@core/lib/ProjectContext";
 import { useBuildingProgram, programMetrics } from "@core/lib/useBuildingProgram";
+import { useI18n } from "@core/lib/i18n";
+import { screeningAussage, SCREENING_TITEL } from "@core/lib/energieScreening";
 
 export default function EnergyAnalysis() {
+  const { t } = useI18n();
   const { project: selectedProject } = useProject();
   const store = useBuildingProgram();
   const pm = programMetrics(store);
@@ -139,7 +142,7 @@ export default function EnergyAnalysis() {
             <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">
               Energie- & Klimaanalyse
             </h1>
-            <p className="text-slate-600 mt-1">DIN-18599-Berechnung mit GEG-Konformitätsprüfung</p>
+            <p className="text-slate-600 mt-1">{t("Energie-Screening mit Richtwerten — kein GEG-Nachweis")}</p>
           </div>
 
           <div className="flex gap-3">
@@ -232,7 +235,7 @@ export default function EnergyAnalysis() {
                       setSelectedScenario(scenario);
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={t("Szenario")}>
                       <SelectValue placeholder="Szenario wählen…" />
                     </SelectTrigger>
                     <SelectContent>
@@ -252,7 +255,7 @@ export default function EnergyAnalysis() {
                   <TabsList className="grid w-full grid-cols-4 bg-slate-100">
                     <TabsTrigger value="summary">Übersicht</TabsTrigger>
                     <TabsTrigger value="monthly">Monatlich</TabsTrigger>
-                    <TabsTrigger value="compliance">GEG-Prüfung</TabsTrigger>
+                    <TabsTrigger value="compliance">{t(SCREENING_TITEL)}</TabsTrigger>
                     <TabsTrigger value="systems">Anlagen</TabsTrigger>
                   </TabsList>
 
@@ -324,14 +327,17 @@ export default function EnergyAnalysis() {
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-lg font-semibold text-slate-800">
                           <CheckCircle className="w-5 h-5 text-emerald-600" />
-                          GEG-Konformitätsprüfung
+                          {t("Energie-Screening: Vergleich mit Referenz-Richtwert")}
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-lg border border-emerald-200">
                           <div>
-                            <h4 className="font-semibold text-emerald-800">Konformitätsstatus</h4>
-                            <p className="text-sm text-emerald-600">Gebäude erfüllt die GEG-Anforderungen</p>
+                            {/* Liability: screening against a guide value, never a GEG proof (energieScreening.js). */}
+                            <h4 className="font-semibold text-emerald-800">{t(SCREENING_TITEL)}</h4>
+                            <p className="text-sm text-emerald-600" data-energie-screening={screeningAussage(selectedScenario.geg_compliance).stand}>
+                              {t(screeningAussage(selectedScenario.geg_compliance).text)}
+                            </p>
                           </div>
                           <CheckCircle className="w-8 h-8 text-emerald-600" />
                         </div>

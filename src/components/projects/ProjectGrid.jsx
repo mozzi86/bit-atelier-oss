@@ -2,6 +2,8 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Badge } from "@core/components/ui/badge";
+import { bauartVon, BAUART_LABEL } from "@core/lib/bauart";
+import { useI18n } from "@core/lib/i18n";
 import { Button } from "@core/components/ui/button";
 import { Progress } from "@core/components/ui/progress";
 import {
@@ -11,13 +13,16 @@ import {
   Thermometer,
   Pencil,
   FileText,
-  Trash2
+  Trash2,
+  History
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@core/utils";
 import { useProject } from "@core/lib/ProjectContext";
 import EmptyState from "@core/components/common/EmptyState";
 import LoadingState from "@core/components/common/LoadingState";
+import FormModal from "@core/components/common/FormModal";
+import ProjektChronik from "./ProjektChronik";
 import { STATUS_LABELS, CLIMATE_ZONE_LABELS, ENERGY_TARGET_LABELS, labelFor } from "./labels";
 
 const statusColors = {
@@ -36,11 +41,13 @@ const energyTargetColors = {
   plus_energy: "bg-amber-100 text-amber-800"
 };
 
-const ProjectCard = ({ project, onEdit, onReport, onDelete, onActivate, isAktiv, index }) => (
+const ProjectCard = ({ project, onEdit, onReport, onDelete, onActivate, onChronik, chronikLabel, isAktiv, index }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.5, delay: index * 0.1 }}
+    // Stagger capped: with many projects the old `index * 0.1` delayed far cards by tens of seconds,
+    // so they were still moving when clicked (E2E 73-01 "element is not stable").
+    transition={{ duration: 0.35, delay: Math.min(index, 8) * 0.05 }}
   >
     {/* 72-01 A-11 (Befund N-17): Karten-Klick = Projekt aktivieren — vorher
         ging das nur über die Kopfzeile; die Knöpfe darunter stoppen das Event. */}
@@ -58,23 +65,29 @@ const ProjectCard = ({ project, onEdit, onReport, onDelete, onActivate, isAktiv,
       aria-label={`Projekt ${project.name} aktivieren${isAktiv ? " (aktuell aktiv)" : ""}`}
     >
       <CardHeader className="pb-4">
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
+        {/* Wraps: with status badge + four actions (72-07 added the record button) the row no longer fit a
+            narrow card and the icons spilled over the neighbouring card, which then caught the clicks. */}
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 basis-40 space-y-2">
             <CardTitle className="text-lg font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
               {project.name}
               {isAktiv && <Badge variant="outline" className="ml-2 text-[10px] border-emerald-300 text-emerald-700 align-middle">Aktiv</Badge>}
             </CardTitle>
-            <div className="flex items-center gap-2 text-sm text-slate-600">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
               <MapPin className="w-4 h-4" />
               <span>{project.location?.address || project.location || 'Standort nicht angegeben'}</span>
               <Thermometer className="w-4 h-4 ml-2" />
               <span>{labelFor(CLIMATE_ZONE_LABELS, project.climate_zone)}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <Badge className={statusColors[project.status] || statusColors.concept}>
               {labelFor(STATUS_LABELS, project.status)}
             </Badge>
+            {/* 72-07: project file of this project in a dialog. */}
+            <Button variant="ghost" size="icon" onClick={() => onChronik?.(project)} title={chronikLabel} aria-label={chronikLabel}>
+              <History className="w-4 h-4 text-slate-600" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={() => onReport(project)} title="Bericht erstellen" aria-label={`Bericht für ${project.name}`}>
               <FileText className="w-4 h-4 text-emerald-600" />
             </Button>
@@ -121,7 +134,8 @@ const ProjectCard = ({ project, onEdit, onReport, onDelete, onActivate, isAktiv,
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+          <BauartBadge project={project} />
           {project.energy_target && (
             <Badge variant="outline" className={energyTargetColors[project.energy_target]}>
               {labelFor(ENERGY_TARGET_LABELS, project.energy_target)}
@@ -140,9 +154,24 @@ const ProjectCard = ({ project, onEdit, onReport, onDelete, onActivate, isAktiv,
   </motion.div>
 );
 
+/** 73-01: kind of work on the tile; a project without build_kind says so instead of pretending "Neubau". */
+function BauartBadge({ project }) {
+  const { t } = useI18n();
+  const { bauart, gesetzt } = bauartVon(project);
+  const farbe = bauart === "bestand" ? "border-violet-300 text-violet-700 bg-violet-50" : "border-slate-300 text-slate-600";
+  return (
+    <Badge variant="outline" className={farbe} data-testid="projekt-bauart" data-bauart={bauart} data-gesetzt={gesetzt ? "1" : "0"}
+      title={gesetzt ? undefined : t("Vorhabentyp nicht gesetzt — bitte im Projekt bearbeiten")}>
+      {t(BAUART_LABEL[bauart])}{gesetzt ? "" : ` (${t("nicht gesetzt")})`}
+    </Badge>
+  );
+}
+
 export default function ProjectGrid({ projects, isLoading, onEdit, onDelete }) {
   const navigate = useNavigate();
   const { setProjectId, projectId } = useProject();
+  const { t } = useI18n();
+  const [chronikFuer, setChronikFuer] = React.useState(/** @type {any} */ (null));
   // Ein-Klick-Bericht: Projekt global setzen und Berichte-Seite öffnen.
   const openReport = (project) => { setProjectId(project.id); navigate(createPageUrl("Reports")); };
   // 72-01 A-11: Karten-Klick = aktivieren (mit Rückmeldung per „Aktiv"-Ring).
@@ -172,11 +201,18 @@ export default function ProjectGrid({ projects, isLoading, onEdit, onDelete }) {
             onReport={openReport}
             onDelete={onDelete}
             onActivate={activate}
+            onChronik={setChronikFuer}
+            chronikLabel={t("Projektakte: {name}").replace("{name}", project.name)}
             isAktiv={project.id === projectId}
             index={index}
           />
         ))}
       </AnimatePresence>
+      {chronikFuer && (
+        <FormModal title={t("Projektakte: {name}").replace("{name}", chronikFuer.name)} onClose={() => setChronikFuer(null)}>
+          <ProjektChronik projectId={chronikFuer.id} kompakt={false} />
+        </FormModal>
+      )}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { useI18n } from "@core/lib/i18n";
 import React, { useEffect, useMemo, useState } from "react";
 import { usePanelState } from "@core/lib/usePanelState";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
@@ -10,7 +11,7 @@ import {
   Volume2, Waves, Footprints, Fan, Gauge, AlertTriangle, Compass,
 } from "lucide-react";
 import { NumberField, Stat } from "@core/components/Field";
-import { STATUS_STYLE } from "@designer/lib/compliance";
+import { STATUS_STYLE, gesamtStatus } from "@designer/lib/compliance";
 import {
   LAERMQUELLEN, RAUMARTEN, DECKENAUFBAU, TRENN_RICHTWERTE,
   TRITTSCHALL_GRENZE, TGA_GRENZE,
@@ -21,6 +22,9 @@ import { useProject } from "@core/lib/ProjectContext";
 import { openingTypeById, compositeById } from "@core/lib/buildingModel";
 import { autoEnvOpenings } from "@designer/lib/autoOpenings";
 import { usePlanModel } from "@designer/lib/usePlanModel";
+import PruefZeile from "@designer/components/PruefZeile";
+import { mitAbweichungen } from "@designer/lib/abweichung";
+import { bauartVon } from "@core/lib/bauart";
 import { useFachlayer } from "@designer/lib/useFachlayer";
 import {
   PLAN_RAUMARTEN, RAUMART_REIHE, RW_FENSTER_DEFAULT,
@@ -55,6 +59,7 @@ const PLAN_DEFAULT = {
 // durch. Persistenz im exklusiven Feld "schallschutz_layer" (useFachlayer).
 function SchallschutzPlanKarte({ raumart, onUebernehmen }) {
   const { project } = useProject();
+  const { t } = useI18n();
   const plan = usePlanModel(project?.id);
   const [layer, setLayer] = useFachlayer(project?.id, "schallschutz_layer", PLAN_DEFAULT);
   const [level, setLevel] = useState(0);
@@ -152,7 +157,7 @@ function SchallschutzPlanKarte({ raumart, onUebernehmen }) {
           <div className="flex items-center gap-2">
             <Badge className={ampel.color}>{ampel.label}</Badge>
             <Select value={String(level)} onValueChange={(v) => setLevel(+v)}>
-              <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("Geschoss")} className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Array.from({ length: plan.storeys }, (_, i) => (
                   <SelectItem key={i} value={String(i)}>{i === 0 ? "EG" : `${i}. OG`}</SelectItem>
@@ -165,6 +170,19 @@ function SchallschutzPlanKarte({ raumart, onUebernehmen }) {
           Fassaden nach Lärmpegel je Orientierung eingefärbt (R'w,res = Wandaufbau „{compositeById(plan.model?.walls?.[0]?.composite)?.name || "Standard"}" R'w {de(rwWand)} dB + Fensteranteil).
           Zonen-Klick schaltet die Raumart durch; violette Segmente = wohnungstrennend (Klick = gleiche WE).
         </p>
+        {/* 89-02: the workshop's separating walls as components (plan.bauteile, read-only) —
+            DIN 4109-1:2018 Tab. 2 asks R'w ≥ 53 dB for walls between units [CITED]; the rule
+            build-up KS 24 cm reaches that order of magnitude [ASSUMED, no proof]. */}
+        {(() => {
+          const trenn = (plan.bauteile?.waende || []).filter((w) => w.klasse === "tragend" && w.level === Number(level));
+          if (!trenn.length) return null;
+          const laenge = trenn.reduce((s, w) => s + w.lichteLaenge_m, 0);
+          return (
+            <p className="text-xs text-slate-600 mt-1" data-testid="ss-bauteile" data-anzahl={trenn.length}>
+              {t("Werkstatt-Bauteile")}: {trenn.length} {t("tragende Trennwände (Wohnung/Flur/Treppenraum)")}, {laenge.toLocaleString("de-DE", { maximumFractionDigits: 1 })} m, {trenn[0].material} — {t("Anforderung Wohnungstrennwand R'w ≥ 53 dB (DIN 4109-1 Tab. 2)")}
+            </p>
+          );
+        })()}
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
@@ -278,19 +296,11 @@ function SchallschutzPlanKarte({ raumart, onUebernehmen }) {
           </span>
         </div>
         <div className="space-y-2">
-          {checks.items.map((it) => {
-            const s = SP_STATUS[it.status] || SP_STATUS.offen;
-            return (
-              <div key={it.key} className="flex items-center gap-3 rounded-lg border p-2">
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${s.dot}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-slate-800">{it.label}</div>
-                  <div className="text-[11px] text-slate-500">{it.detail}</div>
-                </div>
-                <Badge className={`${s.color} shrink-0`}>{s.label}</Badge>
-              </div>
-            );
-          })}
+          {/* 73-13: documented deviations overlay the checks; notes live in schallschutz_layer.abweichungen. */}
+          {mitAbweichungen(checks.items, layer?.abweichungen).items.map((it) => (
+            <PruefZeile key={it.key} it={it} styles={SP_STATUS} bauart={bauartVon(project).bauart}
+              onVermerk={(key, v) => setLayer({ ...layer, abweichungen: { ...(layer?.abweichungen || {}), [key]: v || undefined } })} />
+          ))}
         </div>
         {worst && (
           <div className="flex items-center justify-between pt-1 border-t">
@@ -319,10 +329,18 @@ const BEREICH_ACCENT = {
   VII: "text-amber-800",
 };
 
+/** Default of the summary's own deviation layer (73-13 rest). */
+const VERMERKE_DEFAULT = { abweichungen: {} };
+
 export default function SchallschutzPlanner() {
+  const { t } = useI18n();
   // Geometrie READ-only aus der gemeinsamen Quelle — nie duplizieren, nie zurückschreiben.
   const store = useBuildingProgram();
   const pm = programMetrics(store);
+  // 73-13 (rest): deviations of the summary checks in an own field — schallschutz_layer stays with the plan
+  // card (lifting its hook here caused a save/reload loop in the designer), one writer per field (KD-17).
+  const { project } = useProject();
+  const [vermerke, setVermerke] = useFachlayer(project?.id, "schallschutz_vermerke_layer", VERMERKE_DEFAULT);
 
   // Lokaler State (useState only — keine DB, kein bitApi, keine Store-Persistenz).
   // Card A — Außenlärm (SCHALL-01)
@@ -411,7 +429,7 @@ export default function SchallschutzPlanner() {
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Maßgebliche Lärmquelle</label>
                 <Select value={quelle} onValueChange={setQuelle}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Maßgebliche Lärmquelle")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(LAERMQUELLEN).map(([k, v]) => (
                       <SelectItem key={k} value={k}>{v}</SelectItem>
@@ -422,7 +440,7 @@ export default function SchallschutzPlanner() {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Raumart (schutzbedürftige Räume)</label>
                 <Select value={raumart} onValueChange={setRaumart}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Raumart (schutzbedürftige Räume)")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(RAUMARTEN).map(([k, v]) => (
                       <SelectItem key={k} value={k}>{v}</SelectItem>
@@ -458,7 +476,7 @@ export default function SchallschutzPlanner() {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Gewählter Deckenaufbau</label>
                 <Select value={deckenaufbau} onValueChange={setDeckenaufbau}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Gewählter Deckenaufbau")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(DECKENAUFBAU).map(([k, v]) => (
                       <SelectItem key={k} value={k}>{v.label}</SelectItem>
@@ -499,23 +517,15 @@ export default function SchallschutzPlanner() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between text-base">
                 <span className="flex items-center gap-2"><Gauge className="w-4 h-4" /> Zusammenfassung & Plausibilität (Richtwert)</span>
-                <Badge className={STATUS_STYLE[kpi.checks.warns > 0 ? "warn" : "pass"].color}>{kpi.checks.verdict}</Badge>
+                <Badge className={STATUS_STYLE[gesamtStatus(kpi.checks)].color}>{kpi.checks.verdict}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {kpi.checks.items.map((it) => {
-                const s = STATUS_STYLE[it.status];
-                return (
-                  <div key={it.key} className="flex items-center gap-3 rounded-lg border p-2">
-                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${s.dot}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-800">{it.label}</div>
-                      <div className="text-[11px] text-slate-500">{it.detail}</div>
-                    </div>
-                    <Badge className={`${s.color} shrink-0`}>{s.label}</Badge>
-                  </div>
-                );
-              })}
+              {/* 73-13: documented deviations overlay the checks; notes live in schallschutz_vermerke_layer.abweichungen. */}
+              {mitAbweichungen(kpi.checks.items, vermerke?.abweichungen).items.map((it) => (
+                <PruefZeile key={it.key} it={it} styles={STATUS_STYLE} bauart={bauartVon(project).bauart}
+                  onVermerk={(key, v) => setVermerke({ ...vermerke, abweichungen: { ...(vermerke?.abweichungen || {}), [key]: v || undefined } })} />
+              ))}
               <div className="text-xs text-slate-500 border-t pt-2">
                 Anlagen-Auslegung im Reiter „Haustechnik (TGA)“, Raum-Sollpegel für Arbeitsstätten
                 im ASR-Raumdatenblatt — der Schallschutz-Reiter zeigt nur Konzept-Richtwerte

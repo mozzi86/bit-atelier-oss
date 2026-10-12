@@ -18,6 +18,8 @@ import { Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { nachtragStatusLabel, uebergangErlaubt, bearbeitbar } from '@core/lib/nachtraege';
 import { ticketUrl } from '@ifc/lib/ticketLink';
+// 88-03: the amount cell shows demanded / checked / released and the number of review findings.
+import { hatPruefpfad, pruefHinweise, betragOderNull, nachtragArtLabel } from '@core/lib/nachtragPruefpfad';
 
 const statusColors = {
   pending: "bg-orange-100 text-orange-800",
@@ -121,6 +123,22 @@ export default function ChangeOrderTable({ changeOrders, isLoading, zeigeProjekt
                       <td className={`${TD} ${order.cost_impact == null ? "text-slate-500" : order.cost_impact > 0 ? "text-red-600" : "text-emerald-600"}`}>
                         {/* null/undefined = amount deliberately not quantified — "—" instead of "NaN €" */}
                         {order.cost_impact == null ? "—" : eur.format(order.cost_impact)}
+                        {hatPruefpfad(order) && (() => {
+                          const hw = pruefHinweise(order);
+                          const warn = hw.filter((h) => h.stufe === "warn").length;
+                          const zeile = (label, v) => `${t(label)} ${betragOderNull(v) == null ? "—" : eur.format(/** @type {number} */ (betragOderNull(v)))}`;
+                          return (
+                            <div className="text-xs text-slate-500" data-testid="nachtrag-betraege">
+                              {order.art && <div>{t(nachtragArtLabel(order.art))}</div>}
+                              <div>{zeile("gefordert", order.betrag_gefordert)} · {zeile("geprüft", order.betrag_geprueft)} · {zeile("freigegeben", order.betrag_freigegeben)}</div>
+                              {hw.length > 0 && (
+                                <div className={warn > 0 ? "text-amber-700" : ""} title={hw.map((h) => t(h.text)).join(" · ")}>
+                                  {t("{n} Prüfhinweise").replace("{n}", String(hw.length))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className={TD}>
                         <Badge className={statusColors[order.status]}>

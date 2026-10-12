@@ -63,10 +63,13 @@ export function pruefeBeleg(datei, einst) {
  * @param {{name: string, size: number, type: string}} datei
  * @param {string} dataUrl data URL (packages/nova-core/src/lib/pdf.js fileToDataUrl)
  * @param {{typ: string, id: string}} bezug the owning record, e.g. {typ: "Eingangsrechnung", id}
+ * @param {string|null} [dataBlob] blob id when the content went to the object store (then dataUrl is null)
  * @returns {Omit<import("./datenmodell.js").Beleg, "id">} without `id` — speicher.speichere assigns one on save
  */
-export function belegDatensatz(datei, dataUrl, bezug) {
-  return { name: datei.name, mime: datei.type, groesse: datei.size, data: dataUrl, bezug };
+export function belegDatensatz(datei, dataUrl, bezug, dataBlob = null) {
+  // Storage rule (speicherOrt.js, 11.10.2026): the caller decides via inhaltAblegen — a small receipt keeps
+  // its data URL in the record (`data`), a large one only the blob id (`data_blob`, data = null).
+  return { name: datei.name, mime: datei.type, groesse: datei.size, data: dataUrl, ...(dataBlob ? { data_blob: dataBlob } : {}), bezug };
 }
 
 /**

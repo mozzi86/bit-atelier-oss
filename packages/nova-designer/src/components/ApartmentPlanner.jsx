@@ -7,12 +7,13 @@ import {
   LayoutTemplate, Home, Repeat, Link2, AlertTriangle, Plus, Trash2, Eraser,
 } from "lucide-react";
 import { NumberField, Stat } from "@core/components/Field";
-import { STATUS_STYLE } from "@designer/lib/compliance";
+import { STATUS_STYLE, gesamtStatus } from "@designer/lib/compliance";
 import {
   DEFAULT_TYPEN, layoutApartments, wohnflaecheSumme, wohnungenAnzahl,
   istGeneriert, apartmentChecks,
 } from "@designer/lib/apartments";
 import { useBuildingProgram, programMetrics, polygonAreaM } from "@core/lib/useBuildingProgram";
+import { useI18n } from "@core/lib/i18n";
 
 const de = (n) => Math.round(Number(n) || 0).toLocaleString("de-DE");
 
@@ -40,6 +41,7 @@ const weAusRun = (run) => {
 // Wohnungs-Zonen erscheinen sofort im Gebäudemodell, im Massing-Zonen-Overlay
 // und in „Wohnungen & Compliance". Konzept-Layout, kein Grundriss-Anspruch.
 export default function ApartmentPlanner() {
+  const { t } = useI18n();
   // Gemeinsame Quelle der Wahrheit: Footprint/Geschosse lesen, zones schreiben.
   const store = useBuildingProgram();
   const pm = programMetrics(store);
@@ -170,7 +172,7 @@ export default function ApartmentPlanner() {
                       onChange={(e) => setRow(r.id, { name: e.target.value })}
                       className="h-8 font-medium"
                     />
-                    <Button size="icon" variant="ghost" className="shrink-0 text-slate-400 hover:text-rose-600" onClick={() => delRow(r.id)}>
+                    <Button aria-label={t("Wohnung entfernen")} size="icon" variant="ghost" className="shrink-0 text-slate-400 hover:text-rose-600" onClick={() => delRow(r.id)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -285,7 +287,7 @@ export default function ApartmentPlanner() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between text-base">
                 <span className="flex items-center gap-2"><Home className="w-4 h-4" /> Plausibilität (Konzept)</span>
-                <Badge className={STATUS_STYLE[checks.warns > 0 ? "warn" : "pass"].color}>{checks.verdict}</Badge>
+                <Badge className={STATUS_STYLE[gesamtStatus(checks)].color}>{checks.verdict}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">

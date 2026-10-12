@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@core/components/ui/select";
 import { Save } from "lucide-react";
+import { useI18n } from "@core/lib/i18n";
 
 const STATUSES = ["active", "in_negotiation", "under_contract", "completed", "cancelled"];
 
@@ -23,6 +24,7 @@ const STATUS_LABELS = {
 };
 
 export default function LandListingForm({ onSubmit, onCancel }) {
+  const { t } = useI18n();
   const [formData, setFormData] = useState({
     title: "",
     address: "",
@@ -105,7 +107,7 @@ export default function LandListingForm({ onSubmit, onCancel }) {
         <div className="space-y-1">
           <Label>Status</Label>
           <Select value={formData.status} onValueChange={(v) => change("status", v)}>
-            <SelectTrigger>
+            <SelectTrigger aria-label={t("Status")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

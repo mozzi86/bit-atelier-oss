@@ -9,8 +9,10 @@
 //
 // In:  the ProjectContext state (loading, fehler, number of projects), the
 //      current router pathname and the navigation entries (navFlach).
-// Out: 'laden' | 'fehler' | 'leer' | 'inhalt', plus two small helpers the
-//      shell needs next to it (portfolio scope, office name for the footer).
+// Out: 'gesperrt' | 'laden' | 'fehler' | 'leer' | 'inhalt', plus small helpers the
+//      shell needs next to it (portfolio scope, module of a route, office name).
+//      82-01: optional `darfModul` — rule 0 'gesperrt' when the role may not read
+//      the route's module (the shell renders it from 82-02 on).
 //
 // No React, no browser APIs, no imports: it only decides.
 
@@ -77,7 +79,20 @@ export function istPortfolioRoute(pathname, eintraege) {
 }
 
 /**
+ * The rights module of a route (82-01), from the menu entry; undefined outside the menu.
+ * @param {string|null|undefined} pathname router pathname
+ * @param {Array<{url: string, modul?: string}>} [eintraege] navFlach
+ * @returns {string|undefined}
+ */
+export function modulFuer(pathname, eintraege) {
+  return /** @type {any} */ (eintragFuer(pathname, eintraege))?.modul;
+}
+
+/**
  * What <main> shows. Order of the rules:
+ *   0. (82-01) a menu route whose module the role may not read → 'gesperrt',
+ *      before everything else (no project, error or loading state may reveal
+ *      that the page exists); routes outside the menu are never 'gesperrt';
  *   1. /Projects and project-free modules → 'inhalt' (they never need a project,
  *      so neither a failed store nor an empty list may hide them);
  *   2. a load error → 'fehler' (before 'laden': an error is never hidden);
@@ -90,12 +105,16 @@ export function istPortfolioRoute(pathname, eintraege) {
  *   fehler?: string|null,
  *   projektAnzahl?: number,
  *   pathname?: string,
- *   eintraege?: Array<{url: string, projektfrei?: boolean}>,
+ *   eintraege?: Array<{url: string, projektfrei?: boolean, modul?: string}>,
+ *   darfModul?: ((modul: string) => boolean)|null,
  * }} eingabe loading/fehler from useProject(); projektAnzahl = projects.length
- *   (count); pathname = router pathname; eintraege = navFlach
- * @returns {'laden'|'fehler'|'leer'|'inhalt'}
+ *   (count); pathname = router pathname; eintraege = navFlach; darfModul = read
+ *   right of the session (82, optional — without it everything behaves as before)
+ * @returns {'gesperrt'|'laden'|'fehler'|'leer'|'inhalt'}
  */
-export function huellenZustand({ loading = false, fehler = null, projektAnzahl = 0, pathname = '/', eintraege = [] } = {}) {
+export function huellenZustand({ loading = false, fehler = null, projektAnzahl = 0, pathname = '/', eintraege = [], darfModul = null } = {}) {
+  const modul = modulFuer(pathname, eintraege);
+  if (typeof darfModul === 'function' && modul && !darfModul(modul)) return 'gesperrt';
   if (istProjektfreieRoute(pathname, eintraege)) return 'inhalt';
   if (fehler) return 'fehler';
   if (loading) return 'laden';

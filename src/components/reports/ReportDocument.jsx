@@ -9,6 +9,7 @@ import { gp, eur0 } from "@ava/components/avaUtils";
 import { statusInfo, hoaiProgress, hoaiPhaseShort, fmtDate, fmtCity, projectArea } from "@core/lib/projectModel";
 import { labelFor, ENERGY_TARGET_LABELS, CLIMATE_ZONE_LABELS, normalisiereKlimazone } from "@core/lib/labels";
 import { useI18n } from "@core/lib/i18n";
+import { screeningAussage, SCREENING_TITEL } from "@core/lib/energieScreening";
 import { FloorPlan, Elevation, Section } from "./Drawings";
 import { kostenUebersicht, prozentText } from "./berichtKosten";
 
@@ -285,15 +286,16 @@ export default function ReportDocument({ docRef, project, data, type, options = 
       )}
 
       {showEnergy && data.energy && (
-        <Section_ title="Energie & GEG">
+        <Section_ title={t("Energie (Screening)")}>
           <div className="grid grid-cols-2 gap-x-8">
             <div>
               <Row k="Primärenergie p.a." v={`${Math.round((data.energy.results?.pe_annual || 0) / 1000).toLocaleString("de-DE")} MWh`} />
               <Row k="CO₂ p.a." v={`${Math.round((data.energy.results?.co2_annual || 0) / 1000).toLocaleString("de-DE")} t`} />
             </div>
-            <div>
-              <Row k="GEG-Nachweis" v={data.energy.geg_compliance?.passes_geg ? "bestanden ✓" : "nicht bestanden ✗"} />
-              <Row k="Kompaktheits-/Compliance-Faktor" v={data.energy.geg_compliance?.compliance_factor} />
+            <div data-energie-screening={screeningAussage(data.energy.geg_compliance).stand}>
+              {/* Liability: the app screens against a guide value — it never issues a GEG proof (energieScreening.js). */}
+              <Row k={t(SCREENING_TITEL)} v={t(screeningAussage(data.energy.geg_compliance).wert)} />
+              <Row k={t("Faktor Bedarf/Referenz (Screening)")} v={data.energy.geg_compliance?.compliance_factor} />
             </div>
           </div>
         </Section_>

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@core/components/ui/button";
 import { Badge } from "@core/components/ui/badge";
 import { MessageSquare, Check, Trash2, CircleDot, Send, CornerDownRight, Radio } from "lucide-react";
+import { useI18n } from "@core/lib/i18n";
 
 // Echter lokaler Live-Kanal: synchronisiert Kommentar-Änderungen zwischen Browser-Tabs.
 const bc = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("bit-bim-collab") : null;
@@ -83,6 +84,7 @@ export function PresenceCursors() {
 
 // Comments list with resolve / delete / select / reply threads / assignment.
 export function CommentsList({ comments, selectedId, onSelect, onResolve, onDelete, onReply, onAssign }) {
+  const { t } = useI18n();
   const open = comments.filter((c) => !c.resolved);
   const [replyDrafts, setReplyDrafts] = useState({});
   const sendReply = (c) => {
@@ -127,7 +129,7 @@ export function CommentsList({ comments, selectedId, onSelect, onResolve, onDele
               <select value={c.assignee || ""}
                 onClick={(e) => e.stopPropagation()}
                 onChange={(e) => { e.stopPropagation(); onAssign(c, e.target.value); }}
-                className="h-6 rounded border border-slate-200 bg-white px-1 text-[11px] text-slate-700 focus:outline-none">
+                className="h-6 rounded border border-slate-200 bg-white px-1 text-[11px] text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
                 <option value="">Niemand</option>
                 {COLLABORATORS.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
@@ -155,7 +157,7 @@ export function CommentsList({ comments, selectedId, onSelect, onResolve, onDele
                 onChange={(e) => setReplyDrafts((d) => ({ ...d, [c.id]: e.target.value }))}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sendReply(c); } }}
                 className="h-7 flex-1 min-w-0 rounded border border-slate-200 bg-white px-2 text-xs text-slate-700 focus:outline-none focus:border-amber-400" />
-              <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-slate-500"
+              <Button aria-label={t("Antwort senden")} size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-slate-500"
                 onClick={(e) => { e.stopPropagation(); sendReply(c); }} title="Antwort senden">
                 <Send className="w-3.5 h-3.5" />
               </Button>
@@ -165,7 +167,7 @@ export function CommentsList({ comments, selectedId, onSelect, onResolve, onDele
             <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onResolve(c); }}>
               <Check className="w-3.5 h-3.5 mr-1" />{c.resolved ? "Öffnen" : "Erledigt"}
             </Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-500" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }}>
+            <Button aria-label={t("Kommentar löschen")} size="icon" variant="ghost" className="h-7 w-7 text-rose-500" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }}>
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
           </div>

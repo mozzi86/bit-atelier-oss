@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-altbestand-lesen"
+description = "Enables the altbestand_lesen command without any pre-configured scope."
+commands.allow = ["altbestand_lesen"]
+
+[[permission]]
+identifier = "deny-altbestand-lesen"
+description = "Denies the altbestand_lesen command without any pre-configured scope."
+commands.deny = ["altbestand_lesen"]

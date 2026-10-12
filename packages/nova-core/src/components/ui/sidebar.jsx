@@ -288,7 +288,7 @@ export const SidebarMenuButton = React.forwardRef(
           if (isMobile) setOpenMobile(false);
         }}
         className={cn(
-          "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none transition-colors",
+          "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500",
           className
         )}
         {...props}

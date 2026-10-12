@@ -45,6 +45,16 @@ export const WERKSTATT_DEFAULT = {
   // tesselierung.stufeSchluessel). It beats the `stufe` of the mix entry (D-P84-R); an entry
   // that equals the mix level is removed again. Older layers default additively to {}.
   stufeJeWe: {},
+  // 75-12: interior-wall offsets { "<level>|<zoneA>|<zoneB>": m } (raumGrenzen.js), set in the
+  // focus. A solver input like grenzenPositionen; older layers default additively to {}.
+  raumGrenzen: {},
+  // 86-04: building form ("auto" = 86-01/86-03 decomposition, "rand" = perimeter block around a
+  // court) and own storey count per bar { "<k>": n }. Older layers default additively.
+  zerlegung: "auto",
+  geschosseJeRiegel: {},
+  // 75-10: project weights of the variant evaluation { "<dimension>": weight ≥ 0 } over the office
+  // standard (variantenBewertung.BUERO_STANDARD); {} = office standard. Older layers default additively.
+  bewertungsGewichte: {},
   // 86-05b: minimum footprint of a further bar, m² (tesseliere riegelMinFlaeche_m2; 120 =
   // solver default → byte-identical result), and the proposal the user applied last
   // ({ id, typologie, parameter, algoVersion, footprintHash, gewaehltAm } or null).
@@ -52,6 +62,19 @@ export const WERKSTATT_DEFAULT = {
   riegelMinFlaeche_m2: 120,
   gewaehlterVorschlag: null,
 };
+
+/** 86-04/86-07/86-06: building forms of the workshop (werkstatt_layer.zerlegung). */
+export const ZERLEGUNGS_ARTEN = ["auto", "rand", "achse", "skelett"];
+
+/**
+ * 86-07: the stored building form or "auto" (migration guard — unknown values of older or newer
+ * clients fall back to the automatic decomposition).
+ * @param {unknown} v werkstatt_layer.zerlegung
+ * @returns {"auto"|"rand"|"achse"|"skelett"}
+ */
+export function zerlegungsArt(v) {
+  return /** @type {any} */ (ZERLEGUNGS_ARTEN.includes(/** @type {any} */ (v)) ? v : "auto");
+}
 
 /**
  * 84-10: add a catalogue (or own) type to the unit mix. A second entry of the same type

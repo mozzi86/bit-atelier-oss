@@ -194,7 +194,7 @@ export default function HarnessChat({ chat, events, skills = [], verbunden, appr
           data-testid="chat-input"
         />
         {/* Push-to-Talk (67-05): hold → MediaRecorder → POST /stt → text INTO the field. Never auto-send (T-67-16). */}
-        <Button
+        <Button aria-label={t("Spracheingabe (gedrückt halten)")}
           variant={aufnahme ? 'destructive' : 'outline'}
           size="icon"
           disabled={!sttInfo?.verfuegbar}

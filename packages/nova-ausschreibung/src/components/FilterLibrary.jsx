@@ -5,6 +5,7 @@ import { Badge } from "@core/components/ui/badge";
 import { Layers, Pencil, Trash2, Link2, AlertTriangle } from "lucide-react";
 import { filterTreffer, istWildcard } from "@ava/lib/avaFilters";
 import { STATUS_LABEL } from "@core/lib/bimClassification";
+import { useI18n } from "@core/lib/i18n";
 
 // Kompakte Chip-Zusammenfassung eines Filters (WAS + ZUSTAND).
 const filterChips = (f) => {
@@ -20,6 +21,7 @@ const filterChips = (f) => {
 // (Entität AvaFilter) mit Live-Treffer-Badge und amber Lücken-Badge bei 0 Treffern
 // (AVA-FILTER-04 — Baustoff/Klassifizierung fehlt im Modell?).
 export default function FilterLibrary({ filters = [], elements = [], onEdit, onDelete, onApply }) {
+  const { t } = useI18n();
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -44,14 +46,14 @@ export default function FilterLibrary({ filters = [], elements = [], onEdit, onD
                 <div className="font-medium text-slate-700 truncate">{f.name}</div>
                 <div className="flex items-center gap-1 shrink-0">
                   {onApply && (
-                    <Button size="icon" variant="ghost" className="h-7 w-7" title="Auf Position anwenden" onClick={() => onApply(f)}>
+                    <Button aria-label={t("Filter auf Position anwenden")} size="icon" variant="ghost" className="h-7 w-7" title="Auf Position anwenden" onClick={() => onApply(f)}>
                       <Link2 className="w-3.5 h-3.5" />
                     </Button>
                   )}
-                  <Button size="icon" variant="ghost" className="h-7 w-7" title="Bearbeiten" onClick={() => onEdit?.(f)}>
+                  <Button aria-label={t("Filter bearbeiten")} size="icon" variant="ghost" className="h-7 w-7" title="Bearbeiten" onClick={() => onEdit?.(f)}>
                     <Pencil className="w-3.5 h-3.5" />
                   </Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-500" title="Löschen" onClick={() => onDelete?.(f.id)}>
+                  <Button aria-label={t("Filter löschen")} size="icon" variant="ghost" className="h-7 w-7 text-rose-500" title="Löschen" onClick={() => onDelete?.(f.id)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>

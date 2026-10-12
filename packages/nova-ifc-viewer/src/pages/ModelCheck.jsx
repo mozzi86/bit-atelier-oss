@@ -1,7 +1,7 @@
 import { seitenWurzel } from "@core/lib/utils";
 // ModelCheck.jsx — Prüf-Suite (Phase 64): Clash Detection + IDS-Prüfung + BCF/PDF-Export.
 //
-// Ablauf: (1) IFC laden (parseIfcFile + extractGeometry) → (2) Kollisionsregeln
+// Ablauf: (1) IFC laden (parseIfcFile + extractGeometry, 69-21 im Web Worker via ifcLesen) → (2) Kollisionsregeln
 // wählen + optional .ids laden → (3) Prüfung starten (chunked via clashPairsIter,
 // setTimeout-Yield je 200 Paare) → Ergebnis-Dashboard → BCF-2.1-/PDF-Export und
 // Befundliste als CSV/Excel (66-14, befundListe.js + @core/lib/tabellenExport).
@@ -34,12 +34,15 @@ import {
   Boxes, Building2, Download, FileDown, ChevronDown, ChevronRight, Play, Info,
   Package, Share2, FileSpreadsheet,
 } from "lucide-react";
-import { parseIfcFile, extractGeometry } from "@ifc/lib/ifcImport";
+import { ifcLesen } from "@ifc/lib/ifcLesen";
 import BcfIssues from "@ifc/components/BcfIssues";
 import IdsEditor from "@ifc/components/IdsEditor";
 import LieferpaketKarte, { klassenZaehlung } from "@ifc/components/LieferpaketKarte";
+import LaufVergleichKarte from "@ifc/components/LaufVergleichKarte";
 import Befundkarte from "@ifc/components/Befundkarte";
 import { datumText } from "@ifc/lib/lieferplan";
+import { elementSuche, geschossVonBefund } from "@ifc/lib/befundkarte";
+import { abschnittsTermine, ordneNachAbschnitt, befundeJeAbschnitt, OHNE_ABSCHNITT } from "@ifc/lib/befundAbschnitt";
 import { clashPairsIter, STANDARD_REGELN } from "@ifc/lib/clash";
 import { ladeRegelsatz, regelnZuOptionen, grundlageText } from "@ifc/lib/clashRegeln";
 import { findeKoordinationskoerper, vergleicheLage } from "@ifc/lib/koordinationskoerper";
@@ -50,12 +53,22 @@ import { baueBefundPaket } from "@ifc/lib/befundPaket";
 import { befundTabelle, befundlisteDateiname, zaehleBefundzeilen } from "@ifc/lib/befundListe";
 import { dateiAnbieten, tabelleAlsCsv, tabellenAlsXlsx } from "@core/lib/tabellenExport";
 import { exportElementToPdf } from "@core/lib/pdf";
+import { passtFilter } from "@core/lib/fenster";
+import FensterTabelle from "@core/components/FensterTabelle";
 import { pfadText } from "@core/lib/ablage";
 import { befundText, oeffneFeedback } from "@core/lib/feedback";
 import { SERVERLOS } from "@core/lib/umgebung";
 import { parsePruefzustand, prueflaufLink, serialisierePruefzustand } from "@ifc/lib/prueflaufLink";
 
 const nf = new Intl.NumberFormat("de-DE");
+/**
+ * 72-21: rows of the clash table in the printed PDF report (rows). The report used to
+ * stop at 60; it now prints the full list up to this technical limit — beyond it the
+ * report would exceed the browser canvas even at raster scale 1 (≈ 22 px per row,
+ * 32 767 px canvas, see @core/lib/pdf pdfMassstab). Rows beyond are named with a hint
+ * to the findings list (CSV/Excel) and the BCF, which always carry all findings.
+ */
+const BERICHT_MAX_ZEILEN = 1200;
 const nf3 = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 3 });
 const nf2 = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 });
 
@@ -161,6 +174,12 @@ export default function ModelCheck() {
   const [fortschritt, setFortschritt] = useState({ geprueft: 0, gesamt: 0 });
   const [ergebnis, setErgebnis] = useState(null); // { clash, ids }
   const [offeneGruppen, setOffeneGruppen] = useState(() => new Set());
+  // 72-21: text filter over findings and IDS violations — filters the DATA, the report
+  // numbers (befundNr) stay those of the full list.
+  const [befundFilter, setBefundFilter] = useState("");
+  // 66-15: order of the finding groups — "paar" (pair of IFC classes, as before) or
+  // "abschnitt" (section dates of the delivery plan: what blocks the next section first).
+  const [ordnung, setOrdnung] = useState(/** @type {"paar"|"abschnitt"} */ ("paar"));
   const [exportiert, setExportiert] = useState(false);
 
   // Briefkopf für den Prüfbericht (persistente Setting-Entität, wie Berichte-Seite).
@@ -202,17 +221,13 @@ export default function ModelCheck() {
       // Semantik (Psets/Klassifizierung/Material) für IDS — darf fehlschlagen,
       // wenn das Modell nur Typen außerhalb des Produktkatalogs enthält (reines
       // TGA-Modell): die Clash-Prüfung läuft dann trotzdem über die Geometrie.
-      let parsed = null;
-      try {
-        parsed = await parseIfcFile(buffer, setStatusText);
-      } catch { /* nur Geometrie-Prüfung möglich */ }
-
-      // Geometrie (StreamAllMeshes ist blockierend — Hinweis läuft über statusText).
+      // 69-21: both readings run in one Web Worker (StreamAllMeshes blocks for seconds on real
+      // models); a semantics failure only lands in parseFehler.
       // Steht schon ein Vergleichsmodell, wird direkt UNZENTRIERT gelesen
       // (D-P71-05) — der zentrierte Erstlauf wäre sofort veraltet.
       const zweiModelle = vergleich != null;
-      const geo = await extractGeometry(buffer, setStatusText,
-        { coordinateToOrigin: !zweiModelle });
+      const { parsed, geo } = await ifcLesen(buffer,
+        { parse: true, geometrie: { coordinateToOrigin: !zweiModelle } }, setStatusText);
       if (!geo.elemente.length) {
         throw new Error("Das Modell enthält keine prüfbare Geometrie.");
       }
@@ -257,12 +272,12 @@ export default function ModelCheck() {
           "Hauptmodell ohne Puffer (z. B. per Deep-Link geladen) — bitte zuerst das Haupt-IFC neu wählen.");
       }
       setStatusText("Lese Vergleichsmodell (unzentriert)…");
-      const geoB = await extractGeometry(buffer, setStatusText, { coordinateToOrigin: false });
+      const { geo: geoB } = await ifcLesen(buffer, { geometrie: { coordinateToOrigin: false } }, setStatusText);
       if (!geoB.elemente.length) {
         throw new Error("Das Vergleichsmodell enthält keine prüfbare Geometrie.");
       }
       setStatusText("Hauptmodell unzentriert neu gelesen (gemeinsames Koordinatensystem)…");
-      const geoA = await extractGeometry(modell.buffer, () => {}, { coordinateToOrigin: false });
+      const { geo: geoA } = await ifcLesen(modell.buffer, { geometrie: { coordinateToOrigin: false } });
       if (!geoA.elemente.length) {
         throw new Error("Das Hauptmodell enthält unzentriert keine prüfbare Geometrie.");
       }
@@ -298,7 +313,7 @@ export default function ModelCheck() {
     setBusy(true);
     try {
       setStatusText("Hauptmodell zentriert neu gelesen…");
-      const geo = await extractGeometry(modell.buffer, setStatusText, { coordinateToOrigin: true });
+      const { geo } = await ifcLesen(modell.buffer, { geometrie: { coordinateToOrigin: true } }, setStatusText);
       if (geo.elemente.length) setModell({ ...modell, geo });
     } catch (err) {
       console.error("Hauptmodell konnte nicht zentriert neu gelesen werden:", err);
@@ -494,6 +509,11 @@ export default function ModelCheck() {
         tolerance: Math.max(0, Number(toleranzMm) || 0) / 1000,
         clearance: Math.max(0, Number(clearanceMm) || 0) / 1000,
         duplikate,
+        // 69-19: same cap as the BAP path. The rule pass enumerates every A×B pair of
+        // the role groups BEFORE the broadphase, so the engine default (20 000) was
+        // already exceeded by the 523-element sample (≈ 45 000 pairs) — a quarter of
+        // the pairs went unchecked ("über Limit übersprungen") in the standard run.
+        maxPairs: 500_000,
       };
     }
     // Hauptmodell = Quelle A, Vergleichsmodell = Quelle B (Regeldatei spricht
@@ -567,26 +587,33 @@ export default function ModelCheck() {
     };
   }, [ergebnis]);
 
-  // Clash-Gruppen nach Paar-Typ; globale Sortierung (Volumen absteigend) bleibt
-  // innerhalb der Gruppen erhalten, Gruppenreihenfolge = erster (größter) Befund.
-  const clashGruppen = useMemo(() => {
-    if (!ergebnis) return [];
-    const map = new Map();
-    for (const c of ergebnis.clash.clashes) {
-      const key = `${c.aType || "?"} × ${c.bType || "?"}`;
-      let g = map.get(key);
-      if (!g) map.set(key, (g = { key, clashes: [] }));
-      g.clashes.push(c);
-    }
-    return [...map.values()];
-  }, [ergebnis]);
-
   // 66-08: report number of each finding (position in the result list + 1) — the
   // same number the finding map prints, so map and list resolve each other.
   const befundNr = useMemo(
     () => new Map((ergebnis?.clash?.clashes || []).map((c, i) => [c, i + 1])),
     [ergebnis],
   );
+  // 72-21: the findings that pass the filter field, in report order. Searched: kind
+  // (label and key), both IFC classes, both GlobalIds / express ids, rule id and name,
+  // report number. Empty filter → the full list (same array object).
+  const clashesGefiltert = useMemo(() => {
+    const alle = ergebnis?.clash?.clashes || [];
+    if (!befundFilter.trim()) return alle;
+    return alle.filter((c) => passtFilter(befundFilter, [
+      KIND_LABELS[c.kind], c.kind, c.aType, c.bType, c.aGuid, c.bGuid,
+      c.aId == null ? null : `#${c.aId}`, c.bId == null ? null : `#${c.bId}`,
+      c.regel?.id, c.regel?.name, befundNr.get(c),
+    ]));
+  }, [ergebnis, befundFilter, befundNr]);
+  /**
+   * 72-21: IDS violations that pass the filter field (a matching specification name
+   * keeps all its violations).
+   * @param {{spec: {name: string}, verletzungen: Array<{globalId?: string, elementName?: string, facette?: string, erwartet?: string, gefunden?: string}>}} r
+   */
+  const verletzungenGefiltert = (r) => (!befundFilter.trim() || passtFilter(befundFilter, [r.spec.name])
+    ? r.verletzungen
+    : r.verletzungen.filter((v) => passtFilter(befundFilter, [v.globalId, v.elementName, v.facette, v.erwartet, v.gefunden])));
+
   // 66-08: geometry the check ran on (both models in a comparison run, uncentred
   // there; centred in a single run — the finding centres share that system). The
   // source tag A/B mirrors the check run: express IDs repeat across the two files.
@@ -599,6 +626,45 @@ export default function ModelCheck() {
       : (modell?.geo?.elemente || [])),
     [modell, vergleich],
   );
+
+  // 66-15 (register no. 135): sections of the delivery plan (open, dated, ≤ 15) and the
+  // storey of each finding (same lookup as the finding map). The plan comes from
+  // LieferpaketKarte through onLieferInfo — read only here, written only there (KD-17).
+  const abschnitte = useMemo(() => {
+    const geschosse = [...(modell?.parsed?.storeys || []), ...(kartenElemente || []).map((e) => e?.storey).filter(Boolean)];
+    return abschnittsTermine(lieferInfo?.plan || [], { heute: new Date(), modellGeschosse: [...new Set(geschosse)] });
+  }, [lieferInfo, modell, kartenElemente]);
+  const geschossVon = useMemo(() => {
+    const suche = elementSuche(kartenElemente);
+    return (c) => geschossVonBefund(c, suche);
+  }, [kartenElemente]);
+  /** Report cover page: counts per section over ALL findings (not the screen filter). */
+  const abschnittZeilen = useMemo(() => {
+    if (!ergebnis) return [];
+    const gruppen = ordneNachAbschnitt(ergebnis.clash.clashes, { abschnitte, geschossVon, nummer: (c) => befundNr.get(c) });
+    return befundeJeAbschnitt(gruppen, abschnitte);
+  }, [ergebnis, abschnitte, geschossVon, befundNr]);
+
+  // Clash-Gruppen nach Paar-Typ; globale Sortierung (Volumen absteigend) bleibt
+  // innerhalb der Gruppen erhalten, Gruppenreihenfolge = erster (größter) Befund.
+  // 66-15: in section mode the groups are the sections in date order (first = blocks
+  // next), inside by severity, then report number; without a dated section one group
+  // by severity.
+  const clashGruppen = useMemo(() => {
+    if (!ergebnis) return [];
+    if (ordnung === "abschnitt") {
+      return ordneNachAbschnitt(clashesGefiltert, { abschnitte, geschossVon, nummer: (c) => befundNr.get(c) })
+        .map((g) => ({ key: g.key, clashes: g.befunde, abschnitt: g.abschnitt, alsAbschnitt: true }));
+    }
+    const map = new Map();
+    for (const c of clashesGefiltert) {
+      const key = `${c.aType || "?"} × ${c.bType || "?"}`;
+      let g = map.get(key);
+      if (!g) map.set(key, (g = { key, clashes: [] }));
+      g.clashes.push(c);
+    }
+    return [...map.values()];
+  }, [ergebnis, clashesGefiltert, ordnung, abschnitte, geschossVon, befundNr]);
 
   const gruppeToggle = (key) =>
     setOffeneGruppen((prev) => {
@@ -1262,7 +1328,7 @@ export default function ModelCheck() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-slate-500 mb-1 block">Toleranz (mm)</label>
-                  <Input
+                  <Input aria-label={t("Toleranz (mm)")}
                     type="number"
                     min="0"
                     step="0.5"
@@ -1273,7 +1339,7 @@ export default function ModelCheck() {
                 </div>
                 <div>
                   <label className="text-xs text-slate-500 mb-1 block">Mindestabstand (mm)</label>
-                  <Input
+                  <Input aria-label={t("Mindestabstand (mm)")}
                     type="number"
                     min="0"
                     step="5"
@@ -1615,35 +1681,90 @@ export default function ModelCheck() {
                   <AlertTriangle className="w-5 h-5 text-rose-500" />
                   Kollisions-Befunde ({nf.format(ergebnis.clash.clashes.length)})
                 </CardTitle>
+                {/* 72-21 (register no. 134): filter on the data — findings here and
+                    the IDS violations below; numbers stay the report numbers. */}
+                {(ergebnis.clash.clashes.length > 0 || ergebnis.ids.some((r) => r.verletzungen.length > 0)) && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <Input
+                      value={befundFilter}
+                      onChange={(e) => setBefundFilter(e.target.value)}
+                      placeholder={t("Befunde filtern: Nr., GlobalId, Bauteiltyp, Regel, Name")}
+                      aria-label={t("Befunde filtern")}
+                      data-testid="befund-filter"
+                      className="h-8 max-w-md text-sm"
+                    />
+                    {/* 66-15: order by pair type or by section date */}
+                    <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                      {t("Ordnen nach")}
+                      <select
+                        value={ordnung}
+                        onChange={(e) => setOrdnung(e.target.value === "abschnitt" ? "abschnitt" : "paar")}
+                        data-testid="befund-ordnung"
+                        className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs"
+                      >
+                        <option value="paar">{t("Paar-Typ")}</option>
+                        <option value="abschnitt">{t("Abschnittstermin (was blockiert zuerst)")}</option>
+                      </select>
+                    </label>
+                    {befundFilter.trim() && (
+                      <span className="text-xs text-slate-500" data-testid="befund-filter-stand">
+                        {t("{{n}} von {{m}} Befunden").replace("{{n}}", nf.format(clashesGefiltert.length)).replace("{{m}}", nf.format(ergebnis.clash.clashes.length))}
+                      </span>
+                    )}
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
-                {clashGruppen.length === 0 ? (
+                {clashGruppen.length === 0 && befundFilter.trim() && ergebnis.clash.clashes.length > 0 ? (
+                  <p className="text-sm text-slate-500" data-testid="befund-filter-leer">{t("Kein Befund passt zum Filter.")}</p>
+                ) : clashGruppen.length === 0 ? (
                   <p className="text-sm text-slate-500 flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     Keine Kollisionen, Abstands-Befunde oder Duplikate gefunden.
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {clashGruppen.map((g) => {
+                    {clashGruppen.map((g, gi) => {
                       const offen = offeneGruppen.has(g.key);
+                      const naechster = g.alsAbschnitt && gi === 0 && !!g.abschnitt;
                       return (
-                        <div key={g.key} className="rounded-lg border border-slate-200">
+                        <div key={g.key} className={`rounded-lg border ${naechster ? "border-amber-300" : "border-slate-200"}`}
+                          data-testid={g.alsAbschnitt ? "befund-abschnitt-gruppe" : undefined}
+                          data-abschnitt={g.alsAbschnitt ? (g.abschnitt?.name || OHNE_ABSCHNITT) : undefined}>
                           <button
                             type="button"
                             onClick={() => gruppeToggle(g.key)}
                             className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50 rounded-lg"
                           >
                             {offen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
-                            <span className="font-medium text-slate-800">{g.key}</span>
+                            <span className="font-medium text-slate-800">
+                              {g.alsAbschnitt ? (g.abschnitt ? g.abschnitt.name : t("ohne Abschnittstermin — nach Schwere")) : g.key}
+                            </span>
                             <Badge variant="secondary" className="font-normal">{nf.format(g.clashes.length)}</Badge>
+                            {naechster && (
+                              <Badge className="font-normal border bg-amber-100 text-amber-800 border-amber-200" data-testid="befund-blockiert-naechsten">
+                                {t("blockiert als Nächstes")}
+                              </Badge>
+                            )}
                             <span className="ml-auto text-xs text-slate-400">
-                              max. Überlappung {nf3.format(g.clashes[0]?.overlapVol || 0)} m³
+                              {!g.alsAbschnitt
+                                ? <>max. Überlappung {nf3.format(g.clashes[0]?.overlapVol || 0)} m³</>
+                                : g.abschnitt
+                                  ? `${t("Termin")} ${datumText(g.abschnitt.termin)} · ${g.abschnitt.tage > 0
+                                    ? t("in {{n}} Tagen").replace("{{n}}", nf.format(g.abschnitt.tage))
+                                    : g.abschnitt.tage === 0 ? t("heute fällig")
+                                      : t("{{n}} Tage überfällig").replace("{{n}}", nf.format(-g.abschnitt.tage))} · ${g.abschnitt.geschosse
+                                    ? g.abschnitt.geschosse.join(", ") : t("ganzes Gebäude")}`
+                                  : (abschnitte.length ? t("blockiert keinen Abschnitt mit Termin") : t("kein Abschnittstermin im Modelllieferplan"))}
                             </span>
                           </button>
                           {offen && (
-                            <div className="overflow-x-auto border-t border-slate-100">
-                              <table className="w-full text-xs">
-                                <thead>
+                            <FensterTabelle
+                              liste={g.clashes}
+                              spalten={6 + (ergebnis.bapAktiv ? 2 : 0)}
+                              rahmenKlasse="overflow-x-auto border-t border-slate-100"
+                              testId="befund-gruppe-tabelle"
+                              kopf={(
                                   <tr className="text-left text-slate-400">
                                     <th className="px-3 py-1.5 text-right">Nr.</th>
                                     <th className="px-3 py-1.5">Prüfart</th>
@@ -1656,9 +1777,8 @@ export default function ModelCheck() {
                                     <th className="px-3 py-1.5 text-right">Überlappung (AABB) m³</th>
                                     <th className="px-3 py-1.5">Mittelpunkt (x/y/z)</th>
                                   </tr>
-                                </thead>
-                                <tbody>
-                                  {g.clashes.map((c, i) => {
+                              )}
+                              zeile={(c, i) => {
                                     // 69-06: a row click selects the finding by
                                     // GlobalId — the anchor that travels in the
                                     // share link (expressIds are export-unstable).
@@ -1704,10 +1824,8 @@ export default function ModelCheck() {
                                       <td className="px-3 py-1.5 text-slate-500">{fmtCenter(c.center)}</td>
                                     </tr>
                                     );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
+                                  }}
+                            />
                           )}
                         </div>
                       );
@@ -1767,33 +1885,37 @@ export default function ModelCheck() {
                           {r.bestanden ? "bestanden" : `${nf.format(r.verletzungen.length)} ${r.verletzungen.length === 1 ? "Verletzung" : "Verletzungen"}`}
                         </Badge>
                       </div>
-                      {r.verletzungen.length > 0 && (
-                        <div className="overflow-x-auto mt-2">
-                          <table className="w-full text-xs">
-                            <thead>
-                              <tr className="text-left text-slate-400">
-                                <th className="py-1 pr-3">Bauteil</th>
-                                <th className="py-1 pr-3">Facette</th>
-                                <th className="py-1 pr-3">Erwartet</th>
-                                <th className="py-1">Gefunden</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {r.verletzungen.map((v, k) => (
-                                <tr key={k} className="border-t border-slate-100 align-top" data-globalid={v.globalId || ""}>
-                                  <td className="py-1 pr-3 font-mono text-[11px]">
-                                    {v.globalId || "—"}
-                                    {v.elementName && <div className="font-sans text-slate-500">{v.elementName}</div>}
-                                  </td>
-                                  <td className="py-1 pr-3">{v.facette}</td>
-                                  <td className="py-1 pr-3 text-slate-600">{v.erwartet}</td>
-                                  <td className="py-1 text-slate-600">{v.gefunden}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
+                      {r.verletzungen.length > 0 && (verletzungenGefiltert(r).length === 0 ? (
+                        <p className="mt-2 text-xs text-slate-400">{t("Kein Bauteil passt zum Filter.")}</p>
+                      ) : (
+                        // 72-21: the violations are the component list of the check
+                        // suite — windowed above 60 rows, filtered by the field above.
+                        <FensterTabelle
+                          liste={verletzungenGefiltert(r)}
+                          spalten={4}
+                          rahmenKlasse="overflow-x-auto mt-2"
+                          testId="ids-verletzungen-tabelle"
+                          kopf={(
+                            <tr className="text-left text-slate-400">
+                              <th className="py-1 pr-3">Bauteil</th>
+                              <th className="py-1 pr-3">Facette</th>
+                              <th className="py-1 pr-3">Erwartet</th>
+                              <th className="py-1">Gefunden</th>
+                            </tr>
+                          )}
+                          zeile={(v, k) => (
+                            <tr key={k} className="border-t border-slate-100 align-top" data-globalid={v.globalId || ""}>
+                              <td className="py-1 pr-3 font-mono text-[11px]">
+                                {v.globalId || "—"}
+                                {v.elementName && <div className="font-sans text-slate-500">{v.elementName}</div>}
+                              </td>
+                              <td className="py-1 pr-3">{v.facette}</td>
+                              <td className="py-1 pr-3 text-slate-600">{v.erwartet}</td>
+                              <td className="py-1 text-slate-600">{v.gefunden}</td>
+                            </tr>
+                          )}
+                        />
+                      ))}
                     </div>
                   ))}
                 </CardContent>
@@ -1872,6 +1994,51 @@ export default function ModelCheck() {
                 {nf.format(modell?.geo?.elemente?.length || 0)} Bauteil-Geometrien ·{" "}
                 Toleranz {nf2.format(Number(toleranzMm) || 0)} mm
                 {Number(clearanceMm) > 0 && ` · Mindestabstand ${nf2.format(Number(clearanceMm))} mm`}
+              </p>
+            </div>
+
+            {/* Befunde je Bauabschnitt (66-15, register no. 135) — on the cover page: which
+                section the findings block, earliest first. Report text stays German like the
+                rest of the printed report. */}
+            <div className="mt-6" data-testid="bericht-abschnitte">
+              <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-emerald-500 pb-1 mb-3">Befunde je Bauabschnitt</h2>
+              {abschnitte.length === 0 ? (
+                <p className="text-[11px] text-slate-600">
+                  Kein Abschnittstermin im Modelllieferplan — Befunde nach Schwere:{" "}
+                  {nf.format(abschnittZeilen[0]?.hoch || 0)} hoch, {nf.format(abschnittZeilen[0]?.mittel || 0)} mittel,{" "}
+                  {nf.format(abschnittZeilen[0]?.niedrig || 0)} niedrig.
+                </p>
+              ) : (
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="text-left text-slate-400 border-b">
+                      <th className="py-1 pr-2">Bauabschnitt</th>
+                      <th className="py-1 pr-2">Termin</th>
+                      <th className="py-1 pr-2 text-right">Tage</th>
+                      <th className="py-1 pr-2 text-right">Befunde</th>
+                      <th className="py-1 pr-2 text-right">hoch</th>
+                      <th className="py-1 pr-2 text-right">mittel</th>
+                      <th className="py-1 text-right">niedrig</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {abschnittZeilen.map((z, i) => (
+                      <tr key={`${z.name}-${i}`} className={`border-b border-slate-100 ${i === 0 && z.termin && z.anzahl > 0 ? "font-semibold" : ""}`}>
+                        <td className="py-1 pr-2">{z.name}</td>
+                        <td className="py-1 pr-2">{z.termin ? datumText(z.termin) : "—"}</td>
+                        <td className="py-1 pr-2 text-right">{z.tage == null ? "—" : nf.format(z.tage)}</td>
+                        <td className="py-1 pr-2 text-right">{nf.format(z.anzahl)}</td>
+                        <td className="py-1 pr-2 text-right">{nf.format(z.hoch)}</td>
+                        <td className="py-1 pr-2 text-right">{nf.format(z.mittel)}</td>
+                        <td className="py-1 text-right">{nf.format(z.niedrig)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <p className="text-[10px] text-slate-400 mt-1">
+                Zuordnung: Geschoss des Bauteils → frühester offener Abschnitt des Modelllieferplans, der dieses Geschoss umfasst
+                (Tage = bis zum Liefertermin, negativ = überfällig). Schwere nach Prüfart (Kollision hoch, Duplikat/Näherungen mittel, Abstand niedrig).
               </p>
             </div>
 
@@ -1971,7 +2138,7 @@ export default function ModelCheck() {
               {ergebnis.clash.clashes.length === 0 ? (
                 <p className="text-[12px] text-slate-400">Keine Befunde.</p>
               ) : (
-                <table className="w-full text-[11px]">
+                <table className="w-full text-[11px]" data-testid="bericht-befunde">
                   <thead>
                     <tr className="text-left text-slate-400 border-b">
                       <th className="py-1 pr-2 text-right">Nr.</th>
@@ -1984,7 +2151,7 @@ export default function ModelCheck() {
                     </tr>
                   </thead>
                   <tbody>
-                    {ergebnis.clash.clashes.slice(0, 60).map((c, i) => (
+                    {ergebnis.clash.clashes.slice(0, BERICHT_MAX_ZEILEN).map((c, i) => (
                       <tr key={i} className="border-b border-slate-100">
                         <td className="py-1 pr-2 text-right">{i + 1}</td>
                         <td className="py-1 pr-2">{KIND_LABELS[c.kind] || c.kind}</td>
@@ -2033,9 +2200,9 @@ export default function ModelCheck() {
                         + "über der 0-mm-Forderung der BAP-Matrix."}
                 </p>
               )}
-              {ergebnis.clash.clashes.length > 60 && (
-                <p className="text-[10px] text-slate-400 mt-1">
-                  … Nr. 61–{nf.format(ergebnis.clash.clashes.length)}: {nf.format(ergebnis.clash.clashes.length - 60)} weitere Befunde (mit Nummer in der Befundliste; alle Befunde auch im BCF-Export).
+              {ergebnis.clash.clashes.length > BERICHT_MAX_ZEILEN && (
+                <p className="text-[10px] text-slate-400 mt-1" data-testid="bericht-rest">
+                  … Nr. {nf.format(BERICHT_MAX_ZEILEN + 1)}–{nf.format(ergebnis.clash.clashes.length)}: {nf.format(ergebnis.clash.clashes.length - BERICHT_MAX_ZEILEN)} weitere Befunde — zu viele für ein PDF; vollständig mit Nummer in der Befundliste (CSV/Excel) und im BCF-Export.
                 </p>
               )}
             </div>
@@ -2098,6 +2265,11 @@ export default function ModelCheck() {
       {/* Lieferung (71-03): Modelllieferplan + Richtlinien-Name + Lieferpaket.
           Baut aus dem VORHANDENEN Ergebnis (kein zweiter Prüflauf); Persistenz
           lieferung_layer. */}
+      {/* 69-20: compare this run with a saved or uploaded one (new / fixed / unchanged per rule). */}
+      {ergebnis && (
+        <LaufVergleichKarte ergebnis={ergebnis} kennzahlen={kennzahlenAktuell} modell={modell?.fileName || null}
+          regelsatz={bapRegeln ? (bapName || null) : (idsFileName || null)} projectId={project?.id || null} />
+      )}
       {modell && (
         <LieferpaketKarte
           projectId={project?.id}

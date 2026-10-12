@@ -9,14 +9,16 @@
 //   <BimPlan2D model={plan.model} mode="grundriss" readOnly
 //     customZones={plan.zones} envOpenings={plan.envOpenings} … />
 //
-// Grenze (dokumentiert): loadBimModel cached EINEN Datensatz je Projekt —
-// Element-Änderungen aus BitBimStudio in derselben Session propagieren nicht
-// live hierher. Der Programm-Anteil (Hülle) ist dagegen live, und die Räume
-// kommen live aus dem Store (BitBimStudio spiegelt customZones dorthin).
+// Seit 89-07 (BW-09) live: saveBimModel meldet jeden gespeicherten Patch
+// (aufBimModelAenderung), dieser Hook mischt ihn in seinen Stand — Element-
+// Änderungen aus BitBimStudio erscheinen ohne Reload in den Fachplaner-Plänen.
+// Der Programm-Anteil (Hülle) war schon live, die Räume kommen aus dem Store.
 import { useEffect, useMemo, useState } from "react";
 import { createBuildingModel } from "@core/lib/buildingModel";
 import { useBuildingProgram } from "@core/lib/useBuildingProgram";
-import { loadBimModel } from "@core/lib/useBimModelSync";
+import { loadBimModel, aufBimModelAenderung } from "@core/lib/useBimModelSync";
+// 89-02: the workshop's walls/doors/rooms as classified components (read model for planners).
+import { werkstattBauteile } from "@core/lib/werkstattBauteile";
 
 export function usePlanModel(projectId) {
   const bp = useBuildingProgram();
@@ -36,8 +38,13 @@ export function usePlanModel(projectId) {
       .catch(() => {
         /* offline: Hülle rendert trotzdem aus dem Store */
       });
+    // 89-07: merge every saved patch of THIS project (same flat merge as the server).
+    const abmelden = aufBimModelAenderung((pid, patch) => {
+      if (!cancelled && pid === projectId) setGeladen((alt) => ({ ...(alt || {}), ...patch }));
+    });
     return () => {
       cancelled = true;
+      abmelden();
     };
   }, [projectId]);
 
@@ -65,9 +72,15 @@ export function usePlanModel(projectId) {
     [bp.zones]
   );
 
+  // 89-02: workshop components derived LIVE from the store zones (·WT) — a separate list on
+  // purpose: model.walls stays the envelope (edge-indexed; openings, facades rely on it).
+  // D-BW-02: zones are clear dimensions, the walls lie outside (rohbau = growth per storey).
+  const bauteile = useMemo(() => werkstattBauteile(bp.zones || [], { storeyHeight: bp.storeyHeight }), [bp.zones, bp.storeyHeight]);
+
   return {
     model,
     zones,
+    bauteile,
     envOpenings: geladen?.envOpenings || [],
     customSlabs: geladen?.customSlabs || [],
     customRoofs: geladen?.customRoofs || [],

@@ -6,7 +6,8 @@ import Seitenwechsel from "./components/Seitenwechsel";
 // 72-10 (N-05): separate lines on purpose — the import block further down
 // (next to Befehlspalette) is edited in parallel (Hermes 69-12), and adding
 // names to those lines would turn every merge into a conflict.
-import { AlertTriangle, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ShieldCheck, WifiOff } from "lucide-react";
+import { useOnline, netzHinweis } from "@core/lib/useOnline";
 import { huellenZustand, istPortfolioRoute, bueroAnzeige } from "./huellenZustand";
 import { navFlach } from "./navigation";
 // 80-01: own lines as well (see the note above) — personnel gate of the menu and
@@ -54,12 +55,22 @@ import AlhambraAssistantButton from "./components/AlhambraAssistantButton";
 import SpeicherStatus from "./demo/SpeicherStatus";
 import { navGroups } from "./navigation";
 import Befehlspalette from "./components/Befehlspalette";
+import KeinZugriff from "./components/KeinZugriff";
+import NutzerUmschalter from "./components/NutzerUmschalter";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
+import { useFaelligZaehler } from "@/lib/termine/useFaelligZaehler.js";
+import { cloudGesperrt } from "@core/lib/rechte.js";
 import KuerzelHilfe from "./components/KuerzelHilfe";
 import { aktionenFuer, passtKuerzel, parseKuerzel, abonnieren, aktionenVersion } from "@core/lib/aktionen";
 import { SERVERLOS, DATENQUELLE } from "@core/lib/umgebung";
 import { useAuth } from "@core/lib/AuthContext";
 // 92-01: self-update of the downloaded app.
 import UpdateHinweis from "@/components/update/UpdateHinweis";
+import BueroKennung from "@/components/buero/BueroKennung.jsx";
+// 72-07 / 72-20: own lines (see the note above) — recent projects and work focus.
+import { SelectGroup, SelectLabel, SelectSeparator } from "@core/components/ui/select";
+import { FOKUS, FOKUS_SCHLUESSEL, fokusAusUrl, fokusEintraege, fokusGueltig } from "@/lib/arbeitsfokus.js";
+import { lies as liesZuletzt, merke as merkeZuletzt, zuletztSichtbar, ZULETZT_MAX } from "@/lib/zuletztProjekte.js";
 
 // Navigationsliste: eine Quelle für Seitenleiste UND Befehlspalette (65-05).
 // Siehe src/navigation.js.
@@ -194,6 +205,7 @@ function KeinProjekt() {
 }
 
 function LayoutInner({ children }) {
+  const online = useOnline(); // 70-06: marks modules that need the internet while offline
   const location = useLocation();
   const navigate = useNavigate();
   const { collapsed, toggle } = useSidebar();
@@ -202,20 +214,62 @@ function LayoutInner({ children }) {
   const { user } = useAuth();
   // 80-01 (DS-12, E-03): the personnel entry only with personnel access; a group
   // left without entries disappears. navFlach stays unfiltered (titles, shell states).
-  const zugang = personalZugang({ datenquelle: DATENQUELLE, rolle: user?.role });
+  // 82-02: the access of the session (role, "Ansicht als") decides the menu and the
+  // central gate — one place for sidebar, direct URL, palette and "Weiter mit".
+  const zugriff = useZugriff();
+  // 82-06: due counter at "Fristen & Termine" (overdue + today, same function as the page).
+  const faellig = useFaelligZaehler();
+  const zugang = personalZugang({ datenquelle: DATENQUELLE, rolle: user?.role, zugriff });
   const sichtbareGruppen = React.useMemo(
     () => navGroups
-      .map((g) => ({ ...g, items: g.items.filter((i) => navSichtbar(i, { personalZugang: zugang })) }))
+      .map((g) => ({ ...g, items: g.items.filter((i) => navSichtbar(i, { personalZugang: zugang, zugriff })) }))
       .filter((g) => g.items.length > 0),
-    [zugang],
+    [zugang, zugriff],
   );
+
+  // 72-20: work focus "Wofür sind Sie hier?" — 5–6 entries on top, every other module
+  // under "Alle Module". Not a permission: fokusEintraege takes the groups already
+  // filtered by navSichtbar. ?rolle=<fokus> in a link sets and remembers it.
+  const [fokus, setFokus] = React.useState(() => {
+    try { return fokusGueltig(localStorage.getItem(FOKUS_SCHLUESSEL)); } catch { return "alle"; }
+  });
+  const fokusWaehlen = React.useCallback((/** @type {string} */ wert) => {
+    const f = fokusGueltig(wert);
+    setFokus(f);
+    try { localStorage.setItem(FOKUS_SCHLUESSEL, f); } catch { /* blocked storage: the focus lasts this session */ }
+  }, []);
+  React.useEffect(() => {
+    const f = fokusAusUrl(location.search);
+    if (f !== null) fokusWaehlen(f);
+  }, [location.search, fokusWaehlen]);
+  const fokusListe = collapsed ? null : fokusEintraege(sichtbareGruppen, fokus);
+  // The drawer opens by itself when the page shown is a module outside the focus
+  // (same rule as the Labor drawer: it never closes by itself).
+  const alleModuleKlappe = React.useRef(/** @type {HTMLDetailsElement|null} */ (null));
+  const ausserhalbFokus = !!fokusListe && !fokusListe.some((i) => i.url === location.pathname)
+    && sichtbareGruppen.some((g) => !g.collapsible && g.items.some((i) => i.url === location.pathname));
+  React.useEffect(() => {
+    if (ausserhalbFokus && alleModuleKlappe.current) alleModuleKlappe.current.open = true;
+  }, [ausserhalbFokus]);
+
+  // 72-07: recently opened projects of this device, newest first — only those the
+  // role still sees (81-06 and 82-02 decide through `projects`, not this list).
+  // Grouped only when there are more projects than the list holds.
+  const [zuletztIds, setZuletztIds] = React.useState(() => liesZuletzt());
+  React.useEffect(() => {
+    if (projectId) setZuletztIds(merkeZuletzt(projectId));
+  }, [projectId]);
+  const zuletzt = projects.length > ZULETZT_MAX ? zuletztSichtbar(zuletztIds, /** @type {Array<{id: string, name: string}>} */ (projects)) : [];
+  const weitereProjekte = zuletzt.length ? projects.filter((p) => !zuletzt.some((z) => z.id === p.id)) : projects;
 
   // 72-10 (N-05): what <main> shows — the page, loading, a store error or
   // "no project yet" — is decided in src/huellenZustand.js. /Projects and the
   // project-free modules (check suite, IFC viewer, …) always get their page.
   const zustand = huellenZustand({
     loading, fehler, projektAnzahl: projects.length, pathname: location.pathname, eintraege: navFlach,
+    darfModul: (m) => zugriff.darf(m, "lesen"),
   });
+  const gesperrtModul = zustand === "gesperrt" ? navFlach.find((e) => e.url === location.pathname)?.modul : null;
   // Header hint next to the project select, also read out with it: on a
   // portfolio page the chosen project is not what the page shows. (The demo's
   // "Beispiel" chip for its sample projects went with the demo, 83-02.)
@@ -299,6 +353,47 @@ function LayoutInner({ children }) {
     return () => window.removeEventListener("keydown", beiTaste);
   }, [location.pathname]);
 
+  // One sidebar entry (72-20: shared by the focus list and the groups).
+  const navEintrag = (/** @type {any} */ item) => (
+                  <SidebarMenuItem key={item.title} className="group/menu-item relative">
+                      <SidebarMenuButton
+                      asChild
+                      className={`group hover:bg-slate-700/50 transition-all duration-300 rounded-xl ${
+                      location.pathname === item.url ?
+                      'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30' :
+                      ''}`
+                      }>
+
+                        <Link to={item.url} title={collapsed ? t(item.title) : undefined}
+                          aria-current={location.pathname === item.url ? "page" : undefined}
+                          aria-label={collapsed ? t(item.title) : undefined}
+                          className={`flex items-center ${collapsed ? 'justify-center px-0 py-3' : 'gap-3 px-4 py-2.5'}`}>
+                          <item.icon className={`w-5 h-5 shrink-0 transition-colors ${
+                        location.pathname === item.url ? 'text-emerald-300' : 'text-slate-400 group-hover:text-white'}`
+                        } />
+                          {!collapsed && (
+                          <span className={`font-medium text-sm transition-colors ${
+                        location.pathname === item.url ? 'text-white' : 'text-slate-300 group-hover:text-white'}`
+                        }>
+                            {t(item.title)}
+                          </span>
+                          )}
+                          {item.url === "/Deadlines" && faellig ? (
+                            <span className={`${collapsed ? "absolute right-1 top-1" : "ml-auto"} min-w-5 rounded-full bg-rose-600 px-1.5 text-center text-[10px] font-semibold leading-5 text-white`}
+                              aria-label={t("{n} fällig").replace("{n}", String(faellig))} data-testid="faellig-badge">{faellig}</span>
+                          ) : null}
+                          {/* 70-06: while offline, modules that need the internet say so (icon + tooltip + sr text). */}
+                          {netzHinweis(item.netz, online) && (
+                            <span className="ml-auto text-amber-300" title={t(netzHinweis(item.netz, online))} data-testid="nav-offline">
+                              <WifiOff className="h-3.5 w-3.5" aria-hidden="true" />
+                              <span className="sr-only">{t(netzHinweis(item.netz, online))}</span>
+                            </span>
+                          )}
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+  );
+
   return (
     <>
       <a href="#hauptinhalt" className="skip-link">{t("Zum Inhalt springen")}</a>
@@ -352,7 +447,27 @@ function LayoutInner({ children }) {
 
           <SidebarContent className={collapsed ? 'p-2' : 'p-3'}>
             <nav aria-label={t("Hauptnavigation")}>
-            {sichtbareGruppen.map((grp) => (
+            {/* 72-20: work focus — a display choice, not a permission. */}
+            {!collapsed && (
+              <div className="px-3 pb-2">
+                <label htmlFor="fokus-wahl" className="block px-1 pb-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">{t("Wofür sind Sie hier?")}</label>
+                <select id="fokus-wahl" data-testid="fokus-wahl" value={fokus} onChange={(e) => fokusWaehlen(e.target.value)}
+                  className="h-8 w-full rounded-lg border border-slate-600 bg-slate-800 px-2 text-sm text-slate-100">
+                  {FOKUS.map((f) => <option key={f.key} value={f.key}>{t(f.label)}</option>)}
+                </select>
+              </div>
+            )}
+            {fokusListe && (
+              <SidebarGroup data-testid="fokus-gruppe">
+                <SidebarGroupContent>
+                  <SidebarMenu className="space-y-1">
+                    {fokusListe.map(navEintrag)}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+            {(() => {
+            const gruppen = sichtbareGruppen.map((grp) => (
             // 72-01 A-13: Gruppe „Labor" zuklappbar, standardmäßig ZU —
             // Labor-Module (Vision/Dienst nötig) stehen nicht mehr
             // gleichrangig neben den Kernmodulen (Befunde N-08/N-18/N-19).
@@ -385,44 +500,29 @@ function LayoutInner({ children }) {
               )}
               <SidebarGroupContent>
                 <SidebarMenu className="space-y-1">
-                  {grp.items.map((item) =>
-                  <SidebarMenuItem key={item.title} className="group/menu-item relative">
-                      <SidebarMenuButton
-                      asChild
-                      className={`group hover:bg-slate-700/50 transition-all duration-300 rounded-xl ${
-                      location.pathname === item.url ?
-                      'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30' :
-                      ''}`
-                      }>
-
-                        <Link to={item.url} title={collapsed ? t(item.title) : undefined}
-                          aria-current={location.pathname === item.url ? "page" : undefined}
-                          aria-label={collapsed ? t(item.title) : undefined}
-                          className={`flex items-center ${collapsed ? 'justify-center px-0 py-3' : 'gap-3 px-4 py-2.5'}`}>
-                          <item.icon className={`w-5 h-5 shrink-0 transition-colors ${
-                        location.pathname === item.url ? 'text-emerald-300' : 'text-slate-400 group-hover:text-white'}`
-                        } />
-                          {!collapsed && (
-                          <span className={`font-medium text-sm transition-colors ${
-                        location.pathname === item.url ? 'text-white' : 'text-slate-300 group-hover:text-white'}`
-                        }>
-                            {t(item.title)}
-                          </span>
-                          )}
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )}
+                  {grp.items.map(navEintrag)}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
             )
-            ))}
+            ));
+            // 72-20: with a focus the usual groups move into the drawer "Alle Module" (closed by default).
+            return fokusListe ? (
+              <details ref={alleModuleKlappe} data-testid="alle-module" className="py-1">
+                <summary className="cursor-pointer select-none text-xs font-medium text-slate-400 uppercase tracking-wider px-6 py-2 hover:text-slate-200 list-none flex items-center justify-between">
+                  {t("Alle Module")}
+                  <span className="text-slate-500 text-[10px]" aria-hidden="true">▸</span>
+                </summary>
+                {gruppen}
+              </details>
+            ) : gruppen;
+            })()}
             {/* 72-01 A-13: Labor-Klappe (ausgeklappte Seitenleiste) — Details-
                 Element, Standard zu; die Routen bleiben über die Palette
                 (Strg+K) und direkte URLs erreichbar. */}
             {!collapsed && (() => {
-              const labor = navGroups.find((g) => g.collapsible);
+              // 82-02: the filtered groups — a role without the Labor modules gets no drawer.
+              const labor = sichtbareGruppen.find((g) => g.collapsible);
               if (!labor) return null;
               return (
                 <details ref={laborKlappe} className="px-3 py-1">
@@ -503,7 +603,20 @@ function LayoutInner({ children }) {
               </SelectTrigger>
               <SelectContent>
                 {projects.length === 0 && <div className="px-2 py-1.5 text-sm text-slate-400">{t("Keine Projekte")}</div>}
-                {projects.map((p) => (
+                {/* 72-07: recently opened first; every project appears once (unique Select values). */}
+                {zuletzt.length > 0 ? (
+                  <>
+                    <SelectGroup data-testid="zuletzt-gruppe">
+                      <SelectLabel>{t("Zuletzt geöffnet")}</SelectLabel>
+                      {zuletzt.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                    </SelectGroup>
+                    <SelectSeparator />
+                    <SelectGroup>
+                      <SelectLabel>{t("Weitere Projekte")}</SelectLabel>
+                      {weitereProjekte.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                    </SelectGroup>
+                  </>
+                ) : projects.map((p) => (
                   <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -545,6 +658,8 @@ function LayoutInner({ children }) {
             )}
             {project?.client && <span className="text-sm text-slate-400 truncate hidden lg:inline">· {project.client}</span>}
             <div className="ml-auto flex items-center gap-1">
+              {/* 93-03: office mode on (host) or which paired device this is — at every width. */}
+              <BueroKennung />
               {/* Sichtbarer Hinweis auf das Kürzel — eine Palette, die niemand
                   kennt, hilft niemandem. */}
               <button
@@ -564,6 +679,8 @@ function LayoutInner({ children }) {
                   man herauskommt. express/serverlos haben keinen echten Login —
                   dort bleibt die Kopfzeile unverändert. */}
               {DATENQUELLE === "supabase" && <NutzerKopf />}
+              {/* 82-02: "Ansicht als …" — no sign-in, orders what is shown. */}
+              <NutzerUmschalter />
               {/* 83-02: feedback in every build — mail or GitHub, sent by the user. */}
               <FeedbackDialog seite={location.pathname} />
               <ThemeToggle />
@@ -589,6 +706,7 @@ function LayoutInner({ children }) {
             {zustand === "laden" && <HuelleLaedt />}
             {zustand === "fehler" && <VerbindungsFehler fehler={fehler} onErneut={erneutLaden} />}
             {zustand === "leer" && <KeinProjekt />}
+            {zustand === "gesperrt" && <KeinZugriff grund={gesperrtModul && cloudGesperrt(gesperrtModul, DATENQUELLE) ? "cloud" : "rolle"} />}
 
             {/* 72-09 (N-03): "Weiter mit …" after the page content, so no module
                 ends in a dead end — also the ones whose files belong to Hermes.
@@ -621,6 +739,10 @@ function LayoutInner({ children }) {
               <span aria-hidden="true"> · </span>
               <Link to="/cookies" className="underline hover:text-slate-700 dark:hover:text-slate-200">
                 {t("Cookies")}
+              </Link>
+              <span aria-hidden="true"> · </span>
+              <Link to="/barrierefreiheit" className="underline hover:text-slate-700 dark:hover:text-slate-200">
+                {t("Barrierefreiheit")}
               </Link>
               <span aria-hidden="true"> · </span>
               {/* 83-02: open source under MIT — the source is one click away. */}

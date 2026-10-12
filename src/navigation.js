@@ -21,24 +21,32 @@ import {
   Boxes,
   Briefcase,
   Calculator,
+  CalendarClock,
+  ClipboardList,
   Cloud,
   Coins,
   Euro,
   FileSpreadsheet,
   FileText,
   FolderKanban,
+  Gauge,
+  Handshake,
   History,
   IdCard,
   Landmark,
   LayoutDashboard,
+  Mail,
   PencilRuler,
   PenTool,
   Radio,
   Settings,
   ShieldCheck,
+  Timer,
+  TreePalm,
   Users,
   Wrench,
 } from 'lucide-react';
+import { darf } from '@core/lib/rechte.js';
 
 // Local stand-in for createPageUrl from '@core/utils'. That module is a
 // TypeScript index file, which the node alias hook of the unit tests cannot
@@ -58,6 +66,13 @@ const seite = (name) => '/' + name;
  * `breite: 'voll'` (75-16): a drawing page — the shell lifts the 1280 px
  * page cap (max-w-7xl) for it with ONE css rule, see seitenBreite().
  *
+ * `modul` (82-01): the rights module of the entry (@core/lib/rechte.js MODULE) — the
+ * shell's gate (huellenZustand rule 0) and navSichtbar read it.
+ * `netz` (70-06, register Nr. 50): what a module needs the internet for — absent = works fully offline
+ * (local app: own server on this computer); 'teilweise' = some parts need the internet (map tiles, climate,
+ * flood data, price search), 'noetig' = the module's purpose needs it (external AI provider). The sidebar
+ * marks these entries while the device is offline.
+ *
  * @typedef {{
  *   title: string,
  *   url: string,
@@ -67,6 +82,8 @@ const seite = (name) => '/' + name;
  *   umfang?: 'portfolio',
  *   zugang?: 'personal',
  *   breite?: 'voll',
+ *   netz?: 'teilweise'|'noetig',
+ *   modul: string,
  * }} NavEintrag
  * @typedef {{label: string, items: NavEintrag[], collapsible?: boolean}} NavGruppe
  */
@@ -78,9 +95,11 @@ export const navGroups = [
     items: [
       // The h1 stays "Projektübersicht" (tests/e2e/cloud-smoke.spec.js:62),
       // so the menu follows the page, not the other way round.
-      { title: 'Projektübersicht', url: seite('Dashboard'), icon: LayoutDashboard, umfang: 'portfolio' },
-      { title: 'Projekte', url: seite('Projects'), icon: FolderKanban },
-      { title: 'Berichte & Dokumente', url: seite('Reports'), icon: FileText },
+      { title: 'Projektübersicht', url: seite('Dashboard'), modul: 'projekte', icon: LayoutDashboard, umfang: 'portfolio' },
+      { title: 'Projekte', url: seite('Projects'), modul: 'projekte', icon: FolderKanban },
+      { title: 'Berichte & Dokumente', url: seite('Reports'), modul: 'berichte', icon: FileText },
+      // Phase 82 (82-01, E-02): deadlines and appointments of all modules, without a project.
+      { title: 'Fristen & Termine', url: seite('Deadlines'), modul: 'fristen', icon: CalendarClock, projektfrei: true, umfang: 'portfolio' },
     ],
   },
   {
@@ -90,50 +109,68 @@ export const navGroups = [
       // own; the real calculator is the designer tab "Energie", and the route
       // /EnergyAnalysis redirects there (App.jsx). Feasibility comes first
       // because it precedes the design in the project flow.
-      { title: 'Machbarkeit', url: seite('RealEstateFeasibility'), icon: Calculator },
-      { title: 'Komplex-Designer', url: seite('ComplexDesigner'), icon: PencilRuler, breite: 'voll' },
+      { title: 'Machbarkeit', url: seite('RealEstateFeasibility'), modul: 'planung', icon: Calculator, netz: 'teilweise' },
+      { title: 'Komplex-Designer', url: seite('ComplexDesigner'), modul: 'planung', icon: PencilRuler, breite: 'voll', netz: 'teilweise' },
+      // Phase 88: plan list, openings, sampling, H&S — between detailed design and site.
+      { title: 'Werkplanung & Baustelle', url: seite('Werkplanung'), modul: 'planung', icon: ClipboardList },
     ],
   },
   {
     label: 'Modell & Prüfung',
     items: [
-      { title: 'Prüf-Suite', url: seite('ModelCheck'), icon: ShieldCheck, projektfrei: true, breite: 'voll' },
-      { title: 'BIM-Viewer & Tickets', url: seite('BimViewer'), icon: Box, breite: 'voll' },
-      { title: 'IFC-Viewer (LV-gekoppelt)', url: seite('IfcViewer'), icon: Boxes, projektfrei: true },
+      { title: 'Prüf-Suite', url: seite('ModelCheck'), modul: 'modell', icon: ShieldCheck, projektfrei: true, breite: 'voll' },
+      { title: 'BIM-Viewer & Tickets', url: seite('BimViewer'), modul: 'modell', icon: Box, breite: 'voll' },
+      { title: 'IFC-Viewer (LV-gekoppelt)', url: seite('IfcViewer'), modul: 'modell', icon: Boxes, projektfrei: true },
       // KRITIK-14: the page stores nine key figures per stage and restores
       // nothing, so it must not promise "versions" or "commits".
-      { title: 'Projektstände', url: seite('ModelVersions'), icon: History },
+      { title: 'Projektstände', url: seite('ModelVersions'), modul: 'modell', icon: History },
     ],
   },
   {
     label: 'Ausschreibung & Kosten',
     items: [
-      { title: 'AVA (Ausschreibung)', url: seite('AVA'), icon: FileSpreadsheet },
-      { title: 'Finanzen & Nachträge', url: seite('Finance'), icon: Euro },
+      { title: 'AVA (Ausschreibung)', url: seite('AVA'), modul: 'ava', icon: FileSpreadsheet, netz: 'teilweise' },
+      { title: 'Finanzen & Nachträge', url: seite('Finance'), modul: 'finanzen', icon: Euro },
     ],
   },
   {
     label: 'KI & Analyse',
     items: [
-      { title: 'KI-Zentrale', url: seite('AIDashboard'), icon: Bot, umfang: 'portfolio' },
+      { title: 'KI-Zentrale', url: seite('AIDashboard'), modul: 'ki', icon: Bot, umfang: 'portfolio', netz: 'noetig' },
+    ],
+  },
+  {
+    // Phase 81 (81-01, E-02): time, fees and controlling of the office, right before
+    // "Büro". Time tracking and controlling span all projects; time tracking also
+    // works without an active project (office time, E-17).
+    label: 'Zeit & Honorar',
+    items: [
+      { title: 'Zeiterfassung', url: seite('TimeTracking'), modul: 'zeiterfassung', icon: Timer, projektfrei: true, umfang: 'portfolio' },
+      { title: 'Angebot & Auftrag', url: seite('Fees'), modul: 'auftrag', icon: Handshake },
+      { title: 'Projektcontrolling', url: seite('Controlling'), modul: 'controlling', icon: Gauge, umfang: 'portfolio' },
     ],
   },
   {
     // E-02: "Büro" replaces the former group "Stammdaten". Phase 80 adds Personal
     // and Einstellungen, phase 82 (82-01) adds Abwesenheiten and Schriftverkehr
     // between them, phase 81 puts "Zeit & Honorar" right before this group.
+    // 81-01: „Zeit & Honorar“ direkt davor angelegt.
     // 80-01: Personal and Einstellungen inserted, Adressbuch moved behind Personal
     // (order Buchhaltung · Personal · Adressbuch · Einstellungen [ASSUMED], D-P80-02);
     // 82 inserts Abwesenheiten after Personal and Schriftverkehr after Adressbuch.
     label: 'Büro',
     items: [
       // Phase 79: the office books span all projects and work without an active one.
-      { title: 'Buchhaltung', url: seite('Accounting'), icon: Landmark, umfang: 'portfolio', projektfrei: true },
+      { title: 'Buchhaltung', url: seite('Accounting'), modul: 'buchhaltung', icon: Landmark, umfang: 'portfolio', projektfrei: true },
       // Phase 80: HR of the office, without a project; hidden without personnel access (E-03, DS-12).
-      { title: 'Personal', url: seite('People'), icon: IdCard, projektfrei: true, zugang: 'personal' },
-      { title: 'Adressbuch', url: seite('AddressBook'), icon: Users, projektfrei: true },
+      { title: 'Personal', url: seite('People'), modul: 'personal', icon: IdCard, projektfrei: true, zugang: 'personal' },
+      // Phase 82 (82-01): inserted after Personal (E-02, 80-01 "82 inserts").
+      { title: 'Abwesenheiten', url: seite('Absences'), modul: 'abwesenheiten', icon: TreePalm, projektfrei: true, umfang: 'portfolio' },
+      { title: 'Adressbuch', url: seite('AddressBook'), modul: 'adressbuch', icon: Users, projektfrei: true },
+      // Phase 82 (82-01): inserted after Adressbuch (E-02).
+      { title: 'Schriftverkehr', url: seite('Correspondence'), modul: 'schriftverkehr', icon: Mail, projektfrei: true, umfang: 'portfolio' },
       // Phase 80: the one place of all app settings (KRITIK-05).
-      { title: 'Einstellungen', url: seite('Settings'), icon: Settings, projektfrei: true },
+      { title: 'Einstellungen', url: seite('Settings'), modul: 'einstellungen', icon: Settings, projektfrei: true },
     ],
   },
   {
@@ -143,30 +180,34 @@ export const navGroups = [
     label: 'Labor',
     collapsible: true,
     items: [
-      // 72-02 (Befund N-16): a constraint sketcher in the FreeCAD mould, not a
-      // freehand tool. It calls itself "(Labor)" since 72-02, so it sits here.
-      { title: 'Constraint-Zeichner', url: seite('SketchStudio'), icon: PenTool, projektfrei: true },
-      { title: 'Baustellen-Leitstand', url: seite('SiteControl'), icon: Radio, breite: 'voll' },
-      { title: 'Investment', url: seite('InvestmentPlatform'), icon: Coins, umfang: 'portfolio' },
-      { title: 'PDF & Ablage', url: seite('BitAegis'), icon: Cloud, projektfrei: true },
-      { title: 'Portfolio (Projektentwicklung)', url: seite('AtelierDeveloper'), icon: Briefcase, umfang: 'portfolio' },
+      // 72-05 (decision 12.10.2026, variant a): a real sketch tool — freehand with pen
+      // pressure, widths, eraser — with the FreeCAD constraint drawing as a mode. Still in
+      // "Labor" until the overlay over site plan / IFC section is done.
+      { title: 'Skizze', url: seite('SketchStudio'), modul: 'labor', icon: PenTool, projektfrei: true },
+      { title: 'Baustellen-Leitstand', url: seite('SiteControl'), modul: 'labor', icon: Radio, breite: 'voll', netz: 'teilweise' },
+      { title: 'Investment', url: seite('InvestmentPlatform'), modul: 'labor', icon: Coins, umfang: 'portfolio' },
+      { title: 'PDF & Ablage', url: seite('BitAegis'), modul: 'labor', icon: Cloud, projektfrei: true },
+      { title: 'Portfolio (Projektentwicklung)', url: seite('AtelierDeveloper'), modul: 'labor', icon: Briefcase, umfang: 'portfolio' },
       // Phase 67-06: the Atelier AI Harness (local Python service) inside the app.
-      { title: 'KI Tool', url: seite('KiTool'), icon: Wrench },
+      { title: 'KI Tool', url: seite('KiTool'), modul: 'labor', icon: Wrench },
     ],
   },
 ];
 
 /**
- * Whether the sidebar and the palette show an entry. Only entries with
- * `zugang: 'personal'` depend on the context; everything else is always shown.
- * navFlach itself stays unfiltered: the page titles and the shell states need
- * every route, visible or not.
+ * Whether the sidebar and the palette show an entry. Entries with
+ * `zugang: 'personal'` depend on personnel access (80); with an access object
+ * (82-01) an entry whose module the role may not read is hidden too. Without
+ * `zugriff` exactly as in 80. navFlach itself stays unfiltered: the page titles
+ * and the shell states need every route, visible or not.
  * @param {NavEintrag} eintrag
- * @param {{personalZugang?: string}} kontext personalZugang: result of personalZugang()
+ * @param {{personalZugang?: string, zugriff?: import('@core/lib/rechte.js').Zugriff|null}} kontext
+ *   personalZugang: result of personalZugang(); zugriff: access of the session (82)
  * @returns {boolean}
  */
-export function navSichtbar(eintrag, { personalZugang } = {}) {
-  if (eintrag?.zugang === 'personal') return personalZugang === 'erlaubt';
+export function navSichtbar(eintrag, { personalZugang, zugriff } = {}) {
+  if (eintrag?.zugang === 'personal' && personalZugang !== 'erlaubt') return false;
+  if (zugriff && eintrag?.modul && !darf(zugriff, eintrag.modul, 'lesen')) return false;
   return true;
 }
 

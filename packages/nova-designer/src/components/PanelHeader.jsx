@@ -27,6 +27,12 @@ const STAND_STIL = {
     klasse: "bg-amber-100 text-amber-800 border-amber-200",
     titel: "Rechnet auf [ASSUMED]-Richtwerten — kein geprüfter Nachweis.",
   },
+  // 73-02 (BEST-03): fourth state — the tab works on MEASURED geometry of an existing building (survey).
+  gemessen: {
+    text: "Gemessen",
+    klasse: "bg-violet-100 text-violet-800 border-violet-200",
+    titel: "Rechnet auf der Bauaufnahme (gemessene Geometrie des Bestands).",
+  },
   offen: {
     text: "Offen",
     klasse: "bg-slate-100 text-slate-700 border-slate-200",
@@ -39,11 +45,12 @@ const STAND_STIL = {
  * @param {{ label: string, braucht: string[], liefert: string[], stand: string }} props.reiter
  *   registry entry of the active tab
  * @param {string} props.bereichTitel human title of the active area, e.g. "2 · Baukörper"
- * @param {'modell'|'richtwert'|'offen'} [props.standOverride] overrides the registry
+ * @param {'modell'|'richtwert'|'offen'|'gemessen'} [props.standOverride] overrides the registry
  *   default once a caller knows the real state (follow-up work)
+ * @param {string|null} [props.herkunft] 73-02: provenance line of measured data (source, storeys, date)
  * @returns {JSX.Element|null} the header bar, or null without a registry entry
  */
-export default function PanelHeader({ reiter, bereichTitel, standOverride }) {
+export default function PanelHeader({ reiter, bereichTitel, standOverride, herkunft = null }) {
   if (!reiter) return null;
   const stand = STAND_STIL[standOverride || reiter.stand] || STAND_STIL.offen;
 
@@ -72,9 +79,10 @@ export default function PanelHeader({ reiter, bereichTitel, standOverride }) {
         </span>
       )}
 
-      <Badge className={`ml-auto font-normal border ${stand.klasse}`} title={stand.titel}>
+      <Badge className={`ml-auto font-normal border ${stand.klasse}`} title={stand.titel} data-testid="panel-stand" data-stand={standOverride || reiter.stand}>
         {stand.text}
       </Badge>
+      {herkunft && <span className="w-full text-xs text-slate-500" data-testid="panel-herkunft">{herkunft}</span>}
     </div>
   );
 }

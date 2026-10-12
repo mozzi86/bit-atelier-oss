@@ -16,6 +16,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@core/components/ui/ta
 import { useProject } from "@core/lib/ProjectContext";
 import { useI18n } from "@core/lib/i18n";
 import { useBriefkopf } from "@core/lib/useBriefkopf";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
+import { sichtbareDokumente } from "@core/lib/rechte.js";
+import { schreibenLink } from "@/lib/schriftverkehr/deepLink.js";
 import { nachtraegeDesProjekts } from "@core/lib/nachtraege";
 import { toast } from "sonner";
 import {
@@ -27,6 +30,7 @@ import ProtokollBuch from "@/components/reports/ProtokollBuch";
 import EmptyState from "@core/components/common/EmptyState";
 import { DRAWING_TYPES } from "@/components/reports/Drawings";
 import { exportElementToPdf, fileToDataUrl, fmtBytes } from "@core/lib/pdf";
+import { inhaltAblegen, inhaltLaden, blobIdNeu } from "@core/lib/speicherOrt";
 import { pfadText } from "@core/lib/ablage";
 import { fmtDate } from "@core/lib/projectModel";
 
@@ -44,6 +48,10 @@ const entities = () => /** @type {any} */ (bitApi.entities);
 
 export default function Reports() {
   const { projectId, project } = useProject();
+  // 82-05: protocol as a letter with distribution list — only with the correspondence right
+  // (this page stays reachable in the cloud; the link must not appear where the correspondence is locked, E-03).
+  const zugriff = useZugriff();
+  const schriftverkehr = zugriff.darf("schriftverkehr", "voll");
   const { t } = useI18n();
   // building: record, null = loaded and none (no phantom), undefined = not loaded yet.
   // nachtraege: ALL change orders; scoped at render time because the project
@@ -55,7 +63,9 @@ export default function Reports() {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("report");
   const [drawing, setDrawing] = useState("plan");
-  const [docs, setDocs] = useState([]);
+  // 82-02: only documents the role may see (Document.bereich: personnel, accounting, correspondence, fee PDFs).
+  const [rohDocs, setDocs] = useState([]);
+  const docs = useMemo(() => sichtbareDokumente(rohDocs, zugriff), [rohDocs, zugriff]);
   // The ONE letterhead editor lives in Einstellungen › Büro & Briefkopf (80-03,
   // KRITIK-05) — this page only reads it, live, through the shared hook.
   const { briefkopf } = useBriefkopf();
@@ -137,20 +147,26 @@ export default function Reports() {
     setBusy(true);
     try {
       const dataUrl = await fileToDataUrl(file);
+      // Storage rule (speicherOrt.js): < 256 KB in the record, > 1 MB in the object store.
+      const ablage = await inhaltAblegen(dataUrl, { blobId: blobIdNeu("dok"), art: "dokument" });
       await bitApi.entities.Document.create({
         project_id: projectId, name: file.name, size: file.size,
-        mime: file.type, data: dataUrl, uploaded_date: new Date().toISOString(),
+        mime: file.type, data: ablage.inline, data_blob: ablage.blob, uploaded_date: new Date().toISOString(),
       });
       toast.success(`„${file.name}" importiert`);
+      if (ablage.hinweis) toast.info(ablage.hinweis);
       reload(projectId);
     } catch { toast.error("Import fehlgeschlagen"); }
     setBusy(false);
     e.target.value = "";
   };
 
-  const openDoc = (doc) => {
-    const w = window.open();
-    if (w) w.document.write(`<iframe src="${doc.data}" style="border:0;width:100%;height:100%"></iframe>`);
+  const openDoc = async (doc) => {
+    const w = window.open(); // open synchronously (popup blocker), fill after the content is loaded
+    if (!w) return;
+    const data = await inhaltLaden(doc.data, doc.data_blob).catch(() => null);
+    if (data) w.document.write(`<iframe src="${data}" style="border:0;width:100%;height:100%"></iframe>`);
+    else w.document.write("Inhalt nicht gefunden.");
   };
   const deleteDoc = async (id) => { await bitApi.entities.Document.delete(id); reload(projectId); };
 
@@ -199,19 +215,25 @@ export default function Reports() {
                   {type === "status" && (
                     <div>
                       <label className="text-xs text-slate-500 mb-1 block">Berichtszeitraum</label>
-                      <input className="w-full border rounded-md px-2 py-1.5 text-sm" placeholder="z.B. KW 23/2026" value={period} onChange={(e) => setPeriod(e.target.value)} />
+                      <input aria-label={t("Berichtszeitraum")} className="w-full border rounded-md px-2 py-1.5 text-sm" placeholder="z.B. KW 23/2026" value={period} onChange={(e) => setPeriod(e.target.value)} />
                     </div>
                   )}
                   {type === "protokoll" && (
                     <>
                       <div>
                         <label className="text-xs text-slate-500 mb-1 block">Teilnehmer (Komma-getrennt)</label>
-                        <input className="w-full border rounded-md px-2 py-1.5 text-sm" placeholder="z.B. A. Meier, B. Huber" value={participants} onChange={(e) => setParticipants(e.target.value)} />
+                        <input aria-label={t("Teilnehmer (Komma-getrennt)")} className="w-full border rounded-md px-2 py-1.5 text-sm" placeholder="z.B. A. Meier, B. Huber" value={participants} onChange={(e) => setParticipants(e.target.value)} />
                       </div>
                       <div>
                         <label className="text-xs text-slate-500 mb-1 block">Ort/Anlass</label>
-                        <input className="w-full border rounded-md px-2 py-1.5 text-sm" placeholder="z.B. Baubesprechung, Baustelle" value={occasion} onChange={(e) => setOccasion(e.target.value)} />
+                        <input aria-label={t("Ort/Anlass")} className="w-full border rounded-md px-2 py-1.5 text-sm" placeholder="z.B. Baubesprechung, Baustelle" value={occasion} onChange={(e) => setOccasion(e.target.value)} />
                       </div>
+                      {schriftverkehr && projectId && (
+                        <Link className="text-sm text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300" data-testid="protokoll-als-brief"
+                          to={schreibenLink({ neu: "protokoll", bezug: { typ: "projekt", id: projectId } })}>
+                          {t("Als Brief mit Verteiler")}
+                        </Link>
+                      )}
                     </>
                   )}
                   <label className={`flex items-center gap-2 text-sm ${data.building ? "text-slate-700" : "text-slate-400"}`}>

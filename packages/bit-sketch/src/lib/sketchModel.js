@@ -43,6 +43,27 @@ export class Sketch {
     this.constraints = new Map();
     /** @type {Map<string, number>} benannte Parameter (planegcs SketchParam) */
     this.params = new Map();
+    // 72-05: freehand ink. Never part of the solver input (buildSolverInput reads points/
+    // lines/circles/constraints only) — ink has no degrees of freedom. Points as compact
+    // [x (m), y (m), pressure 0…1], width in world metres, colour as hex (freihand.js).
+    /** @type {Map<string, {id:string,type:'stroke',punkte:Array<[number,number,number]>,breite:number,farbe:string}>} */
+    this.strokes = new Map();
+  }
+
+  // ---------- Freihand (72-05) ----------
+
+  /**
+   * Add a freehand stroke.
+   * @param {Array<[number, number, number]>} punkte compact points [x m, y m, pressure]
+   * @param {{breite?: number, farbe?: string, id?: string}} [o] width in metres, colour hex
+   */
+  addStroke(punkte, { breite = 0.05, farbe = "#1e293b", id = nextId("s") } = {}) {
+    if (!Array.isArray(punkte) || punkte.length < 1) throw new Error(`Strich ${id}: keine Punkte`);
+    if (!(breite > 0)) throw new Error(`Strich ${id}: Breite muss > 0 sein`);
+    /** @type {{id:string,type:'stroke',punkte:Array<[number,number,number]>,breite:number,farbe:string}} */
+    const st = { id, type: "stroke", punkte, breite, farbe };
+    this.strokes.set(id, st);
+    return st;
   }
 
   // ---------- Geometrie ----------
@@ -179,6 +200,10 @@ export class Sketch {
     } else if (this.constraints.has(id)) {
       this.constraints.delete(id);
       deleted.add(id);
+    } else if (this.strokes.has(id)) {
+      // 72-05: ink has no constraints — delete it alone.
+      this.strokes.delete(id);
+      deleted.add(id);
     }
     return [...deleted];
   }
@@ -205,6 +230,8 @@ export class Sketch {
       circles: [...this.circles.values()],
       constraints: [...this.constraints.values()],
       params: [...this.params.entries()],
+      // 72-05: additive; a sketch without ink keeps the old shape plus an empty list.
+      strokes: [...this.strokes.values()],
     };
   }
 
@@ -220,6 +247,10 @@ export class Sketch {
     for (const c of data.circles ?? []) {
       if (s.points.has(c.center) && c.radius > 0) s.circles.set(c.id, { ...c });
     }
+    // 72-05: older sketches have no `strokes` — nothing to load. Broken entries are skipped.
+    for (const st of data.strokes ?? []) {
+      if (st?.id && Array.isArray(st.punkte) && st.punkte.length && st.breite > 0) s.strokes.set(st.id, { ...st });
+    }
     for (const k of data.constraints ?? []) {
       try {
         const refsOk = constraintRefs(k).every((ref) => s.points.has(ref) || s.lines.has(ref) || s.circles.has(ref));
@@ -231,7 +262,7 @@ export class Sketch {
     }
     // ID-Zähler vorsetzen, damit nextId() nach einem Reload nie mit
     // geladenen IDs kollidiert (IDs werden NIE recycelt — siehe document.js).
-    for (const id of [...s.points.keys(), ...s.lines.keys(), ...s.circles.keys(), ...s.constraints.keys()]) {
+    for (const id of [...s.points.keys(), ...s.lines.keys(), ...s.circles.keys(), ...s.constraints.keys(), ...s.strokes.keys()]) {
       const n = /(\d+)$/.exec(id);
       if (n) bumpIdCounter(Number(n[1]));
     }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-profil-lesen"
+description = "Enables the profil_lesen command without any pre-configured scope."
+commands.allow = ["profil_lesen"]
+
+[[permission]]
+identifier = "deny-profil-lesen"
+description = "Denies the profil_lesen command without any pre-configured scope."
+commands.deny = ["profil_lesen"]

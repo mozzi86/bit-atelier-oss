@@ -19,14 +19,21 @@
 // Koordinatensystem: zentrierte Meter wie footprintM (Ursprung = Footprint-
 // Mittelpunkt); Zonen passen 1:1 in useBuildingProgram().zones.
 
+import { OKTAMETER, TUER_WERKSTATT, TUER_ECKABSTAND_OKTAMETER } from "./massordnung.js";
 import { rettungsweg as lauflinie, punktInPolygon, innenwegUeberTueren } from "./rettungsweg.js";
 // 75-13: ONE source for the lift duty numbers (import-free module, as rettungsweg.js).
 import { aufzugPflicht, AUFZUG_GESCHOSS_GRENZE, AUFZUG_OKF_GRENZE } from "./accessibility.js";
 // 86-01: footprint-true tessellation (frame + largest inscribed rectangle + remainder).
 import {
   bereinigen, istAchsRechteck, istRechteck, rahmen, inLokal, inWelt, schwerpunkt, flaeche as polyFlaeche,
-  kandidatenRichtungen, groesstesRechteck, restOhneRechteck, streifenIntervalle,
+  kandidatenRichtungen, groesstesRechteck, restOhneRechteck, streifenIntervalle, ohneKonvex, inKonvex,
 } from "./formGeometrie.js";
+// 75-12: interior walls moved in the focus (persisted offsets, applied after the room slicing).
+import { wendeRaumGrenzenAn, raumGrenzenFehlend } from "./raumGrenzen.js";
+// 86-02: slanted remainders are added to the window rooms in front of them.
+import { schraegenZuschlagen, SCHRAEGE } from "./schraegen.js";
+// 86-06: veins from the skeleton of a free footprint (raster distance field, own code).
+import { skelettAdern } from "./skelett.js";
 
 // Zahlen-Härtung (apartments.js-Muster): nie NaN/Infinity weiterreichen.
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -236,11 +243,11 @@ export function kernRegeln(rg, nGeschosse, okf_m) {
 // reported by raumQualitaet.js with the quantitative cause.
 
 /**
- * Raw door opening widths in metres — CITED DIN 18100 (Wandöffnungs-Richtmaße):
- * 0,885 m rooms, 0,985 m bath/WC and apartment entrance (plan 75-14 values; the
- * furniture catalogue's tuer_885/tuer_1010 follow D-P75-09-A and stay untouched).
+ * Raw door opening widths in metres — from the dimensional order (massordnung.js, 89-01): 0,885 m rooms
+ * is DIN 18100 (Baurichtmaß 875); 1,01 m bath/WC and apartment entrance is DIN 18100 (Baurichtmaß 1000,
+ * since D-BW-06 on 12.10.2026 — before it was 0,985, the clear width of that door).
  */
-export const TUERBREITEN = { zimmer: 0.885, bad: 0.985, wohnung: 0.985 };
+export const TUERBREITEN = { ...TUER_WERKSTATT.standard };
 
 /**
  * 84-10: raw door opening widths of a wheelchair unit (R), metres. DIN 18040-2 via
@@ -249,7 +256,7 @@ export const TUERBREITEN = { zimmer: 0.885, bad: 0.985, wohnung: 0.985 };
  * size (tuer_1010, clear 0,985); bath and entrance door (0,985 → clear 0,96) already
  * reach 0,90 and stay.
  */
-export const TUERBREITEN_R = { zimmer: 1.01, bad: 0.985, wohnung: 0.985 };
+export const TUERBREITEN_R = { ...TUER_WERKSTATT.R };
 
 /**
  * 84-10: the three apartment levels of a unit. "standard" = no barrier-free rule
@@ -259,7 +266,7 @@ export const TUERBREITEN_R = { zimmer: 1.01, bad: 0.985, wohnung: 0.985 };
 export const STUFEN = ["standard", "B", "R"];
 
 /** DIN 4172 (Maßordnung im Hochbau, NF-70): octametric raster 12,5 cm — every masonry size is a multiple. */
-export const MAUERWERK_RASTER_M = 0.125;
+export const MAUERWERK_RASTER_M = OKTAMETER; // 89-01: octametre 12,5 cm (DIN 4172) from massordnung.js
 /**
  * Distance jamb → adjacent wall in metres: one raster unit (84-11). Was 0,15 [ASSUMED
  * plaster + frame] — the user (10.10.2026) rejected it as "kein Mauerwerksmaß".
@@ -270,7 +277,7 @@ export const TUER_ANSCHLAG_ABSTAND = MAUERWERK_RASTER_M;
  * wardrobe fits behind the opened leaf: 7 × 12,5 = 0,875 m. The user said "90 cm";
  * 0,875 is the next raster size below [ASSUMED, D-BW-01 — alternative 8 × 12,5 = 1,00].
  */
-export const TUER_ECKABSTAND_SCHRANK_M = 7 * MAUERWERK_RASTER_M;
+export const TUER_ECKABSTAND_SCHRANK_M = TUER_ECKABSTAND_OKTAMETER * MAUERWERK_RASTER_M;
 
 /**
  * 84-11: jamb offset `u_m` of a room door on an edge of length `wandLaenge_m` so that the
@@ -2611,6 +2618,31 @@ export function formEinpassung(footprintM, typ) {
  */
 export function tesseliere(opts) {
   const o = opts || {};
+  // 86-04: perimeter block ("Randbebauung") on request — bars along every edge around a court,
+  // for rectangles too. Fewer than two bars possible → the normal path below.
+  if (o.zerlegung === "rand" && String(o.typ) !== "efh") {
+    const nG = Math.max(1, Math.round(num(o.storeys, 1)));
+    const jeRiegel = o.geschosseJeRiegel && typeof o.geschosseJeRiegel === "object" ? Object.values(o.geschosseJeRiegel).map((v) => Math.round(num(v, 0))) : [];
+    const zerl = randZerlegung(o.footprintM, o.typ, { geschosse: Math.max(nG, ...jeRiegel), geschosshoehe_m: geschosshoeheAus(o.okf_m, nG), riegelMinFlaeche_m2: o.riegelMinFlaeche_m2 });
+    if (zerl && zerl.riegel.length > 1) return tesseliereRiegel(o, zerl);
+  }
+  // 86-07: bars along the drawn centre line (store achseM, passed as `achse`).
+  if (o.zerlegung === "achse" && String(o.typ) !== "efh" && achseBereinigt(o.achse)) {
+    const nG = Math.max(1, Math.round(num(o.storeys, 1)));
+    const jeRiegel = o.geschosseJeRiegel && typeof o.geschosseJeRiegel === "object" ? Object.values(o.geschosseJeRiegel).map((v) => Math.round(num(v, 0))) : [];
+    const zerl = achsZerlegung(o.footprintM, o.typ, [o.achse], { geschosse: Math.max(nG, ...jeRiegel), geschosshoehe_m: geschosshoeheAus(o.okf_m, nG), riegelMinFlaeche_m2: o.riegelMinFlaeche_m2 });
+    // The drawn axis is shown in the workshop plan as the (only) vein.
+    if (zerl) {
+      const a = /** @type {Array<{x:number,z:number}>} */ (achseBereinigt(o.achse));
+      return tesseliereRiegel(o, { ...zerl, adern: [{ punkte: a, laenge_m: Math.round(a.reduce((s, p, i) => (i ? s + Math.hypot(p.x - a[i - 1].x, p.z - a[i - 1].z) : 0), 0) * 100) / 100, ordnung: 1, breite_m: 1.2, zwang: true }] });
+    }
+  }
+  // 86-06: veins from the skeleton (depth filter = lower typology depth); a drawn axis (86-07)
+  // enters as the main vein (constraint). No vein long enough → the normal path below.
+  if (o.zerlegung === "skelett" && String(o.typ) !== "efh" && Array.isArray(o.footprintM) && o.footprintM.length >= 3) {
+    const zerl = skelettZerlegung(o);
+    if (zerl) return tesseliereRiegel(o, zerl);
+  }
   const form = formEinpassung(o.footprintM, o.typ);
   if (!form) return tesseliereKern(o);
   // 86-03: a non-rectangular footprint is filled with several bars (riegelZerlegung); with
@@ -2654,7 +2686,77 @@ export function tesseliere(opts) {
     },
   };
   if (Array.isArray(kern.waende)) out.waende = kern.waende.map((w) => ({ ...w, a: T(w.a), b: T(w.b) }));
-  return out;
+  return schraegenAnwenden(out, nGeschosse);
+}
+
+/**
+ * 86-02: add the slanted remainder in front of window rooms to those rooms (schraegen.js) and
+ * carry the figures along: `form.rest` = remainder of the lowest storey, `form.belegt_m2` /
+ * `rest_m2` / `fuellgrad` updated, `form.zuschlag_m2` (m² per storey, lowest storey),
+ * `weListe[].flaeche_m2` + the unit's share, rule-wandstaerken segments of a bulged facade edge
+ * replaced by the new run (class "aussen"), one hint `[86-02]`. Nothing to add → `out` as is.
+ * `sperren` = convex regions (half-plane lists, world) the wedges must not grow into — the
+ * spacing band between facing bars (86-03 rule 2 × max(3 m; 0,4 H)); those parts stay remainder.
+ * @param {any} out tesseliere result with `form` (world frame)
+ * @param {number} nGeschosse storeys
+ * @param {Array<Array<{nx:number,nz:number,c:number}>>} [sperren] blocked convex regions
+ * @returns {any}
+ */
+function schraegenAnwenden(out, nGeschosse, sperren = []) {
+  if (!out?.form || !Array.isArray(out.form.rest) || !out.form.rest.length) return out;
+  let frei = out.form.rest;
+  const gesperrt = [];
+  for (const h of sperren) {
+    gesperrt.push(...frei.flatMap((t) => inKonvex(t, h)).filter((t) => t.length >= 3));
+    frei = frei.flatMap((t) => ohneKonvex(t, h, 1e-9));
+  }
+  const s0 = schraegenZuschlagen(out.zonen, frei, { seitenMax: WOHNUNGS_REGELN.seitenverhaeltnisMax });
+  if (s0.zonen === out.zonen) return out;
+  // The blocked parts belong to the remainder again (rest + occupied = footprint).
+  const s = { ...s0, restJeGeschoss: new Map([...s0.restJeGeschoss].map(([l, teile]) => [l, [...teile, ...gesperrt]])) };
+  const ebenen = [...s.zuschlagJeGeschoss.keys()].sort((a, b) => a - b);
+  const unten = ebenen.find((l) => l >= 0) ?? ebenen[0];
+  const zuschlag0 = s.zuschlagJeGeschoss.get(unten) || 0;
+  let zuschlagAlle = 0;
+  for (const v of s.zuschlagJeGeschoss.values()) zuschlagAlle += v;
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1).replace(".", ",");
+  const gesamt = num(out.form.gesamt_m2);
+  const belegt = num(out.form.belegt_m2) + zuschlag0;
+  const restForm = Math.max(0, num(out.form.rest_m2) - zuschlag0);
+  const res = {
+    ...out,
+    zonen: s.zonen,
+    weListe: out.weListe.map((w) => (s.zuschlagJeWe.has(String(w.we)) ? { ...w, flaeche_m2: num(w.flaeche_m2) + s.zuschlagJeWe.get(String(w.we)) } : w)),
+    rest_m2: num(out.rest_m2) - zuschlagAlle,
+    rest: num(out.rest) - zuschlagAlle,
+    hinweise: [...out.hinweise, `Schrägen [86-02]: ${s.raeume} Fensterräume an Schrägen erweitert (Schrägwand bis ${f1(SCHRAEGE.tiefeMax_m)} m tief, Raum höchstens 1 : 1,8 [ASSUMED]; Abstand zwischen Riegeln bleibt frei) — im untersten Geschoss ${s.raeumeJeGeschoss.get(unten) || 0} Räume, ${f1(zuschlag0)} m² der Restfläche zugeschlagen, verbleibend ${f1(restForm)} m² (${Math.round((100 * belegt) / Math.max(1e-9, gesamt))} % belegt)`],
+    form: {
+      ...out.form,
+      belegt_m2: r2(belegt),
+      rest_m2: r2(restForm),
+      fuellgrad: Math.round((1000 * belegt) / Math.max(1e-9, gesamt)) / 1000,
+      rest: s.restJeGeschoss.get(unten) || [],
+      zuschlag_m2: r2(zuschlag0),
+    },
+  };
+  if (Array.isArray(out.waende)) {
+    const r = (v) => Math.round(num(v) * 100) / 100;
+    const gleich = (p, q) => r(p.x) === r(q.x) && r(p.z) === r(q.z);
+    let waende = out.waende;
+    for (const k of s.kanten) {
+      const alt = waende.find((w) => w.level === k.level && ((gleich(w.a, k.a) && gleich(w.b, k.b)) || (gleich(w.a, k.b) && gleich(w.b, k.a))));
+      const staerke = alt ? alt.staerke : WANDSTAERKEN.aussen;
+      waende = waende.filter((w) => w !== alt);
+      for (let i = 0; i + 1 < k.neu.length; i++) {
+        if (gleich(k.neu[i], k.neu[i + 1])) continue;
+        waende.push({ a: { x: r(k.neu[i].x), z: r(k.neu[i].z) }, b: { x: r(k.neu[i + 1].x), z: r(k.neu[i + 1].z) }, level: k.level, klasse: "aussen", staerke });
+      }
+    }
+    res.waende = waende;
+  }
+  void nGeschosse;
+  return res;
 }
 
 /**
@@ -2871,6 +2973,370 @@ export function riegelZerlegung(footprintM, typ, o = {}, vorab = undefined) {
   return { form, ...wahl, abstand_m: abstand };
 }
 
+/** 86-04: perimeter-block limits [ASSUMED]: at most 8 bars (one per edge of an octagon-like
+ * block), depth = lower typology depth + 1 m (FORM_TIEFE) — a slim ring leaves the largest court;
+ * bars facing each other across the court must be at most 30° apart to count as "facing". */
+export const FORM_RAND = { max: 8, tiefeZusatz_m: 1, parallelGrad: 30 };
+
+/**
+ * 86-04: depth of a perimeter bar for a typology, m (FORM_TIEFE lower bound + 1 m, capped).
+ * @param {string} typ typology
+ * @returns {number} m
+ */
+export function randTiefe(typ) {
+  const [tMin, tMax] = FORM_TIEFE[String(typ)] || [8, 17];
+  return Math.min(tMax, tMin + FORM_RAND.tiefeZusatz_m);
+}
+
+/** Area of polygon `pts` inside the convex polygon `konvex` (m²). */
+function schnittFlaeche(pts, konvex) {
+  return inKonvex(pts, halbebenenKonvex(konvex)).reduce((s, t) => s + polyFlaeche(t), 0);
+}
+
+/**
+ * 86-04: perimeter block ("Randbebauung", Spacio way of working, 86-RESEARCH §2): one bar per
+ * edge, longest edge first, each in its own frame (x along the edge, z into the footprint),
+ * depth randTiefe(typ). The x-range is the part of the edge where the strip [0, T] lies inside
+ * the footprint, minus the projection of every bar laid so far → CORNER SOLUTION: the longer bar
+ * runs through the corner, the shorter one abuts it with its gable (fire wall). A bar whose
+ * court facade would face an earlier bar (≤ FORM_RAND.parallelGrad apart) closer than the
+ * spacing rule 2 × max(3 m; 0,4 H) is dropped (court too narrow — hint). Pure, deterministic.
+ * Corner wedges at oblique corners stay remainder (the projection is conservative).
+ * @param {Array<{x:number, z:number}>|null} footprintM footprint, m
+ * @param {string} [typ] typology
+ * @param {{geschosse?: number, geschosshoehe_m?: number, riegelMinFlaeche_m2?: number}} [o]
+ *   storeys for the spacing (the highest house), storey height m, minimum bar area m²
+ * @returns {null|{art: "rand", form: {gesamt_m2: number, belegt_m2: number, rechteckForm: boolean}, riegel: Array<{rahmen: ReturnType<typeof rahmen>, rechteck: {x0:number,x1:number,z0:number,z1:number}}>, basis: ReturnType<typeof rahmen>, abstand_m: number, tiefe_m: number, entfallen: Array<{kante: number, grund: string}>}}
+ */
+export function randZerlegung(footprintM, typ, o = {}) {
+  if (!Array.isArray(footprintM) || footprintM.length < 3 || String(typ) === "efh") return null;
+  const pts = bereinigen(footprintM).map((p) => ({ x: num(p.x), z: num(p.z) }));
+  if (pts.length < 3) return null;
+  const gesamt = polyFlaeche(pts);
+  const mitte = schwerpunkt(pts);
+  const abstand = riegelAbstand(num(o.geschosse, 1), num(o.geschosshoehe_m, 3));
+  const T = randTiefe(typ);
+  const minFlaeche = num(o.riegelMinFlaeche_m2) > 0 ? num(o.riegelMinFlaeche_m2) : FORM_RIEGEL.minFlaeche_m2;
+  const kanten = pts.map((a, i) => { const b = pts[(i + 1) % pts.length]; return { i, a, b, l: Math.hypot(b.x - a.x, b.z - a.z) }; })
+    .sort((p, q) => (Math.abs(q.l - p.l) > 1e-6 ? q.l - p.l : p.i - q.i));
+  /** @type {Array<{rahmen: ReturnType<typeof rahmen>, rechteck: {x0:number,x1:number,z0:number,z1:number}, welt: Array<{x:number,z:number}>, band: Array<{x:number,z:number}>, winkel: number}>} */
+  const riegel = [];
+  const entfallen = [];
+  for (const k of kanten) {
+    if (riegel.length >= FORM_RAND.max) break;
+    if (k.l + 1e-9 < Math.max(T, FORM_RIEGEL.minLaenge_m)) continue;
+    // Frame: origin at the edge start, x along the edge, z towards the footprint inside.
+    let f = rahmen(Math.atan2(k.b.z - k.a.z, k.b.x - k.a.x), k.a);
+    if (inLokal(mitte, f).z < 0) f = rahmen(Math.atan2(k.a.z - k.b.z, k.a.x - k.b.x), k.b);
+    const lok = pts.map((p) => inLokal(p, f));
+    /** @type {Array<[number, number]>} */
+    let iv = streifenIntervalle(lok, 0, T)
+      .map(([u, v]) => /** @type {[number, number]} */ ([Math.max(u, 0), Math.min(v, k.l)]))
+      .filter(([u, v]) => v - u > 1e-6);
+    // Corner solution: cut out the projection of every bar that reaches into the strip.
+    for (const q of riegel) {
+      const lq = q.welt.map((p) => inLokal(p, f));
+      const zq0 = Math.min(...lq.map((p) => p.z)), zq1 = Math.max(...lq.map((p) => p.z));
+      if (!(zq0 < T - 1e-6 && zq1 > 1e-6)) continue;
+      const xq0 = Math.min(...lq.map((p) => p.x)), xq1 = Math.max(...lq.map((p) => p.x));
+      /** @type {Array<[number, number]>} */
+      const neu = [];
+      for (const [u, v] of iv) {
+        if (Math.min(v, xq0) - u > 1e-6) neu.push([u, Math.min(v, xq0)]);
+        if (v - Math.max(u, xq1) > 1e-6) neu.push([Math.max(u, xq1), v]);
+      }
+      iv = neu;
+    }
+    /** @type {null|[number, number]} */
+    let best = null;
+    for (const s of iv) if (!best || s[1] - s[0] > best[1] - best[0] + 1e-9) best = s;
+    if (!best) { entfallen.push({ kante: k.i + 1, grund: "kein Platz an der Kante" }); continue; }
+    const [x0, x1] = best;
+    if (x1 - x0 + 1e-9 < Math.max(T, FORM_RIEGEL.minLaenge_m) || (x1 - x0) * T < minFlaeche) { entfallen.push({ kante: k.i + 1, grund: "zu kurz" }); continue; }
+    const welt = [{ x: x0, z: 0 }, { x: x1, z: 0 }, { x: x1, z: T }, { x: x0, z: T }].map((p) => inWelt(p, f));
+    const band = [{ x: x0, z: T }, { x: x1, z: T }, { x: x1, z: T + abstand }, { x: x0, z: T + abstand }].map((p) => inWelt(p, f));
+    // Court spacing: only bars that FACE each other (nearly parallel) count; corners do not.
+    const parallel = (w) => { const d = Math.abs(((f.winkel - w) % Math.PI + Math.PI) % Math.PI); return Math.min(d, Math.PI - d) <= (FORM_RAND.parallelGrad * Math.PI) / 180; };
+    const konflikt = riegel.some((q) => parallel(q.winkel) && (schnittFlaeche(q.welt, band) > 0.01 || schnittFlaeche(welt, q.band) > 0.01));
+    if (konflikt) { entfallen.push({ kante: k.i + 1, grund: "Hof zu schmal" }); continue; }
+    riegel.push({ rahmen: f, rechteck: { x0, x1, z0: 0, z1: T }, welt, band, winkel: f.winkel });
+  }
+  if (riegel.length < 2) return null;
+  const belegt = riegel.reduce((s, r) => s + (r.rechteck.x1 - r.rechteck.x0) * T, 0);
+  return {
+    art: "rand",
+    form: { gesamt_m2: gesamt, belegt_m2: belegt, rechteckForm: false },
+    riegel: riegel.map((r) => ({ rahmen: r.rahmen, rechteck: r.rechteck })),
+    basis: riegel[0].rahmen, abstand_m: abstand, tiefe_m: T, entfallen,
+  };
+}
+
+/**
+ * 86-07/86-06: the hint of an axis decomposition: segments → bars (length × depth), vein per bar,
+ * occupied share, remainder, dropped segments, spacing rule, storeys per house.
+ * @param {any} zerl achsZerlegung result
+ * @param {Array<any>} info riegelInfo of tesseliereRiegel
+ * @param {{gesamt: number, belegt: number, restForm_m2: number, f1: (v: number) => string}} z
+ * @returns {string}
+ */
+function achsHinweis(zerl, info, { gesamt, belegt, restForm_m2, f1 }) {
+  const anteil = Math.round((100 * belegt) / Math.max(1e-9, gesamt));
+  const tag = zerl.art === "skelett" ? "Adern [86-06]" : "Achse [86-07]";
+  const quelle = zerl.art === "skelett" ? `aus dem Skelett der Form${zerl.mitNutzerAchse ? " (gezeichnete Achse als Hauptader)" : ""}` : "entlang der gezeichneten Achse";
+  const weg = zerl.entfallen.length ? `; entfallen: ${zerl.entfallen.map((e) => `Abschnitt ${e.kante} (${e.grund})`).join(", ")}` : "";
+  const geschosse = info.some((r) => r.geschosse !== undefined) ? `; eigene Geschosszahl: ${info.filter((r) => r.geschosse !== undefined).map((r) => `Riegel ${r.nr} ${r.geschosse}`).join(", ")}` : "";
+  const adern = zerl.art === "skelett" && Array.isArray(zerl.adern)
+    ? `; ${zerl.adern.length} ${zerl.adern.length === 1 ? "Ader" : "Adern"} (Strahler-Ordnung ${zerl.adern.map((a) => a.ordnung).join("/")}, Flurbreite nach Murray ${zerl.adern.map((a) => f1(a.breite_m)).join("/")} m [ASSUMED], nur angezeigt)`
+    : "";
+  const vergleich = zerl.art === "skelett" && Number.isFinite(zerl.autoFuellgrad) ? `; automatische Zerlegung belegt ${Math.round(100 * zerl.autoFuellgrad)} %` : "";
+  return `${tag}: ${info.length} Riegel ${quelle} (${info.map((r) => `${f1(r.laenge_m)} × ${f1(r.tiefe_m)}`).join(", ")} m, Flur auf der Achse) — ${anteil} % von ${f1(gesamt)} m² belegt, ${f1(restForm_m2)} m² Restfläche je Geschoss${weg}${adern}${vergleich}; parallele Riegel halten ≥ ${f1(zerl.abstand_m)} m Abstand (2 × max(3 m; 0,4 H) [ASSUMED])${geschosse}`;
+}
+
+/**
+ * 86-04: the hint of a perimeter block: bars, court/remainder area, corners (which bar abuts
+ * which — fire wall), dropped edges, the spacing rule and the storeys per house.
+ * @param {any} zerl randZerlegung result
+ * @param {Array<any>} info riegelInfo of tesseliereRiegel (world rectangles, m)
+ * @param {{gesamt: number, belegt: number, restForm_m2: number, f1: (v: number) => string}} z
+ * @returns {string}
+ */
+function randHinweis(zerl, info, { gesamt, belegt, restForm_m2, f1 }) {
+  // Contact = a corner of one bar lies on the other bar's outline (within 2 cm).
+  const auf = (p, r) => {
+    const h = halbebenenKonvex(r);
+    return h.every((e) => e.nx * p.x + e.nz * p.z <= e.c + 0.02) && h.some((e) => Math.abs(e.nx * p.x + e.nz * p.z - e.c) <= 0.02);
+  };
+  const ecken = [];
+  for (let a = 0; a < info.length; a++) {
+    for (let b = a + 1; b < info.length; b++) {
+      if (info[b].rechteck.some((p) => auf(p, info[a].rechteck))) ecken.push(`${b + 1} an ${a + 1}`);
+      else if (info[a].rechteck.some((p) => auf(p, info[b].rechteck))) ecken.push(`${a + 1} an ${b + 1}`);
+    }
+  }
+  const anteil = Math.round((100 * belegt) / Math.max(1e-9, gesamt));
+  const geschosse = info.some((r) => r.geschosse !== undefined) ? `; eigene Geschosszahl: ${info.filter((r) => r.geschosse !== undefined).map((r) => `Riegel ${r.nr} ${r.geschosse}`).join(", ")}` : "";
+  const weg = zerl.entfallen.length ? `; entfallen: ${zerl.entfallen.map((e) => `Kante ${e.kante} (${e.grund})`).join(", ")}` : "";
+  return `Randbebauung [86-04]: ${info.length} Riegel entlang der Kanten, Tiefe ${f1(zerl.tiefe_m)} m — ${anteil} % von ${f1(gesamt)} m² belegt, Hof und Ecken ${f1(restForm_m2)} m² frei; Ecken: ${ecken.length ? `Riegel ${ecken.join(", ")} (Giebel stößt an, Brandwand)` : "keine"}${weg}; gegenüberliegende Hoffassaden ≥ ${f1(zerl.abstand_m)} m (2 × max(3 m; 0,4 H) des höchsten Hauses [ASSUMED]); jeder Riegel ist ein Haus mit eigener Erschließung${geschosse}`;
+}
+
+/**
+ * 86-07: a usable polyline (≥ 2 points, finite, consecutive points ≥ 1 m apart), m — or null.
+ * @param {any} achse polyline [{x,z}]
+ * @returns {Array<{x:number,z:number}>|null}
+ */
+export function achseBereinigt(achse) {
+  if (!Array.isArray(achse)) return null;
+  const out = [];
+  for (const p of achse) {
+    const q = { x: num(p?.x, NaN), z: num(p?.z, NaN) };
+    if (!Number.isFinite(q.x) || !Number.isFinite(q.z)) continue;
+    const l = out[out.length - 1];
+    if (!l || Math.hypot(q.x - l.x, q.z - l.z) >= 1) out.push(q);
+  }
+  return out.length >= 2 ? out : null;
+}
+
+/**
+ * 86-07 (+ 86-06): bars along centre lines ("Adern"). Every segment of every polyline becomes a
+ * bar CENTRED on the segment (the corridor runs on the line — Spacio "Center-Line", Finch
+ * "corridor follows a drawn centre line", 86-RESEARCH §2), as deep as fits: the largest depth in
+ * FORM_TIEFE (1-m steps, deepest first) whose strip around the line lies inside the footprint for
+ * at least the minimum bar length. The bar may run T/2 beyond the segment ends so a bend is
+ * covered; segments are placed in order — first polyline (the main vein / the drawn axis) first,
+ * within a polyline longest first — and every later bar loses the projection of the earlier ones
+ * (corner solution as 86-04: the earlier bar runs through, the later abuts). Bars that would face
+ * an earlier, nearly parallel bar closer than the spacing rule are dropped. Pure, deterministic.
+ * @param {Array<{x:number, z:number}>|null} footprintM footprint, m
+ * @param {string} typ typology
+ * @param {Array<Array<{x:number,z:number}>>} achsen polylines in the footprint frame, m
+ * @param {{geschosse?: number, geschosshoehe_m?: number, riegelMinFlaeche_m2?: number, art?: string}} [o]
+ * @returns {null|{art: string, form: {gesamt_m2: number, belegt_m2: number, rechteckForm: boolean}, riegel: Array<{rahmen: ReturnType<typeof rahmen>, rechteck: {x0:number,x1:number,z0:number,z1:number}}>, basis: ReturnType<typeof rahmen>, abstand_m: number, tiefe_m: number, entfallen: Array<{kante: number, grund: string}>, abschnitte: Array<{nr: number, ader: number, laenge_m: number, tiefe_m: number}>}}
+ */
+export function achsZerlegung(footprintM, typ, achsen, o = {}) {
+  // Two ways to handle a flat bend — corner solution (one bar runs through) or mitre; the one
+  // with more occupied area wins (ties: corner solution, the 86-07 behaviour). Without flat bends
+  // both are identical.
+  const ecke = achsZerlegungMit(footprintM, typ, achsen, o, false);
+  const gehrung = achsZerlegungMit(footprintM, typ, achsen, o, true);
+  if (!ecke) return gehrung;
+  if (!gehrung) return ecke;
+  return gehrung.form.belegt_m2 > ecke.form.belegt_m2 + 1 ? gehrung : ecke;
+}
+
+/**
+ * 86-07/86-06: one variant of achsZerlegung — `mitGehrung` = mitre flat bends (< 60°).
+ * @param {Array<{x:number, z:number}>|null} footprintM footprint, m
+ * @param {string} typ typology
+ * @param {Array<Array<{x:number,z:number}>>} achsen polylines, m
+ * @param {any} o options (see achsZerlegung)
+ * @param {boolean} mitGehrung mitre flat bends
+ * @returns {any}
+ */
+function achsZerlegungMit(footprintM, typ, achsen, o, mitGehrung) {
+  if (!Array.isArray(footprintM) || footprintM.length < 3 || String(typ) === "efh") return null;
+  const pts = bereinigen(footprintM).map((p) => ({ x: num(p.x), z: num(p.z) }));
+  if (pts.length < 3) return null;
+  const linien = (Array.isArray(achsen) ? achsen : []).map(achseBereinigt).filter((l) => l !== null);
+  if (!linien.length) return null;
+  const gesamt = polyFlaeche(pts);
+  const abstand = riegelAbstand(num(o.geschosse, 1), num(o.geschosshoehe_m, 3));
+  const [tMin, tMax] = FORM_TIEFE[String(typ)] || [8, 17];
+  const minFlaeche = num(o.riegelMinFlaeche_m2) > 0 ? num(o.riegelMinFlaeche_m2) : FORM_RIEGEL.minFlaeche_m2;
+  // Robustness against a jittery axis (raster skeleton, hand-drawn clicks) [ASSUMED]: a segment
+  // within 3° of an edge direction of the footprint is turned onto it (about its midpoint), and the
+  // bar may sit up to ±2 m across the axis (0,25-m steps) to reach the full typology depth.
+  const richtungen = kandidatenRichtungen(pts, 6).flatMap((k) => [k.winkel, k.winkel + Math.PI / 2]);
+  const einrasten = (a, b) => {
+    const w = Math.atan2(b.z - a.z, b.x - a.x);
+    for (const r of richtungen) {
+      let d = ((w - r) % Math.PI + Math.PI) % Math.PI;
+      if (d > Math.PI / 2) d -= Math.PI;
+      if (Math.abs(d) > 1e-9 && Math.abs(d) < (3 * Math.PI) / 180) {
+        const m = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }, c = Math.cos(-d), sn = Math.sin(-d);
+        const dreh = (p) => ({ x: m.x + c * (p.x - m.x) - sn * (p.z - m.z), z: m.z + sn * (p.x - m.x) + c * (p.z - m.z) });
+        return [dreh(a), dreh(b)];
+      }
+    }
+    return [a, b];
+  };
+  const VERSATZ_MAX = 2, VERSATZ_SCHRITT = 0.25;
+  const versaetze = [0];
+  for (let v = VERSATZ_SCHRITT; v <= VERSATZ_MAX + 1e-9; v += VERSATZ_SCHRITT) versaetze.push(v, -v);
+  const abschnitte = [];
+  linien.forEach((l, ader) => {
+    const segs = [];
+    // Turning angle at an inner vertex (0 = straight on, π/2 = right angle).
+    const knick = (a, v, b) => {
+      const ux = v.x - a.x, uz = v.z - a.z, wx = b.x - v.x, wz = b.z - v.z;
+      const c = (ux * wx + uz * wz) / ((Math.hypot(ux, uz) * Math.hypot(wx, wz)) || 1);
+      return Math.acos(Math.max(-1, Math.min(1, c)));
+    };
+    for (let i = 0; i + 1 < l.length; i++) {
+      segs.push({
+        ader, i, ...(([a, b]) => ({ a, b }))(einrasten(l[i], l[i + 1])), l: Math.hypot(l[i + 1].x - l[i].x, l[i + 1].z - l[i].z),
+        vor: i > 0 ? knick(l[i - 1], l[i], l[i + 1]) : null,
+        nach: i + 2 < l.length ? knick(l[i], l[i + 1], l[i + 2]) : null,
+      });
+    }
+    segs.sort((p, q) => (Math.abs(q.l - p.l) > 1e-6 ? q.l - p.l : p.i - q.i));
+    abschnitte.push(...segs);
+  });
+  /** @type {Array<{rahmen: ReturnType<typeof rahmen>, rechteck: {x0:number,x1:number,z0:number,z1:number}, welt: Array<{x:number,z:number}>, baender: Array<Array<{x:number,z:number}>>, winkel: number, ader: number, i: number}>} */
+  const riegel = [];
+  const info = [];
+  const entfallen = [];
+  // A flat bend (< 60°) is mitred: both bars end at the bisector (trim (tMax/2)·tan(θ/2) from the
+  // vertex on the centre line, so the inner corners meet without overlap; the outer wedge stays
+  // remainder). A sharp bend keeps the corner solution (one bar runs through, the other abuts).
+  const FLACH = Math.PI / 3;
+  // The cross offset (±VERSATZ_MAX) widens a bar's reach towards the inner corner — trim by it too.
+  const gehrung = (theta) => (tMax / 2 + VERSATZ_MAX) * Math.tan(theta / 2);
+  abschnitte.forEach((s, nr) => {
+    const flachVor = mitGehrung && s.vor !== null && s.vor < FLACH, flachNach = mitGehrung && s.nach !== null && s.nach < FLACH;
+    // Neighbouring segments of the same line: no spacing rule (one wing), no projection cut at a mitre.
+    const nachbar = (q) => q.ader === s.ader && Math.abs(q.i - s.i) === 1;
+    const gehrungsNachbar = (q) => nachbar(q) && ((q.i === s.i - 1 && flachVor) || (q.i === s.i + 1 && flachNach));
+    if (riegel.length >= FORM_RAND.max) { entfallen.push({ kante: nr + 1, grund: "zu viele Abschnitte" }); return; }
+    const f = rahmen(Math.atan2(s.b.z - s.a.z, s.b.x - s.a.x), s.a);
+    const lok = pts.map((p) => inLokal(p, f));
+    let gewaehlt = null;
+    // Every depth × cross offset; the bar with the most area along the segment wins (ties: deeper,
+    // then the smaller offset — versaetze is ordered 0, ±0,25, …).
+    let bestePunkte = -1;
+    for (let T = tMax; T >= tMin - 1e-9; T -= 1) {
+     for (const c of versaetze) {
+      const xMin = flachVor ? gehrung(s.vor) : -T / 2, xMax = flachNach ? s.l - gehrung(s.nach) : s.l + T / 2;
+      /** @type {Array<[number, number]>} */
+      let iv = streifenIntervalle(lok, c - T / 2, c + T / 2)
+        .map(([u, v]) => /** @type {[number, number]} */ ([Math.max(u, xMin), Math.min(v, xMax)]))
+        .filter(([u, v]) => v - u > 1e-6);
+      for (const q of riegel) {
+        if (gehrungsNachbar(q)) continue;
+        const lq = q.welt.map((p) => inLokal(p, f));
+        const zq0 = Math.min(...lq.map((p) => p.z)), zq1 = Math.max(...lq.map((p) => p.z));
+        if (!(zq0 < c + T / 2 - 1e-6 && zq1 > c - T / 2 + 1e-6)) continue;
+        const xq0 = Math.min(...lq.map((p) => p.x)), xq1 = Math.max(...lq.map((p) => p.x));
+        /** @type {Array<[number, number]>} */
+        const neu = [];
+        for (const [u, v] of iv) {
+          if (Math.min(v, xq0) - u > 1e-6) neu.push([u, Math.min(v, xq0)]);
+          if (v - Math.max(u, xq1) > 1e-6) neu.push([Math.max(u, xq1), v]);
+        }
+        iv = neu;
+      }
+      // The interval with the largest overlap with the segment itself.
+      let best = null, bestUeber = 0;
+      for (const [u, v] of iv) {
+        const ueber = Math.min(v, s.l) - Math.max(u, 0);
+        if (ueber > bestUeber + 1e-9) { best = [u, v]; bestUeber = ueber; }
+      }
+      if (!best) continue;
+      const [x0, x1] = best;
+      if (x1 - x0 + 1e-9 < Math.max(T, FORM_RIEGEL.minLaenge_m) || (x1 - x0) * T < minFlaeche) continue;
+      const punkte = (x1 - x0) * T;
+      if (punkte > bestePunkte + 1e-6) { bestePunkte = punkte; gewaehlt = { x0, x1, T, c }; }
+     }
+    }
+    if (!gewaehlt) { entfallen.push({ kante: nr + 1, grund: "kein Platz entlang der Achse" }); return; }
+    const { x0, x1, T, c } = gewaehlt;
+    const z0 = c - T / 2, z1 = c + T / 2;
+    const welt = [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }].map((p) => inWelt(p, f));
+    const baender = [
+      [{ x: x0, z: z1 }, { x: x1, z: z1 }, { x: x1, z: z1 + abstand }, { x: x0, z: z1 + abstand }],
+      [{ x: x0, z: z0 - abstand }, { x: x1, z: z0 - abstand }, { x: x1, z: z0 }, { x: x0, z: z0 }],
+    ].map((b) => b.map((p) => inWelt(p, f)));
+    const parallel = (w) => { const d = Math.abs(((f.winkel - w) % Math.PI + Math.PI) % Math.PI); return Math.min(d, Math.PI - d) <= (FORM_RAND.parallelGrad * Math.PI) / 180; };
+    const konflikt = riegel.some((q) => !nachbar(q) && parallel(q.winkel) && (baender.some((b) => schnittFlaeche(q.welt, b) > 0.01) || q.baender.some((b) => schnittFlaeche(welt, b) > 0.01)));
+    if (konflikt) { entfallen.push({ kante: nr + 1, grund: "Abstand zum Nachbarriegel" }); return; }
+    riegel.push({ rahmen: f, rechteck: { x0, x1, z0, z1 }, welt, baender, winkel: f.winkel, ader: s.ader, i: s.i });
+    info.push({ nr: riegel.length, ader: s.ader + 1, laenge_m: Math.round((x1 - x0) * 100) / 100, tiefe_m: T });
+  });
+  if (!riegel.length) return null;
+  const belegt = riegel.reduce((sum, r) => sum + (r.rechteck.x1 - r.rechteck.x0) * (r.rechteck.z1 - r.rechteck.z0), 0);
+  return {
+    art: o.art || "achse",
+    form: { gesamt_m2: gesamt, belegt_m2: belegt, rechteckForm: false },
+    riegel: riegel.map((r) => ({ rahmen: r.rahmen, rechteck: r.rechteck })),
+    basis: riegel[0].rahmen, abstand_m: abstand, tiefe_m: Math.max(...info.map((i) => i.tiefe_m)), entfallen, abschnitte: info,
+  };
+}
+
+/**
+ * 86-06: decomposition along the skeleton veins of the footprint (skelett.js) — the veins become
+ * centre lines for achsZerlegung (main vein first, then by Strahler order and length); the drawn
+ * axis (o.achse, 86-07) is the main vein when present. Result carries `adern` (polyline, order,
+ * Murray width m) for the plan and the hint. Pure, deterministic.
+ * @param {any} o tesseliere options (footprintM, typ, storeys, okf_m, achse, geschosseJeRiegel, riegelMinFlaeche_m2)
+ * @returns {any} achsZerlegung result with art "skelett", or null
+ */
+export function skelettZerlegung(o) {
+  const gesamtFlaeche = (p) => polyFlaeche(p);
+  const pts = bereinigen(o.footprintM).map((p) => ({ x: num(p.x), z: num(p.z) }));
+  if (pts.length < 3) return null;
+  const [tMin] = FORM_TIEFE[String(o.typ)] || [8, 17];
+  const zwang = achseBereinigt(o.achse);
+  const { adern } = skelettAdern(pts, { tiefe_m: tMin, minLaenge_m: FORM_RIEGEL.minLaenge_m, zwang, maxAdern: FORM_RAND.max });
+  if (!adern.length) return null;
+  const nG = Math.max(1, Math.round(num(o.storeys, 1)));
+  const jeRiegel = o.geschosseJeRiegel && typeof o.geschosseJeRiegel === "object" ? Object.values(o.geschosseJeRiegel).map((v) => Math.round(num(v, 0))) : [];
+  const reihe = adern.map((a, i) => ({ a, i })).sort((p, q) => (p.a.zwang !== q.a.zwang ? (p.a.zwang ? -1 : 1) : q.a.ordnung - p.a.ordnung || q.a.laenge_m - p.a.laenge_m || p.i - q.i));
+  const zerl = achsZerlegung(pts, o.typ, reihe.map((r) => r.a.punkte), { geschosse: Math.max(nG, ...jeRiegel), geschosshoehe_m: geschosshoeheAus(o.okf_m, nG), riegelMinFlaeche_m2: o.riegelMinFlaeche_m2, art: "skelett" });
+  if (!zerl) return null;
+  // Honest comparison for the hint: what the automatic decomposition (86-01/86-03) occupies.
+  const form = formEinpassung(o.footprintM, o.typ);
+  let autoBelegt = gesamtFlaeche(pts);
+  if (form && !form.rechteckForm) {
+    const za = riegelZerlegung(o.footprintM, o.typ, { geschosse: nG, geschosshoehe_m: geschosshoeheAus(o.okf_m, nG), riegelMinFlaeche_m2: o.riegelMinFlaeche_m2 }, form);
+    autoBelegt = za ? za.riegel.reduce((sum, r) => sum + (r.rechteck.x1 - r.rechteck.x0) * (r.rechteck.z1 - r.rechteck.z0), 0) : form.belegt_m2;
+  }
+  return {
+    ...zerl,
+    autoFuellgrad: Math.round((1000 * autoBelegt) / Math.max(1e-9, zerl.form.gesamt_m2)) / 1000,
+    mitNutzerAchse: !!zwang,
+    adern: reihe.map((r) => ({ punkte: r.a.punkte, laenge_m: r.a.laenge_m, ordnung: r.a.ordnung, breite_m: r.a.breite_m, zwang: r.a.zwang })),
+  };
+}
+
 /** 86-03: decompositions already computed (pure function of shape, typology, spacing and —
  * since 86-05a — the minimum bar area) — the workshop re-tessellates on every toggle; the
  * row-layout scan costs ~0,1–0,3 s per shape. Insertion order = LRU order (see riegelZerlegung). */
@@ -2930,6 +3396,14 @@ function riegelEingaben(o, k, weOff, typOff) {
       else lokal = name.endsWith(` R${k} ·WT`) ? name.replace(new RegExp(` R${k} ·WT$`), " ·WT") : null;
       return lokal === null ? null : `${teile[0]}|${lokal}|${teile[teile.length - 1]}`;
     }),
+    // 75-12: "<level>|<zoneA>|<zoneB>" — both rooms belong to one unit, so both names carry
+    // the same "(WE l-n)" and the sorted order survives the renumbering.
+    raumGrenzen: schluessel(o.raumGrenzen, (key) => {
+      const teile = String(key).split("|");
+      if (teile.length !== 3) return null;
+      const a = weLokal(teile[1]), b = weLokal(teile[2]);
+      return a === null || b === null ? null : `${teile[0]}|${a}|${b}`;
+    }),
   };
 }
 
@@ -2981,7 +3455,9 @@ function riegelUmbenennen(teil, k, weOff) {
  * comment above). Output = tesseliere contract plus `form.riegel` and `riegel` on units and
  * boundaries; `form.rest` = the footprint minus all bars (half-plane pieces, display only).
  * @param {any} o tesseliere options
- * @param {NonNullable<ReturnType<typeof riegelZerlegung>>} zerl
+ * @param {any} zerl decomposition — riegelZerlegung (86-03), randZerlegung (86-04, `art: "rand"`) or
+ *   achsZerlegung (86-07 `art: "achse"`, 86-06 `art: "skelett"`): { form, riegel[{rahmen, rechteck}],
+ *   basis, abstand_m, art?, entfallen?, adern? }
  * @returns {any}
  */
 function tesseliereRiegel(o, zerl) {
@@ -2994,11 +3470,19 @@ function tesseliereRiegel(o, zerl) {
   let rettungswegWarnungen = null;
   let rest_m2 = 0, restNachfrage_m2 = 0, belegt = 0;
   const riegelInfo = [];
+  // 86-04: own storey count per house (geschosseJeRiegel { "<k>": n }); without an entry every
+  // bar keeps `storeys` and the result is byte-identical. Lift duty per house: OKF from n.
+  const hoehe = geschosshoeheAus(o.okf_m, nGeschosse);
+  const jeRiegel = o.geschosseJeRiegel && typeof o.geschosseJeRiegel === "object" ? o.geschosseJeRiegel : {};
+  const geschosseVon = (k) => { const v = Math.round(num(jeRiegel[k] ?? jeRiegel[String(k)], 0)); return v >= 1 ? Math.min(v, 30) : nGeschosse; };
   zerl.riegel.forEach(({ rahmen: rf, rechteck: rk }, i) => {
     const k = i + 1;
+    const nK = geschosseVon(k);
     const kern = tesseliereKern({
       ...o,
       ...riegelEingaben(o, k, weOff, typOff),
+      ...(nK !== nGeschosse ? { storeys: nK, okf_m: (nK - 1) * hoehe } : {}),
+      raumGrenzenFehlendMelden: false,
       footprintM: [{ x: rk.x0, z: rk.z0 }, { x: rk.x1, z: rk.z0 }, { x: rk.x1, z: rk.z1 }, { x: rk.x0, z: rk.z1 }],
       nordwinkel: num(o.nordwinkel) + (rf.winkel * 180) / Math.PI,
     });
@@ -3029,34 +3513,63 @@ function tesseliereRiegel(o, zerl) {
       rechteck: [{ x: rk.x0, z: rk.z0 }, { x: rk.x1, z: rk.z0 }, { x: rk.x1, z: rk.z1 }, { x: rk.x0, z: rk.z1 }].map(welt.T),
       laenge_m: Math.round(L * 100) / 100, tiefe_m: Math.round(D * 100) / 100,
       we: new Set(teil.weListe.map((w) => w.we)).size,
+      ...(nK !== nGeschosse ? { geschosse: nK } : {}),
     });
   });
-  // Remainder for the display: footprint minus every bar, all in the common frame.
+  // 86-04/86-07: perimeter block and axis bars have arbitrary angles → generic remainder.
+  const rand = zerl.art === "rand" || zerl.art === "achse" || zerl.art === "skelett";
   const basis = zerl.basis;
-  const inBasis = zerl.riegel.map((r) => rechteckUmrechnen(r.rechteck, r.rahmen, basis));
-  let stuecke = [bereinigen(o.footprintM).map((p) => inLokal(p, basis))];
-  for (const q of inBasis) stuecke = stuecke.flatMap((s) => restOhneRechteck(s, q));
-  const restPoly = stuecke.map((s) => s.map((p) => { const w = inWelt(p, basis); return { x: w.x, z: w.z }; }));
+  const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1).replace(".", ",");
   const gesamt = zerl.form.gesamt_m2;
   const restForm_m2 = Math.max(0, gesamt - belegt);
-  const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1).replace(".", ",");
   const anteil = Math.round((100 * belegt) / Math.max(1e-9, gesamt));
-  hinweise.push(`Form [86-03]: ${riegelInfo.length} Riegel ${riegelInfo.map((r) => `${f1(r.laenge_m)} × ${f1(r.tiefe_m)}`).join(", ")} m — ${anteil} % von ${f1(gesamt)} m² belegt, ${f1(restForm_m2)} m² Restfläche je Geschoss; jeder Riegel ist ein eigenes Haus mit eigener Erschließung. Gegenüberliegende Längsseiten halten ≥ ${f1(zerl.abstand_m)} m Abstand (2 × max(3 m; 0,4 H), BayBO Art. 6 als Richtwert [ASSUMED], kein Abstandsflächennachweis)`);
-  // Bars that touch (gable at a gable or at a long side): those units lose facade there.
-  for (let a = 0; a < inBasis.length; a++) {
-    for (let b = a + 1; b < inBasis.length; b++) {
-      const p = inBasis[a], q = inBasis[b];
-      const luecke = Math.max(p.x0 - q.x1, q.x0 - p.x1, p.z0 - q.z1, q.z0 - p.z1);
-      const ueber = Math.max(Math.min(p.x1, q.x1) - Math.max(p.x0, q.x0), Math.min(p.z1, q.z1) - Math.max(p.z0, q.z0));
-      if (Math.abs(luecke) < 0.01 && ueber > 0.5) hinweise.push(`Form [86-03]: Riegel ${b + 1} stößt an Riegel ${a + 1} (${f1(ueber)} m Brandwand) — die Wohnungen an dieser Stelle haben dort keine Fenster; Belichtung prüfen`);
+  /** @type {Array<{x0:number,x1:number,z0:number,z1:number}>} */
+  let inBasis = [];
+  /** @type {Array<Array<{x:number,z:number}>>} */
+  let restPoly;
+  if (rand) {
+    // 86-04: bars along every edge have arbitrary angles — the remainder (court + corner
+    // wedges) is the footprint minus every bar as world polygons (multi-part cut, 86-02).
+    let stuecke = [bereinigen(o.footprintM).map((p) => ({ x: num(p.x), z: num(p.z) }))];
+    for (const r of riegelInfo) stuecke = stuecke.flatMap((s) => ohneKonvex(s, halbebenenKonvex(r.rechteck), 0.01));
+    restPoly = stuecke;
+    hinweise.push(zerl.art === "rand" ? randHinweis(zerl, riegelInfo, { gesamt, belegt, restForm_m2, f1 }) : achsHinweis(zerl, riegelInfo, { gesamt, belegt, restForm_m2, f1 }));
+  } else {
+    // Remainder for the display: footprint minus every bar, all in the common frame.
+    inBasis = zerl.riegel.map((r) => rechteckUmrechnen(r.rechteck, r.rahmen, basis));
+    let stuecke = [bereinigen(o.footprintM).map((p) => inLokal(p, basis))];
+    for (const q of inBasis) stuecke = stuecke.flatMap((s) => restOhneRechteck(s, q));
+    restPoly = stuecke.map((s) => s.map((p) => { const w = inWelt(p, basis); return { x: w.x, z: w.z }; }));
+    hinweise.push(`Form [86-03]: ${riegelInfo.length} Riegel ${riegelInfo.map((r) => `${f1(r.laenge_m)} × ${f1(r.tiefe_m)}`).join(", ")} m — ${anteil} % von ${f1(gesamt)} m² belegt, ${f1(restForm_m2)} m² Restfläche je Geschoss; jeder Riegel ist ein eigenes Haus mit eigener Erschließung. Gegenüberliegende Längsseiten halten ≥ ${f1(zerl.abstand_m)} m Abstand (2 × max(3 m; 0,4 H), BayBO Art. 6 als Richtwert [ASSUMED], kein Abstandsflächennachweis)`);
+    // Bars that touch (gable at a gable or at a long side): those units lose facade there.
+    for (let a = 0; a < inBasis.length; a++) {
+      for (let b = a + 1; b < inBasis.length; b++) {
+        const p = inBasis[a], q = inBasis[b];
+        const luecke = Math.max(p.x0 - q.x1, q.x0 - p.x1, p.z0 - q.z1, q.z0 - p.z1);
+        const ueber = Math.max(Math.min(p.x1, q.x1) - Math.max(p.x0, q.x0), Math.min(p.z1, q.z1) - Math.max(p.z0, q.z0));
+        if (Math.abs(luecke) < 0.01 && ueber > 0.5) hinweise.push(`Form [86-03]: Riegel ${b + 1} stößt an Riegel ${a + 1} (${f1(ueber)} m Brandwand) — die Wohnungen an dieser Stelle haben dort keine Fenster; Belichtung prüfen`);
+      }
     }
   }
+  // 86-04: houses with their own storey count — above a lower house the footprint is free, so
+  // the remainder is summed per storey (all equal → the plain product as before).
+  let restAlle = restForm_m2 * nGeschosse;
+  if (riegelInfo.some((r) => r.geschosse !== undefined)) {
+    const maxG = Math.max(nGeschosse, ...riegelInfo.map((r) => r.geschosse ?? nGeschosse));
+    restAlle = 0;
+    for (let l = 0; l < maxG; l++) {
+      const belegtL = riegelInfo.reduce((s, r) => s + ((r.geschosse ?? nGeschosse) > l ? r.laenge_m * r.tiefe_m : 0), 0);
+      restAlle += Math.max(0, gesamt - belegtL);
+    }
+  }
+  // 75-12: interior-wall entries without a wall in ANY bar (each bar ran silently).
+  if (o.raumzonen) for (const h of raumGrenzenFehlend(zonen, o.raumGrenzen)) hinweise.push(h);
   const rb = zerl.riegel[0];
   /** @type {any} */
   const out = {
     zonen, weListe, grenzen,
-    rest_m2: rest_m2 + restForm_m2 * nGeschosse,
-    rest: rest_m2 + restForm_m2 * nGeschosse,
+    rest_m2: rest_m2 + restAlle,
+    rest: rest_m2 + restAlle,
     restNachfrage_m2, raumWarns, hinweise,
     form: {
       winkel_grad: Math.round(((rb.rahmen.winkel * 180) / Math.PI) * 100) / 100,
@@ -3069,10 +3582,55 @@ function tesseliereRiegel(o, zerl) {
       rechteckForm: false,
       riegel: riegelInfo,
       abstand_m: Math.round(zerl.abstand_m * 100) / 100,
+      ...(rand ? { art: zerl.art } : {}),
+      ...(Array.isArray(zerl.adern) ? { adern: zerl.adern } : {}),
     },
   };
   if (rettungswegWarnungen) out.rettungswegWarnungen = rettungswegWarnungen;
   if (waende.length) out.waende = waende;
+  // 86-04: the court of a perimeter block is intended open space — no wedge use (86-02); the
+  // axis modes (86-07/86-06) keep their remainder too (follow-up: wedges along an axis).
+  if (rand) return out;
+  // 86-02: the band between two facing long facades keeps the spacing rule — the middle
+  // `abstand` of the gap (or the whole gap when narrower) is blocked for the wedge use.
+  const sperren = [];
+  for (let a = 0; a < inBasis.length; a++) {
+    for (let b = a + 1; b < inBasis.length; b++) {
+      const p = inBasis[a], q = inBasis[b];
+      const langX = (r) => r.x1 - r.x0 >= r.z1 - r.z0 - 1e-9, langZ = (r) => r.z1 - r.z0 >= r.x1 - r.x0 - 1e-9;
+      const ux0 = Math.max(p.x0, q.x0), ux1 = Math.min(p.x1, q.x1), uz0 = Math.max(p.z0, q.z0), uz1 = Math.min(p.z1, q.z1);
+      /** @type {null|{x0:number,x1:number,z0:number,z1:number}} */
+      let band = null;
+      if (ux1 - ux0 > 0.01 && langX(p) && langX(q)) {
+        const lo = Math.min(p.z1, q.z1), hi = Math.max(p.z0, q.z0);
+        if (hi - lo > 1e-6) { const m = (lo + hi) / 2, h = Math.min(hi - lo, zerl.abstand_m) / 2; band = { x0: ux0, x1: ux1, z0: m - h, z1: m + h }; }
+      } else if (uz1 - uz0 > 0.01 && langZ(p) && langZ(q)) {
+        const lo = Math.min(p.x1, q.x1), hi = Math.max(p.x0, q.x0);
+        if (hi - lo > 1e-6) { const m = (lo + hi) / 2, h = Math.min(hi - lo, zerl.abstand_m) / 2; band = { x0: m - h, x1: m + h, z0: uz0, z1: uz1 }; }
+      }
+      if (!band) continue;
+      const ecken = [{ x: band.x0, z: band.z0 }, { x: band.x1, z: band.z0 }, { x: band.x1, z: band.z1 }, { x: band.x0, z: band.z1 }].map((e) => inWelt(e, basis));
+      sperren.push(halbebenenKonvex(ecken));
+    }
+  }
+  return schraegenAnwenden(out, nGeschosse, sperren);
+}
+
+/**
+ * 86-02: half-planes (n·p ≤ c) of a convex polygon, inside = polygon, any orientation (m).
+ * @param {Array<{x:number,z:number}>} pts
+ * @returns {Array<{nx:number,nz:number,c:number}>}
+ */
+function halbebenenKonvex(pts) {
+  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length, cz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length], l = Math.hypot(b.x - a.x, b.z - a.z);
+    if (l < 1e-9) continue;
+    let nx = (b.z - a.z) / l, nz = -(b.x - a.x) / l;
+    if (nx * (cx - a.x) + nz * (cz - a.z) > 0) { nx = -nx; nz = -nz; }
+    out.push({ nx, nz, c: nx * a.x + nz * a.z });
+  }
   return out;
 }
 
@@ -3093,6 +3651,12 @@ function tesseliereKern(opts) {
     // stufeJeWe, keys from stufeSchluessel). It beats the `stufe` of the mix entry; without
     // both the result is byte-identical to before.
     stufeJeWe = null,
+    // 75-12: interior-wall offsets { "<level>|<zoneA>|<zoneB>": m } (werkstatt_layer.raumGrenzen,
+    // set in the focus). Applied after the room slicing; without entries byte-identical.
+    raumGrenzen = null,
+    // 75-12: false in the bar path (86-03) — each bar sees all keys; missing walls are
+    // reported once after merging (tesseliereRiegel), not once per bar.
+    raumGrenzenFehlendMelden = true,
     // 75-13: finished-floor level of the top storey in m for the lift duty
     // (MBO §39 Abs. 4: OKF > 13 m). Default (storeys − 1) · 3,0 m [ASSUMED].
     okf_m = null,
@@ -3743,6 +4307,22 @@ function tesseliereKern(opts) {
         zonen.push(...neuZonen);
       }
     }
+  }
+
+  // --- 75-12: interior walls moved in the focus ----------------------------------------
+  // The stored offsets move the shared edge of two rooms of one unit (raumGrenzen.js); every
+  // later step (escape route, balconies, wall segments) sees the moved wall. Undercutting a
+  // 75-07 minimum width is a HINT only (warn, not fail): the user moved the wall on purpose.
+  if (raumzonen && raumGrenzen && typeof raumGrenzen === "object" && Object.keys(raumGrenzen).length) {
+    const werte = rg.mindestbreitenWerte || MINDESTBREITEN;
+    const rgErg = wendeRaumGrenzenAn(zonen, raumGrenzen, {
+      fehlendMelden: raumGrenzenFehlendMelden !== false,
+      mindestbreite: rg.mindestbreiten
+        ? (z) => (z.art === "aufenthalt" && /schlaf|kind/i.test(String(z.name || "")) ? num(werte.schlafen, werte.aufenthalt) : num(werte[z.art]))
+        : undefined,
+    });
+    if (rgErg.zonen !== zonen) zonen.splice(0, zonen.length, ...rgErg.zonen);
+    hinweise.push(...rgErg.hinweise);
   }
 
   // --- 75-07/75-13 regeln.rettungsweg: WALKED line from the deepest point of the

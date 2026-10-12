@@ -21,6 +21,14 @@ import { BUCHHALTUNG_ENTITAETEN, SETTING_KEY } from '@/lib/accounting/datenmodel
 // 80-10 (E-07/E-14): die Registry trägt jetzt auch "personal" (separat, nie im
 // .bitproj) — dieselbe registry-allgemeine Anpassung wie in exportBereiche.test.js.
 import { PERSONAL_EXPORT_BEREICH } from '@/lib/people/exportBereich.js';
+// 81-06: Zeile zeiten — eine Sicherung braucht jetzt alle drei Häkchen.
+import { EXPORT_BEREICHE } from '@/lib/exportBereiche.js';
+import { ZEIT_HONORAR_ENTITAETEN } from '@/lib/zeitHonorar/entitaeten.js';
+// 82-01: three more rows; a backup carries their collections too.
+import { BUERO_ORGA_ENTITAETEN } from '@/lib/bueroOrga/entitaeten.js';
+
+/** Every registry key checked = a backup (81-06). */
+const ALLE_HAEKCHEN = EXPORT_BEREICHE.map((b) => b.key);
 
 /** Same fake adapter as tests/unit/demoDb.test.js — a synchronous in-memory store. */
 function speicherAttrappe(start = {}) {
@@ -101,18 +109,18 @@ describe('projektAlsBlob/exportProjekt — alle Häkchen (sicherung)', () => {
   // "alles enthalten" hängen und braucht deshalb beide Häkchen.
   it('alles enthalten, art sicherung, bereiche nennt buchhaltung (Personal bleibt separat, nie im .bitproj)', async () => {
     setzeSpeicher(speicherAttrappe(buchhaltungsSeed()));
-    const { obj } = await projektAlsBlob('Test', exportOptionen(['buchhaltung', 'personal']));
+    const { obj } = await projektAlsBlob('Test', exportOptionen(ALLE_HAEKCHEN));
     for (const e of BUCHHALTUNG_ENTITAETEN) assert.ok(Array.isArray(obj.daten[e]), `${e} sollte enthalten sein`);
     for (const e of PERSONAL_EXPORT_BEREICH.entitaeten) assert.ok(!(e in obj.daten), `${e} (Personal) sollte NIE im .bitproj stehen`);
     assert.deepEqual((obj.daten.Setting || []).map((s) => s.key).sort(), ['briefkopf', 'buchhaltung']);
     assert.equal(obj.art, 'sicherung');
-    assert.deepEqual(obj.bereiche, ['buchhaltung']); // separat-Bereiche stehen nie in bereiche
+    assert.deepEqual(obj.bereiche, ['buchhaltung', 'zeiten', 'fristen', 'schriftverkehr', 'rechte']); // separat-Bereiche stehen nie in bereiche
   });
 
   it('letzteSicherung wird gestempelt', async () => {
     setzeSpeicher(speicherAttrappe(buchhaltungsSeed()));
     assert.equal(await letzteSicherungLesen(), null);
-    await mitDomAttrappe(() => exportProjekt('Test', exportOptionen(['buchhaltung', 'personal'])));
+    await mitDomAttrappe(() => exportProjekt('Test', exportOptionen(ALLE_HAEKCHEN)));
     assert.ok(await letzteSicherungLesen());
   });
 });
@@ -135,8 +143,8 @@ describe('uebernehmeProjekt — Import einer Weitergabe-Datei', () => {
 describe('uebernehmeProjekt — Import einer Sicherung', () => {
   it('ersetzt alles wie bisher', async () => {
     setzeSpeicher(speicherAttrappe(buchhaltungsSeed()));
-    const voll = { schema: 1, app: 'bit-atelier-demo', exportiert: new Date().toISOString(), projektname: 'Sicherung', art: 'sicherung', bereiche: ['buchhaltung'], daten: { Project: [] } };
-    for (const e of BUCHHALTUNG_ENTITAETEN) voll.daten[e] = [];
+    const voll = { schema: 1, app: 'bit-atelier-demo', exportiert: new Date().toISOString(), projektname: 'Sicherung', art: 'sicherung', bereiche: ['buchhaltung', 'zeiten', 'fristen', 'schriftverkehr', 'rechte'], daten: { Project: [] } };
+    for (const e of [...BUCHHALTUNG_ENTITAETEN, ...ZEIT_HONORAR_ENTITAETEN, ...BUERO_ORGA_ENTITAETEN]) voll.daten[e] = [];
     voll.daten.Setting = [];
     const opt = importOptionen(voll);
     // Personal ist ein separat-Bereich (E-14): eine .bitproj nennt "personal"
@@ -183,5 +191,51 @@ describe('parseProjektDatei — art/bereiche kommen unverändert mit', () => {
     const gelesen = await parseProjektDatei(bytes);
     assert.equal(gelesen.art, 'weitergabe');
     assert.deepEqual(gelesen.bereiche, []);
+  });
+});
+
+// 82-02: Document rows by `bereich` (dokumentBereiche at the rows zeiten and schriftverkehr).
+describe('dokumentBereiche — Büro-, Buchhaltungs- und Honorar-Dokumente', () => {
+  const DOKS = [
+    { id: 'd1', project_id: 'p1', name: 'plan.pdf' },
+    { id: 'd2', project_id: 'p1', bereich: 'projekt', name: 'brief.pdf' },
+    { id: 'd3', bereich: 'schriftverkehr', name: 'buero.pdf' },
+    { id: 'd4', bereich: 'buchhaltung', name: 'mahnung.pdf' },
+    { id: 'd5', project_id: 'p1', bereich: 'buero', name: 'honorarangebot.pdf' },
+  ];
+  it('ohne Häkchen: keine Document-Zeile schriftverkehr/buchhaltung/buero, keine 82-Sammlung, kein rechte/buero_orga', async () => {
+    setzeSpeicher(speicherAttrappe({ ...buchhaltungsSeed(), Document: DOKS, Nutzer: [{ id: 'nu-1' }], Schreiben: [{ id: 'sc-1' }],
+      Setting: [{ id: 's1', key: 'rechte', value: {} }, { id: 's2', key: 'buero_orga', value: {} }, { id: 's3', key: 'briefkopf', value: {} }] }));
+    const opt = exportOptionen([]);
+    assert.deepEqual(opt.ohneDokumentBereiche.sort(), ['buchhaltung', 'buero', 'schriftverkehr']);
+    const { obj } = await projektAlsBlob('Alpha', opt);
+    assert.deepEqual(obj.daten.Document.map((d) => d.id), ['d1', 'd2']);
+    for (const e of BUERO_ORGA_ENTITAETEN) assert.ok(!(e in obj.daten), e);
+    assert.deepEqual(obj.daten.Setting.map((s) => s.key), ['briefkopf']);
+    assert.equal(obj.art, 'weitergabe');
+  });
+  it('mit „Zeiten & Aufträge“ geht nur die Honorar-PDF mit; alle Häkchen = Sicherung mit allen Dokumenten', async () => {
+    assert.ok(!exportOptionen(['zeiten']).ohneDokumentBereiche.includes('buero'));
+    assert.deepEqual(exportOptionen(['schriftverkehr']).ohneDokumentBereiche, ['buero']);
+    setzeSpeicher(speicherAttrappe({ ...buchhaltungsSeed(), Document: DOKS }));
+    const { obj } = await projektAlsBlob('Alpha', exportOptionen(ALLE_HAEKCHEN));
+    assert.equal(obj.daten.Document.length, 5);
+  });
+  it('Import einer Weitergabe-Datei lässt lokale Büro-Dokumente, Nutzer, Schreiben und rechte unverändert', async () => {
+    setzeSpeicher(speicherAttrappe({ ...buchhaltungsSeed(), Document: DOKS, Nutzer: [{ id: 'nu-1' }, { id: 'nu-2' }, { id: 'nu-3' }, { id: 'nu-4' }], Schreiben: [{ id: 'sc-1' }],
+      Setting: [{ id: 's1', key: 'rechte', value: { x: 1 } }] }));
+    const datei = { schema: 1, app: 'bit-atelier-demo', exportiert: new Date().toISOString(), projektname: 'Fremd', art: 'weitergabe', bereiche: [],
+      daten: { Project: [{ id: 'p2', name: 'Beta' }], Tender: [{ id: 't1' }], Document: [{ id: 'x1', project_id: 'p2' }, { id: 'x2', bereich: 'buero' }] } };
+    const opt = importOptionen(datei);
+    assert.deepEqual(opt.behalteDokumentBereiche.sort(), ['buchhaltung', 'buero', 'schriftverkehr']);
+    await uebernehmeProjekt(datei, opt);
+    const { demoDbAuslesen } = await import('@core/api/demoDb.js');
+    const nachher = await demoDbAuslesen();
+    assert.deepEqual(nachher.Project, [{ id: 'p2', name: 'Beta' }]);
+    assert.deepEqual(nachher.Tender, [{ id: 't1' }]);
+    assert.deepEqual(nachher.Document.map((d) => d.id).sort(), ['d3', 'd4', 'd5', 'x1']);
+    assert.equal(nachher.Nutzer.length, 4);
+    assert.equal(nachher.Schreiben.length, 1);
+    assert.deepEqual(nachher.Setting.find((s) => s.key === 'rechte')?.value, { x: 1 });
   });
 });

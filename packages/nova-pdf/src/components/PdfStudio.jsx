@@ -1,6 +1,8 @@
 // PDF-Studio: PDFs anzeigen, kommentieren, annotieren, Ebenen (OCG) schalten,
 // annotiert exportieren. Rendering via pdfjs-dist v6, Export via jsPDF.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { sichtbareDokumente } from "@core/lib/rechte.js";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { jsPDF } from "jspdf";
@@ -18,7 +20,9 @@ import {
   FileDown, Loader2, Upload, Eye, EyeOff,
 } from "lucide-react";
 import { fileToDataUrl, fmtBytes } from "@core/lib/pdf";
+import { inhaltAblegen, inhaltLaden, blobIdNeu } from "@core/lib/speicherOrt";
 import { fmtDate } from "@core/lib/projectModel";
+import { useI18n } from "@core/lib/i18n";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -97,8 +101,12 @@ function drawAnnotationsToCanvas(ctx, w, h, pageAnns) {
 }
 
 export default function PdfStudio({ project, openDoc, refreshKey }) {
+  const { t } = useI18n();
   // Dokumente
-  const [docs, setDocs] = useState([]);
+  // 82-02: only documents the role may see (Document.bereich: personnel, accounting, correspondence, fee PDFs).
+  const zugriff = useZugriff();
+  const [rohDocs, setDocs] = useState([]);
+  const docs = useMemo(() => sichtbareDokumente(rohDocs, zugriff), [rohDocs, zugriff]);
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -171,7 +179,8 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
         setSelectedAnnId(null);
         setDraftPin(null);
         setDraftText(null);
-        const bytes = dataUrlToBytes(selectedDoc.data);
+        const bytes = dataUrlToBytes(await inhaltLaden(selectedDoc.data, selectedDoc.data_blob));
+        if (cancelled) return;
         pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
         if (cancelled) { /** @type {any} */ (pdfDoc).destroy(); return; }
 
@@ -255,11 +264,14 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
     setBusy(true);
     try {
       const dataUrl = await fileToDataUrl(file);
+      // Storage rule (speicherOrt.js): < 256 KB in the record, > 1 MB in the object store.
+      const ablage = await inhaltAblegen(dataUrl, { blobId: blobIdNeu("dok"), art: "dokument" });
       const created = await bitApi.entities.Document.create({
         project_id: project.id, name: file.name, size: file.size,
-        mime: file.type, data: dataUrl, uploaded_date: new Date().toISOString(),
+        mime: file.type, data: ablage.inline, data_blob: ablage.blob, uploaded_date: new Date().toISOString(),
       });
       toast.success(`"${file.name}" hochgeladen`);
+      if (ablage.hinweis) toast.info(ablage.hinweis);
       await loadDocs();
       setSelectedDoc(created);
     } catch { toast.error("Upload fehlgeschlagen"); }
@@ -663,7 +675,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
                     {/* Text-Entwurf: Inline-Input */}
                     {draftText && (
                       <input autoFocus value={draftText.value} placeholder="Text..."
-                        className="absolute z-10 bg-white/95 border border-slate-300 rounded px-1.5 py-0.5 text-sm shadow-lg outline-none"
+                        className="absolute z-10 bg-white/95 border border-slate-300 rounded px-1.5 py-0.5 text-sm shadow-lg outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                         style={{
                           left: Math.min(draftText.x * W, Math.max(W - 160, 0)),
                           top: Math.max(draftText.y * H - 22, 0),
@@ -722,7 +734,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
           <CardContent className="space-y-2">
             <div>
               <label className="text-[11px] text-slate-500 mb-0.5 block">Autor</label>
-              <Input value={author} placeholder="Ihr Name" className="h-8 text-sm"
+              <Input aria-label={t("Autor")} value={author} placeholder="Ihr Name" className="h-8 text-sm"
                 onChange={(e) => setAuthor(e.target.value)} />
             </div>
             {allPins.length === 0 && (

@@ -11,6 +11,12 @@
 // In:  plan (usePlanModel), we (Schlüssel „WE 0-1"), zonen (Store-Räume),
 //      checks (checksJeWe-Eintrag), nonce (Zoom-Trigger der Werkstatt).
 // Out: Rendering. Fenster/Türen der Hülle rendert BimPlan2D selbst (envOpenings).
+//
+// 89-07 (BW-09, one door system): the unit's zone doors are door COMPONENTS (@core
+// werkstattTueren, stable GUID). The furniture reads their swing (checks, movement-area count,
+// auto-furnishing, catalogue placement); the catalogue offers no doors while the unit has
+// component doors, and old catalogue doors in such a unit are flagged "doppelt" (never deleted
+// silently).
 
 import React, { useMemo, useRef, useState } from "react";
 import { ArrowLeft, Sofa, ListChecks, AlertTriangle, RotateCw, Trash2, FlipHorizontal } from "lucide-react";
@@ -38,8 +44,10 @@ import {
 import {
   bewegungsflaechen, fensterSegmente, sperrGrund, anWandEinrasten, wohnMoebelChecks,
   autoMoeblierung, istAutoItem, fokusKatalog, platziereTyp, platziereTuer,
-  BEWEGUNG_STUFEN, STUFE_DEFAULT, bewegungsNachweis,
+  BEWEGUNG_STUFEN, STUFE_DEFAULT, bewegungsNachweis, bauteilTuerenFuerZone,
 } from "@designer/lib/wohnMoebel";
+// 89-07: door components of the unit (the zone doors) — one door system.
+import { werkstattTueren } from "@core/lib/werkstattBauteile";
 import { oeffnungenAmRaum } from "@designer/lib/raumOeffnungen";
 // 75-09 Task 7: KPI column (proportion rule from @core — one source) + the
 // unit iso (isoSzeneAusModell maps model metres into the MassingView3D frame).
@@ -51,6 +59,8 @@ import MassingView3D from "./MassingView3D";
 import ZonenTueren from "./ZonenTueren";
 import { kantenVon } from "@designer/lib/wohnungsErschliessung";
 import { leererStack, merke, zurueck, vor } from "@core/lib/undoStack";
+// 75-12: interior walls of the unit (werkstatt_layer.raumGrenzen through the host callback).
+import FokusInnenwaende from "./FokusInnenwaende";
 
 const de1 = (n) => (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 1 });
 const de2 = (n) => (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 2 });
@@ -111,6 +121,8 @@ function zonenBBox(zonen) {
  * @param {string|null} [p.stufe] 84-10: effective level of this unit ("standard" | "B" | "R", switch > mix entry)
  * @param {string|null} [p.stufeVorgabe] 84-10: level the mix entry gives (shown when the switch differs)
  * @param {(s: string) => void} [p.onStufeChange] 84-10: the ONE write path of the switch (werkstatt_layer.stufeJeWe)
+ * @param {Record<string, number>|null} [p.raumGrenzen] 75-12: interior-wall offsets (werkstatt_layer, m)
+ * @param {(m: Record<string, number>) => void} [p.onRaumGrenzenChange] 75-12: the ONE write path of the offsets
  */
 export default function WohnungsFokus({
   plan, we, zonen, checks, nonce, onClose, onGotoInnenausbau, onGotoChecks,
@@ -119,6 +131,7 @@ export default function WohnungsFokus({
   tuerAufschlaege = null, onTuerAufschlaegeChange, qualitaet = null,
   balkonAktiv, onBalkonToggle,
   stufe: stufeProp = null, stufeVorgabe = null, onStufeChange,
+  raumGrenzen = null, onRaumGrenzenChange,
 }) {
   const { t } = useI18n();
   const hoeheAuto = usePlanHoehe({ min: HOEHE_AUTO });
@@ -170,6 +183,16 @@ export default function WohnungsFokus({
   const wohnZonen = fokusZonen.filter((z) => z.raumart !== "flur");
 
   const level = fokusZonen[0]?.level ?? 0;
+
+  // 89-07 (BW-09): the unit's doors as components; per room the swings that open INTO it.
+  const tuerBauteile = useMemo(() => werkstattTueren(fokusZonen), [fokusZonen]);
+  const mitBauteilTueren = tuerBauteile.length > 0;
+  const tuerenJeZone = useMemo(() => {
+    const map = new Map();
+    for (const z of fokusZonen) map.set(zoneKey(z), bauteilTuerenFuerZone(z, tuerBauteile));
+    return map;
+  }, [fokusZonen, tuerBauteile]);
+  const tuerenFuer = (z) => tuerenJeZone.get(zoneKey(z)) || [];
 
   // focus-Prop für BimPlan2D: bei neuem nonce auf die WE-BBox zoomen; im
   // Maßstabsmodus fährt der Maßstab-Effekt von BimPlan2D (Task 2) dieselbe
@@ -242,7 +265,7 @@ export default function WohnungsFokus({
       if (!items.length) continue;
       const raum = kurzRaumname(z.name);
       const key = zoneKey(z);
-      for (const w of wohnMoebelChecks(items, z.points, stufe, { fenster: fensterFuer(z) })) {
+      for (const w of wohnMoebelChecks(items, z.points, stufe, { fenster: fensterFuer(z), tueren: tuerenFuer(z), mitBauteilTueren })) {
         out.push({ ...w, raum, key });
       }
       for (const w of kollisionsWarnungen(items)) {
@@ -251,7 +274,7 @@ export default function WohnungsFokus({
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fokusZonen, moeblierung, stufe, fensterJeZone]);
+  }, [fokusZonen, moeblierung, stufe, fensterJeZone, tuerenJeZone, mitBauteilTueren]);
 
   const zoneZuKey = (key) => fokusZonen.find((z) => zoneKey(z) === key) || null;
 
@@ -322,7 +345,7 @@ export default function WohnungsFokus({
     const fenster = fensterFuer(zone);
     const platziert = moebelById(typId)?.tuer
       ? platziereTuer(zone, items, typId, { idPrefix: nr, nr: 1 })
-      : platziereTyp(zone, items, typId, { stufe, fenster, idPrefix: nr, nr: 1 });
+      : platziereTyp(zone, items, typId, { stufe, fenster, tueren: tuerenFuer(zone), idPrefix: nr, nr: 1 });
     if (!platziert) {
       setSperrHinweis(t("Kein freier Platz für dieses Möbel in diesem Raum."));
       return;
@@ -339,7 +362,7 @@ export default function WohnungsFokus({
     const hinweise = [];
     for (const z of fokusZonen) {
       const items = moebelFuerZone(next, z);
-      const r = autoMoeblierung(z, { personen, stufe, vorhandene: items, fenster: fensterJeZone.get(zoneKey(z)) || [] });
+      const r = autoMoeblierung(z, { personen, stufe, vorhandene: items, fenster: fensterJeZone.get(zoneKey(z)) || [], tueren: tuerenFuer(z) });
       // autoMoeblierung already names the room in some hints — prefix only
       // when the hint does not start with the room name (no double prefix).
       const raum = kurzRaumname(z.name);
@@ -393,15 +416,16 @@ export default function WohnungsFokus({
   };
 
   const selItem = sel ? (zoneZuKey(sel.key) ? itemsFuerZone(zoneZuKey(sel.key)).find((it) => it.id === sel.id) : null) : null;
-  const katalog = useMemo(() => fokusKatalog(moebelEigene), [moebelEigene]);
+  // 89-07: no catalogue doors while the unit's doors are components (one door system).
+  const katalog = useMemo(() => fokusKatalog(moebelEigene, { ohneTueren: mitBauteilTueren }), [moebelEigene, mitBauteilTueren]);
 
   // ---- 75-09 Task 7: KPI column (one calc path each) ----------------------------
   // Movement-area compliance over the focus rooms (wohnMoebel.bewegungsNachweis).
   const nachweis = useMemo(() => bewegungsNachweis(
-    fokusZonen.map((z) => ({ zone: z, items: itemsFuerZone(z), fenster: fensterJeZone.get(zoneKey(z)) || [] })),
+    fokusZonen.map((z) => ({ zone: z, items: itemsFuerZone(z), fenster: fensterJeZone.get(zoneKey(z)) || [], tueren: tuerenFuer(z) })),
     stufe,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [fokusZonen, moeblierung, stufe, fensterJeZone]);
+  ), [fokusZonen, moeblierung, stufe, fensterJeZone, tuerenJeZone]);
 
   // Proportion per room (φ, office standard D-P75-03): bbox of the room,
   // PHI_AUSNAHMEN rooms show "—" (no φ requirement).
@@ -803,6 +827,11 @@ export default function WohnungsFokus({
                 <button type="button" data-testid="fk-tuer-redo" onClick={tuerRedo} disabled={!tuerStand.f}
                   className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-slate-600 hover:bg-slate-50 disabled:opacity-40"
                   title={t("Wiederholen (Strg+Y)")}>↷ {t("Wiederholen")}</button>
+                {mitBauteilTueren && (
+                  <span data-testid="fk-tueren-bauteil" data-anzahl={tuerBauteile.length}>
+                    · {t("Türen sind Bauteile mit GUID — die Möblierung liest ihren Aufschlag.")}
+                  </span>
+                )}
               </div>
             )}
             {editierbar && (
@@ -852,7 +881,8 @@ export default function WohnungsFokus({
                           onClick={() => { setAktivKey(w.key); setSel({ key: w.key, id: w.itemId }); }}>
                           {w.raum}
                         </button>
-                        <span>{w.text}</span>
+                        {/* 89-07: fixed texts (component doors) have an EN entry; others pass through. */}
+                        <span>{t(w.text)}</span>
                       </div>
                     ))}
                   </div>
@@ -927,7 +957,7 @@ export default function WohnungsFokus({
                   {nachweis.anzahl} {t("Flächen")} · {nachweis.frei} {t("frei")} · {nachweis.konflikte.length} {t("Konflikte")}
                 </div>
                 {nachweis.konflikte.slice(0, 3).map((k, i) => (
-                  <div key={i} className="text-[10px] text-amber-700">{k.raum}: {k.text}</div>
+                  <div key={i} className="text-[10px] text-amber-700">{k.raum}: {t(k.text)}</div>
                 ))}
                 <div className="text-[10px] text-slate-400">
                   {t("Stufe")}: {stufe === "standard" ? t("Standard (Blatt 07)") : `DIN 18040-2 ${stufe}`}
@@ -965,6 +995,11 @@ export default function WohnungsFokus({
                 workshop — ONE calc path). fail = planning error (access, bath from
                 living room, < 10 m², < 2,40 m), warn = office standard (ratio,
                 wardrobe wall). Only rendered when the rule is on (qualitaet given). */}
+            {/* 75-12: interior walls — only when the host wired the write path. */}
+            {typeof onRaumGrenzenChange === "function" && (
+              <FokusInnenwaende zonen={fokusZonen} raumGrenzen={raumGrenzen} onChange={onRaumGrenzenChange} />
+            )}
+
             {qualitaet && (
               <div className="rounded-lg border border-slate-200 p-3 text-xs space-y-1" data-testid="fk-qualitaet"
                 data-ok={qualitaet.zaehler?.ok ?? 0} data-warn={qualitaet.zaehler?.warn ?? 0} data-fail={qualitaet.zaehler?.fail ?? 0}>

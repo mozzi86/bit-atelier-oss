@@ -34,6 +34,44 @@ import { REPO_URL } from './projektInfo.js';
 export const RECHT_STAND = '6. Oktober 2026';
 
 /**
+ * The scope sentence on public procurement (decision E1, 74-01-PLAN.md Task 0),
+ * verbatim. The second half carries the weight: without it "not certified"
+ * reads like a formality and a customer assumes bids are sealed against the
+ * operator - they are not (74-01 G-1). Shown in the imprint and above the
+ * registration form, and quoted in docs/extern/LEISTUNGSBESCHREIBUNG-STUFE-1.md;
+ * tests/unit/rechtstexte.test.js compares the three character by character.
+ * @type {string}
+ */
+export const VERGABE_SATZ =
+  'BIT-Atelier ist eine Plattform für private Bieterverfahren, GU-Vergaben und modellbasierte ' +
+  'Preisspiegel. Sie ist nicht für förmliche öffentliche Vergabeverfahren nach VgV/UVgO ' +
+  'geeignet und dafür nicht zertifiziert; ein Verschluss der Angebote gegenüber dem Betreiber ' +
+  'der Instanz findet technisch nicht statt.';
+
+/**
+ * Target group (VERK-06). Only while the offer is B2B do withdrawal notice,
+ * VSBG notice and price-display rules stay out of scope [ASSUMED].
+ * @type {string}
+ */
+export const UNTERNEHMER_SATZ =
+  'Das Angebot richtet sich ausschließlich an Unternehmer im Sinne des § 14 BGB und nicht an Verbraucher.';
+
+/**
+ * Scope block shown where a prospective customer reads before asking for
+ * access (/registrieren): the procurement sentence and, when the offer is
+ * B2B only, the target group - visible without a click, not folded away.
+ * @returns {React.ReactElement}
+ */
+export function AngebotsUmfang() {
+  return (
+    <div data-testid="angebots-umfang" className="space-y-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-950">
+      <p>{VERGABE_SATZ}</p>
+      {ANBIETER.nurUnternehmer && <p>{UNTERNEHMER_SATZ}</p>}
+    </div>
+  );
+}
+
+/**
  * Where the delivered licence file lives. Vite copies the repo root file into
  * every build output (vite.config.js plugin `lizenzdateien`), so the link
  * below is true in the local build, the server build and the cloud build alike. In a
@@ -129,21 +167,13 @@ export function ImpressumText() {
       <Abschnitt titel="Art des Angebots">
         <p>
           BIT-Atelier wird als Softwareleistung angeboten, nicht als
-          Architektenleistung. Es handelt sich um eine Plattform für private
-          Bieterverfahren, GU-Vergaben und modellbasierte Preisspiegel. Sie ist{' '}
-          <strong>nicht</strong> für förmliche öffentliche Vergabeverfahren nach
-          VgV/UVgO geeignet und dafür nicht zertifiziert; ein Verschluss der
-          Angebote gegenüber dem Betreiber der Instanz findet technisch nicht
-          statt.
+          Architektenleistung. {VERGABE_SATZ}
         </p>
       </Abschnitt>
 
       {ANBIETER.nurUnternehmer && (
         <Abschnitt titel="Zielgruppe und Streitbeilegung">
-          <p>
-            Das Angebot richtet sich ausschließlich an Unternehmer im Sinne des
-            § 14 BGB und nicht an Verbraucher.
-          </p>
+          <p>{UNTERNEHMER_SATZ}</p>
           <p>
             Wir sind nicht bereit und nicht verpflichtet, an
             Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle
@@ -1065,6 +1095,110 @@ export function CookieRichtlinieText() {
       </Abschnitt>
 
       <p className="mt-6 text-xs text-slate-400">Stand: {RECHT_STAND}</p>
+    </div>
+  );
+}
+
+/** Date of the accessibility statement - its own date, it changes with the measurements. */
+export const BARRIEREFREIHEIT_STAND = '12. Oktober 2026';
+
+/**
+ * Accessibility statement (93-02, register lever 157). Honest status, modelled on the
+ * structure of the BITV 2.0 statement (state of compliance, what is not accessible,
+ * how it was assessed, feedback). [ASSUMED] A private software offering is not bound
+ * by BITV 2.0; the statement is given voluntarily. Update the numbers together with
+ * tests/unit/a11y-schulden.test.js and the axe baseline once that runs.
+ */
+export function BarrierefreiheitText() {
+  return (
+    <div>
+      <Abschnitt titel="Geltungsbereich">
+        <p>
+          Diese Erklärung gilt für die Anwendung BIT-Atelier in allen Fassungen
+          (lokale Installation, Desktop-Client, Demo im Browser). Sie wird
+          freiwillig abgegeben: Für ein privates Softwareangebot besteht keine
+          Pflicht nach der Barrierefreie-Informationstechnik-Verordnung (BITV 2.0).
+          Maßstab sind die WCAG 2.1, Stufe AA, wie sie die EN 301 549 übernimmt.
+        </p>
+      </Abschnitt>
+
+      <Abschnitt titel="Stand der Vereinbarkeit">
+        <p>
+          BIT-Atelier ist <strong>teilweise barrierefrei</strong>. Die Bewertung
+          beruht auf einer Selbstprüfung; eine Prüfung durch eine unabhängige
+          Stelle hat nicht stattgefunden.
+        </p>
+      </Abschnitt>
+
+      <Abschnitt titel="Was gemessen wird">
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            Ein automatischer Wächter liest bei jeder Änderung den gesamten
+            Oberflächen-Quelltext und zählt: Auswahl- und Eingabefelder ohne
+            lesbaren Namen, Knöpfe, die nur ein Symbol zeigen und keinen Namen
+            tragen, Beschriftungen ohne Verbindung zu ihrem Feld und Stellen, an
+            denen der Tastaturfokus unsichtbar wird. Alle vier Zahlen stehen auf
+            null und dürfen nicht mehr steigen.
+          </li>
+          <li>
+            Ein automatischer Durchlauf bedient den Kernweg nur mit der Tastatur:
+            Projekt anlegen, Entwurfswerkzeug, Bereich und Reiter wechseln,
+            Prüf-Suite, Musterprojekt laden, Prüfung starten — und prüft an jeder
+            Station, ob der Fokus sichtbar ist. Dialoge halten den Fokus, Escape
+            schließt sie, der Fokus kehrt zum auslösenden Element zurück.
+          </li>
+          <li>
+            Eine Prüfung aller Modulseiten mit einem Regelwerk-Prüfwerkzeug
+            (WCAG 2.1 AA) ist vorbereitet, aber <strong>noch nicht in Betrieb</strong>.
+          </li>
+        </ul>
+      </Abschnitt>
+
+      <Abschnitt titel="Bekannte Einschränkungen">
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            3D-Ansichten, Karten und Planflächen werden als Grafik gezeichnet und
+            sind für Screenreader nicht auswertbar. Die Kennzahlen dazu stehen
+            als Text und Tabelle daneben; das Zeichnen selbst setzt eine Maus
+            oder einen Stift voraus.
+          </li>
+          <li>
+            Farbkontraste sind nicht systematisch geprüft.
+          </li>
+          <li>
+            In der englischen Oberfläche sind manche sichtbaren Beschriftungen
+            noch deutsch, während der vorgelesene Name englisch ist.
+          </li>
+          <li>
+            Auf schmalen Bildschirmen (Telefon) läuft die Kopfzeile über den
+            Rand; nicht alle Bedienelemente sind dort ohne seitliches Verschieben
+            erreichbar.
+          </li>
+          <li>
+            Erzeugte PDF-Dokumente (Berichte, Pläne, Briefe) sind nicht mit einer
+            Dokumentstruktur für Screenreader versehen.
+          </li>
+          <li>
+            Einzelne Eingabefelder ohne sichtbare Beschriftung erfasst der
+            Wächter noch nicht.
+          </li>
+        </ul>
+      </Abschnitt>
+
+      <Abschnitt titel="Barrieren melden">
+        <p>
+          Wenn Sie auf eine Barriere stoßen, melden Sie sie bitte über den Knopf
+          „Feedback geben" in der Kopfzeile der Anwendung. Dort schicken Sie die
+          Nachricht selbst per E-Mail oder als Eintrag im öffentlichen
+          Quellcode-Verzeichnis ab; die Seite, auf der Sie sind, wird auf Wunsch
+          mitgeschickt.
+        </p>
+        <p>
+          Ansprechpartner für Barrierefreiheit: {angabe('barrierefreiheitKontakt')}
+        </p>
+      </Abschnitt>
+
+      <p className="mt-6 text-xs text-slate-400">Stand: {BARRIEREFREIHEIT_STAND}</p>
     </div>
   );
 }

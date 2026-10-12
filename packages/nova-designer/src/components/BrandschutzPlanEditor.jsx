@@ -141,7 +141,7 @@ export default function BrandschutzPlanEditor({ maxFluchtweg, onUebernehmen, pdf
           <CardTitle className="flex items-center gap-2 text-base"><Flame className="w-4 h-4" /> {t("Brandschutz-Plan")}</CardTitle>
           <div className="flex items-center gap-1">
             <Select value={String(lvl)} onValueChange={(v) => { setLevel(+v); setDraft([]); setSel(null); }}>
-              <SelectTrigger className="h-8 w-28 text-xs" data-testid="bs-level"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("Geschoss")} className="h-8 w-28 text-xs" data-testid="bs-level"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Array.from({ length: storeys }, (_, i) => <SelectItem key={i} value={String(i)}>{geschoss(i, t)}</SelectItem>)}
               </SelectContent>
@@ -177,7 +177,8 @@ export default function BrandschutzPlanEditor({ maxFluchtweg, onUebernehmen, pdf
       </CardHeader>
       <CardContent className="space-y-2">
         <div className={werkzeug === "symbol" ? "grid lg:grid-cols-[1fr_200px] gap-3" : ""}>
-          <div ref={planRef} tabIndex={0} className="outline-none" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && sel) { e.preventDefault(); loeschen(); } if (e.key === "Escape") { setDraft([]); setSel(null); } }}>
+          <div ref={planRef} tabIndex={0} role="group" aria-label={t("Plan-Zeichenfläche")} className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && sel) { e.preventDefault(); loeschen(); } if (e.key === "Escape") { setDraft([]); setSel(null); } }}>
+            <p className="mb-1 text-[11px] text-slate-500">{t("Tastatur: Entf löscht die Auswahl, Esc bricht das Zeichnen ab.")}</p>
             <BimPlan2D
               model={plan.model}
               mode="grundriss"

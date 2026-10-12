@@ -267,11 +267,11 @@ describe("hvac.js — tgaChecks() Invarianten", () => {
     assert.equal(unbekannt.items.find((i) => i.key === "erzeuger_ee").status, "warn");
   });
 
-  it("fehlende Fläche / fehlende WE ⇒ warn mit Pflegehinweis, kein stiller pass", () => {
+  it("72-04: fehlende Fläche / fehlende WE ⇒ offen mit Pflegehinweis, kein stiller pass", () => {
     const c = tgaChecks({ ...BASIS, beheizteFlaeche: 0, we: 0 });
-    assert.equal(c.items.find((i) => i.key === "flaeche").status, "warn");
+    assert.equal(c.items.find((i) => i.key === "flaeche").status, "offen");
     assert.match(c.items.find((i) => i.key === "flaeche").detail, /eingeben|pflegen/);
-    assert.equal(c.items.find((i) => i.key === "we").status, "warn");
+    assert.equal(c.items.find((i) => i.key === "we").status, "offen");
   });
 
   it("INVARIANTE: tgaChecks liefert NIE Status \"fail\" (Haftung, T-17-04)", () => {
@@ -284,7 +284,7 @@ describe("hvac.js — tgaChecks() Invarianten", () => {
     for (const v of varianten) {
       const c = tgaChecks(v);
       for (const i of c.items) {
-        assert.ok(["pass", "warn"].includes(i.status), `unerwarteter Status "${i.status}" (${i.key})`);
+        assert.ok(["pass", "warn", "offen"].includes(i.status), `unerwarteter Status "${i.status}" (${i.key})`);
       }
     }
   });
@@ -295,8 +295,8 @@ describe("hvac.js — tgaChecks() Invarianten", () => {
       const passes = c.items.filter((i) => i.status === "pass").length;
       assert.equal(c.score, Math.round((passes / c.items.length) * 100));
       assert.ok(c.score >= 0 && c.score <= 100);
-      assert.equal(c.warns, c.items.length - passes);
-      assert.equal(c.verdict, c.warns > 0 ? "Konzept mit Hinweisen" : "Konzept plausibel");
+      assert.equal(c.warns + c.offen, c.items.length - passes); // 72-04: not met = warn + offen
+      assert.equal(c.verdict, c.warns > 0 && c.offen > 0 ? "Konzept mit Hinweisen — Angaben fehlen" : c.warns > 0 ? "Konzept mit Hinweisen" : c.offen > 0 ? "Konzept unvollständig — Angaben fehlen" : "Konzept plausibel"); // 72-04
     }
   });
 

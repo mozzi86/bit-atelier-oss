@@ -17,8 +17,20 @@ export const num = (n, d = 2) =>
 // Gesamtpreis of one position (Menge × Einheitspreis).
 export const gp = (pos) => (pos.quantity || 0) * (pos.unit_price || 0);
 
-// Sum of all positions' GP (Kostenanschlag / cost estimate).
-export const lvTotal = (positions = []) => positions.reduce((s, p) => s + gp(p), 0);
+/**
+ * 73-08 follow-up: contingency item (Bedarfs-/Eventualposition ohne Gesamtbetrag) — VOB: it is priced but
+ * NOT part of the offer sum. Recognised from our own value ("Bedarfsposition", set by the quantity pots) and
+ * from imported marks (GAEB 90 kennz text, GAEB XML Provis "WithoutTotal") [ASSUMED spellings].
+ * @param {{kennz?: string|null}} pos
+ * @returns {boolean}
+ */
+export const istBedarfsposition = (pos) => /bedarf|eventual|withouttotal/i.test(String(pos?.kennz || ""));
+
+// Sum of all positions' GP (Kostenanschlag / cost estimate) — without contingency items (73-08).
+export const lvTotal = (positions = []) => positions.reduce((s, p) => s + (istBedarfsposition(p) ? 0 : gp(p)), 0);
+
+// Sum of the contingency items alone (shown separately, never added to the total).
+export const lvBedarfSumme = (positions = []) => positions.reduce((s, p) => s + (istBedarfsposition(p) ? gp(p) : 0), 0);
 
 // Group positions by trade (Los) preserving first-seen order.
 export function groupByTrade(positions = []) {

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ablage-schreiben"
+description = "Enables the ablage_schreiben command without any pre-configured scope."
+commands.allow = ["ablage_schreiben"]
+
+[[permission]]
+identifier = "deny-ablage-schreiben"
+description = "Denies the ablage_schreiben command without any pre-configured scope."
+commands.deny = ["ablage_schreiben"]

@@ -17,6 +17,8 @@ import HarnessStatus from '../components/kitool/HarnessStatus';
 import HarnessOffline from '../components/kitool/HarnessOffline';
 import HarnessChat from '../components/kitool/HarnessChat';
 import IfcPane from '../components/kitool/IfcPane';
+// 93-12: badge while "Nur lokale KI" is on (the harness then works with the local model only).
+import NurLokalPlakette from '@/components/ai/NurLokalPlakette.jsx';
 
 export default function KiTool() {
   const { t } = useI18n();
@@ -87,7 +89,7 @@ export default function KiTool() {
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-2xl shadow-lg"><Wrench className="w-7 h-7 text-white" /></div>
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">{t('KI Tool')}</h1>
+            <h1 className="flex items-center gap-3 text-3xl font-bold"><span className="bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">{t('KI Tool')}</span> <NurLokalPlakette /></h1>
             <p className="text-slate-600 dark:text-slate-300 mt-1">{t('Provider-unabhängiges Arbeitssystem mit Projekt-Gedächtnis, Werkzeugen und Skills')}</p>
           </div>
         </motion.div>

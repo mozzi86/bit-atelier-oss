@@ -21,6 +21,8 @@
 // weil die Status-Normalisierung genau EINMAL existieren darf (T-33-04).
 
 import { normalisiereStatus } from "./kataloge.js";
+// 89-03: workshop components (walls/doors) as classified elements.
+import { werkstattBauteile } from "./werkstattBauteile.js";
 
 // Defensive, nicht-negative, endliche Zahl.
 const num = (x) => Math.max(0, Number(x) || 0);
@@ -112,9 +114,95 @@ export function normalizeStatus(raw, snapshot = null) {
   return normalisiereStatus(raw, snapshot);
 }
 
+/** 89-04 (D-BW-03): display text of an element without status in the viewer and counters. */
+export const STATUS_OHNE_LABEL = "ohne Status";
+
+/**
+ * Count elements per status (89-04). `null`/unknown values count as "ohne" — never as "neubau".
+ * @param {Array<{status?: string|null}>} elemente classified or IFC elements
+ * @returns {{abbruch: number, neubau: number, bestand: number, ohne: number}}
+ */
+export function statusZaehler(elemente = []) {
+  const z = { abbruch: 0, neubau: 0, bestand: 0, ohne: 0 };
+  for (const el of elemente || []) {
+    const s = el?.status;
+    if (s === "abbruch" || s === "neubau" || s === "bestand") z[s] += 1;
+    else z.ohne += 1;
+  }
+  return z;
+}
+
 /** Anzeigetext eines internen Status — `null` wird sichtbar als „unbekannt". */
 export function statusAnzeige(intern) {
   return STATUS_LABEL[intern] || "unbekannt";
+}
+
+// --- 73-04 (BEST-04): Erfassungsgrad — the SECOND axis of an element, right below the status axis on
+// purpose so nobody opens a second table. Status says WHAT an element is (bestand/abbruch/neubau), the
+// Erfassungsgrad says HOW WELL we know it: in a new build the decision creates the geometry (always exact),
+// in an existing building the measurement does — element by element with different reliability.
+// `null` = visibly unknown; there is NO default anywhere (a silent "gemessen" would turn an assumption
+// into a measurement — exactly the liability case this axis exists for).
+export const ERFASSUNG_WERTE = ["gemessen", "abgeleitet", "altplan", "angenommen"];
+export const ERFASSUNG_LABEL = { gemessen: "Gemessen", abgeleitet: "Abgeleitet", altplan: "Altplan", angenommen: "Annahme" };
+/** Reliability rank (higher = better known); a finding may only raise it (73-10 "hochstufen"). */
+export const ERFASSUNG_RANG = Object.freeze({ angenommen: 1, altplan: 2, abgeleitet: 3, gemessen: 4 });
+export const ERFASSUNG_UNBEKANNT = "unbekannt";
+
+// Raw spellings seen in IFC psets, survey exports and the UI → internal value. Unknown → null (no default).
+const ERFASSUNG_SYNONYME = {
+  gemessen: "gemessen", aufmass: "gemessen", "aufmaß": "gemessen", scan: "gemessen", punktwolke: "gemessen", measured: "gemessen",
+  abgeleitet: "abgeleitet", derived: "abgeleitet", interpoliert: "abgeleitet",
+  altplan: "altplan", archivplan: "altplan", bestandsplan: "altplan", "as-built": "altplan", asbuilt: "altplan",
+  angenommen: "angenommen", assumed: "angenommen", "geschätzt": "angenommen", geschaetzt: "angenommen", regelaufbau: "angenommen",
+};
+
+/**
+ * Erfassungsgrad raw value → internal spelling, or null. Never a default.
+ * @param {*} raw value from IFC pset, survey export or UI (case-insensitive)
+ * @returns {"gemessen"|"abgeleitet"|"altplan"|"angenommen"|null}
+ */
+export function normalizeErfassung(raw) {
+  if (raw == null) return null;
+  const k = String(raw).trim().toLowerCase();
+  return /** @type {any} */ (ERFASSUNG_SYNONYME[k] ?? null);
+}
+
+/** Display text of an internal Erfassungsgrad — `null` is visibly "unbekannt". */
+export function erfassungAnzeige(intern) {
+  return ERFASSUNG_LABEL[intern] || ERFASSUNG_UNBEKANNT;
+}
+
+/**
+ * 73-04: schema of a documented deviation from a current rule in an existing building (third check exit
+ * "Abweichung / Bestandsschutz", 73-13; inherited by 71-10). Defined ONCE here so the check, the finding
+ * list and the export share one shape. A deviation is never a pass: it carries a reason, a compensation
+ * and the state of the application to the authority.
+ */
+export const ABWEICHUNG_SCHEMA = Object.freeze({
+  felder: Object.freeze(["regel_id", "art", "begruendung", "kompensation", "antrag_status", "datum"]),
+  arten: Object.freeze({ bestandsschutz: "Bestandsschutz", abweichung: "Abweichung (Landesbauordnung)", befreiung: "Befreiung" }),
+  antragStatus: Object.freeze({ offen: "offen", beantragt: "beantragt", genehmigt: "genehmigt", abgelehnt: "abgelehnt" }),
+});
+
+// --- 73-04 (BEST-09): provenance of a build-up (Bauteilaufbau). In an existing building the WALL_COMPOSITES
+// are reference values, not the real wall. Acoustics, thermal bridges, building physics and energy keep
+// computing (no switch-off) but name their basis and are raised after an opening.
+export const AUFBAU_HERKUNFT = Object.freeze({ oeffnung: "Bauteilöffnung", archivplan: "Archivplan", regelaufbau: "Regelaufbau angenommen" });
+
+/**
+ * Basis of the build-up figures for the tab header.
+ * @param {"neubau"|"bestand"} bauart kind of work (bauartVon)
+ * @param {*} herkunft stored provenance (project.aufbau_herkunft) — raw, normalised here
+ * @returns {{herkunft: "oeffnung"|"archivplan"|"regelaufbau"|null, text: string|null}} text null in a new
+ *   build (the planned build-up IS the truth there)
+ */
+export function aufbauGrundlage(bauart, herkunft) {
+  if (bauart !== "bestand") return { herkunft: null, text: null };
+  const h = Object.prototype.hasOwnProperty.call(AUFBAU_HERKUNFT, herkunft) ? /** @type {"oeffnung"|"archivplan"|"regelaufbau"} */ (herkunft) : null;
+  if (!h) return { herkunft: null, text: "Bauteilaufbau: Grundlage nicht angegeben — es gelten Regelaufbauten (Richtwerte); im Reiter Bauphysik festlegen." };
+  const zusatz = h === "oeffnung" ? "" : " — nach einer Bauteilöffnung hochstufen";
+  return { herkunft: h, text: `Bauteilaufbau: ${AUFBAU_HERKUNFT[h]}${zusatz}.` };
 }
 
 /**
@@ -186,7 +274,14 @@ const normalizeElement = (raw, id, kind, mengen) => ({
     : typeof raw?.schicht === "string" && raw.schicht
       ? [raw.schicht]
       : schichtFromComposite(raw?.composite),
-  status: typeof raw?.status === "string" && raw.status ? raw.status : "neubau",
+  // 89-04 (D-BW-03): no default. The raw value runs through the ONE normalisation (catalogue
+  // StatusKonvention, "Bestand"/"EXISTING" → "bestand"); unknown or missing stays null and is
+  // shown as "ohne Status". Before: every element without status became "neubau" (BW-06), so a
+  // status filter "neubau" counted elements nobody had classified.
+  status: normalizeStatus(raw?.status),
+  // 73-07 (BEST-08): optional Erfassungsgrad of a drawn element — only present when the element carries
+  // one, so legacy models produce byte-identical elements (AVA quantities of new builds change by 0).
+  ...(raw?.erfassung != null ? { erfassung: normalizeErfassung(raw.erfassung) } : {}),
   mengen: {
     area: num(mengen.area),
     volume: num(mengen.volume),
@@ -215,7 +310,9 @@ export function synthHull(bimModel) {
     kg,
     gewerk,
     schicht,
-    status: "neubau",
+    // 89-04 (D-BW-03): no default — the synthetic hull is derived from the outline, nothing
+    // says whether it is new, existing or demolished. Before: fixed "neubau".
+    status: null,
     mengen: {
       area: num(mengen.area),
       volume: num(mengen.volume),
@@ -265,11 +362,36 @@ export function synthHull(bimModel) {
 // RESEARCH §Pitfall 6). 2) synthHull ergänzt ADDITIV alle Hüllen-Kategorien, deren kind
 // nicht bereits custom gezeichnet ist (ohne Custom-Elemente = kompletter Fallback).
 // Defensiv: bimModel null → synthHull ohne Throw; alle Mengen endlich (kein NaN/Infinity).
-export function classifiedElements(bimModel, building) {
+/**
+ * @param {any} bimModel BimModel record
+ * @param {any} [building] building (fallback storeys)
+ * @param {{werkstattZonen?: Array<any>}} [optionen] 89-03: workshop zones (store, " ·WT") → interior
+ *   walls/doors as elements "wt-wall-<guid>"/"wt-door-<guid>"
+ * @returns {Array<any>}
+ */
+export function classifiedElements(bimModel, building, optionen = {}) {
   const m = bimModel || {};
   const sh = num(m.storeyHeight) || 3;
   const arr = (a) => (Array.isArray(a) ? a : []);
   const els = [];
+
+  // 89-03 (BW-08): workshop components as classified elements — interior walls and interior doors
+  // (the envelope pieces are the hull below: no double count). KG/trade/material come with the
+  // component (werkstattBauteile), so the quantity rules (KG ∩ trade ∩ layer ∩ status) reach them.
+  // Ids "wt-wall-<guid>"/"wt-door-<guid>" stay stable over re-tessellation. Without workshop
+  // zones (optionen.werkstattZonen empty/missing) the list is byte-identical to before.
+  // Status: normalizeElement still defaults to "neubau" — the D-BW-03 fix belongs to 89-04.
+  if (Array.isArray(optionen?.werkstattZonen) && optionen.werkstattZonen.length) {
+    const wt = werkstattBauteile(optionen.werkstattZonen, { storeyHeight: sh });
+    wt.waende.filter((w) => !w.huelle).forEach((w) => {
+      els.push(normalizeElement({ kg: w.kg, gewerk: w.gewerk, schicht: ["Kalksandstein", "Putz"] }, `wt-wall-${w.guid}`, "wall-inner", {
+        area: w.flaeche_m2, volume: w.volumen_m3, length: w.lichteLaenge_m, count: 1,
+      }));
+    });
+    wt.tueren.filter((t) => !t.huelle).forEach((t) => {
+      els.push(normalizeElement({ kg: t.kg, gewerk: t.gewerk, schicht: ["Holz"] }, `wt-door-${t.guid}`, "door", { area: 0, volume: 0, length: 0, count: 1 }));
+    });
+  }
 
   arr(m.customWalls).forEach((w, i) => {
     const len = num(wallLength(w));

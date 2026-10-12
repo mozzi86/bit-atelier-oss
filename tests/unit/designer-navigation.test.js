@@ -37,8 +37,8 @@ test("Registry und Seite kennen exakt dieselben Reiter", () => {
   const ausDatei = tabsAusDerSeite();
   const ausRegistry = DESIGNER_REITER.map((r) => r.key);
 
-  assert.equal(ausDatei.length, 30, "ComplexDesigner.jsx soll 30 TabsContent haben");
-  assert.equal(ausRegistry.length, 30, "Registry soll 30 Reiter haben");
+  assert.equal(ausDatei.length, 31, "ComplexDesigner.jsx soll 31 TabsContent haben (30 + bauaufnahme, 73-09)");
+  assert.equal(ausRegistry.length, 31, "Registry soll 31 Reiter haben");
 
   const fehltInRegistry = ausDatei.filter((k) => !ausRegistry.includes(k));
   const verwaistInRegistry = ausRegistry.filter((k) => !ausDatei.includes(k));

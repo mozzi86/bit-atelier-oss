@@ -28,6 +28,7 @@ import {
 } from "@core/components/ui/select";
 import { toast } from "sonner";
 import { fmtBytes } from "@core/lib/pdf";
+import { inhaltLaden } from "@core/lib/speicherOrt";
 import {
   Combine,
   Scissors,
@@ -84,6 +85,7 @@ import {
   downloadBytes,
   downloadDataUrl,
 } from "./pdfTools";
+import { useI18n } from "@core/lib/i18n";
 
 // ---------------------------------------------------------------------------
 // Werkzeug-Katalog (Farbe rotiert je Kategorie: emerald/teal/blue/violet/amber)
@@ -160,6 +162,7 @@ function Modal({ onClose, title, icon: Icon, color, children }) {
 // ---------------------------------------------------------------------------
 
 function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) {
+  const { t } = useI18n();
   // Quellen
   const [source, setSource] = useState(null); // { kind: "doc", doc } | { kind: "upload", name, bytes }
   const [sources, setSources] = useState([]); // Merge: geordnete Liste
@@ -206,9 +209,18 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
 
   // ---- Quellen-Handler -----------------------------------------------------
 
-  const pickDoc = (id) => {
+  // Storage rule: a document over 1 MB keeps its bytes in the object store (data_blob), not in
+  // `data` — resolve them once when the document is picked, so the tools stay synchronous.
+  const mitDaten = async (d) => {
+    const data = await inhaltLaden(d.data, d.data_blob);
+    if (!data) throw new Error("Die Datei des Dokuments ist nicht verfügbar.");
+    return { ...d, data };
+  };
+
+  const pickDoc = async (id) => {
     const d = pdfDocs.find((x) => x.id === id);
-    if (d) { setSource({ kind: "doc", doc: d }); resetOutput(); }
+    if (!d) return;
+    try { setSource({ kind: "doc", doc: await mitDaten(d) }); resetOutput(); } catch (err) { setError(err.message); }
   };
 
   const onUploadSingle = async (e) => {
@@ -222,12 +234,14 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
     } catch (err) { setError(err.message); }
   };
 
-  const addMergeDoc = (id) => {
+  const addMergeDoc = async (id) => {
     const d = pdfDocs.find((x) => x.id === id);
-    if (d) {
-      setSources((prev) => [...prev, { kind: "doc", doc: d, name: d.name }]);
+    if (!d) return;
+    try {
+      const mit = await mitDaten(d);
+      setSources((prev) => [...prev, { kind: "doc", doc: mit, name: d.name }]);
       resetOutput();
-    }
+    } catch (err) { setError(err.message); }
   };
 
   const onUploadMerge = async (e) => {
@@ -432,7 +446,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
       <Label className="text-xs text-slate-500">PDF-Quelle</Label>
       {pdfDocs.length > 0 && (
         <Select value={source && source.kind === "doc" ? source.doc.id : ""} onValueChange={pickDoc}>
-          <SelectTrigger>
+          <SelectTrigger aria-label={t("PDF-Quelle")}>
             <SelectValue placeholder="Dokument aus dem Projekt wählen" />
           </SelectTrigger>
           <SelectContent>
@@ -460,7 +474,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
   const rangeInput = (label, placeholder = "z. B. 1-3,5,7-9") => (
     <div className="space-y-1.5">
       <Label className="text-xs text-slate-500">{label}</Label>
-      <Input value={ranges} onChange={(e) => { setRanges(e.target.value); resetOutput(); }} placeholder={placeholder} />
+      <Input aria-label={label} value={ranges} onChange={(e) => { setRanges(e.target.value); resetOutput(); }} placeholder={placeholder} />
     </div>
   );
 
@@ -515,7 +529,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
           <div className="flex items-center gap-2 flex-wrap">
             {pdfDocs.length > 0 && (
               <Select value="" onValueChange={addMergeDoc}>
-                <SelectTrigger className="w-auto min-w-[220px]">
+                <SelectTrigger aria-label={t("Projekt-PDF hinzufügen")} className="w-auto min-w-[220px]">
                   <SelectValue placeholder="Projekt-PDF hinzufügen" />
                 </SelectTrigger>
                 <SelectContent>
@@ -570,7 +584,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-500">Drehwinkel</Label>
               <Select value={angle} onValueChange={(v) => { setAngle(v); resetOutput(); }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("Drehwinkel")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="90">90 Grad (rechts)</SelectItem>
                   <SelectItem value="180">180 Grad</SelectItem>
@@ -581,7 +595,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-500">Anwenden auf</Label>
               <Select value={scope} onValueChange={(v) => { setScope(v); resetOutput(); }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("Anwenden auf")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Alle Seiten</SelectItem>
                   <SelectItem value="range">Seitenbereich</SelectItem>
@@ -603,7 +617,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-500">Position</Label>
               <Select value={position} onValueChange={(v) => { setPosition(v); resetOutput(); }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("Position")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="bottom-center">Unten mittig</SelectItem>
                   <SelectItem value="bottom-right">Unten rechts</SelectItem>
@@ -612,12 +626,12 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-500">Start bei</Label>
-              <Input type="number" min="1" value={startNo} onChange={(e) => { setStartNo(e.target.value); resetOutput(); }} />
+              <Input aria-label={t("Start bei")} type="number" min="1" value={startNo} onChange={(e) => { setStartNo(e.target.value); resetOutput(); }} />
             </div>
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs text-slate-500">Format ({"{n}"} = Nummer, {"{total}"} = gesamt)</Label>
-            <Input value={format} onChange={(e) => { setFormat(e.target.value); resetOutput(); }} />
+            <Input aria-label={t("Format der Seitenzahl")} value={format} onChange={(e) => { setFormat(e.target.value); resetOutput(); }} />
           </div>
         </div>
       );
@@ -630,7 +644,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
           {singleSourcePicker}
           <div className="space-y-1.5">
             <Label className="text-xs text-slate-500">Text</Label>
-            <Input value={wmText} onChange={(e) => { setWmText(e.target.value); resetOutput(); }} placeholder="z. B. ENTWURF" />
+            <Input aria-label={t("Text")} value={wmText} onChange={(e) => { setWmText(e.target.value); resetOutput(); }} placeholder="z. B. ENTWURF" />
           </div>
           {sliderRow("Deckkraft", wmOpacity, setWmOpacity, 5, 60, " %")}
         </div>
@@ -669,7 +683,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
               <Label className="text-xs text-slate-500">
                 {{ title: "Titel", author: "Autor", subject: "Betreff", keywords: "Stichwörter (Komma-getrennt)" }[field]}
               </Label>
-              <Input value={meta[field]} onChange={(e) => { setMeta((m) => ({ ...m, [field]: e.target.value })); resetOutput(); }} />
+              <Input aria-label={t({ title: "Titel", author: "Autor", subject: "Betreff", keywords: "Stichwörter (Komma-getrennt)" }[field])} value={meta[field]} onChange={(e) => { setMeta((m) => ({ ...m, [field]: e.target.value })); resetOutput(); }} />
             </div>
           ))}
         </div>
@@ -734,7 +748,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
             <Label className="text-xs text-slate-500">Projekt-PDF wählen</Label>
             {pdfDocs.length > 0 ? (
               <Select value={annotateId} onValueChange={setAnnotateId}>
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("Projekt-PDF wählen")}>
                   <SelectValue placeholder="Dokument wählen" />
                 </SelectTrigger>
                 <SelectContent>

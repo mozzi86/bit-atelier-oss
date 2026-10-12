@@ -20,8 +20,12 @@ const de = (n) => Math.round(Number(n) || 0).toLocaleString("de-DE");
 //      | "pflicht" (Kunst am Bau: kein Zuschuss, sondern übliche Verpflichtung).
 // satz_pct: Fördersatz in % der förderfähigen Kosten (null = kein pauschaler Satz).
 // max_betrag: Deckel in € (null = ohne Deckel).
+// bauart (73-11): "neubau" | "bestand" | "beide" — which kind of work the programme serves [ASSUMED:
+//   KFN only new build, BEG EM only existing buildings]; the planner filters by it, stored applications of
+//   another kind stay listed with a hint.
 export const PROGRAMM_KATALOG = {
   kfw_beg_wg: {
+    bauart: "beide", // 73-11
     label: "KfW / BEG Wohngebäude",
     traeger: "KfW",
     typ: "kredit",
@@ -30,6 +34,7 @@ export const PROGRAMM_KATALOG = {
     hinweis: "Förderkredit für Effizienzhaus-Neubau/-Sanierung; Satz als Zinsvorteil-Äquivalent angesetzt.",
   },
   beg_em: {
+    bauart: "bestand", // 73-11
     label: "BEG Einzelmaßnahmen",
     traeger: "BAFA",
     typ: "zuschuss",
@@ -38,6 +43,7 @@ export const PROGRAMM_KATALOG = {
     hinweis: "Zuschuss für Einzelmaßnahmen an Hülle und Anlagentechnik (BEG EM).",
   },
   kfw_kfn: {
+    bauart: "neubau", // 73-11
     label: "KfW Klimafreundlicher Neubau",
     traeger: "KfW",
     typ: "kredit",
@@ -46,6 +52,7 @@ export const PROGRAMM_KATALOG = {
     hinweis: "Zinsverbilligter Kredit für klimafreundlichen Neubau (KFN/QNG-Kontext).",
   },
   bafa_heizung: {
+    bauart: "beide", // 73-11
     label: "BAFA Heizungsförderung",
     traeger: "BAFA / KfW",
     typ: "zuschuss",
@@ -54,6 +61,7 @@ export const PROGRAMM_KATALOG = {
     hinweis: "Zuschuss für Heizungstausch (Wärmepumpe, Biomasse, Fernwärme-Anschluss).",
   },
   landesprogramm: {
+    bauart: "beide", // 73-11
     label: "Landesprogramm (generisch)",
     traeger: "Land",
     typ: "zuschuss",
@@ -62,6 +70,7 @@ export const PROGRAMM_KATALOG = {
     hinweis: "Platzhalter für landesspezifische Programme (z. B. Wohnraumförderung) — Werte anpassen.",
   },
   kommunal: {
+    bauart: "beide", // 73-11
     label: "Kommunale Förderung (generisch)",
     traeger: "Kommune",
     typ: "zuschuss",
@@ -70,6 +79,7 @@ export const PROGRAMM_KATALOG = {
     hinweis: "Platzhalter für kommunale Programme (z. B. Begrünung, PV, Stellplatzablöse-Bonus).",
   },
   kunst_am_bau: {
+    bauart: "beide", // 73-11
     label: "Kunst am Bau",
     traeger: "Bund / Land (Bauherr)",
     typ: "pflicht",
@@ -227,4 +237,50 @@ export function fundingChecks(antraege = [], { oeffentlich = false, bausumme = 0
   const warns = items.filter((i) => i.status === "warn").length;
   const verdict = warns > 0 ? "Konzept mit Hinweisen" : "Konzept plausibel";
   return { items, score, warns, verdict };
+}
+
+
+/**
+ * 73-11: does a programme fit the kind of work?
+ * @param {string} programmKey key of PROGRAMM_KATALOG
+ * @param {"neubau"|"bestand"} bauart
+ * @returns {boolean} unknown programmes count as fitting (no silent filtering of foreign data)
+ */
+export function programmPasstZurBauart(programmKey, bauart) {
+  const b = PROGRAMM_KATALOG[programmKey]?.bauart;
+  return !b || b === "beide" || b === bauart;
+}
+
+/**
+ * 73-11 (BEST-13): order check "application BEFORE the start of the project". For BEG/KfW the start is the
+ * conclusion of a supply or service contract attributable to the execution (planning services excepted)
+ * [ASSUMED summary of the BEG guideline — check the current programme conditions]. In an existing building
+ * the expensive mistake is not the wrong programme but the late application. warn/offen/pass only — this is
+ * a reminder, not a statement on eligibility.
+ * @param {Array<{id?: string, titel?: string, programm_key?: string, status?: string, eingereicht_am?: string}>} antraege
+ * @param {{vorhabenbeginn?: string|null, ersterZuschlag?: string|null}} termine ISO dates (yyyy-mm-dd or full ISO)
+ * @param {string} heuteIso today (yyyy-mm-dd)
+ * @returns {Array<{id: string, titel: string, status: "pass"|"warn"|"offen", detail: string}>}
+ */
+export function antragReihenfolge(antraege = [], { vorhabenbeginn = null, ersterZuschlag = null } = {}, heuteIso) {
+  const tag = (d) => (d ? String(d).slice(0, 10) : null);
+  const kandidaten = [tag(vorhabenbeginn), tag(ersterZuschlag)].filter(Boolean).sort();
+  const beginn = kandidaten[0] || null;
+  const quelle = beginn && beginn === tag(ersterZuschlag) && beginn !== tag(vorhabenbeginn) ? "erster Zuschlag" : "Vorhabenbeginn";
+  const deTag = (d) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString("de-DE") : "");
+  return (Array.isArray(antraege) ? antraege : [])
+    .filter((a) => a?.programm_key !== "kunst_am_bau")
+    .map((a) => {
+      const id = String(a?.id || a?.titel || "");
+      const titel = String(a?.titel || PROGRAMM_KATALOG[a?.programm_key]?.label || "Antrag");
+      const gestellt = tag(a?.eingereicht_am);
+      if (!beginn) return { id, titel, status: "offen", detail: "Vorhabenbeginn unbekannt — Datum eintragen, sonst lässt sich die Reihenfolge nicht prüfen." };
+      if (gestellt) {
+        return gestellt < beginn
+          ? { id, titel, status: "pass", detail: `Antrag ${deTag(gestellt)} vor ${quelle} ${deTag(beginn)}.` }
+          : { id, titel, status: "warn", detail: `Antrag ${deTag(gestellt)} NICHT vor ${quelle} ${deTag(beginn)} — Förderung gefährdet, Programmbedingungen sofort prüfen.` };
+      }
+      if (beginn <= heuteIso) return { id, titel, status: "warn", detail: `${quelle} ${deTag(beginn)} liegt schon zurück, der Antrag ist noch nicht gestellt — Förderung gefährdet.` };
+      return { id, titel, status: "offen", detail: `Antrag vor ${quelle} ${deTag(beginn)} stellen (noch nicht eingereicht).` };
+    });
 }

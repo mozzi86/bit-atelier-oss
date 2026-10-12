@@ -51,6 +51,35 @@ Beim ersten Start werden die Laufzeitpakete installiert (einige Minuten), dann �
 Browser mit **http://localhost:3001**. Alles läuft auf Ihrem Rechner; Ihre Daten liegen im Ordner
 `daten/` neben der App — sichern Sie ihn wie jeden anderen Projektordner.
 
+**Installer und Deinstallation.** Jedes Release enthält außerdem **`BIT-Atelier-Installer.cmd`** (Windows:
+doppelklicken; installiert nach `%LOCALAPPDATA%\BIT-Atelier` ohne Administratorrechte, mit Verknüpfungen auf dem
+Desktop und im Startmenü) und **`install.sh`** (macOS / Linux:
+`curl -fsSL https://github.com/mozzi86/bit-atelier-oss/releases/latest/download/install.sh | sh`, installiert nach
+`~/BIT-Atelier`). Eine installierte App erkennt neue Fassungen selbst und aktualisiert sich per Klick.
+Entfernen: Startmenü → **BIT-Atelier entfernen** oder `BIT-Atelier-Installer.cmd /entfernen` (Windows),
+`sh ~/BIT-Atelier/installer/install.sh --entfernen` (macOS / Linux). Die Deinstallation beendet eine laufende
+App, fragt, ob Ihr Datenordner bleibt (Vorgabe: ja — vor dem Löschen bietet sie eine Sicherungskopie an),
+entfernt Programm, `.update/`, `node_modules/` und die Verknüpfungen und sagt zum Schluss in einer Zeile, was
+übrig ist. Eine von Hand entpackte Fassung entfernen Sie, indem Sie ihren Ordner löschen (`daten/` vorher
+beiseitelegen, wenn Sie Ihre Projekte behalten wollen).
+
+**Wie ein eigenes Programm.** Die Verknüpfungen des Installers starten BIT-Atelier ohne Konsolenfenster in
+einem eigenen App-Fenster (Microsoft Edge oder Chrome im App-Modus, eigenes Taskleistensymbol, getrennt von
+Ihrem Browser; ohne Edge/Chrome öffnet der Standardbrowser). Nur der allererste Start zeigt ein Fenster mit dem
+Fortschritt der Paketinstallation. Ein zweiter Klick öffnet nur ein weiteres Fenster, nie einen zweiten Server.
+Schließen Sie das Fenster, läuft BIT-Atelier im Hintergrund weiter (so öffnet ein Doppelklick auf eine
+Projektdatei sofort); ganz beenden: Einstellungen › System & Info › **Programm beenden**. Protokoll:
+`daten/server.log`. Lieber im Browser-Tab: Umgebungsvariable `BIT_FENSTER=0`.
+
+**Projektdateien per Doppelklick.** Der Installer meldet den Dateityp **`.bitproj`** für Ihr Benutzerkonto an
+(Windows ohne Administratorrechte, Linux über `~/.local/share`): Ein Doppelklick startet BIT-Atelier, falls es
+noch nicht läuft, und zeigt die Import-Vorschau. Ist das Projekt schon vorhanden, wählen Sie **Aktualisieren**,
+**Als Kopie** oder **Abbrechen**. Unter Einstellungen › Daten & Sicherung schreibt **Zurück in die Datei
+speichern** den aktuellen Stand in dieselbe Datei — hat jemand die Datei inzwischen geändert, fragt die App
+vorher (überschreiben / als Kopie speichern / abbrechen). Der Pfad bleibt auf Ihrem Rechner und geht nie in eine
+Projektdatei. Die Deinstallation meldet den Dateityp wieder ab. macOS: kein Doppelklick (kein App-Paket) —
+`sh ~/BIT-Atelier/tools/datei-oeffnen.sh <datei.bitproj>` öffnet eine Datei.
+
 ### Weg B — aus dem Quellcode (Entwickler)
 
 ```bash
@@ -201,6 +230,20 @@ Das Projekt ist jung, entstanden aus echter Büroarbeit, und es wird mit jeder R
 - **Pull Requests** sind willkommen — Einstieg in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
+
+## Und wenn der Entwickler morgen aufhört?
+
+- **Ihre Daten gehören Ihnen.** Sie liegen als lesbares JSON in einem Ordner auf Ihrem Rechner
+  (`daten/`, bzw. der Ordner aus `BIT_DATA_DIR`); Dokumente und Fotos daneben als gewöhnliche Dateien.
+  Kopieren, sichern, mit jedem Texteditor öffnen — ohne BIT-Atelier.
+- **Offene Formate.** Alles Wichtige geht in Formaten hinaus, die andere Programme lesen:
+  IFC, BCF, IDS, GAEB, CSV und PDF.
+- **MIT-Lizenz.** Jede und jeder darf den Quellcode weiterführen, anpassen oder abspalten —
+  auch ein anderes Büro oder ein Dienstleister Ihrer Wahl.
+- **Alle Fassungen bleiben verfügbar.** Jede veröffentlichte Version liegt mit Prüfsumme unter
+  „Releases“ auf GitHub.
+- **Kein Server von uns.** Die App läuft offline auf Ihrem Rechner. Nur die Update-Prüfung
+  (abschaltbar mit `BIT_KEIN_UPDATECHECK`) und KI-Anbieter, die Sie selbst anbinden, gehen ins Netz.
 
 ## Haftungsausschluss & Lizenz
 

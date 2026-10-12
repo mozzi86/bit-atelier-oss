@@ -27,11 +27,14 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, Check, Download, History, RotateCcw, Upload, Save } from 'lucide-react';
 import { useI18n } from '@core/lib/i18n';
-import { speicherStand } from '@core/api/demoIdb';
+import { useZugriff } from '@core/lib/ZugriffContext.jsx';
 import {
   demoDbAuslesen,
   sicherungFaellig, letzteSicherungLesen,
+  speicherStandAktuell,
 } from '@core/api/demoDb';
+// 70-03: in the desktop client the data lives in files in the storage folder.
+import { inHuelle } from '@/client/huelle.js';
 import { exportProjekt } from '@core/api/projektDatei';
 import { schnappschuesseListe } from '@core/api/schnappschuesse';
 // 79-12 (E-07): the export-dialog registry lives in src/ (app-only), because a
@@ -86,10 +89,15 @@ export default function SpeicherStatus({ hinweisZiel = null }) {
   const { t } = useI18n();
   const [gespeichert, setGespeichert] = React.useState(/** @type {number|null} */ (null));
   const [fehler, setFehler] = React.useState(/** @type {Error|null} */ (null));
-  const [stand, setStand] = React.useState(/** @type {{benutzt:number,gesamt:number}|null} */ (null));
+  const [stand, setStand] = React.useState(/** @type {{benutzt:number,gesamt:number|null,ort?:string}|null} */ (null));
+  const imClient = inHuelle();
   const [, neuZeichnen] = React.useReducer((x) => x + 1, 0);
   // 80-05: the shared dialogs' handler logic (file read, replace, reset, restore).
   const aktionen = useSpeicherAktionen();
+  // 82-02: a full backup carries every office area, a reset deletes the local data —
+  // one-click backup, import, reset and snapshots only with darf('einstellungen', 'voll');
+  // otherwise "Projekt sichern" opens the role-filtered export dialog.
+  const darfAlles = useZugriff().darf('einstellungen', 'voll');
   // 79-12 (E-07): export dialog state — anzahlen null = closed (ExportDialog's
   // own convention, speicherDialoge.jsx), a snapshot taken when the dialog
   // opens, purely informational (the actual export re-reads the database).
@@ -127,7 +135,7 @@ export default function SpeicherStatus({ hinweisZiel = null }) {
 
   React.useEffect(() => {
     let lebt = true;
-    const holen = () => speicherStand().then((s) => lebt && setStand(s));
+    const holen = () => speicherStandAktuell().then((s) => lebt && setStand(s));
     holen();
     const id = setInterval(holen, STAND_INTERVALL);
     return () => {
@@ -168,6 +176,7 @@ export default function SpeicherStatus({ hinweisZiel = null }) {
   }, [nudgePruefen]);
 
   const sichern = async () => {
+    if (!darfAlles) { exportOeffnen(); return; }
     try {
       await exportProjekt();
       setNudge(false); // a real save ends the nudge for good (meta stamped)
@@ -274,12 +283,16 @@ export default function SpeicherStatus({ hinweisZiel = null }) {
           title={
             [
               stand
-                ? `${t('Belegt')}: ${mb(stand.benutzt)} ${t('von')} ${mb(stand.gesamt)}`
+                ? (stand.gesamt == null
+                  ? `${t('Belegt')}: ${mb(stand.benutzt)}`
+                  : `${t('Belegt')}: ${mb(stand.benutzt)} ${t('von')} ${mb(stand.gesamt)}`)
                 : t('Speicherstand nicht ermittelbar'),
-              // In the client the storage location has to be named: browser storage is
-              // not a folder and can be cleared, which is why the backup button sits
-              // right next to it (70-01; a real folder arrives with 70-03).
-              t('Die Daten liegen im Speicher dieses Browsers auf diesem Gerät — Sicherung als Datei empfohlen.'),
+              // The storage location has to be named. PWA: browser storage is not a
+              // folder and can be cleared, hence the backup button right next to it
+              // (70-01). Desktop client (70-03): real files in the storage folder.
+              imClient && stand?.ort
+                ? `${t('Ablageort')}: ${stand.ort}`
+                : t('Die Daten liegen im Speicher dieses Browsers auf diesem Gerät — Sicherung als Datei empfohlen.'),
             ]
               .filter(Boolean)
               .join('\n')
@@ -299,7 +312,7 @@ export default function SpeicherStatus({ hinweisZiel = null }) {
         </span>
         {stand && (
           <span className="text-slate-400 dark:text-slate-500 hidden 2xl:inline whitespace-nowrap">
-            {mb(stand.benutzt)} / {mb(stand.gesamt)}
+            {stand.gesamt == null ? mb(stand.benutzt) : `${mb(stand.benutzt)} / ${mb(stand.gesamt)}`}
           </span>
         )}
         <button
@@ -313,6 +326,8 @@ export default function SpeicherStatus({ hinweisZiel = null }) {
         >
           <Download className="w-4 h-4" />
         </button>
+        {!darfAlles && <span className="hidden xl:inline text-[11px] text-slate-400" data-testid="nur-inhaber">{t('Laden, Schnappschüsse und Zurücksetzen nur für Inhaber')}</span>}
+        {darfAlles && (<>
         <button
           type="button"
           ref={ladenKnopfRef}
@@ -345,6 +360,7 @@ export default function SpeicherStatus({ hinweisZiel = null }) {
         >
           <RotateCcw className="w-4 h-4" />
         </button>
+        </>)}
         <input
           ref={dateiRef}
           type="file"
@@ -392,7 +408,9 @@ export default function SpeicherStatus({ hinweisZiel = null }) {
             >
               <Save className="w-4 h-4 shrink-0" />
               <span className="flex-1">
-                {t('Ihre Arbeit liegt nur im Speicher dieses Browsers — als Datei sichern, damit sie einen geleerten Browser-Speicher übersteht.')}
+                {imClient
+                  ? t('Ihre Arbeit liegt nur im Ablageort auf diesem Gerät — eine Sicherung als Datei schützt vor Festplattenschaden und versehentlichem Löschen.')
+                  : t('Ihre Arbeit liegt nur im Speicher dieses Browsers — als Datei sichern, damit sie einen geleerten Browser-Speicher übersteht.')}
               </span>
               <button
                 type="button"

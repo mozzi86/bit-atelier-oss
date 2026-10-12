@@ -80,10 +80,12 @@ export function Miniatur({ vorschlag, footprintM }) {
 
 /**
  * @param {{vorschlag: ReturnType<typeof import("@designer/lib/bebauungsvorschlaege").kartenDaten>, footprintM: Array<{x:number, z:number}>|null|undefined, sortKey: string, gewaehlt: boolean, veraltet: boolean, onUebernehmen: (v: any) => void,
- *   ausgewaehlt?: boolean, auswahlGesperrt?: boolean, onAuswahl?: (v: any, an: boolean) => void, onAehnliche?: (v: any) => void, aehnlichLaedt?: boolean}} props
+ *   ausgewaehlt?: boolean, auswahlGesperrt?: boolean, onAuswahl?: (v: any, an: boolean) => void, onAehnliche?: (v: any) => void, aehnlichLaedt?: boolean,
+ *   bewertung?: {rang: number|null, score: number|null, ko: string[]}|null}} props
  *   86-05c: ausgewaehlt/onAuswahl = comparison selection (auswahlGesperrt = four already chosen), onAehnliche = "ähnliche erzeugen"
+ *   75-10: bewertung = rank/score of the weighted evaluation or knock-out reasons
  */
-export default function VorschlagKarte({ vorschlag, footprintM, sortKey, gewaehlt, veraltet, onUebernehmen, ausgewaehlt = false, auswahlGesperrt = false, onAuswahl, onAehnliche, aehnlichLaedt = false }) {
+export default function VorschlagKarte({ vorschlag, footprintM, sortKey, gewaehlt, veraltet, onUebernehmen, ausgewaehlt = false, auswahlGesperrt = false, onAuswahl, onAehnliche, aehnlichLaedt = false, bewertung = null }) {
   const { t } = useI18n();
   const kz = vorschlag.kennzahlen || {};
   const typ = String(vorschlag.typologie?.erschliessung ?? "");
@@ -102,6 +104,14 @@ export default function VorschlagKarte({ vorschlag, footprintM, sortKey, gewaehl
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
+          {/* 75-10: rank of the weighted evaluation or the knock-out reason (hard rules only). */}
+          {bewertung && (bewertung.ko?.length ? (
+            <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700" title={bewertung.ko.join(" · ")} data-testid="vs-ko">{t("K.-o.")}</span>
+          ) : bewertung.rang ? (
+            <span className="rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-800" data-testid="vs-rang" data-rang={bewertung.rang} data-score={bewertung.score ?? ""}>
+              {t("Rang")} {bewertung.rang} · {(Number(bewertung.score) || 0).toLocaleString("de-DE", { maximumFractionDigits: 2 })}
+            </span>
+          ) : null)}
           {typeof onAuswahl === "function" && (
             <label className={`inline-flex items-center gap-1 text-[10px] ${auswahlGesperrt && !ausgewaehlt ? "text-slate-400" : "text-slate-600"}`} title={auswahlGesperrt && !ausgewaehlt ? t("höchstens 4 Vorschläge im Vergleich") : undefined}>
               <input type="checkbox" className="h-3 w-3" checked={ausgewaehlt} disabled={auswahlGesperrt && !ausgewaehlt}

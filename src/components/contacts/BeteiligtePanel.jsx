@@ -122,7 +122,7 @@ export default function BeteiligtePanel({ contacts }) {
                 <td className="px-2 py-1">{r.email}</td>
                 <td className="px-2 py-1">{r.bemerkung}</td>
                 <td className="px-2 py-1 text-right">
-                  <button type="button" className="text-slate-400 hover:text-rose-600" title={t("Entfernen")} onClick={() => speichern(entfernen(liste, r.index))} data-testid="bp-entfernen"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button aria-label={t("Beteiligten entfernen")} type="button" className="text-slate-400 hover:text-rose-600" title={t("Entfernen")} onClick={() => speichern(entfernen(liste, r.index))} data-testid="bp-entfernen"><Trash2 className="h-3.5 w-3.5" /></button>
                 </td>
               </tr>
             ))}

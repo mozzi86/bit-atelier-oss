@@ -21,6 +21,9 @@ import {
 import { gruppeZuruecksetzen, setzeRegel, zuruecksetzen } from "@core/lib/useRegelwerkBearbeiten.js";
 import { HR_REGELN } from "@/lib/people/hrRegeln.js";
 import { REGELWERKE } from "@/lib/settings/regelwerke.js";
+import { FRISTEN_REGELN } from "@/lib/termine/fristenRegeln.js";
+import { KALENDER_REGELN } from "@/lib/abwesenheit/kalenderRegeln.js";
+import { ZEIT_HONORAR_REGELN } from "@/lib/zeitHonorar/regeln.js";
 
 const PERSONAL = REGELWERKE.find((g) => g.gruppe === "personal");
 const BUCHHALTUNG = REGELWERKE.find((g) => g.gruppe === "buchhaltung");
@@ -126,26 +129,23 @@ test("Behavior 2: statusFuer — standard, geplant/abweichend, veraltet, gesetzl
   assert.equal(statusFuer(hr("kuendigung_staffel"), null, HEUTE), "fest");
 });
 
-test("Behavior 3: tabellenZeilen — Gruppen und Zeilenzahl je Kontext, Andockpunkt 81 per Fake-Gruppe", () => {
-  const zeitHonorarFake = {
-    gruppe: "zeit_honorar", titel: "Zeit & Honorar",
-    regeln: [
-      { id: "zeit_honorar.a", label: "A", einheit: "%", typ: "zahl", art: "buero", werte: [{ ab: "2000-01-01", wert: 80 }], stand: HEUTE, quelle: "Test" },
-      { id: "zeit_honorar.b", label: "B", einheit: "%", typ: "zahl", art: "buero", werte: [{ ab: "2000-01-01", wert: 21 }], stand: HEUTE, quelle: "Test" },
-      { id: "zeit_honorar.c", label: "C", einheit: "%", typ: "zahl", art: "buero", werte: [{ ab: "2000-01-01", wert: 85 }], stand: HEUTE, quelle: "Test" },
-    ],
-    speicher: { art: "zeilen" }, sichtbar: () => true,
-  };
-  const regelwerke = [...REGELWERKE, zeitHonorarFake];
+// 81-01: Gruppe zeit_honorar angehängt (E-16) — the fake group of 80-07 is replaced by the
+// real one, which is part of REGELWERKE now (a fake on top would give four groups with a
+// duplicate key).
+test("Behavior 3: tabellenZeilen — Gruppen und Zeilenzahl je Kontext, Andockpunkt 81 mit der echten Gruppe", () => {
+  const regelwerke = REGELWERKE;
   const voll = tabellenZeilen(regelwerke, {}, { datenquelle: "serverlos", personalZugang: "erlaubt" }, HEUTE);
-  assert.equal(voll.length, 3, "buchhaltung, personal, zeit_honorar");
+  // 82-01: Gruppen fristen und kalender angehängt (E-16).
+  assert.equal(voll.length, 5, "buchhaltung, personal, zeit_honorar, fristen, kalender");
   const zeilenZahl = (g) => voll.find((x) => x.gruppe === g).abschnitte.reduce((n, a) => n + a.zeilen.length, 0);
   assert.equal(zeilenZahl("buchhaltung"), 60);
   assert.equal(zeilenZahl("personal"), HR_REGELN.length);
-  assert.equal(zeilenZahl("zeit_honorar"), 3);
+  assert.equal(zeilenZahl("zeit_honorar"), ZEIT_HONORAR_REGELN.length);
+  assert.equal(zeilenZahl("fristen"), FRISTEN_REGELN.length);
+  assert.equal(zeilenZahl("kalender"), KALENDER_REGELN.length);
 
   const eingeschraenkt = tabellenZeilen(regelwerke, {}, { datenquelle: "express", personalZugang: "keine-berechtigung" }, HEUTE);
-  assert.deepEqual(eingeschraenkt.map((g) => g.gruppe).sort(), ["buchhaltung", "zeit_honorar"]);
+  assert.deepEqual(eingeschraenkt.map((g) => g.gruppe).sort(), ["buchhaltung", "fristen", "kalender", "zeit_honorar"]);
 });
 
 test("Behavior 9 (rechenweg): Minijob-Formel als Text, Kündigungsstaffel als Zeilenliste", () => {

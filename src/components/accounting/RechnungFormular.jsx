@@ -19,6 +19,7 @@ import {
 import { bauherrSchluessel, zahlungszielTage } from "@/lib/accounting/grundlagen.js";
 import { formatEuro } from "@/lib/accounting/geld.js";
 import BetragFeld from "./gemeinsam/BetragFeld.jsx";
+import XRechnungKnopf from "./XRechnungKnopf.jsx";
 
 const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900";
 // Native <label> instead of the shadcn Label wrapper: same tsc-cost reason as
@@ -37,7 +38,7 @@ function zielQuelle(vertrag, einst, schluessel) {
  *   bh: import("./useBuchhaltung.js").Buchhaltung,
  *   modus: "neu"|"bearbeiten"|"lesen",
  *   rechnung?: Record<string, any>|null,
- *   vorlage?: {netto?: number, art?: string, lp_pos?: Array<{lp: number, stand: number, netto: number}>, rechnungsdatum?: string, stand_quelle?: string}|null,
+ *   vorlage?: {netto?: number, art?: string, lp_pos?: Array<{lp: number|null, stand: number, netto: number, nachtrag_id?: string, bezeichnung?: string}>, rechnungsdatum?: string, stand_quelle?: string}|null,
  *   vertrag?: Record<string, any>|null,
  *   projektIdVorwahl?: string|null,
  *   onClose: () => void,
@@ -69,6 +70,8 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
   const [leistungBis, setLeistungBis] = React.useState(anfang.leistung_bis || "");
   const [versandGeplantAm, setVersandGeplantAm] = React.useState(anfang.versand_geplant_am || bh.heute);
   const [verzugshinweis, setVerzugshinweis] = React.useState(Boolean(anfang.verzugshinweis));
+  // 93-01: Leitweg-ID of this invoice only (XRechnung BT-10) — overrides the contract's; empty = the contract's.
+  const [leitwegId, setLeitwegId] = React.useState(anfang.leitweg_id || "");
   const [stellenBestaetigen, setStellenBestaetigen] = React.useState(false);
   const [speichert, setSpeichert] = React.useState(false);
 
@@ -97,7 +100,11 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
     project_name: projekt?.name,
     honorarvertrag_id: honorarvertragId || undefined,
     art,
-    lp_pos: lpPos.map((p) => ({ lp: Number(p.lp) || 1, stand: Number(p.stand) || 0, netto: Number(p.netto) || 0 })),
+    // Phase 81-04: fee-amendment positions (lp null) must not be coerced to LP 1;
+    // they keep their nachtrag_id and label. Every other position is stored as before.
+    lp_pos: lpPos.map((p) => (p.nachtrag_id
+      ? { lp: null, nachtrag_id: p.nachtrag_id, bezeichnung: p.bezeichnung || "", stand: Number(p.stand) || 0, netto: Number(p.netto) || 0 }
+      : { lp: Number(p.lp) || 1, stand: Number(p.stand) || 0, netto: Number(p.netto) || 0 })),
     netto: betraege.netto,
     ust_satz: ustSatz,
     ust: betraege.ust,
@@ -109,6 +116,7 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
     versand_geplant_am: statusZiel === "geplant" ? versandGeplantAm : undefined,
     verzugshinweis,
     empfaenger,
+    leitweg_id: leitwegId.trim() || undefined,
     status: statusZiel,
   });
 
@@ -153,8 +161,10 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
           <dt className="text-slate-500">{t("Rechnungsdatum")}</dt><dd>{rechnung?.rechnungsdatum || "—"}</dd>
           <dt className="text-slate-500">{t("Fällig am")}</dt><dd>{rechnung?.faellig_am || "—"}</dd>
           <dt className="text-slate-500">{t("Empfänger")}</dt><dd>{rechnung?.empfaenger?.name || "—"}</dd>
+          <dt className="text-slate-500">{t("Leitweg-ID")}</dt><dd>{rechnung?.leitweg_id || rechnung?.empfaenger?.leitweg_id || "—"}</dd>
         </dl>
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex flex-wrap items-start justify-end gap-2">
+          {rechnung && <XRechnungKnopf bh={bh} rechnung={rechnung} groesse="default" />}
           <button type="button" className={buttonVariants({ variant: "outline" })} onClick={onClose}>{t("Schließen")}</button>
         </div>
       </FormModal>
@@ -201,11 +211,19 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
           <legend className="px-1 text-sm font-medium">{t("Leistungsphasen")}</legend>
           {lpPos.map((pos, i) => (
             <div key={i} className="flex flex-wrap items-end gap-2">
+              {/* Phase 81-04: a fee-amendment position shows its label read-only instead of the LP field. */}
+              {pos.nachtrag_id ? (
+                <span className="flex min-w-40 flex-col gap-1 text-xs" data-testid="rf-nachtrag-position">
+                  {t("Honorarnachtrag")}
+                  <span className="text-sm text-slate-800 dark:text-slate-100">{pos.bezeichnung || pos.nachtrag_id}</span>
+                </span>
+              ) : (
               <label className="flex flex-col gap-1 text-xs">
                 {t("LP")}
                 <input type="number" min={1} max={9} value={pos.lp} className={`${FELD} w-16`}
                   onChange={(e) => setLpPos((liste) => liste.map((p, j) => (j === i ? { ...p, lp: Number(e.target.value) } : p)))} />
               </label>
+              )}
               <label className="flex flex-col gap-1 text-xs">
                 {t("Stand (%)")}
                 <input type="number" min={0} max={100} value={pos.stand} className={`${FELD} w-20`}
@@ -264,6 +282,12 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
         <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200">
           {t("Empfänger")}: {empfaenger.name || t("noch kein Empfänger")}
         </p>
+
+        <div>
+          <label className={LABEL} htmlFor="rf-leitweg">{t("Leitweg-ID (für XRechnung)")}</label>
+          <input id="rf-leitweg" className={FELD} value={leitwegId} onChange={(e) => setLeitwegId(e.target.value)}
+            placeholder={empfaenger.leitweg_id || t("aus dem Honorarvertrag")} />
+        </div>
 
         {stellenBestaetigen && (
           <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-700 dark:bg-amber-950">

@@ -22,6 +22,7 @@ import { ModulFehlergrenze } from "@core/components/ModulFehlergrenze";
 import { useAuth } from "@core/lib/AuthContext";
 import { useI18n } from "@core/lib/i18n";
 import { useTabParam } from "@core/lib/useTabParam";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
 import { BUERO_CLOUD_FREIGABE, DATENQUELLE } from "@core/lib/umgebung";
 import { EINSTELLUNGS_ALIAS, EINSTELLUNGS_REITER, sichtbareBereiche } from "@/lib/settings/bereiche.js";
 import { personalZugang } from "@/lib/people/zugang.js";
@@ -70,8 +71,11 @@ export default function Settings() {
   // 80-03 task 6: a rule-book jump ("?tab=rules&einstellung=<id>") — RegelwerkBereich
   // (80-07) reads this prop, every other area ignores it.
   const fokusId = suchParams.get("einstellung");
-  const zugang = personalZugang({ datenquelle: DATENQUELLE, rolle: user?.role });
-  const kontext = React.useMemo(() => ({ datenquelle: DATENQUELLE, personalZugang: zugang, buchhaltungCloud: BUERO_CLOUD_FREIGABE }), [zugang]);
+  // 82-02: the access decides the visible areas (access, templates) and the read-only frame.
+  const zugriff = useZugriff();
+  const nurLesen = !zugriff.darf("einstellungen", "voll");
+  const zugang = personalZugang({ datenquelle: DATENQUELLE, rolle: user?.role, zugriff });
+  const kontext = React.useMemo(() => ({ datenquelle: DATENQUELLE, personalZugang: zugang, buchhaltungCloud: BUERO_CLOUD_FREIGABE, zugriff }), [zugang, zugriff]);
   // visible ∩ ready, in registry order.
   const bereiche = React.useMemo(() => sichtbareBereiche(kontext).filter((b) => BEREICH_KOMPONENTEN[b.key]?.BEREIT), [kontext]);
   const erlaubt = React.useMemo(() => bereiche.map((b) => b.key), [bereiche]);
@@ -106,6 +110,7 @@ export default function Settings() {
         </div>
 
         <EinstellungsSuche kontext={kontext} />
+        {nurLesen && <p role="status" className="text-xs text-amber-800 dark:text-amber-200" data-testid="nur-lesen">{t("Nur lesen — Ihre Rolle darf hier nichts ändern.")}</p>}
 
         <Tabs value={tab} onValueChange={setTab} activationMode="manual" orientation={breit ? "vertical" : "horizontal"}
           className="flex flex-col gap-4 lg:flex-row lg:items-start">
@@ -114,6 +119,9 @@ export default function Settings() {
               <TabsTrigger key={b.key} value={b.key} className={AUSLOESER}>{t(b.titel)}</TabsTrigger>
             ))}
           </TabsList>
+          {/* 82-02: level 'lesen' (matrix) → every input, also "Zurücksetzen" and "Projektdatei laden"
+              of Daten & Sicherung, is natively disabled; the tab list stays usable. */}
+          <fieldset disabled={nurLesen} className="contents">
           {bereiche.map((b) => {
             // BEREICH_KOMPONENTEN types every area as {kontext?: any} only (80-01,
             // src/components/settings/index.js — not touched by this plan); fokusId
@@ -126,6 +134,7 @@ export default function Settings() {
               </TabsContent>
             );
           })}
+          </fieldset>
         </Tabs>
       </div>
     </div>

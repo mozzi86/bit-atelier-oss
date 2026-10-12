@@ -13,6 +13,20 @@
 //      import src/lib/accounting/geld.js — the app/package boundary).
 // Out: a page model in mm (A4 210×297): the fixed DIN 5008 marks, wrapped body
 //      lines, and one or more pages when the text overflows a page.
+//
+// Phase 81 (81-03) adds three OPTIONS — a call without them returns exactly the
+// model of 79-03 (tests/unit/briefKern81.test.js compares it):
+// - `seitenzahlen: true` → every page carries `fusszeile: "Seite n von m"`;
+// - a table LONGER than one page budget is split across pages, the head row
+//   repeated on every following page (in 79 such a table ran over the page
+//   edge; a table that fits keeps 79's placement);
+// - `tabelle.spalten: [{breite_mm, ausrichtung}]` is passed through so
+//   briefPdf.js draws real columns instead of one joined right-aligned line.
+//
+// Phase 82 (82-05) adds two more OPTIONS, again without effect when absent:
+// - `variante: "verteiler"` with `verteiler: string[]` → a protocol letter: no
+//   address field, the body starts with "Verteiler:" and one line per recipient;
+// - `fusszeileLinks: string` → the office line bottom left on every page.
 
 import { ersetzeNichtWinAnsi } from "./winAnsi.js";
 
@@ -75,22 +89,32 @@ function umbrechen(text, zeichenJeZeile) {
 }
 
 /**
+ * Column of a table (phase 81-03): width in mm and alignment of its cells.
+ * @typedef {{breite_mm: number, ausrichtung?: 'links'|'rechts'}} BriefSpalte
+ */
+
+/**
  * @param {{
  *   absender?: string[], empfaenger?: string[], datum?: string, betreff?: string,
- *   absaetze?: string[], tabelle?: {kopf?: string[], zeilen: string[][]}|null,
+ *   absaetze?: string[], tabelle?: {kopf?: string[], zeilen: string[][], spalten?: BriefSpalte[]}|null,
+ *   seitenzahlen?: boolean, variante?: 'verteiler'|null, verteiler?: string[], fusszeileLinks?: string,
  * }} eingabe
  *   absender/empfaenger: address lines, top to bottom;
  *   absaetze: body paragraphs (each wrapped and separated by a blank line);
  *   tabelle: a right-aligned block at the end of the body (e.g. an amount
- *     breakdown) — cell values already formatted as text by the caller.
+ *     breakdown) — cell values already formatted as text by the caller;
+ *     `spalten` (81-03) draws it in columns;
+ *   seitenzahlen (81-03): "Seite n von m" on every page;
+ *   variante/verteiler (82-05): protocol letter with distribution list, no address field;
+ *   fusszeileLinks (82-05): office line bottom left on every page.
  * @returns {{
  *   a4: {w: number, h: number}, din5008: typeof DIN5008,
  *   datum: string, betreff: string, absender: string[], empfaenger: string[],
- *   seiten: Array<{nummer: number, zeilen: string[], tabelle: {kopf: string[], zeilen: string[][]}|null}>,
- *   zeichenJeZeile: number, zeilenHoeheMm: number, ersetzt: number,
+ *   seiten: Array<{nummer: number, zeilen: string[], tabelle: {kopf: string[], zeilen: string[][], spalten?: BriefSpalte[]}|null, fusszeile?: string, fussLinks?: string}>,
+ *   zeichenJeZeile: number, zeilenHoeheMm: number, ersetzt: number, variante?: 'verteiler', verteiler?: string[],
  * }}
  */
-export function briefLayout({ absender = [], empfaenger = [], datum = "", betreff = "", absaetze = [], tabelle = null } = {}) {
+export function briefLayout({ absender = [], empfaenger = [], datum = "", betreff = "", absaetze = [], tabelle = null, seitenzahlen = false, variante = null, verteiler = [], fusszeileLinks = "" } = {}) {
   let ersetztGesamt = 0;
   /** @param {unknown} wert */
   const reinigen = (wert) => {
@@ -103,18 +127,25 @@ export function briefLayout({ absender = [], empfaenger = [], datum = "", betref
   const zeichenJeZeile = Math.max(10, Math.floor(breiteText / ZEICHENBREITE_10PT_MM));
 
   const absenderZeilen = absender.map(reinigen);
-  const empfaengerZeilen = empfaenger.map(reinigen);
+  const istVerteiler = variante === "verteiler";
+  // 82-05: a protocol letter has no address field.
+  const empfaengerZeilen = istVerteiler ? [] : empfaenger.map(reinigen);
+  const verteilerZeilen = istVerteiler ? (verteiler || []).map(reinigen).filter(Boolean) : [];
   const betreffText = reinigen(betreff);
   const datumText = reinigen(datum);
 
+  /** @type {{kopf: string[], zeilen: string[][], spalten?: BriefSpalte[]}|null} */
   const tabelleModell = tabelle ? {
     kopf: (tabelle.kopf || []).map(reinigen),
     zeilen: (tabelle.zeilen || []).map((zeile) => zeile.map(reinigen)),
   } : null;
+  // 81-03: the key appears only when columns were asked for (79's model stays identical).
+  if (tabelleModell && Array.isArray(tabelle?.spalten)) tabelleModell.spalten = tabelle.spalten.map((sp) => ({ breite_mm: Number(sp.breite_mm) || 0, ausrichtung: sp.ausrichtung === "links" ? "links" : "rechts" }));
 
   // One flat list of body lines with a blank line between paragraphs, so
   // pagination only has to count lines against each page's budget.
   const koerperZeilen = /** @type {string[]} */ ([]);
+  if (istVerteiler) koerperZeilen.push("Verteiler:", ...verteilerZeilen.map((z) => `- ${z}`), "");
   absaetze.map(reinigen).forEach((absatz, i) => {
     if (i > 0) koerperZeilen.push("");
     koerperZeilen.push(...umbrechen(absatz, zeichenJeZeile));
@@ -125,7 +156,7 @@ export function briefLayout({ absender = [], empfaenger = [], datum = "", betref
   const zeilenErsteSeite = Math.max(1, Math.floor(platzErsteSeite / ZEILENHOEHE_MM));
   const zeilenFolgeseite = Math.max(1, Math.floor(platzFolgeseite / ZEILENHOEHE_MM));
 
-  /** @type {Array<{nummer: number, zeilen: string[], tabelle: {kopf: string[], zeilen: string[][]}|null}>} */
+  /** @type {Array<{nummer: number, zeilen: string[], tabelle: {kopf: string[], zeilen: string[][], spalten?: BriefSpalte[]}|null, fusszeile?: string, fussLinks?: string}>} */
   const seiten = [];
   let rest = koerperZeilen;
   do {
@@ -138,15 +169,37 @@ export function briefLayout({ absender = [], empfaenger = [], datum = "", betref
   // separated from the paragraph introducing it); otherwise it starts a fresh
   // page of its own rather than being cut across a page break.
   if (tabelleModell) {
-    const tabellenHoehe = (tabelleModell.kopf.length ? 1 : 0) + tabelleModell.zeilen.length + 1;
+    const kopfZeilen = tabelleModell.kopf.length ? 1 : 0;
+    const tabellenHoehe = kopfZeilen + tabelleModell.zeilen.length + 1;
     const letzte = seiten[seiten.length - 1];
     const budget = letzte.nummer === 1 ? zeilenErsteSeite : zeilenFolgeseite;
     if (letzte.zeilen.length + tabellenHoehe <= budget) {
       letzte.tabelle = tabelleModell;
-    } else {
+    } else if (tabellenHoehe <= zeilenFolgeseite) {
       seiten.push({ nummer: seiten.length + 1, zeilen: [], tabelle: tabelleModell });
+    } else {
+      // 81-03: longer than a whole page — split it, the head row repeated on every
+      // part (79 placed it whole and it ran over the page edge).
+      const teil = (/** @type {string[][]} */ zeilen) => ({ ...tabelleModell, zeilen });
+      let restZeilen = tabelleModell.zeilen;
+      const platzLetzte = budget - letzte.zeilen.length - 1 - kopfZeilen;
+      if (platzLetzte >= 2) {
+        letzte.tabelle = teil(restZeilen.slice(0, platzLetzte));
+        restZeilen = restZeilen.slice(platzLetzte);
+      }
+      const jeSeite = Math.max(1, zeilenFolgeseite - 1 - kopfZeilen);
+      while (restZeilen.length) {
+        seiten.push({ nummer: seiten.length + 1, zeilen: [], tabelle: teil(restZeilen.slice(0, jeSeite)) });
+        restZeilen = restZeilen.slice(jeSeite);
+      }
     }
   }
+
+  // 81-03: page numbers only on request.
+  if (seitenzahlen) for (const seite of seiten) seite.fusszeile = `Seite ${seite.nummer} von ${seiten.length}`;
+  // 82-05: office line only on request.
+  const fussLinks = fusszeileLinks ? reinigen(fusszeileLinks) : "";
+  if (fussLinks) for (const seite of seiten) seite.fussLinks = fussLinks;
 
   return {
     a4: A4,
@@ -159,5 +212,6 @@ export function briefLayout({ absender = [], empfaenger = [], datum = "", betref
     zeichenJeZeile,
     zeilenHoeheMm: ZEILENHOEHE_MM,
     ersetzt: ersetztGesamt,
+    ...(istVerteiler ? { variante: /** @type {'verteiler'} */ ("verteiler"), verteiler: verteilerZeilen } : {}),
   };
 }

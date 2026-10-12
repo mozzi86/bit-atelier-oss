@@ -9,7 +9,7 @@ import {
   Thermometer, Wind, Droplet, Zap, Gauge, AlertTriangle,
 } from "lucide-react";
 import { NumberField, Stat } from "@core/components/Field";
-import { STATUS_STYLE } from "@designer/lib/compliance";
+import { STATUS_STYLE, gesamtStatus } from "@designer/lib/compliance";
 import {
   GEBAEUDESTANDARDS, WAERMEERZEUGER, LUEFTUNGSSYSTEME,
   DEFAULT_LUFTWECHSEL, DEFAULT_AUSSENLUFT_P, DEFAULT_PERSONEN_JE_WE,
@@ -187,7 +187,7 @@ export default function HaustechnikPlanner({ complexData = null } = {}) {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Gebäudestandard</label>
                 <Select value={standard} onValueChange={onStandard}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Gebäudestandard")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(GEBAEUDESTANDARDS).map(([k, v]) => (
                       <SelectItem key={k} value={k}>{v.label}</SelectItem>
@@ -201,7 +201,7 @@ export default function HaustechnikPlanner({ complexData = null } = {}) {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Wärmeerzeuger</label>
                 <Select value={erzeuger} onValueChange={onErzeuger}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Wärmeerzeuger")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(WAERMEERZEUGER).map(([k, v]) => (
                       <SelectItem key={k} value={k}>{v.label}</SelectItem>
@@ -224,7 +224,7 @@ export default function HaustechnikPlanner({ complexData = null } = {}) {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Lüftungssystem</label>
                 <Select value={lueftungssystem} onValueChange={onLueftungssystem}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Lüftungssystem")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(LUEFTUNGSSYSTEME).map(([k, v]) => (
                       <SelectItem key={k} value={k}>{v.label}</SelectItem>
@@ -235,7 +235,7 @@ export default function HaustechnikPlanner({ complexData = null } = {}) {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Bemessungsbasis</label>
                 <Select value={lueftBasis} onValueChange={setLueftBasis}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Bemessungsbasis")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="luftwechsel">über Luftwechselrate</SelectItem>
                     <SelectItem value="personen">über Personen</SelectItem>
@@ -276,7 +276,7 @@ export default function HaustechnikPlanner({ complexData = null } = {}) {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Bemessungsbasis</label>
                 <Select value={elBasis} onValueChange={setElBasis}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Bemessungsbasis")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="va-m2">je m² (VA/m²)</SelectItem>
                     <SelectItem value="we">je WE (kW/WE)</SelectItem>
@@ -293,7 +293,7 @@ export default function HaustechnikPlanner({ complexData = null } = {}) {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">PV-Dachpotenzial nutzen</label>
                 <Select value={pvNutzen} onValueChange={setPvNutzen}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("PV-Dachpotenzial nutzen")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ja">ja</SelectItem>
                     <SelectItem value="nein">nein</SelectItem>
@@ -338,7 +338,7 @@ export default function HaustechnikPlanner({ complexData = null } = {}) {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between text-base">
                 <span className="flex items-center gap-2"><Gauge className="w-4 h-4" /> Zusammenfassung & Plausibilität (Richtwert)</span>
-                <Badge className={STATUS_STYLE[kpi.checks.warns > 0 ? "warn" : "pass"].color}>{kpi.checks.verdict}</Badge>
+                <Badge className={STATUS_STYLE[gesamtStatus(kpi.checks)].color}>{kpi.checks.verdict}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">

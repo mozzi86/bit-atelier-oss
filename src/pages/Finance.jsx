@@ -18,6 +18,7 @@ import {
   nachtraegeDesProjekts, projektDesNachtrags, projektFelder, statusWechsel,
   nachtragAusTicket, ticketGehoertZuProjekt, leseNachtragParameter, ohneNachtragParameter,
 } from "@core/lib/nachtraege";
+import { freigabeFelder } from "@core/lib/nachtragPruefpfad";
 import FinanceSummary from "../components/finance/FinanceSummary";
 import ChangeOrderTable from "../components/finance/ChangeOrderTable";
 import ChangeOrderForm from "../components/finance/ChangeOrderForm";
@@ -105,7 +106,10 @@ export default function Finance() {
   });
 
   const statusSetzen = async (order, neu) => {
-    const patch = statusWechsel(order, neu, projektDesNachtrags(order, projects));
+    const wechsel = statusWechsel(order, neu, projektDesNachtrags(order, projects));
+    // 88-03: approving a change order with review path releases its amount
+    // (betrag_freigegeben defaults to checked ?? demanded, cost_impact follows).
+    const patch = wechsel ? { ...wechsel, ...freigabeFelder(order, neu) } : null;
     if (!patch) {
       toast.error(t("Dieser Statuswechsel ist nicht erlaubt."));
       return;

@@ -200,10 +200,10 @@ describe("statics.js — vorbemessungChecks() Invarianten", () => {
     assert.equal(c.verdict, "Vorbemessung plausibel");
   });
 
-  it("sigma === null (Fläche fehlt) ⇒ warn mit \"nicht berechenbar\", kein stiller pass", () => {
+  it("72-04: sigma === null (Fläche fehlt) ⇒ offen mit \"nicht berechenbar\", kein stiller pass", () => {
     const c = vorbemessungChecks({ sigma: null, zulSohldruck: 200, footArea: 0, storeys: 4 });
     const item = c.items.find((i) => i.key === "sohldruck");
-    assert.equal(item.status, "warn");
+    assert.equal(item.status, "offen");
     assert.match(item.detail, /nicht berechenbar/);
     assert.match(item.detail, /Grundfläche fehlt/);
   });
@@ -224,7 +224,7 @@ describe("statics.js — vorbemessungChecks() Invarianten", () => {
     for (const v of varianten) {
       const c = vorbemessungChecks(v);
       for (const i of c.items) {
-        assert.ok(["pass", "warn"].includes(i.status), `unerwarteter Status "${i.status}" (${i.key})`);
+        assert.ok(["pass", "warn", "offen"].includes(i.status), `unerwarteter Status "${i.status}" (${i.key})`);
       }
     }
   });

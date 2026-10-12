@@ -6,9 +6,11 @@ import { NumberField, Stat } from "@core/components/Field";
 import { Building, Plus, Trash2 } from "lucide-react";
 import { useBuildingProgram, programMetrics } from "@core/lib/useBuildingProgram";
 import { BUILDING_TYPE_LABELS, labelFor } from "./labels";
+import { useI18n } from "@core/lib/i18n";
 
 // Baumassenstudie. data = { buildings:[...], total_gfa, site_coverage, calculated_far }
 export default function MassingGenerator({ data, siteData, onChange }) {
+  const { t } = useI18n();
   const store = useBuildingProgram();
   const pm = programMetrics(store);
   const buildings = data.buildings || [];
@@ -100,7 +102,7 @@ export default function MassingGenerator({ data, siteData, onChange }) {
             <div key={b.id || i} className="rounded-lg border p-4">
               <div className="flex items-center justify-between mb-3">
                 <span className="font-medium text-sm">{labelFor(BUILDING_TYPE_LABELS, b.type)} · {b.id}</span>
-                <Button variant="ghost" size="icon" className="text-red-500" onClick={() => removeBuilding(i)}>
+                <Button aria-label={t("Gebäude entfernen")} variant="ghost" size="icon" className="text-red-500" onClick={() => removeBuilding(i)}>
                   <Trash2 className="w-4 h-4" />
                 </Button>
               </div>

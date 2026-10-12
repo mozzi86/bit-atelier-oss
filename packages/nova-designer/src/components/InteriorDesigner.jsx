@@ -190,10 +190,10 @@ function RaumKarte({ zone, items, onItemsChange, plan, katalog }) {
               <span className="text-xs font-medium text-sky-800 mr-1">
                 {moebelById(selected.typ)?.name || selected.typ}
               </span>
-              <Button type="button" variant="outline" size="icon" className="h-7 w-7" title="10 cm nach links" onClick={() => move(-SCHRITT, 0)}><ArrowLeft className="w-3.5 h-3.5" /></Button>
-              <Button type="button" variant="outline" size="icon" className="h-7 w-7" title="10 cm nach oben" onClick={() => move(0, -SCHRITT)}><ArrowUp className="w-3.5 h-3.5" /></Button>
-              <Button type="button" variant="outline" size="icon" className="h-7 w-7" title="10 cm nach unten" onClick={() => move(0, SCHRITT)}><ArrowDown className="w-3.5 h-3.5" /></Button>
-              <Button type="button" variant="outline" size="icon" className="h-7 w-7" title="10 cm nach rechts" onClick={() => move(SCHRITT, 0)}><ArrowRight className="w-3.5 h-3.5" /></Button>
+              <Button aria-label={t("10 cm nach links verschieben")} type="button" variant="outline" size="icon" className="h-7 w-7" title="10 cm nach links" onClick={() => move(-SCHRITT, 0)}><ArrowLeft className="w-3.5 h-3.5" /></Button>
+              <Button aria-label={t("10 cm nach oben verschieben")} type="button" variant="outline" size="icon" className="h-7 w-7" title="10 cm nach oben" onClick={() => move(0, -SCHRITT)}><ArrowUp className="w-3.5 h-3.5" /></Button>
+              <Button aria-label={t("10 cm nach unten verschieben")} type="button" variant="outline" size="icon" className="h-7 w-7" title="10 cm nach unten" onClick={() => move(0, SCHRITT)}><ArrowDown className="w-3.5 h-3.5" /></Button>
+              <Button aria-label={t("10 cm nach rechts verschieben")} type="button" variant="outline" size="icon" className="h-7 w-7" title="10 cm nach rechts" onClick={() => move(SCHRITT, 0)}><ArrowRight className="w-3.5 h-3.5" /></Button>
               <Button type="button" variant="outline" size="sm" className="h-7" onClick={rotate}>
                 <RotateCw className="w-3.5 h-3.5 mr-1" /> 90°
               </Button>
@@ -375,7 +375,7 @@ export default function InteriorDesigner({ complexData, onInteriorDesignsChange,
                 <div className="h-10 rounded-md" style={{ background: `linear-gradient(135deg, ${d.palette}, #ffffff)` }} />
                 <Input value={d.room} onChange={(e) => upd(i, { room: e.target.value })} placeholder="Raum" />
                 <Select value={d.style} onValueChange={(v) => upd(i, { style: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Stil")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {STYLES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                   </SelectContent>
@@ -384,7 +384,7 @@ export default function InteriorDesigner({ complexData, onInteriorDesignsChange,
                   <Input type="number" value={d.area} onChange={(e) => upd(i, { area: Number(e.target.value) })} className="flex-1" />
                   <span className="text-xs text-slate-500">m²</span>
                   <input type="color" value={d.palette} onChange={(e) => upd(i, { palette: e.target.value })} className="w-9 h-9 rounded border" />
-                  <Button variant="ghost" size="icon" className="text-red-500" onClick={() => remove(i)}>
+                  <Button aria-label={t("Raumgestaltung entfernen")} variant="ghost" size="icon" className="text-red-500" onClick={() => remove(i)}>
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>

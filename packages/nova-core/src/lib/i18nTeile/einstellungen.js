@@ -96,7 +96,6 @@ export const EN = {
   "Personaldaten liegen getrennt in": "Personnel data lives separately in",
   "Sicherungsskript": "Backup script",
   "Liegt das Verzeichnis in OneDrive, synchronisiert das automatisch — ohne Verschlüsselung dieser Dateien selbst.": "If the folder sits in OneDrive, that syncs it automatically — without encrypting these files on its own.",
-  "Cloud-Gesamtexport folgt (78-04).": "A full cloud export is coming (78-04).",
   "Gerätespeicher": "Device storage",
   "Entfernt nur gerätebezogene Anzeige-Einstellungen (IFC-Automatik, Favoriten im Gebäudemodell) — keine Projektdaten.": "Removes only device-bound display settings (IFC auto-load, building-model favourites) — no project data.",
   "Gerätespeicher leeren": "Clear device storage",
@@ -171,4 +170,7 @@ export const EN = {
   "In Safari: Menü „Ablage“ → „Zum Dock hinzufügen“.": "In Safari: menu “File” → “Add to Dock”.",
   "Firefox bietet keine App-Installation. Bitte Chrome oder Edge verwenden.": "Firefox offers no app installation. Please use Chrome or Edge.",
   "In Chrome oder Edge: das Installations-Symbol rechts in der Adressleiste anklicken.": "In Chrome or Edge: click the install icon at the right end of the address bar.",
+  // 70-06: sidebar hint while offline
+  "Braucht eine Internetverbindung": "Needs an internet connection",
+  "Teilweise offline nutzbar": "Partly usable offline",
 };

@@ -4,6 +4,13 @@ import { bitApi } from "@core/api/bitApi";
 import { motion } from "framer-motion";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@core/components/ui/tabs";
 import { useProject } from "@core/lib/ProjectContext";
+import { useAuth } from "@core/lib/AuthContext";
+import { DATENQUELLE } from "@core/lib/umgebung";
+import { submissionLesen, zuschlagErteilen } from "@core/api/zugriff";
+import { zuschlagWeg } from "@ava/lib/vergabeZugriff";
+// 89-03 / 89-07: workshop zones → interior walls/doors in the quantities — session zones of this
+// project, else derived from the saved record (one truth, nothing stored twice).
+import { useWerkstattZonen } from "@core/lib/werkstattAbleitung";
 import { toast } from "sonner";
 import {
   ListTree, Boxes, ScrollText, Gavel, Ruler, BarChart3, FileSpreadsheet,
@@ -38,6 +45,7 @@ import { pruefeReferenzenOderWirf } from "@core/lib/rules/catalogs";
 import { classifiedElements } from "@core/lib/bimClassification";
 import { filterQuantity } from "@ava/lib/avaFilters";
 import { positionMode } from "@ava/components/avaUtils";
+import BestandsMengenKarte from "@ava/components/BestandsMengenKarte";
 import { buildTedQuery, parseTedResponse, parseDoeeCsv, aggregateLots } from "@ava/lib/priceReference";
 import { aktiveSchicht, rangfolge } from "@core/lib/rules/priceStack";
 import { nachtraegeDesProjekts } from "@core/lib/nachtraege";
@@ -65,6 +73,8 @@ const AVA_REITER_ALIAS = {
 export default function AVA() {
   const { t } = useI18n();
   const { projectId, project } = useProject();
+  // 74-01: user.zugriffstrennung = the 0006 schema is live (see award below).
+  const { user } = useAuth();
   const [building, setBuilding] = useState(null);
   const [bimModel, setBimModel] = useState(null);
   const [positions, setPositions] = useState([]);
@@ -202,10 +212,16 @@ export default function AVA() {
   // --- Phase 25: klassifizierte Bauteile + Filterbibliothek (WAS ∩ ZUSTAND) --
   // Normalisierte Element-Liste (inkl. synthHull-Fallback fürs grobe Demo-Modell);
   // ein importiertes IFC-Modell (Phase 26) hat Vorrang vor dem BIT-BIM-Modell.
+  // 89-03: the workshop's interior walls and doors join the drawn elements — no workshop zones →
+  // as before. 89-07 (BW-09, D-BW-05): the zones no longer need a workshop session — without
+  // session zones of this project they are derived from the saved werkstatt_layer + programme.
+  const { zonen: werkstattZonen, quelle: werkstattQuelle } = useWerkstattZonen(projectId);
   const elements = useMemo(
-    () => (ifcElements && ifcElements.length ? ifcElements : classifiedElements(bimModel, building)),
-    [ifcElements, bimModel, building],
+    () => (ifcElements && ifcElements.length ? ifcElements : classifiedElements(bimModel, building, { werkstattZonen })),
+    [ifcElements, bimModel, building, werkstattZonen],
   );
+  /** 89-07: number of workshop components among the elements (ids "wt-wall-…"/"wt-door-…"). */
+  const werkstattAnzahl = useMemo(() => elements.filter((e) => String(e?.id || "").startsWith("wt-")).length, [elements]);
 
   // AvaFilter-CRUD (schemalose Entität, project-scoped — Muster wie LVPosition).
   const createFilter = async (data) => {
@@ -620,11 +636,33 @@ export default function AVA() {
     reload(projectId);
   };
   const award = async (tender, bid) => {
+    // 74-01: once a tender has a submission, its bids may be sealed portal bids
+    // that no UPDATE reaches (0011) — the award then runs through the RPC,
+    // which also decides the office's paper bids of the same tender. Without
+    // access separation (local, express, cloud before 0006) nothing changes.
+    if (DATENQUELLE === "supabase" && user?.zugriffstrennung) {
+      try {
+        const weg = zuschlagWeg({ zugriffstrennung: true, submission: await submissionLesen(tender.id) });
+        if (weg === "rpc-erst-oeffnen") {
+          toast.error(t("Zuschlag erst nach der Öffnung der Angebote (Angebotsfrist abgelaufen, dann „Angebote öffnen“)."));
+          return;
+        }
+        if (weg === "rpc") {
+          await zuschlagErteilen(tender.id, bid.id);
+          toast.success(`Zuschlag an ${bid.bidder_name}`);
+          reload(projectId);
+          return;
+        }
+      } catch (e) {
+        toast.error(`${t("Zuschlag nicht möglich:")} ${e?.message || e}`);
+        return;
+      }
+    }
     const tBids = bids.filter((b) => b.tender_id === tender.id);
     await Promise.all([
       bitApi.entities.Bid.update(bid.id, { status: "awarded" }),
       ...tBids.filter((b) => b.id !== bid.id).map((b) => bitApi.entities.Bid.update(b.id, { status: "rejected" })),
-      bitApi.entities.Tender.update(tender.id, { status: "awarded", awarded_bid_id: bid.id }),
+      bitApi.entities.Tender.update(tender.id, { status: "awarded", awarded_bid_id: bid.id, awarded_date: new Date().toISOString() }), // 73-11: award date = possible project start for funding
     ]);
     toast.success(`Zuschlag an ${bid.bidder_name}`);
     reload(projectId);
@@ -880,6 +918,14 @@ export default function AVA() {
           <TabsContent value="mengenregeln" className="pt-4 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <ParitaetsBadge laeufe={paritaetsLaeufe} />
+              {/* 89-07: where the workshop components come from (session or saved workshop). */}
+              {werkstattAnzahl > 0 && (
+                <span className="text-xs text-slate-600" data-testid="ava-werkstatt-bauteile"
+                  data-anzahl={werkstattAnzahl} data-quelle={werkstattQuelle}>
+                  {t("Werkstatt-Bauteile")}: {werkstattAnzahl} ·{" "}
+                  {werkstattQuelle === "sitzung" ? t("aus der Werkstatt dieser Sitzung") : t("aus der gespeicherten Werkstatt abgeleitet")}
+                </span>
+              )}
               {aktiverSnapshot ? (
                 <span className="text-xs text-slate-600">
                   Bauteilstand: <strong>{aktiverSnapshot.name || aktiverSnapshot.id}</strong>
@@ -941,6 +987,8 @@ export default function AVA() {
               count={ifcElements?.length || 0}
               onReset={() => setIfcElements(null)}
             />
+            <BestandsMengenKarte elements={elements} positions={positions} filters={filters}
+              onKennzeichnen={async (p) => { await bitApi.entities.LVPosition.update(p.id, { kennz: "Bedarfsposition" }); await reload(projectId); }} />
             <QuantityTakeoff
               building={building} positions={positions} onUpdate={updatePos}
               bimModelAvailable={!!bimModel}

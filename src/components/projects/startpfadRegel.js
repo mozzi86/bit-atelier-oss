@@ -39,3 +39,14 @@ export function zeigeStartpfad(project, bimModel, inhalt) {
   const hatInhalt = (inhalt?.tickets ?? 0) > 0 || (inhalt?.lvPositionen ?? 0) > 0;
   return !hatGeometrie && !hatModell && !hatInhalt;
 }
+
+/**
+ * Which three start cards, in which order, for the project's kind of work (73-01). A new build starts with
+ * the design (the decision creates the geometry); an existing building starts with the survey (the
+ * measurement creates the geometry) — "Bauaufnahme laden" replaces "Entwurf beginnen".
+ * @param {"neubau"|"bestand"} bauart from bauartVon(project).bauart
+ * @returns {string[]} step ids of Startpfad.jsx SCHRITTE
+ */
+export function startSchritte(bauart) {
+  return bauart === "bestand" ? ["bauaufnahme", "pruefen", "ausschreiben"] : ["entwurf", "pruefen", "ausschreiben"];
+}

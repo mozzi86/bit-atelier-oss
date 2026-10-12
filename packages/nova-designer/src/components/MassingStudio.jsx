@@ -25,7 +25,7 @@ import { konvexeHuelle, flaecheAusserhalb, istKonvex, clipSutherlandHodgman, lae
 // 75-06 Task 6 (D-P75-05): ONE north angle — layer wins when set. The layer
 // is READ ONLY here (WohnungsWerkstatt owns the writer).
 import { useFachlayer } from "@designer/lib/useFachlayer";
-import { WERKSTATT_DEFAULT, einheitenAnreichern } from "@designer/lib/werkstattDefaults";
+import { WERKSTATT_DEFAULT, einheitenAnreichern, zerlegungsArt } from "@designer/lib/werkstattDefaults";
 // 75-13: escape-route paths (red line) come from the SAME solver as the workshop.
 import { tesseliere, RETTUNGSWEG_INNEN_NAEHERUNG } from "@designer/lib/tesselierung";
 import ZonenTueren from "./ZonenTueren";
@@ -147,6 +147,11 @@ export default function MassingStudio({
   // field. "baukoerper" = the existing behaviour. (The derived polygons below
   // live AFTER the baufeld/grundstueck memos — JS TDZ.)
   const [ebene, setEbene] = useState("baukoerper");
+  // 86-07: centre-line tool ("Achse zeichnen") — the axis lives in the building programme
+  // (store.achseM, footprint-centred metres, persisted by useBimModelSync); locally it is kept in
+  // SITE metres like `poly`, so moving the footprint does not drag the axis along.
+  const [achsModus, setAchsModus] = useState(false);
+  const [entwurf, setEntwurf] = useState(/** @type {Array<{x:number,y:number}>} */ ([]));
 
   // 75-06 Task 6 (D-P75-05): grid reference — "nord" is today's behaviour
   // (axis-parallel 10-m grid), "grundstueck" rotates the GRID GROUP ONLY to
@@ -312,14 +317,50 @@ export default function MassingStudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.footprintM, store.storeys]);
 
+  // 86-07: axis frame = footprint bbox centre (the same centring as footprintM).
+  const polyMitte = (pts) => { const b = polyBBox(pts); return { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 }; };
+  const vorherPoly = useRef(poly);
+
   // --- Lokale Änderungen → Store schreiben (Polygon bleibt Polygon!) ---------
   useEffect(() => {
     writingToStore.current = true;
-    store.set({ footprintM: toStore(poly), storeys: floors });
+    /** @type {any} */
+    const patch = { footprintM: toStore(poly), storeys: floors };
+    // 86-07: a corner/edge edit moves the bbox centre — shift the stored axis by the opposite
+    // amount so it stays where it was drawn. A rigid move of the whole body takes the axis along
+    // (pure translation → nothing to do); a reload keeps the site centre (fromStore) → no shift.
+    const alt = vorherPoly.current;
+    vorherPoly.current = poly;
+    if (Array.isArray(store.achseM) && store.achseM.length >= 2 && alt && alt !== poly) {
+      const ca = polyMitte(alt), cn = polyMitte(poly);
+      const dx = cn.x - ca.x, dy = cn.y - ca.y;
+      const verschoben = alt.length === poly.length && poly.every((p, i) => Math.abs(p.x - alt[i].x - dx) < 1e-6 && Math.abs(p.y - alt[i].y - dy) < 1e-6);
+      if (!verschoben && (Math.abs(dx) > 1e-9 || Math.abs(dy) > 1e-9)) {
+        patch.achseM = store.achseM.map((q) => ({ x: +(q.x - dx).toFixed(2), z: +(q.z - dy).toFixed(2) }));
+      }
+    }
+    store.set(patch);
     const t = setTimeout(() => { writingToStore.current = false; }, 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [poly, floors]);
+
+  // 86-07: the axis in SITE metres for drawing — the store is the only truth outside the draw
+  // mode (no second copy that could drift on load); while drawing, the draft is local.
+  const achseGespeichert = Array.isArray(store.achseM) && store.achseM.length >= 2 ? store.achseM : null;
+  const achse = useMemo(() => {
+    if (achsModus) return entwurf;
+    if (!achseGespeichert) return [];
+    const c = polyMitte(poly);
+    return achseGespeichert.map((p) => ({ x: c.x + p.x, y: c.y + p.z }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [achsModus, entwurf, achseGespeichert, poly]);
+  const achseFertig = () => {
+    setAchsModus(false);
+    if (entwurf.length < 2) return; // nothing drawn: keep the stored axis
+    const c = polyMitte(poly);
+    store.set({ achseM: entwurf.map((p) => ({ x: +(p.x - c.x).toFixed(2), z: +(p.y - c.y).toFixed(2) })) });
+  };
 
   const CANVAS_W = 560, CANVAS_H = 430, PAD = 26;
   const scale = Math.min((CANVAS_W - 2 * PAD) / site.w, (CANVAS_H - 2 * PAD) / site.d);
@@ -773,6 +814,12 @@ export default function MassingStudio({
       tuerAufschlaege: layer.tuerAufschlaege && typeof layer.tuerAufschlaege === "object" ? layer.tuerAufschlaege : {},
       // 84-10: level switch per unit (same guard as the workshop — R units are wider).
       stufeJeWe: layer.stufeJeWe && typeof layer.stufeJeWe === "object" ? layer.stufeJeWe : {},
+      // 75-12: interior walls moved in the focus (same guard as the workshop).
+      raumGrenzen: layer.raumGrenzen && typeof layer.raumGrenzen === "object" ? layer.raumGrenzen : {},
+      // 86-04: building form + storeys per bar (same guard as the workshop).
+      zerlegung: zerlegungsArt(layer.zerlegung),
+      achse: store.achseM ?? null,
+      geschosseJeRiegel: layer.geschosseJeRiegel && typeof layer.geschosseJeRiegel === "object" ? layer.geschosseJeRiegel : {},
       okf_m: (Math.max(1, Math.round(store.storeys || 1)) - 1) * (store.storeyHeight || 3),
       // 86-05b: bar minimum of the applied proposal (same guard as the workshop; default 120).
       riegelMinFlaeche_m2: Number(layer.riegelMinFlaeche_m2) > 0 ? Number(layer.riegelMinFlaeche_m2) : WERKSTATT_DEFAULT.riegelMinFlaeche_m2,
@@ -787,7 +834,7 @@ export default function MassingStudio({
         tuerpunkte: Array.isArray(w.rettungsweg_tuerpunkte) ? w.rettungsweg_tuerpunkte : [],
         innenArt: w.rettungsweg_innen_art, innenNaeherung: w.rettungsweg_innen_naeherung === true,
       }));
-  }, [rettungswegAktiv, wtLayer, store.footprintM, store.storeys, store.storeyHeight]);
+  }, [rettungswegAktiv, wtLayer, store.footprintM, store.storeys, store.storeyHeight, store.achseM]);
   // Footprint-Mittelpunkt im Lageplan (Site-Meter) — Zonenpunkte sind um den Ursprung zentriert.
   const cxM = foot.x + foot.w / 2;
   const cyM = foot.y + foot.d / 2;
@@ -929,6 +976,26 @@ export default function MassingStudio({
                         {t(label)}
                       </button>
                     ))}
+                  </span>
+                )}
+                {/* 86-07: centre-line tool — click sets points on the plan, double click or
+                    the button again finishes; the workshop builds bars along it ("Bebauung:
+                    entlang der Achse"). Plain buttons (E2E-stable). */}
+                {viewMode !== "3d" && ebene === "baukoerper" && (
+                  <span className="inline-flex items-center gap-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => { if (achsModus) achseFertig(); else { setEntwurf([]); setAchsModus(true); } }}
+                      className={`rounded-lg border px-2 py-1 font-medium ${achsModus ? "border-red-600 bg-red-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                      data-testid="ms-achse" data-aktiv={achsModus ? "1" : "0"} data-punkte={achse.length}
+                      title={t("Mittellinie des Gebäudes zeichnen: Klick setzt Punkte, Doppelklick beendet")}
+                    >
+                      {achsModus ? t("Achse fertig") : t("Achse zeichnen")}
+                    </button>
+                    {!achsModus && achse.length >= 2 && (
+                      <button type="button" onClick={() => store.set({ achseM: null })} data-testid="ms-achse-loeschen"
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-600 hover:bg-slate-50">{t("Achse löschen")}</button>
+                    )}
                   </span>
                 )}
                 {/* 75-06 Task 6: Raster-Chip — "Nord" = heutiges achsparalleles
@@ -1374,6 +1441,35 @@ export default function MassingStudio({
                   <rect data-griff="skala" x={mx(foot.x) - px(11)} y={my(foot.y) - px(11)} width={px(9)} height={px(9)} fill="#fff" stroke="#64748b" strokeWidth={px(1.5)} style={{ cursor: "nwse-resize" }} onPointerDown={onDown("nw")} />
                   <rect data-griff="skala" x={mx(foot.x + foot.w) + px(2)} y={my(foot.y + foot.d) + px(2)} width={px(9)} height={px(9)} fill="#fff" stroke="#64748b" strokeWidth={px(1.5)} style={{ cursor: "nwse-resize" }} onPointerDown={onDown("se")} />
                 </>
+              )}
+              {/* 86-07: the drawn centre line (red, dashed) and, while drawing, a click catcher
+                  over the whole plan — screen point → viewBox (getScreenCTM) → site metres,
+                  snapped to 0,1 m like the corners (clampPt). */}
+              {achse.length >= 1 && (
+                <g pointerEvents="none" data-achse>
+                  {achse.length >= 2 && (
+                    <polyline points={achse.map((p) => `${mx(p.x)},${my(p.y)}`).join(" ")} fill="none" stroke="#dc2626" strokeWidth={px(2)} strokeDasharray={`${px(8)} ${px(4)}`} />
+                  )}
+                  {achse.map((p, i) => (
+                    <circle key={`ap-${i}`} cx={mx(p.x)} cy={my(p.y)} r={px(4)} fill="#dc2626" data-testid="ms-achse-punkt" />
+                  ))}
+                </g>
+              )}
+              {achsModus && (
+                <rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill="transparent" style={{ cursor: "crosshair" }} data-testid="ms-achse-flaeche"
+                  onPointerDown={(e) => {
+                    if (e.button !== 0) return;
+                    e.stopPropagation();
+                    const svg = svgRef.current;
+                    const ctm = svg?.getScreenCTM?.();
+                    if (!svg || !ctm) return;
+                    const pt = svg.createSVGPoint();
+                    pt.x = e.clientX; pt.y = e.clientY;
+                    const u = pt.matrixTransform(ctm.inverse());
+                    const p = clampPt({ x: (u.x - offX) / scale, y: (u.y - offY) / scale });
+                    setEntwurf((a) => (a.length && Math.hypot(a[a.length - 1].x - p.x, a[a.length - 1].y - p.y) < 0.5 ? a : [...a, p]));
+                  }}
+                  onDoubleClick={achseFertig} />
               )}
               {/* 75-05: Maßstabsbalken (geteilt mit BimPlan2D), Länge je Maßstab */}
               <ScaleBar x={12} y={CANVAS_H - 14} scale={scale} laengeM={lod.balkenM} />

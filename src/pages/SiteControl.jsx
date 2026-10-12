@@ -27,6 +27,8 @@ import WeatherPanel from "../components/site/WeatherPanel";
 import { useWeather } from "../components/site/useWeather";
 import { computeDispatch, AREA_POINTS } from "../components/site/dispatch";
 import BimTaskPanel from "../components/site/BimTaskPanel";
+// 89-05: construction sequence chain (predecessors, award units, coverage report).
+import BauablaufKette from "../components/site/BauablaufKette";
 // 90-09: Planner Excel import into this Gantt + large-format Gantt PDF.
 import PlannerGanttWerkzeuge from "../components/site/PlannerGanttWerkzeuge";
 import TelemetryPanel from "../components/site/TelemetryPanel";
@@ -74,6 +76,9 @@ export default function SiteControl() {
   const [selectedId, setSelectedId] = useState(null);
   const [commandMode, setCommandMode] = useState(null);
   const [showTaskForm, setShowTaskForm] = useState(false);
+  // 89-05: task being edited (null = create) and the project's BoQ items for the chain fields.
+  const [bearbeiteTask, setBearbeiteTask] = useState(null);
+  const [positionen, setPositionen] = useState([]);
   const [role, setRole] = useState("bauleiter");
   const [telemetrySource, setTelemetrySource] = useState("simulation");
 
@@ -152,6 +157,10 @@ export default function SiteControl() {
   const loadTasks = () =>
     bitApi.entities.ScheduleTask.filter({ project_id: projectId }).then(setTasks);
   useEffect(() => { loadTasks(); /* eslint-disable-next-line */ }, [projectId]);
+  useEffect(() => {
+    if (!projectId) return;
+    bitApi.entities.LVPosition.filter({ project_id: projectId }).then((r) => setPositionen(Array.isArray(r) ? r : [])).catch(() => setPositionen([]));
+  }, [projectId]);
 
   const handlePlanClick = (point) => {
     if (!selectedId || !commandMode) return;
@@ -405,7 +414,9 @@ export default function SiteControl() {
 
           <TabsContent value="schedule" className="mt-4">
             <PlannerGanttWerkzeuge tasks={tasks} projectId={projectId} project={project} onReload={loadTasks} />
-            <GanttSchedule tasks={tasks} onAddTask={() => setShowTaskForm(true)} />
+            <GanttSchedule tasks={tasks} onAddTask={() => { setBearbeiteTask(null); setShowTaskForm(true); }}
+              onEditTask={(task) => { setBearbeiteTask(task); setShowTaskForm(true); }} />
+            <BauablaufKette tasks={tasks} projectId={projectId} projektName={project?.name || ""} />
           </TabsContent>
 
           <TabsContent value="integration" className="mt-4">
@@ -416,7 +427,7 @@ export default function SiteControl() {
           </TabsContent>
 
           <TabsContent value="fourd" className="mt-4">
-            <FourDFiveD tasks={tasks} totalFloors={8} />
+            <FourDFiveD tasks={tasks} projektName={project?.name || ""} />
           </TabsContent>
 
           <TabsContent value="audit" className="mt-4">
@@ -428,12 +439,17 @@ export default function SiteControl() {
       {showTaskForm && (
         <TaskScheduleForm
           contacts={contacts}
+          tasks={tasks}
+          positionen={positionen}
+          task={bearbeiteTask}
           onSubmit={async (data) => {
-            await bitApi.entities.ScheduleTask.create({ ...data, project_id: projectId });
+            if (bearbeiteTask) await bitApi.entities.ScheduleTask.update(bearbeiteTask.id, data);
+            else await bitApi.entities.ScheduleTask.create({ ...data, project_id: projectId });
             setShowTaskForm(false);
+            setBearbeiteTask(null);
             loadTasks();
           }}
-          onCancel={() => setShowTaskForm(false)}
+          onCancel={() => { setShowTaskForm(false); setBearbeiteTask(null); }}
         />
       )}
     </div>

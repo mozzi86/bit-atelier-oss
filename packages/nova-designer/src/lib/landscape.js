@@ -8,6 +8,8 @@
 // fehlender Eingabe null zurück („nicht berechenbar") statt eines Falschwerts.
 
 // Defensive, nicht-negative Zahl.
+import { OFFEN, konzeptAuswertung } from "@designer/lib/pruefStatus";
+
 const num = (x) => Math.max(0, Number(x) || 0);
 
 // --- Richtwert-Konstanten (Defaults, überschreibbar in der Komponente) ----------------
@@ -95,6 +97,9 @@ export function rueckhaltevolumen(Q = 0, dauerMin = DEFAULT_REGENDAUER_MIN) {
 
 // Plausibilitäts-Checks (Konzept) — bewusst NUR "pass"/"warn", nie "fail" (Haftung):
 // Richtwerte dürfen nicht als prüffähiger Genehmigungsnachweis erscheinen (T-16-04).
+// 72-04: missing input -> "offen", never "pass": before, "0 provided / 0 required parking
+// spaces" passed for an empty form. Plot area, retention volume and fire brigade width = 0
+// were "warn" (reads as violated) - now "offen".
 export function aussenanlagenChecks({
   erfKfz = 0, vorhandenKfz = 0,
   erfBarrierefrei = 0, barrierefreiVorh = 0,
@@ -108,20 +113,24 @@ export function aussenanlagenChecks({
     {
       key: "kfz",
       label: "KFZ-Stellplätze (Richtwert)",
-      status: num(vorhandenKfz) >= num(erfKfz) ? "pass" : "warn",
-      detail: `vorh. ${nf(vorhandenKfz)} / erf. ${nf(erfKfz)} Stpl. (kommunal abweichend)`,
+      status: num(erfKfz) <= 0 && num(vorhandenKfz) <= 0 ? OFFEN : num(vorhandenKfz) >= num(erfKfz) ? "pass" : "warn",
+      detail: num(erfKfz) <= 0 && num(vorhandenKfz) <= 0
+        ? "kein Stellplatzbedarf ermittelt — Wohneinheiten/Nutzung pflegen"
+        : `vorh. ${nf(vorhandenKfz)} / erf. ${nf(erfKfz)} Stpl. (kommunal abweichend)`,
     },
     {
       key: "barrierefrei",
       label: "Barrierefreie Stellplätze (Richtwert)",
-      status: num(barrierefreiVorh) >= num(erfBarrierefrei) ? "pass" : "warn",
-      detail: `vorh. ${nf(barrierefreiVorh)} / erf. ${nf(erfBarrierefrei)} Stpl.`,
+      status: num(erfBarrierefrei) <= 0 && num(barrierefreiVorh) <= 0 ? OFFEN : num(barrierefreiVorh) >= num(erfBarrierefrei) ? "pass" : "warn",
+      detail: num(erfBarrierefrei) <= 0 && num(barrierefreiVorh) <= 0
+        ? "kein Bedarf barrierefreier Stellplätze ermittelt — Stellplatzbedarf pflegen"
+        : `vorh. ${nf(barrierefreiVorh)} / erf. ${nf(erfBarrierefrei)} Stpl.`,
     },
     {
       key: "versiegelung",
       label: "Versiegelungsgrad (Richtwert)",
       // null = Grundstücksfläche fehlt ⇒ Hinweis statt stiller pass/Falschwert.
-      status: versiegelung != null && (Number(versiegelung) || 0) <= 0.6 ? "pass" : "warn",
+      status: versiegelung == null ? OFFEN : (Number(versiegelung) || 0) <= 0.6 ? "pass" : "warn",
       detail: versiegelung == null
         ? "nicht berechenbar — Grundstücksfläche eingeben"
         : `${pct(versiegelung)} versiegelt (Orientierung ≤ 60 %, Satzung beachten)`,
@@ -129,7 +138,7 @@ export function aussenanlagenChecks({
     {
       key: "gruen",
       label: "Begrünungsgrad (Richtwert)",
-      status: gruen != null && (Number(gruen) || 0) >= 0.2 ? "pass" : "warn",
+      status: gruen == null ? OFFEN : (Number(gruen) || 0) >= 0.2 ? "pass" : "warn",
       detail: gruen == null
         ? "nicht berechenbar — Grundstücksfläche eingeben"
         : `${pct(gruen)} Grünfläche (Orientierung ≥ 20 %)`,
@@ -137,25 +146,24 @@ export function aussenanlagenChecks({
     {
       key: "retention",
       label: "Regenrückhaltevolumen (Richtwert)",
-      status: num(volumen) > 0 ? "pass" : "warn",
-      detail: `${nf(volumen)} m³ Konzept-Rückhalt (Entwässerungssatzung beachten)`,
+      status: num(volumen) > 0 ? "pass" : OFFEN,
+      detail: num(volumen) > 0
+        ? `${nf(volumen)} m³ Konzept-Rückhalt (Entwässerungssatzung beachten)`
+        : "Rückhaltevolumen nicht ermittelt — Dach-/Befestigungsflächen pflegen",
     },
     {
       key: "feuerwehr",
       label: "Feuerwehr-Aufstellfläche (DIN 14090)",
-      status: num(fwBreite) >= 3.5 ? "pass" : "warn",
-      detail: `Breite ${(Number(fwBreite) || 0).toLocaleString("de-DE")} m (Richtwert ≥ 3,50 m)`,
+      status: num(fwBreite) <= 0 ? OFFEN : num(fwBreite) >= 3.5 ? "pass" : "warn",
+      detail: num(fwBreite) <= 0 ? "Breite der Aufstellfläche fehlt — Maß eingeben" : `Breite ${(Number(fwBreite) || 0).toLocaleString("de-DE")} m (Richtwert ≥ 3,50 m)`,
     },
     {
       key: "plot",
       label: "Grundstücksfläche erfasst",
-      status: num(plot) > 0 ? "pass" : "warn",
+      status: num(plot) > 0 ? "pass" : OFFEN,
       detail: num(plot) > 0 ? `${nf(plot)} m² Grundstück` : "Grundstücksfläche eingeben",
     },
   ];
 
-  const score = Math.round((items.filter((i) => i.status === "pass").length / Math.max(1, items.length)) * 100);
-  const warns = items.filter((i) => i.status === "warn").length;
-  const verdict = warns > 0 ? "Konzept mit Hinweisen" : "Konzept plausibel";
-  return { items, score, warns, verdict };
+  return konzeptAuswertung(items);
 }

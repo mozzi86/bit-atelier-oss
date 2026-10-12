@@ -13,7 +13,7 @@ import {
 import { NumberField, Stat } from "@core/components/Field";
 import { useI18n } from "@core/lib/i18n";
 import { useProject } from "@core/lib/ProjectContext";
-import { STATUS_STYLE } from "@designer/lib/compliance";
+import { STATUS_STYLE, gesamtStatus } from "@designer/lib/compliance";
 import { useFachlayer } from "@designer/lib/useFachlayer";
 import { LAGEPLAN_DEFAULT } from "@designer/lib/lageplan";
 import { gruenflaecheAusLayer } from "@designer/lib/pflanzen";
@@ -178,7 +178,7 @@ export default function LandscapePlanner({ complexData } = {}) {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Fahrrad-Bemessungsbasis</label>
                 <Select value={fahrradBasis} onValueChange={setFahrradBasis}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Fahrrad-Bemessungsbasis")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="we">je WE</SelectItem>
                     <SelectItem value="bgf">je 100 m² BGF</SelectItem>
@@ -217,7 +217,7 @@ export default function LandscapePlanner({ complexData } = {}) {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Aufstellfläche erforderlich</label>
                 <Select value={fwErforderlich} onValueChange={setFwErforderlich}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Aufstellfläche erforderlich")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ja">ja</SelectItem>
                     <SelectItem value="nein">nein</SelectItem>
@@ -248,7 +248,7 @@ export default function LandscapePlanner({ complexData } = {}) {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between text-base">
                 <span className="flex items-center gap-2"><Trees className="w-4 h-4" /> Plausibilität (Richtwert)</span>
-                <Badge className={STATUS_STYLE[kpi.checks.warns > 0 ? "warn" : "pass"].color}>{kpi.checks.verdict}</Badge>
+                <Badge className={STATUS_STYLE[gesamtStatus(kpi.checks)].color}>{kpi.checks.verdict}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">

@@ -1,12 +1,28 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { bitApi } from "@core/api/bitApi";
 import { DATENQUELLE } from "@core/lib/umgebung";
 import { useAuth } from "@core/lib/AuthContext";
 import { waehleStartProjekt } from "@core/lib/startProjekt";
+import { sichtbareProjekte } from "@core/lib/projektArchiv.js";
+import { projekteNachZugriff } from "@core/lib/rechte.js";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
 
 // Global "current project" so every module (Komplex-Designer, AVA, Berichte,
 // BIM, Leitstand, Energie …) works on the same selected project, persisted
 // across reloads and shown in the top bar.
+//
+// Archive (81-06, D-P81-30): `projects` leaves out archived projects
+// (Project.archiviert_am) except the active one — the pickers (top bar in
+// Layout.jsx, command palette, time sheet) read `projects` and stay unchanged;
+// an archived project never becomes the start project. `alleProjekte` is the
+// full list (project controlling, the "Archiviert" section of /Projects).
+//
+// Rights (82-02): the role's project view filters FIRST — alleProjekte =
+// projekteNachZugriff(all, zugriff), then projects = sichtbareProjekte(alleProjekte,
+// active). The other order would let the controlling (which reads alleProjekte)
+// show projects of other people. When the view changes ("Ansicht als") and the
+// active project is no longer visible, the first visible one becomes active and
+// the URL is corrected (replace).
 
 const ProjectContext = createContext(null);
 const LS_KEY = "currentProjectId";
@@ -35,7 +51,11 @@ function writeUrlProjectParam(id) {
 }
 
 export function ProjectProvider({ children }) {
-  const [projects, setProjects] = useState([]);
+  const zugriff = useZugriff();
+  const zugriffRef = useRef(zugriff);
+  zugriffRef.current = zugriff;
+  const [roh, setRoh] = useState(/** @type {any[]} */ ([]));
+  const alleProjekte = useMemo(() => projekteNachZugriff(roh, zugriff), [roh, zugriff]);
   const [projectId, setProjectIdState] = useState(() => {
     // Deep-Link hat Vorrang vor localStorage; loadProjects validiert spaeter.
     const urlId = readUrlProjectParam();
@@ -55,13 +75,15 @@ export function ProjectProvider({ children }) {
 
   const loadProjects = useCallback(async () => {
     const data = await bitApi.entities.Project.list("name");
-    setProjects(data);
+    setRoh(Array.isArray(data) ? data : []);
+    const erlaubt = projekteNachZugriff(Array.isArray(data) ? data : [], zugriffRef.current);
     setFehler(null);
     const urlId = readUrlProjectParam();
     setProjectIdState((cur) => {
       // Deep link (id, then exact name) > valid current/stored id > first by
-      // name — returning visitors keep their project.
-      const next = waehleStartProjekt(data, { urlWert: urlId, gespeichert: cur });
+      // name — returning visitors keep their project. Archived projects are
+      // not candidates (81-06), so a stored archived id falls back.
+      const next = waehleStartProjekt(sichtbareProjekte(erlaubt, null), { urlWert: urlId, gespeichert: cur });
       try { if (next) localStorage.setItem(LS_KEY, next); } catch { /* ignore */ }
       // URL-Param korrigieren (z. B. Name -> Id oder ungueltige Id).
       if (urlId && urlId !== next) writeUrlProjectParam(next);
@@ -102,10 +124,19 @@ export function ProjectProvider({ children }) {
     }
   }, [loadProjects]);
 
-  const project = projects.find((p) => p.id === projectId) || null;
+  // 82-02: the view changed and the active project is outside it → first visible project.
+  useEffect(() => {
+    if (loading || !roh.length) return;
+    if (projectId && alleProjekte.some((p) => p.id === projectId)) return;
+    const next = waehleStartProjekt(sichtbareProjekte(alleProjekte, null), { urlWert: "", gespeichert: "" });
+    if (next !== projectId) setProjectId(next || "");
+  }, [alleProjekte, roh, loading, projectId, setProjectId]);
+
+  const projects = useMemo(() => sichtbareProjekte(alleProjekte, projectId), [alleProjekte, projectId]);
+  const project = alleProjekte.find((p) => p.id === projectId) || null;
 
   return (
-    <ProjectContext.Provider value={{ projects, projectId, setProjectId, project, loading, fehler, erneutLaden, reloadProjects: loadProjects }}>
+    <ProjectContext.Provider value={{ projects, alleProjekte, projectId, setProjectId, project, loading, fehler, erneutLaden, reloadProjects: loadProjects }}>
       {children}
     </ProjectContext.Provider>
   );

@@ -29,6 +29,9 @@ export async function testhausLaden(request) {
   const projekte = await p.json();
   const projekt = (Array.isArray(projekte) ? projekte : []).find((x) => x?.name === PROJEKT_NAME);
   if (!projekt) throw new Error(`Testhaus: Projekt „${PROJEKT_NAME}“ fehlt in der DB — npm run seed?`);
+  // 72-01 A-2 reads the parcel estimate from building_area (500 m² × 3); a project created before this
+  // field was part of the fixture gets it once — without it the estimate falls back to 3 000 m².
+  if (projekt.building_area == null) await request.put(`${API}/Project/${projekt.id}`, { data: { building_area: 500 } });
   const b = await request.get(`${API}/BimModel?project_id=${encodeURIComponent(projekt.id)}`);
   if (!b.ok()) throw new Error(`Testhaus: BimModel-Abfrage ${b.status()}`);
   const modelle = await b.json();
@@ -56,7 +59,7 @@ export async function testhausAnlegen(request) {
   const p = await request.get(`${API}/Project?name=${encodeURIComponent(PROJEKT_NAME)}`);
   let projekt = (p.ok() ? await p.json() : []).find?.((x) => x?.name === PROJEKT_NAME);
   if (!projekt) {
-    const r = await request.post(`${API}/Project`, { data: { name: PROJEKT_NAME, status: "planning", description: "E2E-Testprojekt (87-01/87-03): 70 × 16 m, 4 Geschosse" } });
+    const r = await request.post(`${API}/Project`, { data: { name: PROJEKT_NAME, status: "planning", building_area: 500, description: "E2E-Testprojekt (87-01/87-03): 70 × 16 m, 4 Geschosse" } });
     if (!r.ok()) throw new Error(`Testhaus: Projekt anlegen ${r.status()} ${await r.text()}`);
     projekt = await r.json();
     console.log(`[testhaus] Projekt „${PROJEKT_NAME}“ angelegt (${projekt.id})`);
@@ -83,6 +86,21 @@ export async function testhausSollSchreiben(request) {
     console.warn(`[testhaus] Geometrie beim Start abweichend (${JSON.stringify(modell.footprintM)}) — wird auf 70 × 16 gesetzt`);
     const r = await request.put(`${API}/BimModel/${modell.id}`, { data: { ...modell, ...TESTHAUS } });
     if (!r.ok()) throw new Error(`Testhaus: Reset beim Start ${r.status()}`);
+  }
+  // 86-07: the drawn axis (programme field achseM) is no part of the test house — a run that
+  // stopped before its clean-up would otherwise freeze it into the snapshot and every later
+  // restore would bring it back. Start every run without an axis.
+  if (Array.isArray(modell.achseM) && modell.achseM.length) {
+    console.warn("[testhaus] liegengebliebene Achse (achseM) beim Start entfernt");
+    const r = await request.put(`${API}/BimModel/${modell.id}`, { data: { achseM: null } });
+    if (!r.ok()) throw new Error(`Testhaus: Achse entfernen ${r.status()}`);
+  }
+  // 73-05: an outline edit stamps footprintQuelle "gezeichnet" — the test house carries no provenance
+  // (73-02 expects no "Umriss" line on the new-build house). Start every run without it.
+  if (modell.footprintQuelle != null) {
+    console.warn("[testhaus] footprintQuelle beim Start entfernt");
+    const r = await request.put(`${API}/BimModel/${modell.id}`, { data: { footprintQuelle: null } });
+    if (!r.ok()) throw new Error(`Testhaus: footprintQuelle entfernen ${r.status()}`);
   }
   const { modell: soll } = await testhausLaden(request);
   fs.mkdirSync(path.dirname(SOLL_DATEI), { recursive: true });

@@ -1,0 +1,257 @@
+# -*- coding: utf-8 -*-
+"""harness_bridge — lets the Atelier AI Harness work on the OPEN FreeCAD document.
+
+Start once in the FreeCAD GUI: Macro → Macros… → harness_bridge.FCMacro →
+Execute (running it again restarts the bridge). FreeCAD then listens on
+127.0.0.1:8766 (env BIT_FREECAD_BRIDGE_PORT overrides) — never on another
+interface (T-67-12).
+
+Protocol: one JSON object per line, answer one JSON object per line.
+  {"op": "ping"}                                   → FreeCAD version, document
+  {"op": "run", "name": "<step>", "code": "<py>"}  → exec in a named transaction
+  {"op": "bauteile", "name": "<step>", "beschreibung": {…}, "skripte": "<dir>"}
+                                                   → fc_bauteile in a named transaction
+  {"op": "list"}                                   → objects of the document
+  {"op": "export", "pfad": "<file.ifc>", "skripte": "<dir>"} → IFC4 of the document
+  {"op": "undo"}                                   → undo the last transaction
+  {"op": "stop"}                                   → close the bridge
+Answer: {"ok": true, "result": …} or {"ok": false, "error": "<text>", "traceback": "<text>"}
+
+Every step is ONE FreeCAD transaction carrying the step name, so it shows up
+in Edit → Undo under that name and Ctrl+Z removes exactly that step. A step
+that raises is aborted (abortTransaction): the document stays as before.
+
+Threading: FreeCAD documents must only be touched from the GUI thread. A
+QTimer polls the non-blocking socket every 50 ms from that thread, so exec()
+runs there too — no worker thread ever touches the document. A step that
+runs long blocks the GUI while it runs; the harness gives up after 30 s.
+"""
+
+import json
+import os
+import socket
+import sys
+import traceback
+
+HOST = "127.0.0.1"
+PORT = int(os.environ.get("BIT_FREECAD_BRIDGE_PORT") or 8766)
+POLL_MS = 50
+MAX_ZEILE = 8 * 1024 * 1024  # bytes; a step never needs more
+
+
+def _antwort_ok(result):
+    return {"ok": True, "result": result}
+
+
+def _antwort_fehler(exc):
+    return {"ok": False, "error": "%s: %s" % (exc.__class__.__name__, exc),
+            "traceback": traceback.format_exc()}
+
+
+class Bridge(object):
+    """Socket server + request handler. `app` is the FreeCAD module (or a fake in tests)."""
+
+    def __init__(self, app, port=PORT, host=HOST):
+        if host not in ("127.0.0.1", "localhost"):
+            raise ValueError("Bridge nur auf 127.0.0.1 (T-67-12)")
+        self.app = app
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):  # Windows: no port sharing
+            self.server.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        self.server.bind((host, port))
+        self.server.listen(4)
+        self.server.setblocking(False)
+        self.port = self.server.getsockname()[1]
+        self.clients = {}
+        self.laeuft = True
+
+    # --- socket side --------------------------------------------------------
+    def poll(self):
+        """One non-blocking round: accept, read complete lines, answer them."""
+        if not self.laeuft:
+            return
+        while True:
+            try:
+                conn, _ = self.server.accept()
+            except (BlockingIOError, OSError):
+                break
+            conn.setblocking(False)
+            self.clients[conn] = b""
+        for conn in list(self.clients):
+            try:
+                data = conn.recv(65536)
+            except BlockingIOError:
+                continue
+            except OSError:
+                data = b""
+            if not data:
+                self._schliessen(conn)
+                continue
+            buf = self.clients[conn] + data
+            if len(buf) > MAX_ZEILE:
+                self._senden(conn, {"ok": False, "error": "Anfrage zu groß"})
+                self._schliessen(conn)
+                continue
+            while b"\n" in buf:
+                zeile, buf = buf.split(b"\n", 1)
+                if zeile.strip():
+                    self._senden(conn, self.antwort(zeile))
+            if conn in self.clients:
+                self.clients[conn] = buf
+
+    def antwort(self, zeile):
+        try:
+            req = json.loads(zeile.decode("utf-8"))
+            if not isinstance(req, dict):
+                raise ValueError("Anfrage muss ein JSON-Objekt sein")
+        except Exception as exc:
+            return _antwort_fehler(exc)
+        try:
+            return _antwort_ok(self.handle(req))
+        except Exception as exc:  # every failure goes back as text, the GUI keeps running
+            return _antwort_fehler(exc)
+
+    def _senden(self, conn, obj):
+        try:
+            conn.setblocking(True)
+            conn.sendall((json.dumps(obj, ensure_ascii=False, default=str) + "\n").encode("utf-8"))
+            conn.setblocking(False)
+        except OSError:
+            self._schliessen(conn)
+
+    def _schliessen(self, conn):
+        self.clients.pop(conn, None)
+        try:
+            conn.close()
+        except OSError:
+            pass
+
+    def close(self):
+        self.laeuft = False
+        for conn in list(self.clients):
+            self._schliessen(conn)
+        try:
+            self.server.close()
+        except OSError:
+            pass
+
+    # --- document side ------------------------------------------------------
+    def _doc(self):
+        doc = self.app.ActiveDocument
+        if doc is None:
+            doc = self.app.newDocument("Harness")
+        if not getattr(doc, "UndoMode", 1):
+            doc.UndoMode = 1
+        return doc
+
+    def _transaktion(self, name, fn):
+        if not name or not str(name).strip():
+            raise ValueError("Jeder Schritt braucht einen Namen (name)")
+        doc = self._doc()
+        doc.openTransaction(str(name))
+        try:
+            result = fn(doc)
+            doc.commitTransaction()
+        except Exception:
+            doc.abortTransaction()
+            raise
+        doc.recompute()
+        return result
+
+    def _skripte(self, req):
+        pfad = req.get("skripte")
+        if pfad and pfad not in sys.path:
+            sys.path.insert(0, pfad)
+
+    def handle(self, req):
+        op = req.get("op")
+        if op == "ping":
+            doc = self.app.ActiveDocument
+            return {"freecad": ".".join(self.app.Version()[:3]), "port": self.port,
+                    "dokument": doc.Label if doc is not None else None}
+        if op == "run":
+            code = req.get("code")
+            if not isinstance(code, str) or not code.strip():
+                raise ValueError("run braucht code")
+
+            def ausfuehren(doc):
+                ns = {"App": self.app, "FreeCAD": self.app, "doc": doc, "ergebnis": None}
+                exec(compile(code, "<Schritt %s>" % req.get("name"), "exec"), ns)
+                return {"schritt": req.get("name"), "ergebnis": ns.get("ergebnis")}
+            return self._transaktion(req.get("name"), ausfuehren)
+        if op == "bauteile":
+            self._skripte(req)
+            import fc_bauteile
+
+            def bauen(doc):
+                building = next((o for o in doc.Objects if getattr(o, "IfcType", "") == "Building"), None)
+                _, _, zaehlung = fc_bauteile.baue_bauteile(doc, req.get("beschreibung") or {}, building)
+                return {"schritt": req.get("name"), "zaehlung": zaehlung}
+            return self._transaktion(req.get("name"), bauen)
+        if op == "list":
+            doc = self._doc()
+            return {"dokument": doc.Label, "objekte": [
+                {"name": o.Name, "label": o.Label, "typ": o.TypeId,
+                 "ifc_typ": getattr(o, "IfcType", None)} for o in doc.Objects],
+                "rueckgaengig": list(getattr(doc, "UndoNames", []) or [])}
+        if op == "export":
+            self._skripte(req)
+            import fc_export_ifc
+            pfad = req.get("pfad")
+            if not pfad:
+                raise ValueError("export braucht pfad")
+            return fc_export_ifc.export_dokument(self._doc(), pfad)
+        if op == "undo":
+            doc = self._doc()
+            if not getattr(doc, "UndoCount", 0):
+                raise ValueError("Nichts rückgängig zu machen")
+            name = (list(doc.UndoNames) or ["?"])[0]
+            doc.undo()
+            doc.recompute()
+            return {"rueckgaengig": name}
+        if op == "stop":
+            self.laeuft = False
+            return {"gestoppt": True}
+        raise ValueError("unbekannte op %r (ping, run, bauteile, list, export, undo, stop)" % op)
+
+
+def stop():
+    """Stops a bridge started earlier in this FreeCAD session."""
+    import FreeCAD
+    alt = getattr(FreeCAD, "_harness_bridge", None)
+    if alt:
+        timer, bridge = alt
+        timer.stop()
+        bridge.close()
+        FreeCAD._harness_bridge = None
+
+
+def start(port=PORT):
+    """GUI start: Bridge + QTimer in the GUI thread. Re-running replaces the old one."""
+    import FreeCAD
+    from PySide import QtCore
+
+    stop()
+    bridge = Bridge(FreeCAD, port)
+    timer = QtCore.QTimer()
+
+    def tick():
+        bridge.poll()
+        if not bridge.laeuft:
+            stop()
+            FreeCAD.Console.PrintMessage("Harness-Bridge beendet.\n")
+    timer.timeout.connect(tick)
+    timer.start(POLL_MS)
+    # module attribute: survives the macro namespace, so a re-run can stop it
+    FreeCAD._harness_bridge = (timer, bridge)
+    FreeCAD.Console.PrintMessage("Harness-Bridge läuft auf %s:%d\n" % (HOST, bridge.port))
+    return bridge
+
+
+def _gui_up():
+    fc = sys.modules.get("FreeCAD")
+    return bool(fc is not None and getattr(fc, "GuiUp", False))
+
+
+if _gui_up() and os.environ.get("HARNESS_BRIDGE_NO_AUTOSTART") != "1":
+    start()

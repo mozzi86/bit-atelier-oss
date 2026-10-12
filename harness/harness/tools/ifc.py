@@ -38,7 +38,7 @@ from harness.tools.sandbox import resolve_in_sandbox
 SCRIPTS_DIR = HARNESS_DIR / "skills" / "ifc" / "scripts"
 
 # Subcommands -> script module + option mapping. Keep in sync with SKILL.md.
-UNTERBEFEHLE = ("liste", "mengen", "props", "klassen", "diff", "check", "setze")
+UNTERBEFEHLE = ("liste", "mengen", "props", "klassen", "diff", "check", "setze", "schreibe", "aenderungsdienst")
 
 # Base URL of the app's dev server (vite default). The plan fixes this value;
 # config.py has no app_url field (review §5) — when the app builds the link
@@ -142,8 +142,50 @@ def _run_sync(unterbefehl: str, datei: Path, optionen: dict[str, Any],
         return _script("ifc_props").set_property(
             datei, optionen.get("guid"), optionen["pset"], optionen["eigenschaft"],
             optionen["wert"], out_path=optionen.get("out"), typ=optionen.get("typ"))
+    if unterbefehl == "aenderungsdienst":
+        if datei2 is None:
+            return {"error": "aenderungsdienst braucht den neuen Stand (datei2)"}
+        return _script("ifc_aenderungsdienst").run(
+            datei, datei2, optionen.get("aenderungen") or [], anwenden=bool(optionen.get("anwenden")),
+            out=optionen.get("out"))
+    if unterbefehl == "schreibe":
+        return _script("ifc_write").run(
+            datei, optionen.get("aenderungen") or [], out=optionen.get("out"),
+            abgabe=bool(optionen.get("abgabe")), georef=optionen.get("georef"),
+            erzwingen=bool(optionen.get("erzwingen")))
     return {"error": f"Unbekannter Unterbefehl: {unterbefehl} "
                      f"(verfügbar: {', '.join(UNTERBEFEHLE)})"}
+
+
+def georef_fuer(ctx: ToolContext, option: Any = None) -> dict | None:
+    """Georeference for the delivery export: tool option > projects/<slug>/georef.yaml
+    > config.yaml ifc.georef. Never a value from code (NDA, triage 12.10.)."""
+    if isinstance(option, dict) and option:
+        return option
+    if ctx.project_dir and (ctx.project_dir / "georef.yaml").is_file():
+        import yaml
+
+        data = yaml.safe_load((ctx.project_dir / "georef.yaml").read_text(encoding="utf-8")) or {}
+        if not isinstance(data, dict):
+            raise ValueError("georef.yaml: erwartet ostwert, nordwert, hoehe, drehung_grad, crs")
+        return data
+    cfg = ctx.extra.get("ifc_georef")
+    return dict(cfg) if isinstance(cfg, dict) else None
+
+
+def _schreibe_optionen(optionen: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """Resolves journal file (sandbox), georef and the output path (model/ only)."""
+    opt = dict(optionen)
+    if opt.get("journal"):
+        pfad = resolve_in_sandbox(str(opt["journal"]), ctx, must_exist=True)
+        opt["aenderungen"] = _script("ifc_write").lade_journal(pfad)
+    if opt.get("aenderungen") is not None and not isinstance(opt["aenderungen"], list):
+        raise ValueError("schreibe: aenderungen muss eine Liste sein")
+    if opt.get("abgabe"):
+        opt["georef"] = georef_fuer(ctx, opt.get("georef"))
+    if opt.get("out"):
+        opt["out"] = str(resolve_in_sandbox(str(opt["out"]), ctx, must_exist=False))
+    return opt
 
 
 async def ifc_run(args: dict, ctx: ToolContext) -> str:
@@ -180,12 +222,18 @@ async def ifc_run(args: dict, ctx: ToolContext) -> str:
 
     datei2: Path | None = None
     raw2 = str(optionen.get("datei2") or args.get("datei2") or "").strip()
-    if unterbefehl == "diff":
+    if unterbefehl in ("diff", "aenderungsdienst"):
         try:
             if raw2:
                 datei2 = resolve_in_sandbox(raw2, ctx, must_exist=True)
             else:
-                return tool_error("diff braucht datei2 (zweite IFC-Datei)")
+                return tool_error(f"{unterbefehl} braucht datei2 (zweite IFC-Datei)")
+        except ValueError as exc:
+            return tool_error(str(exc))
+
+    if unterbefehl in ("schreibe", "aenderungsdienst"):
+        try:
+            optionen = _schreibe_optionen(optionen, ctx)
         except ValueError as exc:
             return tool_error(str(exc))
 
@@ -213,7 +261,9 @@ async def ifc_run(args: dict, ctx: ToolContext) -> str:
         "hinweis": f"{DATA_NOT_INSTRUCTION} {result.get('hinweis', '')}".strip(),
         "warnungen": warnungen,
     }
-    ziel = _ziel(payload["json"], datei, ctx)
+    ziel_datei = (Path(payload["json"]["datei"]) if unterbefehl in ("schreibe", "aenderungsdienst")
+                  and payload["json"].get("datei") else datei)
+    ziel = _ziel(payload["json"], ziel_datei, ctx)
     if ziel:
         payload["ziel"] = ziel
         payload["viewer_link"] = _viewer_link(ziel["datei"], ziel.get("guid"))
@@ -223,7 +273,9 @@ async def ifc_run(args: dict, ctx: ToolContext) -> str:
 registry.register("ifc_run", "both", {
     "description": (
         "IFC-Modell des aktiven Projekts lesen, prüfen, vergleichen, schreiben. "
-        "Unterbefehle: liste, mengen, props, klassen, diff, check, setze. "
+        "Unterbefehle: liste, mengen, props, klassen, diff, check, setze, schreibe "
+        "(Änderungsliste/Journal in neue Datei, GUIDs bleiben, optional Abgabe mit Georeferenz), "
+        "aenderungsdienst (eigenes Journal über neuen AG-Stand legen: übertragbar/Konflikt/entfallen). "
         "Ohne datei= gilt das neueste model/*.ifc. Ergebnisse: deutsche "
         "Markdown-Tabellen + JSON + Viewer-Ziel für die App."),
     "parameters": {"type": "object", "properties": {
@@ -232,6 +284,9 @@ registry.register("ifc_run", "both", {
         "datei2": {"type": "string", "description": "zweite Datei für diff"},
         "optionen": {"type": "object", "description": (
             "je Unterbefehl: klasse, guid, geometrie (bool), volumen (bool), "
-            "regeln (Pfad), pset/eigenschaft/wert/typ/out für setze")},
+            "regeln (Pfad), pset/eigenschaft/wert/typ/out für setze; schreibe: aenderungen "
+            "[{guid, pset|attribut, eigenschaft, wert, alt?}] oder journal (Datei), abgabe (bool), "
+            "georef {ostwert, nordwert, hoehe, drehung_grad, crs}, erzwingen; aenderungsdienst: "
+            "datei = alter AG-Stand, datei2 = neuer Stand, journal, anwenden (bool)")},
     }, "required": ["unterbefehl"]},
 }, ifc_run)

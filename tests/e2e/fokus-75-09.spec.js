@@ -6,8 +6,9 @@
 //      mp-raum > 0, genau EIN mp-overlay, Konsole sauber.
 //   2. "1:50 und Labels" (Task 5) — Chip 1:50|Auto, data-px-je-m ≈ 75,59,
 //      5-m-Balken, zoomkonstante Labels in Bildschirm-px (MSB-12/MSB-16).
-//   3. "Möbel" (Task 6) — Auto-Möblierung, sperrende Kollision, Tür mit Aufschlag,
-//      Querprobe Innenausbau, Reload ohne Speichern = Ausgangszustand.
+//   3. "Möbel" (Task 6) — Auto-Möblierung, sperrende Kollision, Türen als Bauteile
+//      (89-07: keine Katalogtür mehr, GUID am Türsymbol), Querprobe Innenausbau,
+//      Reload ohne Speichern = Ausgangszustand.
 //   4. "Kennzahlen und Iso" (Task 7) — WoFlV/Bewegungsnachweis/Proportion/
 //      Belichtung + Iso der WE (genau EINE mv-3d-Instanz).
 //
@@ -273,36 +274,21 @@ test.describe("75-09 Wohnung 1:50 im WohnungsFokus", () => {
     expect(Math.abs(koerper.width - bettAttrs.b * pxJeM), `Breite ${koerper.width} vs ${bettAttrs.b * pxJeM}`).toBeLessThanOrEqual(3);
     expect(Math.abs(koerper.height - bettAttrs.t * pxJeM), `Höhe ${koerper.height} vs ${bettAttrs.t * pxJeM}`).toBeLessThanOrEqual(3);
 
-    // --- Tür (MSB-14): Raum anklicken, Katalog-Chip tuer_885 ---
+    // --- Tür (MSB-14 → 89-07, ein Türsystem): die Türen der Werkstatt-Wohnung sind Bauteile ---
+    // Bis 89-07 setzte dieser Schritt eine Katalogtür (tuer_885) als zweites Türsystem neben die
+    // Zonentüren. Jetzt bietet der Katalog in Werkstatt-Wohnungen keine Tür mehr an; die Zonentüren
+    // tragen die Bauteil-GUID, die Möbel lesen ihren Aufschlag (Auto-Möblierung oben: 0 Warnungen).
+    // Aufschlag drehen + Undo prüft massing-75-14 an denselben Türen.
     const bettKey = await bett.getAttribute("data-key");
     await page.locator(`[data-testid="fk-raum"][data-key="${bettKey}"]`).first().dispatchEvent("click");
     await page.waitForTimeout(200);
-    await page.locator('button:has([data-katalog-typ="tuer_885"])').first().dispatchEvent("click");
-    await page.waitForTimeout(400);
-    await expect(ebene.locator("[data-tuer]")).toHaveCount(1);
-    // 84-01: the plan doors (75-14, now always on) also draw swing arcs — count only
-    // the furniture layer's door here.
-    await expect(ebene.locator("[data-tuer-bogen]")).toHaveCount(1);
-    const tuerAttrs = await ebene.locator("[data-tuer]").first().evaluate((e) => ({
-      tuer: e.getAttribute("data-tuer"), lichte: e.getAttribute("data-lichte"),
-    }));
-    expect(tuerAttrs.tuer, "Aufschlag links").toBe("links");
-    // D-P75-09-A: lichte_m = Rohbaumaß 885 − 25 mm Zargen-/Falzabzug = 0,86.
-    expect(tuerAttrs.lichte, "lichte Breite").toBe("0.86");
-    // Tür antippen (echter Maus-Tap auf den Tür-Körper-Rect: Auswahl läuft über
-    // useSvgDrag onTap = pointerdown/pointerup ohne Bewegung; die <g>-Bbox-Mitte
-    // kann im leeren Raum des Aufschlagbogens liegen — SVG-<g> hat keine
-    // Trefferfläche, nur seine Kinder; dispatchEvent("click") selektiert NICHT)
-    // → Anschlag wechseln → rechts.
-    const tuerBox = await ebene.locator("[data-tuer] [data-koerper]").first().boundingBox();
-    await page.mouse.move(tuerBox.x + tuerBox.width / 2, tuerBox.y + tuerBox.height / 2);
-    await page.mouse.down();
-    await page.mouse.up();
-    await page.waitForTimeout(300);
-    await expect(page.getByTestId("fk-aktionen")).toBeVisible();
-    await page.getByTestId("fk-anschlag").dispatchEvent("click");
-    await page.waitForTimeout(300);
-    await expect(ebene.locator('[data-tuer="rechts"]')).toHaveCount(1);
+    await expect(page.locator('button:has([data-katalog-typ="tuer_885"])')).toHaveCount(0);
+    await expect(page.locator('button:has([data-katalog-typ="doppelbett"])').first()).toBeAttached();
+    await expect(page.getByTestId("fk-tueren-bauteil")).toHaveCount(1);
+    const guids = await page.locator('[data-testid="fk-tuer"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-guid")));
+    expect(guids.length, "Zonentüren im Fokus").toBeGreaterThan(0);
+    for (const g of guids) expect(g, "Bauteil-GUID am Türsymbol").toMatch(/^[0-3][0-9A-Za-z_$]{21}$/);
+    await expect(ebene.locator("[data-tuer]")).toHaveCount(0);
 
     // --- Querprobe Innenausbau: jede fk-id existiert als mp-item ---
     const fkIds = await page.getByTestId("fk-item").evaluateAll((els) => els.map((e) => e.getAttribute("data-id")));

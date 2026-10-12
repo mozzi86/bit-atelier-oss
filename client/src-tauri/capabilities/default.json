@@ -1,0 +1,31 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Rights of the main window: Tauri core defaults plus the shell's own commands — profile (70-02), storage location confined to the chosen folder and the one-time takeover (70-03), the .bitproj files opened by double-click (93-10: read only what was opened, write only .bitproj paths). The dialog plugin is used from Rust only; none of its JS commands is granted.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "allow-profil-lesen",
+    "allow-profil-schreiben",
+    "allow-ablage-lesen",
+    "allow-ablage-schreiben",
+    "allow-ablage-umbenennen",
+    "allow-ablage-loeschen",
+    "allow-ablage-liste",
+    "allow-ablage-ordner-anlegen",
+    "allow-ablage-groesse",
+    "allow-ablage-pruefen",
+    "allow-ablage-standard",
+    "allow-ablage-waehlen",
+    "allow-ablage-oeffnen",
+    "allow-ablage-kopieren",
+    "allow-altbestand-lesen",
+    "allow-altbestand-sichern",
+    "allow-datei-ausstehend",
+    "allow-datei-lesen",
+    "allow-datei-stand",
+    "allow-datei-schreiben"
+  ]
+}

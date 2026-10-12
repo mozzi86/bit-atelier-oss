@@ -17,7 +17,7 @@
  * @type {Record<string, number>}
  */
 export const LAYER_VERSION = {
-  werkstatt_layer: 2,
+  werkstatt_layer: 5,
   netz_layer: 1,
   aussenanlagen_layer: 1,
   entwaesserung_layer: 1,
@@ -25,10 +25,14 @@ export const LAYER_VERSION = {
   statik_layer: 1,
   schallschutz_layer: 1,
   raumklima_layer: 1,
-  sketch_layer: 1,
+  sketch_layer: 2, // 72-05: optional `strokes` (freehand ink)
   befunde_layer: 1,
-  lieferung_layer: 1,
+  lieferung_layer: 2, // 66-15: optional `geschosse` per delivery
   pruefung_layer: 1,
+  bauaufnahme_layer: 1, // 73-09 (BauaufnahmePanel)
+  brandschutz_vermerke_layer: 1, // 73-13 rest (BrandschutzPlanner, { abweichungen })
+  barrierefreiheit_layer: 1, // 73-13 rest (BarrierefreiheitPlanner, { abweichungen })
+  schallschutz_vermerke_layer: 1, // 73-13 rest (SchallschutzPlanner summary, { abweichungen })
 };
 
 /**
@@ -43,7 +47,20 @@ export const MIGRATIONEN = {
   // werkstatt_layer 1 → 2 (86-05b): two OPTIONAL fields appear — `riegelMinFlaeche_m2` (m²,
   // missing = 120 = solver default) and `gewaehlterVorschlag` (missing = none). Nothing has
   // to be rewritten: a v1 blob is a valid v2 blob, the workshop defaults fill the gaps.
-  werkstatt_layer: [(wert) => wert, (wert) => ({ ...wert })],
+  // werkstatt_layer 2 → 3 (75-12): one OPTIONAL field — `raumGrenzen` (interior-wall offsets
+  // per wall, m; missing = {} = no wall moved). A v2 blob is a valid v3 blob.
+  // werkstatt_layer 3 → 4 (86-04): two OPTIONAL fields — `zerlegung` ("auto" | "rand", missing =
+  // "auto") and `geschosseJeRiegel` ({ "<k>": n }, missing = every bar has `storeys`).
+  // werkstatt_layer 4 → 5 (75-10): one OPTIONAL field — `bewertungsGewichte` (project weights of
+  // the variant evaluation; missing = office standard).
+  werkstatt_layer: [(wert) => wert, (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert })],
+  // lieferung_layer 1 → 2 (66-15): each delivery may carry `geschosse` (storey names the
+  // section covers; missing/empty = same-named storey or whole building). A v1 blob is a
+  // valid v2 blob — lieferplan.normalisiereLayer fills the missing list with [].
+  lieferung_layer: [(wert) => wert, (wert) => ({ ...wert })],
+  // sketch_layer 1 → 2 (72-05): optional `strokes` (freehand ink, [x m, y m, pressure] points).
+  // A v1 sketch is a valid v2 sketch without ink — nothing to rewrite.
+  sketch_layer: [(wert) => wert, (wert) => ({ ...wert })],
 };
 
 /** @param {unknown} feld @returns {feld is string} true for a registered layer field */

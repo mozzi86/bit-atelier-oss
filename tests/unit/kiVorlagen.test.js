@@ -113,7 +113,9 @@ describe('llm.js — calls the URL of the rule, models from the environment', ()
         ? { content: [{ type: 'text', text: 'OK' }] }
         : v.provider === 'ollama' ? { message: { content: 'OK' } } : { choices: [{ message: { content: 'OK' } }] };
       const aufrufe = fetchAufzeichnen(antwort);
-      const text = await callConnection({ provider: v.provider, base_url: v.baseUrl, model: v.beispielModell, api_key: v.lokal ? '' : 'sk-test-123456' }, { prompt: 'Hallo' });
+      // 93-12: loopback targets go through node:http (llmLokal.senden) — the recorder is injected there.
+      const deps = { anfrageFn: (url, init) => globalThis.fetch(url, init) };
+      const text = await callConnection({ provider: v.provider, base_url: v.baseUrl, model: v.beispielModell, api_key: v.lokal ? '' : 'sk-test-123456' }, { prompt: 'Hallo' }, { deps });
       assert.equal(text, 'OK');
       assert.equal(aufrufe.length, 1);
       assert.equal(aufrufe[0].url, endpunktUrl(v.provider, v.baseUrl));

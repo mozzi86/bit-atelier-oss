@@ -11,11 +11,13 @@ import {
 import { Label } from "@core/components/ui/label";
 import { NumberField, Stat } from "@core/components/Field";
 import { Zap, Sun } from "lucide-react";
+import { useI18n } from "@core/lib/i18n";
 
 const CERTS = ["DGNB Silber", "DGNB Gold", "DGNB Platin", "LEED Gold", "LEED Platinum", "KfW-40"];
 
 // Energy & sustainability. data = { pv_potential, energy_savings, green_building_cert }
 export default function EnergyOptimizer({ data, massingData, onChange }) {
+  const { t } = useI18n();
   const buildings = massingData?.buildings || [];
   const roofArea = buildings.reduce((s, b) => s + (b.footprint || 0), 0);
   // ~0.15 kWp per m² usable roof; estimate annual yield at ~950 kWh/kWp.
@@ -40,7 +42,7 @@ export default function EnergyOptimizer({ data, massingData, onChange }) {
           <div className="space-y-1">
             <Label className="text-xs text-slate-500">Zertifizierung</Label>
             <Select value={data.green_building_cert} onValueChange={(v) => onChange({ green_building_cert: v })}>
-              <SelectTrigger><SelectValue placeholder="Zertifikat..." /></SelectTrigger>
+              <SelectTrigger aria-label={t("Zertifizierung")}><SelectValue placeholder="Zertifikat..." /></SelectTrigger>
               <SelectContent>
                 {CERTS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>

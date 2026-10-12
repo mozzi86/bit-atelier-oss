@@ -19,3 +19,11 @@ jobs:
       - run: npm run lint
       - run: npm run test:unit
       - run: npm run build
+      # 93-09: fails when the client build grows past budget.json (gzip bytes; raise only deliberately with --schreiben).
+      - name: Size budget
+        run: node scripts/groessen-budget.mjs
+      # 92-08: visible on every push, but not blocking — a new advisory must not turn unrelated commits red.
+      # The release workflow runs the same audit as a hard gate.
+      - name: Audit runtime packages (report only)
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true

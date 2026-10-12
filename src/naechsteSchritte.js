@@ -46,6 +46,11 @@ export const NAECHSTE_SCHRITTE = Object.freeze({
   "/RealEstateFeasibility": [
     { text: "Neues Projekt anlegen", ziel: "/Projects?neu=1" },
   ],
+  // 88-06: from the plan list to cost control and change orders (site phase).
+  "/Werkplanung": [
+    { text: "Kostenkontrolle", ziel: "/AVA?tab=control" },
+    { text: "Nachträge entscheiden", ziel: "/Finance" },
+  ],
   "/ComplexDesigner": [
     { text: "Modell prüfen", ziel: "/ModelCheck" },
     { text: "Kosten in der AVA", ziel: "/AVA?tab=kostenberechnung" },
@@ -106,6 +111,44 @@ export const NAECHSTE_SCHRITTE = Object.freeze({
   "/People": [
     { text: "Aufbewahrungsfristen einstellen", ziel: "/Settings?tab=rules" },
     { text: "Projekte", ziel: "/Projects" },
+    // 82-01: leave and absences of the staff.
+    { text: "Abwesenheiten & Urlaub", ziel: "/Absences?tab=balance" },
+  ],
+  // Phase 82 (82-01): deadlines lead to the mail register, absences and the books;
+  // absences back to the deadlines and the hours; correspondence to the agenda,
+  // the contacts and the reports. English routes only.
+  "/Deadlines": [
+    { text: "Posteingang prüfen", ziel: "/Correspondence?tab=register" },
+    { text: "Abwesenheiten", ziel: "/Absences" },
+    { text: "Buchhaltung", ziel: "/Accounting" },
+  ],
+  "/Absences": [
+    { text: "Fristen & Termine", ziel: "/Deadlines" },
+    { text: "Stunden erfassen", ziel: "/TimeTracking" },
+  ],
+  "/Correspondence": [
+    { text: "Fristen & Termine", ziel: "/Deadlines?tab=agenda" },
+    { text: "Adressbuch", ziel: "/AddressBook" },
+    { text: "Berichte & Dokumente", ziel: "/Reports" },
+  ],
+  // Phase 81 (81-01): hours feed the controlling, offers become contracts and
+  // invoices, the controlling needs the work-stage progress and approved hours.
+  // English routes only; the pages themselves link none of these.
+  "/TimeTracking": [
+    { text: "Projektcontrolling", ziel: "/Controlling" },
+    { text: "Angebot & Auftrag", ziel: "/Fees" },
+    // 82-01: an absence instead of hours.
+    { text: "Abwesenheit eintragen", ziel: "/Absences?tab=requests" },
+  ],
+  "/Fees": [
+    { text: "Rechnungen in der Buchhaltung", ziel: "/Accounting?tab=invoices" },
+    { text: "Leistungsstand je LP pflegen", ziel: "/ComplexDesigner?tab=planner" },
+    { text: "Projektcontrolling", ziel: "/Controlling?tab=project" },
+  ],
+  "/Controlling": [
+    { text: "Leistungsstand je LP pflegen", ziel: "/ComplexDesigner?tab=planner" },
+    { text: "Zeiten freigeben", ziel: "/TimeTracking?tab=approval" },
+    { text: "Architektenverträge", ziel: "/Fees?tab=contracts" },
   ],
   // Labor routes: optional. The bar adds the Labor notice and the way back to
   // the overview on every Labor page, with or without steps.

@@ -331,7 +331,7 @@ describe("accessibility.js — bfChecks() Invarianten", () => {
       const r = bfChecks(v);
       assert.ok(!r.items.some((i) => i.status === "fail"), `fail-Status bei ${JSON.stringify(v)}`);
       for (const i of r.items) {
-        assert.ok(["pass", "warn"].includes(i.status), `unerwarteter Status "${i.status}" (${i.key})`);
+        assert.ok(["pass", "warn", "offen"].includes(i.status), `unerwarteter Status "${i.status}" (${i.key})`);
       }
     }
   });
@@ -342,7 +342,7 @@ describe("accessibility.js — bfChecks() Invarianten", () => {
       const passes = r.items.filter((i) => i.status === "pass").length;
       assert.equal(r.score, Math.round((passes / r.items.length) * 100));
       assert.ok(r.score >= 0 && r.score <= 100);
-      assert.equal(r.warns, r.items.length - passes);
+      assert.equal(r.warns + r.offen, r.items.length - passes); // 72-04: not met = warn + offen
     }
   });
 

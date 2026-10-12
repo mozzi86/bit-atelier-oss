@@ -52,6 +52,33 @@ The first start installs the runtime packages (a few minutes), then your browser
 **http://localhost:3001**. Everything runs on your machine; your data lives in the folder `daten/`
 next to the app — back it up like any other project folder.
 
+**Installer and uninstall.** Each release also carries **`BIT-Atelier-Installer.cmd`** (Windows: double-click;
+installs to `%LOCALAPPDATA%\BIT-Atelier` without admin rights, with Desktop and Start menu shortcuts) and
+**`install.sh`** (macOS / Linux: `curl -fsSL https://github.com/mozzi86/bit-atelier-oss/releases/latest/download/install.sh | sh`,
+installs to `~/BIT-Atelier`). An installed app finds new versions itself and updates from inside the app.
+To remove it: Start menu → **BIT-Atelier entfernen** or `BIT-Atelier-Installer.cmd /entfernen` (Windows),
+`sh ~/BIT-Atelier/installer/install.sh --entfernen` (macOS / Linux). The uninstaller stops a running app, asks
+whether your data folder stays (default: yes — before deleting it offers a backup copy), removes the program,
+`.update/`, `node_modules/` and the shortcuts, and ends with one line saying what is left. A manually unzipped
+copy is removed by deleting its folder (keep `daten/` if you want your projects).
+
+**Feels like its own program.** The installer's shortcuts start BIT-Atelier without a console window in its
+own app window (Microsoft Edge or Chrome in app mode, own taskbar icon, separate from your browser; without
+Edge/Chrome the default browser opens). Only the very first start shows a window with the progress of the
+package installation. A second click only opens another window, never a second server. Closing the window
+leaves BIT-Atelier running in the background (so a double-click on a project file opens at once); to quit it
+completely: Settings › System & Info › **Programm beenden**. Log: `daten/server.log`. Prefer a browser tab:
+environment variable `BIT_FENSTER=0`.
+
+**Project files by double-click.** The installer registers the file type **`.bitproj`** for your user account
+(Windows without admin rights, Linux in `~/.local/share`): a double-click starts BIT-Atelier when it is not
+running and shows the import preview. When the project already exists you choose **Aktualisieren** (update),
+**Als Kopie** (as a copy) or **Abbrechen** (cancel). Settings › Daten & Sicherung › **Zurück in die Datei
+speichern** writes the current state back into the same file — if someone changed the file meanwhile, the app
+asks first (overwrite / save as copy / cancel). The path stays on your computer and never goes into a project
+file. Uninstalling removes the file type again. macOS: no double-click (no app bundle) —
+`sh ~/BIT-Atelier/tools/datei-oeffnen.sh <file.bitproj>` opens a file.
+
 ### Option B — from source (developers)
 
 ```bash
@@ -261,6 +288,20 @@ Monorepo layout: `packages/nova-core` (UI kit, data layer), `packages/nova-ifc-v
 - Larger sample project with spaces, quantities and DIN 276 classes (already started)
 
 ---
+
+## What if the developer stops tomorrow?
+
+- **Your data belongs to you.** It lives as readable JSON in a folder on your computer
+  (`daten/`, or the folder from `BIT_DATA_DIR`); documents and photos next to it as ordinary files.
+  Copy it, back it up, open it with any text editor — without BIT-Atelier.
+- **Open formats.** Everything that matters leaves in formats other programs read:
+  IFC, BCF, IDS, GAEB, CSV and PDF.
+- **MIT license.** Anyone may continue, adapt or fork the source code —
+  including another office or a service provider of your choice.
+- **Every version stays available.** Each published version is on GitHub under "Releases",
+  with a checksum.
+- **No server of ours.** The app runs offline on your computer. Only the update check
+  (switch off with `BIT_KEIN_UPDATECHECK`) and AI providers you connect yourself use the network.
 
 ## Disclaimer & licence
 

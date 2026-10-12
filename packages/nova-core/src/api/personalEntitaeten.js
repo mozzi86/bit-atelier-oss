@@ -13,9 +13,15 @@
 //      onboarding/offboarding checklist keys (80-RESEARCH § Datenmodell).
 
 /**
- * The nine HR entities. Every new HR entity (including the 79 `Fahrt` link,
- * should that ever be decided) is added HERE FIRST — nowhere else applies the
- * lock. Frozen so a accidental `.push()` cannot silently open a tenth entity.
+ * The HR entities (nine from 80, `Kostensatz` from 81). Every new HR entity
+ * (including the 79 `Fahrt` link, should that ever be decided) is added HERE
+ * FIRST — nowhere else applies the lock. Frozen so an accidental `.push()`
+ * cannot silently open another entity.
+ * Phase 81 (81-01, E-14): `Kostensatz` is derived from the salary, therefore as
+ * confidential as the salary itself — it lives in this storage class, never in
+ * `.bitproj` or a snapshot; LOESCH_REGELN (src/lib/people/auskunft.js) has its row.
+ * Phase 82 (82-01, D-P82-38, E-14): `Abwesenheit` (leave, sickness as a duration
+ * only — no diagnosis, no health information about third persons) is the eleventh.
  */
 export const PERSONAL_ENTITAETEN = Object.freeze([
   'Mitarbeiter',
@@ -27,6 +33,8 @@ export const PERSONAL_ENTITAETEN = Object.freeze([
   'Personaldokument',
   'Fristquittung',
   'Loeschprotokoll',
+  'Kostensatz',
+  'Abwesenheit',
 ]);
 
 /** IndexedDB store name prefix for every personal collection (precedent: SCHNAPP_STORE in demoIdb.js). */
@@ -209,4 +217,18 @@ export const AUSTRITT_SCHLUESSEL = Object.freeze([
 
 /**
  * @typedef {{id: string, am: string, entitaet: string, datensatz_id: string, anlass: string, umfang: object}} Loeschprotokoll OHNE Namen (D-P80-G)
+ */
+
+/**
+ * Phase 81 (81-01, E-14): aus dem Gehalt abgeleitet, deshalb vertraulich.
+ * `mitarbeiter_id` ist eine Mitarbeiter-ID oder "inhaber" (virtuelle Inhaber:in, E-17).
+ * @typedef {{
+ *   id: string, mitarbeiter_id: string, gueltig_ab: string,
+ *   satz_eur_h: number, direkt_eur_h: number|null, // Euro/Stunde
+ *   herkunft: 'berechnet'|'manuell',
+ *   basis: {jahresbrutto_eur?: number, ag_anteil_prozent?: number, jahreskosten_eur?: number, produktive_stunden_h?: number,
+ *     gemeinkosten_prozent?: number, produktivquote_prozent?: number, urlaub_tage?: number, feiertage_tage?: number,
+ *     krankheit_tage?: number, wochenstunden?: number, arbeitstage_woche?: number}|null,
+ *   notiz?: string
+ * }} Kostensatz gültig ist der Satz mit dem größten gueltig_ab ≤ Datum
  */

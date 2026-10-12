@@ -11,6 +11,8 @@
 // defensiv coerced (num).
 
 // Härtende Division: nie durch <0.1 teilen (gegen 0/leer/negativ).
+import { OFFEN, konzeptAuswertung } from "@designer/lib/pruefStatus";
+
 const safeDiv = (a, b) => a / Math.max(0.1, b);
 // Defensive, nicht-negative Zahl.
 const num = (x) => Math.max(0, Number(x) || 0);
@@ -100,6 +102,10 @@ export function erfRwGes(bereich, raumart) {
 // Plausibilitäts-Checks (Konzept) — bewusst NUR "pass"/"warn", NIE "fail"
 // (Haftung): Richtwerte dürfen nicht als prüffähiger Schallschutznachweis
 // nach DIN 4109 erscheinen. Nachweis durch Bauakustiker:in erforderlich.
+// 72-04: missing input -> "offen", never "pass": before, a TGA level of 0 dB(A) passed
+// ("<= 30 dB(A)"), and without an outdoor noise level the required R'w,ges was taken from
+// noise band I. Missing R'w values were "warn" (reads as violated) - now "offen".
+// The floor build-up is a select with a visible default, not a missing value.
 export function schallChecks({
   dbA = 0,
   raumart = "wohnen",
@@ -122,24 +128,32 @@ export function schallChecks({
     {
       key: "aussen",
       label: "Außenbauteile R'w,ges (Richtwert)",
-      status: aussenOk ? "pass" : "warn",
-      detail: aussenOk
+      status: num(dbA) <= 0 || num(rwAussenIst) <= 0 ? OFFEN : aussenOk ? "pass" : "warn",
+      detail: num(dbA) <= 0
+        ? "Außenlärmpegel fehlt — erforderliches R'w,ges nicht ableitbar"
+        : num(rwAussenIst) <= 0
+          ? "R'w,ges der Außenbauteile fehlt — Wert eingeben"
+          : aussenOk
         ? `R'w,ges ${de(rwAussenIst)} dB ≥ erforderlich ${de(erf)} dB (Lärmpegelbereich ${bereich})`
         : `R'w,ges ${de(rwAussenIst)} dB unter erforderlich ${de(erf)} dB (Lärmpegelbereich ${bereich}) — Fassaden-/Fensteraufbau prüfen`,
     },
     {
       key: "trennwand",
       label: "Wohnungstrennwand R'w (Richtwert)",
-      status: wandOk ? "pass" : "warn",
-      detail: wandOk
+      status: num(rwTrennIst) <= 0 ? OFFEN : wandOk ? "pass" : "warn",
+      detail: num(rwTrennIst) <= 0
+        ? "R'w der Wohnungstrennwand fehlt — Wert eingeben"
+        : wandOk
         ? `R'w ${de(rwTrennIst)} dB ≥ Richtwert ${de(TRENN_RICHTWERTE.wand_wohnungstrennend)} dB`
         : `R'w ${de(rwTrennIst)} dB unter Richtwert ${de(TRENN_RICHTWERTE.wand_wohnungstrennend)} dB — Wandaufbau prüfen`,
     },
     {
       key: "trenndecke",
       label: "Wohnungstrenndecke R'w (Richtwert)",
-      status: deckeOk ? "pass" : "warn",
-      detail: deckeOk
+      status: num(rwDeckeIst) <= 0 ? OFFEN : deckeOk ? "pass" : "warn",
+      detail: num(rwDeckeIst) <= 0
+        ? "R'w der Wohnungstrenndecke fehlt — Wert eingeben"
+        : deckeOk
         ? `R'w ${de(rwDeckeIst)} dB ≥ Richtwert ${de(TRENN_RICHTWERTE.decke_wohnungstrennend)} dB`
         : `R'w ${de(rwDeckeIst)} dB unter Richtwert ${de(TRENN_RICHTWERTE.decke_wohnungstrennend)} dB — Deckenaufbau prüfen`,
     },
@@ -154,8 +168,10 @@ export function schallChecks({
     {
       key: "tga",
       label: "Anlagengeräusche TGA (Richtwert)",
-      status: tgaOk ? "pass" : "warn",
-      detail: tgaOk
+      status: num(tgaPegel) <= 0 ? OFFEN : tgaOk ? "pass" : "warn",
+      detail: num(tgaPegel) <= 0
+        ? "Anlagenpegel fehlt — Wert eingeben"
+        : tgaOk
         ? `${de(tgaPegel)} dB(A) ≤ ${de(TGA_GRENZE)} dB(A) in schutzbedürftigen Räumen`
         : `${de(tgaPegel)} dB(A) über Richtwert ${de(TGA_GRENZE)} dB(A) — Körperschallentkopplung / Aufstellort prüfen`,
     },
@@ -170,10 +186,5 @@ export function schallChecks({
     });
   }
 
-  const score = Math.round(
-    safeDiv(items.filter((i) => i.status === "pass").length, items.length) * 100
-  );
-  const warns = items.filter((i) => i.status === "warn").length;
-  const verdict = warns > 0 ? "Konzept mit Hinweisen" : "Konzept plausibel";
-  return { items, score, warns, verdict };
+  return konzeptAuswertung(items);
 }

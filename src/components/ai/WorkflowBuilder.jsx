@@ -5,9 +5,11 @@ import { Input } from "@core/components/ui/input";
 import { Badge } from "@core/components/ui/badge";
 import { Workflow, Plus, ArrowRight, Play, Loader2, Trash2 } from "lucide-react";
 import { InvokeLLM } from "@core/integrations/Core";
+import { useI18n } from "@core/lib/i18n";
 
 // Build a sequential agent pipeline and "run" it via the LLM proxy.
 export default function WorkflowBuilder({ agents = [] }) {
+  const { t } = useI18n();
   const [name, setName] = useState("Neuer Workflow");
   const [steps, setSteps] = useState([]);
   const [running, setRunning] = useState(false);
@@ -76,7 +78,7 @@ export default function WorkflowBuilder({ agents = [] }) {
                 <React.Fragment key={i}>
                   <Badge className="bg-indigo-100 text-indigo-800 py-1.5 pl-3 pr-2 flex items-center gap-1">
                     {s.name}
-                    <button onClick={() => removeStep(i)} className="hover:text-red-600">
+                    <button aria-label={t("Schritt entfernen")} onClick={() => removeStep(i)} className="hover:text-red-600">
                       <Trash2 className="w-3 h-3" />
                     </button>
                   </Badge>

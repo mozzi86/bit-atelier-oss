@@ -17,6 +17,7 @@ import { filterQuantity } from "@ava/lib/avaFilters";
 import FilterEditor from "./FilterEditor";
 import FilterLibrary from "./FilterLibrary";
 import ClassificationEditor from "./ClassificationEditor";
+import { useI18n } from "@core/lib/i18n";
 
 // Die drei Mengen-Wege einer LV-Position (mengen_modus).
 const MODI = [
@@ -34,6 +35,7 @@ export default function QuantityTakeoff({
   filters = [], elements = [], onSaveFilter, onDeleteFilter, onSaveClassification,
   onRecompute,
 }) {
+  const { t } = useI18n();
   const [positionId, setPositionId] = useState("");
   const [modus, setModus] = useState("filter");
   const [basis, setBasis] = useState("area");
@@ -205,7 +207,7 @@ export default function QuantityTakeoff({
               <div>
                 <label className="text-xs text-slate-500 mb-1 block">LV-Position</label>
                 <Select value={positionId} onValueChange={loadFromPosition}>
-                  <SelectTrigger><SelectValue placeholder="Position wählen…" /></SelectTrigger>
+                  <SelectTrigger aria-label={t("LV-Position")}><SelectValue placeholder="Position wählen…" /></SelectTrigger>
                   <SelectContent>
                     {positions.map((p) => (
                       <SelectItem key={p.id} value={p.id}>{p.oz} · {p.title}</SelectItem>
@@ -217,7 +219,7 @@ export default function QuantityTakeoff({
               <div>
                 <label className="text-xs text-slate-500 mb-1 block">Mengen-Modus</label>
                 <Select value={modus} onValueChange={setModus}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Mengen-Modus")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {MODI.map((m) => (
                       <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
@@ -231,7 +233,7 @@ export default function QuantityTakeoff({
                   <div>
                     <label className="text-xs text-slate-500 mb-1 block">Filter</label>
                     <Select value={filterRef} onValueChange={setFilterRef}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={t("Filter")}>
                         <SelectValue placeholder={filters.length ? "Filter wählen…" : "Keine Filter — oben anlegen"} />
                       </SelectTrigger>
                       <SelectContent>
@@ -244,7 +246,7 @@ export default function QuantityTakeoff({
                   <div>
                     <label className="text-xs text-slate-500 mb-1 block">Mengenbasis</label>
                     <Select value={basis} onValueChange={setBasis}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={t("Mengenbasis")}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {QUANTITY_BASES.map((b) => (
                           <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
@@ -273,7 +275,7 @@ export default function QuantityTakeoff({
                   <div>
                     <label className="text-xs text-slate-500 mb-1 block">Mengenbasis</label>
                     <Select value={basis} onValueChange={setBasis}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={t("Mengenbasis")}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {QUANTITY_BASES.map((b) => (
                           <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
@@ -292,7 +294,7 @@ export default function QuantityTakeoff({
                 <>
                   <div>
                     <label className="text-xs text-slate-500 mb-1 block">Menge</label>
-                    <Input
+                    <Input aria-label={t("Menge")}
                       type="number"
                       step="any"
                       value={handMenge}
@@ -302,7 +304,7 @@ export default function QuantityTakeoff({
                   </div>
                   <div>
                     <label className="text-xs text-slate-500 mb-1 block">Grund (Pauschale / Regie / Entsorgung / temporär)</label>
-                    <Input
+                    <Input aria-label={t("Grund (Pauschale / Regie / Entsorgung / temporär)")}
                       value={handGrund}
                       onChange={(e) => setHandGrund(e.target.value)}
                       placeholder="z. B. Pauschale Baustelleneinrichtung"

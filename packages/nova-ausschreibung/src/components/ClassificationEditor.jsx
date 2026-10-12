@@ -9,6 +9,7 @@ import { Tag, Save } from "lucide-react";
 import {
   KG_KATALOG, GEWERKE, SCHICHTEN, STATUS_WERTE_UI, STATUS_LABEL, STATUS_UNBEKANNT,
 } from "@core/lib/bimClassification";
+import { useI18n } from "@core/lib/i18n";
 
 // Deutsche Anzeige-Labels für die Elementarten aus classifiedElements().
 const KIND_LABEL = {
@@ -29,6 +30,7 @@ const KIND_LABEL = {
 // (AVA.jsx) mappt den Patch per _idx zurück auf die BimModel-Custom-Arrays
 // und persistiert additiv/schemalos per BimModel.update.
 export default function ClassificationEditor({ elements = [], onSaveClassification }) {
+  const { t } = useI18n();
   const [draft, setDraft] = usePanelState("classification:draft", {}); // element-id → {kg, gewerk, schicht, status}
 
   const effective = (el, key) => draft[el.id]?.[key] ?? el[key];
@@ -100,7 +102,7 @@ export default function ClassificationEditor({ elements = [], onSaveClassificati
                     </td>
                     <td className="py-2 pr-3">
                       <Select value={effective(el, "kg")} onValueChange={(v) => setVal(el, "kg", v)}>
-                        <SelectTrigger className="h-8 w-[220px]"><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-label={t("Kostengruppe (DIN 276)")} className="h-8 w-[220px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {Object.entries(KG_KATALOG).map(([code, label]) => (
                             <SelectItem key={code} value={code}>{code} – {label}</SelectItem>
@@ -110,7 +112,7 @@ export default function ClassificationEditor({ elements = [], onSaveClassificati
                     </td>
                     <td className="py-2 pr-3">
                       <Select value={effective(el, "gewerk")} onValueChange={(v) => setVal(el, "gewerk", v)}>
-                        <SelectTrigger className="h-8 w-[140px]"><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-label={t("Gewerk")} className="h-8 w-[140px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {GEWERKE.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
                         </SelectContent>
@@ -145,7 +147,7 @@ export default function ClassificationEditor({ elements = [], onSaveClassificati
                         value={effective(el, "status") ?? STATUS_UNBEKANNT}
                         onValueChange={(v) => setVal(el, "status", v === STATUS_UNBEKANNT ? null : v)}
                       >
-                        <SelectTrigger className="h-8 w-[120px]"><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-label={t("Status")} className="h-8 w-[120px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {STATUS_WERTE_UI.map((s) => (
                             <SelectItem key={s} value={s}>{STATUS_LABEL[s] || s}</SelectItem>

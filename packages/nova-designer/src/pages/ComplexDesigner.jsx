@@ -26,6 +26,9 @@ import { MapPin, Building, Calculator, Droplets, CheckSquare, Sofa, Boxes, Spark
 import { motion } from "framer-motion";
 
 import { useProject } from "@core/lib/ProjectContext";
+import { bauartVon, herkunftZeile } from "@core/lib/bauart";
+import { aufbauGrundlage } from "@core/lib/bimClassification";
+import { footprintQuelleText } from "@core/lib/footprintQuelle";
 import MassingStudio from "../components/MassingStudio";
 import SpaceProgram from "../components/SpaceProgram";
 import UnitMixCompliance from "../components/UnitMixCompliance";
@@ -33,6 +36,8 @@ import LocationSelector from "../components/LocationSelector";
 import SiteDesigner from "../components/SiteDesigner";
 import BuildingConfig from "../components/BuildingConfig";
 import EnergyPlanner from "../components/EnergyPlanner";
+import NachhaltigkeitKarte from "../components/NachhaltigkeitKarte";
+import BauaufnahmePanel from "../components/BauaufnahmePanel";
 import CostCalculator from "../components/CostCalculator";
 import FloodRiskAnalyzer from "../components/FloodRiskAnalyzer";
 import ProjectPlanner from "../components/ProjectPlanner";
@@ -56,6 +61,11 @@ import RaumklimaPlanner from "../components/RaumklimaPlanner";
 import FoerderPlanner from "../components/FoerderPlanner";
 import ApartmentPlanner from "../components/ApartmentPlanner";
 import WohnungsWerkstatt from "../components/WohnungsWerkstatt";
+
+/** 73-04: tabs that compute on the build-up (Bauteilaufbau) and show its provenance in an existing building. */
+const AUFBAU_REITER = new Set(["acoustics", "waermebruecken", "bauphysik", "energy"]);
+/** 73-05: tabs that work on the building outline and show its provenance. */
+const UMRISS_REITER = new Set(["studio", "massing", "bim", "buildings", "program"]);
 
 export default function ComplexDesigner() {
   const [complexData, setComplexData] = useState({
@@ -100,6 +110,20 @@ export default function ComplexDesigner() {
   // in dieser Datei steht keine zweite Reiter-Liste mehr.
   const tabParam = aufloesen(searchParams.get("tab"));
   const [activeTab, setActiveTab] = useState(tabParam ?? "site");
+  // 73-02: second reading of the registry for existing buildings — braucht/stand per kind of work, the
+  // "Gemessen" badge carries the survey's provenance (latest BimSnapshot of the project). Without a survey
+  // the measured tabs say "Offen" instead of pretending measured data.
+  const bauart = bauartVon(project).bauart;
+  const programmStand = /** @type {{footprintQuelle?: any}} */ (useBuildingProgram());
+  const [bestandSnap, setBestandSnap] = useState(null);
+  useEffect(() => {
+    if (bauart !== "bestand" || !project?.id) { setBestandSnap(null); return undefined; }
+    let weg = false;
+    bitApi.entities.BimSnapshot.filter({ project_id: project.id })
+      .then((r) => { if (!weg) setBestandSnap((r || [])[0] || null); })
+      .catch(() => { if (!weg) setBestandSnap(null); });
+    return () => { weg = true; };
+  }, [bauart, project?.id]);
   // Nach-Navigation auf denselben Reiter (z. B. zweiter Klick auf die
   // umgeleitete Route) folgt dem Parameter.
   useEffect(() => {
@@ -474,8 +498,9 @@ export default function ComplexDesigner() {
           <CardContent className="p-0">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <div className="border-b border-slate-200 p-3">
-                {/* Ebene 1: die fünf Arbeitsbereiche (72-02, Befund N-09). */}
-                <div className="flex flex-wrap gap-1 mb-2" role="tablist" aria-label="Arbeitsbereiche">
+                {/* Ebene 1: die fünf Arbeitsbereiche (72-02, Befund N-09). role=group, not tablist:
+                    the buttons switch area via aria-current, they are no ARIA tabs (72-03). */}
+                <div className="flex flex-wrap gap-1 mb-2" role="group" aria-label="Arbeitsbereiche">
                   {DESIGNER_BEREICHE.map((b) => (
                     <button
                       key={b.id}
@@ -484,8 +509,8 @@ export default function ComplexDesigner() {
                       aria-current={bereich === b.id ? "true" : undefined}
                       className={
                         bereich === b.id
-                          ? "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-emerald-600 text-white shadow-sm"
-                          : "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          ? "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 bg-emerald-600 text-white shadow-sm"
+                          : "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 bg-slate-100 text-slate-600 hover:bg-slate-200"
                       }
                     >
                       {b.titel}
@@ -505,7 +530,23 @@ export default function ComplexDesigner() {
               </div>
 
               {/* 72-02: eine Zeile statt Textwand — braucht / liefert / Stand. */}
-              <PanelHeader reiter={reiterFuerTab(activeTab)} bereichTitel={DESIGNER_BEREICHE.find((b) => b.id === bereich)?.titel} />
+              {(() => {
+                const reiter = reiterFuerTab(activeTab, bauart);
+                const gemessen = reiter?.stand === "gemessen";
+                // 73-04 (BEST-09): build-up based tabs name their basis in an existing building.
+                const aufbau = AUFBAU_REITER.has(activeTab) ? aufbauGrundlage(bauart, project?.aufbau_herkunft).text : null;
+                // 73-05: tabs that work on the outline say whether it is drawn or measured.
+                const umriss = UMRISS_REITER.has(activeTab) ? footprintQuelleText(programmStand.footprintQuelle) : null;
+                return (
+                  <PanelHeader reiter={reiter} bereichTitel={DESIGNER_BEREICHE.find((b) => b.id === bereich)?.titel}
+                    standOverride={gemessen && !bestandSnap ? "offen" : undefined}
+                    herkunft={[gemessen ? (herkunftZeile(bestandSnap) || "Noch keine Bauaufnahme geladen — IFC-Viewer › Modell laden") : aufbau, umriss].filter(Boolean).join(" · ") || null} />
+                );
+              })()}
+
+              <TabsContent value="bauaufnahme" className="p-6">
+                <BauaufnahmePanel />
+              </TabsContent>
 
               <TabsContent value="studio" className="p-6">
                 <MassingStudio
@@ -670,6 +711,7 @@ export default function ComplexDesigner() {
                   complexData={complexData}
                   onEnergySystemsChange={(systems) => updateComplexData('energy_systems', systems)}
                 />
+                <div className="mt-6"><NachhaltigkeitKarte complexData={complexData} /></div>
               </TabsContent>
 
               <TabsContent value="costs" className="p-6">

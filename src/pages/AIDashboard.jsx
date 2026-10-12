@@ -1,5 +1,7 @@
 import { seitenWurzel } from "@core/lib/utils";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { projekteNachZugriff } from "@core/lib/rechte.js";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
 import { useSearchParams, Link } from "react-router-dom";
 import { bitApi } from "@core/api/bitApi";
 import LoadingState from "@core/components/common/LoadingState";
@@ -8,9 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/ca
 import { Button } from "@core/components/ui/button";
 import { Badge } from "@core/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@core/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@core/components/ui/dialog";
 import {
   Bot, Brain, Workflow, MessageSquare, Eye, Zap, Building, Euro, AlertTriangle,
-  Gauge, ClipboardCheck, X, FileDown, Lightbulb, BarChart3, Check, Loader2, Plug,
+  Gauge, ClipboardCheck, FileDown, Lightbulb, BarChart3, Check, Loader2, Plug,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -46,6 +49,7 @@ const TAB_SCHLUESSEL = ["analysis", "chat", "workflows", "agents", "connections"
 
 export default function AIDashboard() {
   const { projectId } = useProject();
+  const zugriff = useZugriff();
   const { t } = useI18n();
   // 72-10 (N-05): the tab lives in ?tab, so the shell's AI button can open
   // "KI-Chat" directly (#/AIDashboard?tab=chat) and a reload keeps the tab.
@@ -62,6 +66,8 @@ export default function AIDashboard() {
     }, { replace: true });
   }, [setSuchParams]);
   const [selectedAgent, setSelectedAgent] = useState(null);
+  /** Card that opened the agent dialog — focus goes back there on close (72-03). @type {React.MutableRefObject<HTMLElement|null>} */
+  const agentAusloeser = useRef(null);
   const [metrics, setMetrics] = useState({ projects: 0, openIssues: 0, modules: AI_AGENTS.length, avgProgress: 0 });
   const [activities, setActivities] = useState([]);
   const [allProjects, setAllProjects] = useState([]);
@@ -86,7 +92,8 @@ export default function AIDashboard() {
       ]);
       // 72-01 A-7: Seed-Labels („LP 5 - …") und neue Keys auf eine Wertebasis
       // bringen — hoaiProgress/statusInfo zählen sonst Mischformen.
-      const projects = normalisiereProjekte(rawProjects);
+      // 82-02: only projects of the role's project view enter the AI context.
+      const projects = normalisiereProjekte(projekteNachZugriff(rawProjects, zugriff));
       const open = issues.filter((i) => i.status !== "resolved" && i.status !== "closed");
       const byId = Object.fromEntries(projects.map((p) => [p.id, p]));
       const avg = projects.length ? Math.round(projects.reduce((s, p) => s + hoaiProgress(p), 0) / projects.length) : 0;
@@ -104,7 +111,7 @@ export default function AIDashboard() {
     } finally {
       setLaedt(false);
     }
-  }, []);
+  }, [zugriff]);
 
   useEffect(() => { ladeKennzahlen(); }, [ladeKennzahlen]);
 
@@ -391,7 +398,11 @@ export default function AIDashboard() {
                     <div className="grid sm:grid-cols-2 gap-4">
                       {AI_AGENTS.map((a) => (
                         <motion.div key={a.id} whileHover={{ scale: 1.02 }}>
-                          <Card className="border-0 shadow-md hover:shadow-lg transition-all cursor-pointer h-full" onClick={() => setSelectedAgent(a)}>
+                          {/* 72-03: the card opens the agent dialog — reachable and operable by keyboard. */}
+                          <Card role="button" tabIndex={0} aria-haspopup="dialog" data-testid={`agent-karte-${a.id}`}
+                            className="border-0 shadow-md hover:shadow-lg transition-all cursor-pointer h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                            onClick={(e) => { agentAusloeser.current = e.currentTarget; setSelectedAgent(a); }}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); agentAusloeser.current = e.currentTarget; setSelectedAgent(a); } }}>
                             <CardContent className="p-4">
                               <div className="flex items-center gap-3 mb-2">
                                 <div className={`p-2.5 rounded-xl ${a.bg}`}><a.icon className={`w-5 h-5 ${a.color}`} /></div>
@@ -454,31 +465,34 @@ export default function AIDashboard() {
         </Card>
       </div>
 
-      {/* Agent detail modal */}
-      {selectedAgent && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={() => setSelectedAgent(null)}
-          onKeyDown={(e) => { if (e.key === "Escape") setSelectedAgent(null); }}>
-          <motion.div role="dialog" aria-modal="true" aria-label={selectedAgent.name || "Agent-Details"}
-            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-2xl p-6 max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-3">
-                <div className={`p-3 rounded-xl ${selectedAgent.bg}`}><selectedAgent.icon className={`w-7 h-7 ${selectedAgent.color}`} /></div>
-                <div><h2 className="text-xl font-bold">{selectedAgent.name}</h2><p className="text-slate-600">{selectedAgent.specialty}</p></div>
+      {/* Agent detail modal — Radix dialog (72-03): focus trap, Escape and focus return to
+          the agent card come from Radix instead of a hand-built overlay. */}
+      <Dialog open={!!selectedAgent} onOpenChange={(offen) => { if (!offen) setSelectedAgent(null); }}>
+        {/* Without a DialogTrigger Radix would focus an empty trigger ref on close — hand the
+            focus back to the card that opened the dialog. */}
+        <DialogContent className="p-6" onCloseAutoFocus={(e) => { e.preventDefault(); agentAusloeser.current?.focus(); }}>
+          {selectedAgent && (
+            <>
+              <div className="flex items-center gap-3 mb-4 pr-8">
+                <div className={`p-3 rounded-xl ${selectedAgent.bg}`}><selectedAgent.icon className={`w-7 h-7 ${selectedAgent.color}`} aria-hidden="true" /></div>
+                <div>
+                  <DialogTitle className="text-xl font-bold">{selectedAgent.name}</DialogTitle>
+                  <p className="text-slate-600">{selectedAgent.specialty}</p>
+                </div>
               </div>
-              <Button variant="ghost" size="icon" aria-label="Dialog schliessen" onClick={() => setSelectedAgent(null)}><X className="w-4 h-4" /></Button>
-            </div>
-            <p className="text-slate-600 mb-5">{selectedAgent.description}</p>
-            <div className="flex gap-3">
-              <Button className="flex-1" onClick={() => { setSelectedAgent(null); setActiveTab("analysis"); }}>
-                <ClipboardCheck className="w-4 h-4 mr-2" /> Projekt analysieren
-              </Button>
-              <Button variant="outline" className="flex-1" onClick={() => { setSelectedAgent(null); setActiveTab("chat"); }}>
-                <MessageSquare className="w-4 h-4 mr-2" /> Im Chat fragen
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+              <DialogDescription className="text-base text-slate-600 mb-5">{selectedAgent.description}</DialogDescription>
+              <div className="flex gap-3">
+                <Button className="flex-1" onClick={() => { setSelectedAgent(null); setActiveTab("analysis"); }}>
+                  <ClipboardCheck className="w-4 h-4 mr-2" /> Projekt analysieren
+                </Button>
+                <Button variant="outline" className="flex-1" onClick={() => { setSelectedAgent(null); setActiveTab("chat"); }}>
+                  <MessageSquare className="w-4 h-4 mr-2" /> Im Chat fragen
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

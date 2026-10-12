@@ -26,12 +26,6 @@ from harness.providers.base import ProviderProfile
 from harness.providers.openai_compat import fetch_models
 from harness.providers.registry import ProviderRegistry
 
-FREECAD_CANDIDATES = [
-    r"C:\Program Files\FreeCAD 1.1\bin\freecadcmd.exe",
-    r"C:\Program Files\FreeCAD 1.0\bin\FreeCADCmd.exe",
-    "/Applications/FreeCAD.app/Contents/MacOS/FreeCADCmd",
-]
-
 
 @dataclass
 class Row:
@@ -58,6 +52,13 @@ async def check_profile(profile: ProviderProfile, registry: ProviderRegistry, re
                         probe: bool, transport: httpx.AsyncBaseTransport | None, timeout: float = 5.0) -> None:
     if profile.api_mode == "mock":
         report.add("provider", profile.name, "ok", "Offline-Mock, immer verfügbar")
+        return
+    # 93-12: "Nur lokale KI" — not even a model-list request goes to another computer. warn, not fail:
+    # the profile was not checked, it is not known to be broken.
+    from harness.lokal import profile_is_local
+    if registry.nur_lokal and not profile_is_local(profile):
+        report.add("provider", profile.name, "warn", "nicht geprüft — Nur lokale KI ist eingeschaltet",
+                   "keine Anfrage an Server außerhalb dieses Rechners")
         return
     key_state = registry.key_status(profile.name)
     if key_state == "fehlt":
@@ -179,8 +180,10 @@ def check_environment(cfg: HarnessConfig, report: Report) -> None:
         path = shutil.which(name) or (str(Path.home() / ".lmstudio" / "bin" / "lms.exe") if name == "lms" and (Path.home() / ".lmstudio" / "bin" / "lms.exe").exists() else None)
         report.add("werkzeug", name, "ok" if path else "warn", path or "nicht im PATH", "" if path else hint)
 
-    fc = next((p for p in FREECAD_CANDIDATES if Path(p).exists()), None) or shutil.which("freecadcmd")
-    report.add("werkzeug", "FreeCADCmd", "ok" if fc else "warn", fc or "nicht gefunden", "" if fc else "für 67-04: freecad.cmd in config.yaml setzen")
+    from harness.tools.freecad import _fc_run  # same lookup as /freecad (BIT_FREECAD, config, defaults)
+    fc = _fc_run().finde_freecadcmd(cfg.freecad_cmd)
+    report.add("werkzeug", "FreeCADCmd", "ok" if fc else "warn", str(fc) if fc else "nicht gefunden",
+               "" if fc else "BIT_FREECAD oder freecad.cmd in config.yaml setzen (für /freecad)")
 
     for label, d in (("projects/", cfg.projects_dir), ("logs/", cfg.logs_dir)):
         try:
@@ -202,7 +205,7 @@ async def run_doctor(cfg: HarnessConfig, *, provider: str | None = None, probe: 
                      transport: httpx.AsyncBaseTransport | None = None,
                      registry: ProviderRegistry | None = None) -> Report:
     report = Report()
-    registry = registry or ProviderRegistry.load(cfg.providers_file)
+    registry = registry or ProviderRegistry.load(cfg.providers_file, nur_lokal=cfg.nur_lokal)
     names = [provider] if provider else registry.names()
     for name in names:
         try:

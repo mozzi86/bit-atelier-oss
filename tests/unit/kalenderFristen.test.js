@@ -10,6 +10,7 @@ import {
   naechster15OderMonatsende,
   volleJahre,
   volleMonate,
+  faelligkeit,
 } from "@core/lib/kalender/fristen.js";
 
 describe("fristEndeBeginn — Beginnfrist § 187 Abs. 2, § 188 Abs. 2 Alt. 2 / Abs. 3", () => {
@@ -92,5 +93,41 @@ describe("kein zweites Datums-Modul", () => {
     const fs = await import("node:fs/promises");
     const inhalt = await fs.readFile(new URL("../../packages/nova-core/src/lib/kalender/fristen.js", import.meta.url), "utf8");
     assert.equal((inhalt.match(/toISOString/g) || []).length, 0);
+  });
+});
+
+// 82-01: faelligkeit — "today" as a parameter, stage = smallest lead time >= remaining days.
+describe("faelligkeit — Fälligkeit mit Vorlaufstufen (82-01)", () => {
+  const V = [30, 7, 1];
+  const frist = (datum) => ({ datum, klasse: "frist" });
+  it("02.10. bei heute 28.09.: 4 Tage → Stufe 7", () => {
+    assert.deepEqual(faelligkeit(frist("2026-10-02"), "2026-09-28", V), { status: "faellig", stufe: 7, tage: 4 });
+  });
+  it("15.10.: 3 + 15 = 17 Tage → Stufe 30; 29.09.: 1 Tag → Stufe 1", () => {
+    assert.deepEqual(faelligkeit(frist("2026-10-15"), "2026-09-28", V), { status: "faellig", stufe: 30, tage: 17 });
+    assert.equal(faelligkeit(frist("2026-09-29"), "2026-09-28", V)?.stufe, 1);
+  });
+  it("heute → 'heute'; 14.07. → überfällig, 17 + 31 + 28 = 76 Tage zurück", () => {
+    assert.equal(faelligkeit(frist("2026-09-28"), "2026-09-28", V)?.status, "heute");
+    assert.deepEqual(faelligkeit(frist("2026-07-14"), "2026-09-28", V), { status: "ueberfaellig", stufe: null, tage: -76 });
+  });
+  it("15.12.: 2 + 31 + 30 + 15 = 78 Tage → geplant; erledigt → erledigt", () => {
+    assert.deepEqual(faelligkeit(frist("2026-12-15"), "2026-09-28", V), { status: "geplant", stufe: null, tage: 78 });
+    assert.equal(faelligkeit({ ...frist("2026-07-14"), erledigt: true }, "2026-09-28", V)?.status, "erledigt");
+  });
+  it("Termin oder Hinweis vor heute → vergangen (nur Fristen sind überfällig); ungültig → null", () => {
+    assert.equal(faelligkeit({ datum: "2026-09-01", klasse: "termin" }, "2026-09-28", V)?.status, "vergangen");
+    assert.equal(faelligkeit({ datum: "2026-09-01", klasse: "hinweis" }, "2026-09-28", V)?.status, "vergangen");
+    assert.equal(faelligkeit({ datum: "kaputt" }, "2026-09-28", V), null);
+  });
+});
+
+describe("fristEnde — Gegenprobe der 82-Fälle (80-04 unverändert)", () => {
+  it("4 Jahre, 29.02. + 5 Jahre, 31.01. + 1 Monat, 48 Monate, ungültig", () => {
+    assert.equal(fristEnde("2026-05-15", { jahre: 4 }), "2030-05-15");
+    assert.equal(fristEnde("2028-02-29", { jahre: 5 }), "2033-02-28");
+    assert.equal(fristEnde("2026-01-31", { monate: 1 }), "2026-02-28");
+    assert.equal(fristEnde("2022-10-14", { monate: 48 }), "2026-10-14");
+    assert.equal(fristEnde("kaputt", { jahre: 1 }), null);
   });
 });

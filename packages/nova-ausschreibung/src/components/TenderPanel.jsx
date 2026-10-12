@@ -13,6 +13,10 @@ import FormModal from "@core/components/common/FormModal";
 // can read every bid at any time (74-01-PLAN.md G-1).
 import { Plus, Send, Gavel, Trash2, Users, CalendarClock, ScrollText } from "lucide-react";
 import { eur0, lvTotal, TENDER_STATUS, groupByTrade } from "./avaUtils";
+// 74-01: bidder access, deadline, release, opening — renders nothing outside the
+// cloud build with access separation in place.
+import VergabeZugriff from "./VergabeZugriff";
+import { useI18n } from "@core/lib/i18n";
 
 // Ausschreibungs-Verwaltung: create tenders from LV positions, invite bidders,
 // publish / close, and open the price comparison.
@@ -20,6 +24,7 @@ export default function TenderPanel({
   tenders, positions, contacts, bids, selectedTenderId, onSelect,
   onCreate, onUpdate, onDelete,
 }) {
+  const { t } = useI18n();
   const [showForm, setShowForm] = useState(false);
   const groups = groupByTrade(positions);
   const bidderContacts = contacts.filter((c) => ["contractor", "manufacturer", "engineer"].includes(c.category));
@@ -77,16 +82,16 @@ export default function TenderPanel({
       </p>
 
       <div className="grid md:grid-cols-2 gap-4">
-        {tenders.map((t) => {
-          const st = TENDER_STATUS[t.status] || TENDER_STATUS.draft;
-          const tp = tenderPositions(t);
-          const sel = t.id === selectedTenderId;
+        {tenders.map((tender) => {
+          const st = TENDER_STATUS[tender.status] || TENDER_STATUS.draft;
+          const tp = tenderPositions(tender);
+          const sel = tender.id === selectedTenderId;
           return (
-            <Card key={t.id} className={sel ? "ring-2 ring-blue-500" : ""}>
+            <Card key={tender.id} className={sel ? "ring-2 ring-blue-500" : ""}>
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <ScrollText className="w-4 h-4 text-blue-600" /> {t.name}
+                    <ScrollText className="w-4 h-4 text-blue-600" /> {tender.name}
                   </CardTitle>
                   <Badge className={st.color}>{st.label}</Badge>
                 </div>
@@ -95,30 +100,31 @@ export default function TenderPanel({
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div><div className="text-xs text-slate-400">Positionen</div><div className="font-semibold">{tp.length}</div></div>
                   <div><div className="text-xs text-slate-400">Kostenanschlag</div><div className="font-semibold">{eur0(lvTotal(tp))}</div></div>
-                  <div><div className="text-xs text-slate-400">Angebote</div><div className="font-semibold">{bidCount(t)}</div></div>
+                  <div><div className="text-xs text-slate-400">Angebote</div><div className="font-semibold">{bidCount(tender)}</div></div>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-slate-500">
-                  <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {t.invited_contact_ids?.length || 0} eingeladen</span>
-                  {t.deadline && <span className="flex items-center gap-1"><CalendarClock className="w-3 h-3" /> {new Date(t.deadline).toLocaleDateString("de-DE")}</span>}
+                  <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {tender.invited_contact_ids?.length || 0} eingeladen</span>
+                  {tender.deadline && <span className="flex items-center gap-1"><CalendarClock className="w-3 h-3" /> {new Date(tender.deadline).toLocaleDateString("de-DE")}</span>}
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <Button size="sm" variant={sel ? "default" : "outline"} onClick={() => onSelect(t.id)}>
+                  <Button size="sm" variant={sel ? "default" : "outline"} onClick={() => onSelect(tender.id)}>
                     <Gavel className="w-3.5 h-3.5 mr-1" /> Preisspiegel
                   </Button>
-                  {t.status === "draft" && (
-                    <Button size="sm" variant="outline" onClick={() => onUpdate(t.id, { status: "published" })}>
+                  {tender.status === "draft" && (
+                    <Button size="sm" variant="outline" onClick={() => onUpdate(tender.id, { status: "published" })}>
                       <Send className="w-3.5 h-3.5 mr-1" /> Veröffentlichen
                     </Button>
                   )}
-                  {t.status === "published" && (
-                    <Button size="sm" variant="outline" onClick={() => onUpdate(t.id, { status: "closed" })}>
+                  {tender.status === "published" && (
+                    <Button size="sm" variant="outline" onClick={() => onUpdate(tender.id, { status: "closed" })}>
                       <CalendarClock className="w-3.5 h-3.5 mr-1" /> Angebotsfrist beenden
                     </Button>
                   )}
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-500 ml-auto" onClick={() => onDelete(t.id)}>
+                  <Button aria-label={t("Ausschreibung löschen")} size="icon" variant="ghost" className="h-8 w-8 text-rose-500 ml-auto" onClick={() => onDelete(tender.id)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
+                <VergabeZugriff tender={tender} contacts={contacts} />
               </CardContent>
             </Card>
           );
@@ -130,13 +136,13 @@ export default function TenderPanel({
           <form onSubmit={submit} className="space-y-4">
             <div>
               <Label className="text-xs">Bezeichnung</Label>
-              <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Ausschreibung Rohbau" />
+              <Input aria-label={t("Bezeichnung")} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Ausschreibung Rohbau" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Gewerk / Los</Label>
                 <Select value={form.trade} onValueChange={(v) => set("trade", v)}>
-                  <SelectTrigger><SelectValue placeholder="Gewerk…" /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Gewerk / Los")}><SelectValue placeholder="Gewerk…" /></SelectTrigger>
                   <SelectContent>
                     {groups.map((g) => <SelectItem key={g.trade} value={g.trade}>{g.trade} ({g.items.length} Pos.)</SelectItem>)}
                   </SelectContent>
@@ -144,7 +150,7 @@ export default function TenderPanel({
               </div>
               <div>
                 <Label className="text-xs">Abgabefrist</Label>
-                <Input type="date" value={form.deadline} onChange={(e) => set("deadline", e.target.value)} />
+                <Input aria-label={t("Abgabefrist")} type="date" value={form.deadline} onChange={(e) => set("deadline", e.target.value)} />
               </div>
             </div>
             <div>

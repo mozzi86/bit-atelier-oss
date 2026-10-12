@@ -90,8 +90,12 @@ function attrappe(start = {}) {
 }
 
 describe('personalEntitaeten — reine Regeln (Behavior 1, 13)', () => {
-  it('PERSONAL_ENTITAETEN: 9, eingefroren', () => {
-    assert.equal(PERSONAL_ENTITAETEN.length, 9);
+  // 81-01 (E-14): Kostensatz is the tenth HR entity.
+  // 82-01 (D-P82-38): Abwesenheit is the eleventh.
+  it('PERSONAL_ENTITAETEN: 11 (mit Kostensatz und Abwesenheit), eingefroren', () => {
+    assert.equal(PERSONAL_ENTITAETEN.length, 11);
+    assert.ok(PERSONAL_ENTITAETEN.includes('Kostensatz'));
+    assert.ok(PERSONAL_ENTITAETEN.includes('Abwesenheit'));
     assert.throws(() => { PERSONAL_ENTITAETEN.push('X'); });
   });
 

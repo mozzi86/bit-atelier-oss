@@ -28,10 +28,12 @@ import { createPageUrl } from '@core/utils';
 import {
   aktionenFuer, abonnieren, aktionenVersion, parseKuerzel,
 } from '@core/lib/aktionen';
-import { navFlach, navSichtbar } from '@/navigation';
+import { navFlach } from '@/navigation';
 import { useAuth } from '@core/lib/AuthContext';
 import { DATENQUELLE } from '@core/lib/umgebung';
 import { personalZugang } from '@/lib/people/zugang';
+import { useZugriff } from '@core/lib/ZugriffContext.jsx';
+import { paletteEintraege as erlaubteModule } from '@/lib/zugriffFilter.js';
 
 /**
  * Lowercase, umlauts folded, accents stripped — so "prüf" finds "Prüf-Suite"
@@ -73,10 +75,11 @@ export default function Befehlspalette({ offen, onSchliessen }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useI18n();
-  const { setProjectId } = useProject();
+  // 82-02: the filtered project list of the context (role, project view) — no own list.
+  const { setProjectId, projects: projekte } = useProject();
+  const zugriff = useZugriff();
   const [suche, setSuche] = React.useState('');
   const [aktiv, setAktiv] = React.useState(0);
-  const [projekte, setProjekte] = React.useState([]);
   const [kontakte, setKontakte] = React.useState([]);
   // 80-01: settings areas, loaded with the palette instead of with the shell — the
   // registry pulls the rule books (79 settings, HOAI tables) and the area files.
@@ -84,7 +87,8 @@ export default function Befehlspalette({ offen, onSchliessen }) {
     /** @type {{paletteEintraege: (k: any) => Array<{key: string, titel: string, beschreibung: string, stichworte: string, ziel: string}>, bereit: Set<string>}|null} */ (null),
   );
   const { user } = useAuth();
-  const zugang = personalZugang({ datenquelle: DATENQUELLE, rolle: user?.role });
+  const zugang = personalZugang({ datenquelle: DATENQUELLE, rolle: user?.role, zugriff });
+  const darfKontakte = zugriff.darf('adressbuch');
   const eingabeRef = React.useRef(null);
   // Verbs of the current view re-render the palette when pages (un)register
   // actions while it is open (69-12). The snapshot value doubles as a memo
@@ -102,12 +106,8 @@ export default function Befehlspalette({ offen, onSchliessen }) {
         // bitApi.entities ist zur Laufzeit dynamisch (ein Eintrag je Entität) —
         // tsc kennt die Namen nicht, deshalb hier bewusst ungetypt.
         const e = /** @type {any} */ (bitApi.entities);
-        const [p, k] = await Promise.all([
-          e.Project.list('-updated_date'),
-          e.Contact.list('name'),
-        ]);
+        const k = darfKontakte ? await e.Contact.list('name') : [];
         if (!lebt) return;
-        setProjekte(p || []);
         setKontakte(k || []);
       } catch {
         /* ohne Daten bleibt die Navigation durchsuchbar */
@@ -125,6 +125,7 @@ export default function Befehlspalette({ offen, onSchliessen }) {
     return () => {
       lebt = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offen]);
 
   React.useEffect(() => {
@@ -148,9 +149,8 @@ export default function Befehlspalette({ offen, onSchliessen }) {
       });
     }
 
-    for (const n of navFlach) {
-      // 80-01 (DS-12): no personnel entry without personnel access.
-      if (!navSichtbar(n, { personalZugang: zugang })) continue;
+    // 80-01 (DS-12) / 82-02: only modules the role may read.
+    for (const n of erlaubteModule(navFlach, { personalZugang: zugang, zugriff })) {
       alle.push({
         art: t('Modul'),
         titel: t(n.title),
@@ -160,7 +160,7 @@ export default function Befehlspalette({ offen, onSchliessen }) {
     }
     // 80-01: "Einstellung: <area>" per visible, finished settings area.
     if (einstellungsQuelle) {
-      const kontext = { datenquelle: DATENQUELLE, personalZugang: zugang };
+      const kontext = { datenquelle: DATENQUELLE, personalZugang: zugang, zugriff };
       for (const e of einstellungsQuelle.paletteEintraege(kontext)) {
         if (!einstellungsQuelle.bereit.has(e.key)) continue;
         alle.push({
@@ -205,7 +205,7 @@ export default function Befehlspalette({ offen, onSchliessen }) {
     return alle
       .filter((e) => normalisiere(`${e.titel} ${e.zusatz || ''} ${e.beschreibung || ''} ${e.stichworte || ''} ${e.art}`).includes(q))
       .slice(0, MAX);
-  }, [suche, projekte, kontakte, navigate, setProjectId, t, location.pathname, version, zugang, einstellungsQuelle]);
+  }, [suche, projekte, kontakte, navigate, setProjectId, t, location.pathname, version, zugang, zugriff, einstellungsQuelle]);
 
   React.useEffect(() => {
     if (aktiv >= eintraege.length) setAktiv(0);
@@ -247,7 +247,8 @@ export default function Befehlspalette({ offen, onSchliessen }) {
         onKeyDown={(ev) => ev.key === 'Escape' && onSchliessen()}
         className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-2xl"
       >
-        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 px-3">
+        {/* Focus ring on the container (72-03): the input itself stays borderless. */}
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 px-3 focus-within:ring-2 focus-within:ring-inset focus-within:ring-emerald-500">
           <Search className="w-4 h-4 text-slate-400 shrink-0" />
           <input
             ref={eingabeRef}

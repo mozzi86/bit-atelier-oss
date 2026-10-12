@@ -23,14 +23,21 @@ import { bauherrSchluessel, faelligAm, rechnungsStatus, zahlungszielTage } from 
  * the form and stelleRechnung() derive it from the CURRENT project/contract,
  * so a switched project or a later-filled contract is never billed to the
  * previous recipient.
- * @param {{bauherr_name?: string, bauherr_anschrift?: string, bauherr_ust_idnr?: string, bauherr_art?: string}|null|undefined} vertrag
+ * 93-01: the contract's Leitweg-ID (routing ID of a public client, XRechnung
+ * BT-10/BT-49) travels along as `leitweg_id` — only when set, so recipients of
+ * contracts without one keep their exact previous shape.
+ * @param {{bauherr_name?: string, bauherr_anschrift?: string, bauherr_ust_idnr?: string, bauherr_art?: string, bauherr_leitweg_id?: string}|null|undefined} vertrag
  * @param {ReadonlyArray<{company?: string, name?: string}>} kontakte
  * @param {{client?: string}|null|undefined} projekt
- * @returns {{name: string, anschrift: string, ust_idnr: string, art: string}} name "" when nothing is known
+ * @returns {{name: string, anschrift: string, ust_idnr: string, art: string, leitweg_id?: string}} name "" when nothing is known
  */
 export function empfaengerAus(vertrag, kontakte, projekt) {
   if (vertrag?.bauherr_name) {
-    return { name: vertrag.bauherr_name, anschrift: vertrag.bauherr_anschrift || "", ust_idnr: vertrag.bauherr_ust_idnr || "", art: vertrag.bauherr_art || "unternehmer" };
+    const leitweg = String(vertrag.bauherr_leitweg_id || "").trim();
+    return {
+      name: vertrag.bauherr_name, anschrift: vertrag.bauherr_anschrift || "", ust_idnr: vertrag.bauherr_ust_idnr || "", art: vertrag.bauherr_art || "unternehmer",
+      ...(leitweg ? { leitweg_id: leitweg } : {}),
+    };
   }
   const treffer = Array.isArray(kontakte) ? kontakte.find((k) => k?.company && k.company === projekt?.client) : null;
   if (treffer) return { name: treffer.company, anschrift: "", ust_idnr: "", art: "unternehmer" };

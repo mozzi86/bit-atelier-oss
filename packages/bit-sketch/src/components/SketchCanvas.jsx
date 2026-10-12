@@ -12,7 +12,8 @@
 // Konstruktionsgeometrie blau gestrichelt, Auswahl teal (App-Selektionsfarbe).
 
 import React, { useRef, useState, useCallback, useEffect } from "react";
-import SketchGeometry, { SKETCH_FARBEN } from "./SketchGeometry.jsx";
+import SketchGeometry, { SKETCH_FARBEN, strichPfad } from "./SketchGeometry.jsx";
+import { glaetten, kompakt } from "../lib/freihand.js";
 
 const VB_W = 1000;
 const VB_H = 640;
@@ -41,6 +42,10 @@ export default function SketchCanvas({
   onAddCircle,
   onDragPoint, // (pointId, x, y)
   onDragEnd,
+  // 72-05 freehand mode: raw samples [{x, y, p}] (m, pressure 0…1) at pen-up; eraser at a world point.
+  onAddStroke = null,
+  onErase = null,
+  stift = { breite: 0.05, farbe: "#1e293b" },
 }) {
   const svgRef = useRef(null);
   const [view, setView] = useState({ cx: 5, cy: 3, scale: 55 }); // Weltmitte + px/m
@@ -53,6 +58,10 @@ export default function SketchCanvas({
   const pointersRef = useRef(new Map()); // pointerId -> {x, y} (Client-Pixel)
   const gestureRef = useRef(null); // Pinch: {dist, view, anchor, inert}
   const tapRef = useRef(null); // Touch: Aktion erst beim pointerup
+  // 72-05: running freehand stroke (raw samples) and eraser drag; `live` re-renders the ink.
+  const strichRef = useRef(null); // { pointerId, roh: [{x, y, p}] }
+  const radierRef = useRef(null); // { pointerId, pointerType }
+  const [live, setLive] = useState(null);
 
   // Werkzeugwechsel bricht einen aktiven Entwurf ab — sonst zeichnet der
   // Kreis-Modus mit dem alten Linien-Startpunkt weiter (und umgekehrt).
@@ -183,6 +192,10 @@ export default function SketchCanvas({
         onDragEnd();
       }
       tapRef.current = null;
+      // 72-05: a second finger is a gesture, not ink — drop the stroke of the first finger.
+      strichRef.current = null;
+      radierRef.current = null;
+      setLive(null);
       return;
     }
     if (pointersRef.current.size > 2 || gestureRef.current) return;
@@ -192,6 +205,19 @@ export default function SketchCanvas({
     if (e.button === 1) {
       e.preventDefault();
       panRef.current = { x: e.clientX, y: e.clientY };
+      return;
+    }
+
+    // 72-05: pen eraser end / barrel eraser button (Pointer Events: buttons bit 32) erases in any tool.
+    const stiftRadierer = e.pointerType === "pen" && (e.buttons & 32) === 32;
+    if ((tool === "radierer" || stiftRadierer) && onErase) {
+      radierRef.current = { pointerId: e.pointerId, pointerType: e.pointerType };
+      onErase(w, hitRadius(e.pointerType) * 1.5 / view.scale);
+      return;
+    }
+    if (tool === "freihand" && onAddStroke && e.button === 0) {
+      strichRef.current = { pointerId: e.pointerId, roh: [{ ...w, p: druckVon(e) }] };
+      setLive(strichRef.current.roh);
       return;
     }
     if (e.button !== 0) return;
@@ -246,6 +272,20 @@ export default function SketchCanvas({
       return;
     }
 
+    // 72-05: ink — all coalesced samples of the frame (a pen reports 200+ Hz, the frame 60 Hz).
+    if (strichRef.current && strichRef.current.pointerId === e.pointerId) {
+      const ereignisse = e.nativeEvent?.getCoalescedEvents?.() || [];
+      for (const ev of ereignisse.length ? ereignisse : [e]) {
+        strichRef.current.roh.push({ ...toWorld(ev.clientX, ev.clientY), p: druckVon(ev) });
+      }
+      setLive([...strichRef.current.roh]);
+      return;
+    }
+    if (radierRef.current && radierRef.current.pointerId === e.pointerId) {
+      onErase?.(toWorld(e.clientX, e.clientY), hitRadius(radierRef.current.pointerType) * 1.5 / view.scale);
+      return;
+    }
+
     if (panRef.current) {
       const dx = e.clientX - panRef.current.x;
       const dy = e.clientY - panRef.current.y;
@@ -296,6 +336,19 @@ export default function SketchCanvas({
 
     panRef.current = null;
 
+    // 72-05: pen up → smooth and hand the stroke over; eraser up → done.
+    if (strichRef.current && strichRef.current.pointerId === e.pointerId) {
+      const roh = strichRef.current.roh;
+      strichRef.current = null;
+      setLive(null);
+      onAddStroke?.(roh);
+      return;
+    }
+    if (radierRef.current && radierRef.current.pointerId === e.pointerId) {
+      radierRef.current = null;
+      return;
+    }
+
     if (dragRef.current) {
       const wasDrag = dragRef.current.moved;
       const pointId = dragRef.current.pointId;
@@ -328,6 +381,10 @@ export default function SketchCanvas({
     if (pointersRef.current.size === 0) gestureRef.current = null;
     tapRef.current = null;
     panRef.current = null;
+    // 72-05: a cancelled pointer (palm rejection, system gesture) leaves no ink behind.
+    strichRef.current = null;
+    radierRef.current = null;
+    setLive(null);
     if (dragRef.current) {
       dragRef.current = null;
       onDragEnd();
@@ -382,7 +439,8 @@ export default function SketchCanvas({
       ref={svgRef}
       viewBox={`0 0 ${VB_W} ${VB_H}`}
       className="w-full h-full bg-white rounded-lg border border-slate-200 touch-none select-none"
-      style={{ cursor: tool === "select" ? (hoverPt ? "pointer" : "default") : "crosshair" }}
+      style={{ cursor: tool === "select" ? (hoverPt ? "pointer" : "default") : tool === "radierer" ? "cell" : "crosshair" }}
+      data-werkzeug={tool}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -403,6 +461,11 @@ export default function SketchCanvas({
         hoverPt={hoverPt}
         onSelect={onSelect}
       />
+
+      {/* 72-05: the stroke being drawn, smoothed like the stored one */}
+      {live && live.length > 0 && (
+        <path d={strichPfad({ punkte: kompakt(glaetten(live)), breite: stift.breite }, X, Y)} fill={stift.farbe} fillOpacity={0.85} data-testid="strich-live" />
+      )}
 
       {/* Entwurf (Gummiband) */}
       {draft && tool === "line" && (() => {
@@ -451,3 +514,15 @@ function distPointSegment(p, a, b) {
 }
 
 // glyphPos/massText leben jetzt in SketchGeometry.jsx (gemeinsames Rendering).
+
+/**
+ * Pressure of a pointer sample, 0…1 (72-05). Pointer Events report 0.5 for a pressed mouse and
+ * for most touch screens; some touch screens report 0 or 1 while touching — read as "no sensor".
+ * @param {{pressure?: number, pointerType?: string}} e
+ * @returns {number}
+ */
+function druckVon(e) {
+  const p = Number(e?.pressure);
+  if (e?.pointerType !== "pen") return 0.5;
+  return Number.isFinite(p) && p > 0 ? Math.min(1, p) : 0.5;
+}

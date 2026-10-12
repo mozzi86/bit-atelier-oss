@@ -442,7 +442,7 @@ export default function BimViewer() {
                   }
                   disabled={!buildings.length}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("Gebäude")}>
                     <SelectValue placeholder={buildings.length ? t("Gebäude wählen…") : t("Noch kein Gebäude")} />
                   </SelectTrigger>
                   <SelectContent>

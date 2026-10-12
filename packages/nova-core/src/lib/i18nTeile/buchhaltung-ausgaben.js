@@ -117,4 +117,6 @@ export const EN = {
   "§ 13b — Reverse Charge": "§ 13b — reverse charge",
   "— kein Fahrzeug —": "— no vehicle —",
   "— kein Projekt —": "— no project —",
+  // Storage rule 11.10.2026: receipt content may live in the object store and be missing
+  "Beleg nicht gefunden.": "Receipt not found.",
 };

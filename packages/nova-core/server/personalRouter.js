@@ -30,17 +30,21 @@ import { istPersonalEntitaet } from '../src/api/personalEntitaeten.js';
 /**
  * @param {ReturnType<typeof import('./db.js').createDb>} db the personal.json store
  * @param {ReturnType<typeof import('./blobs.js').createBlobStore>} blobs the personal-blobs/ store
- * @param {{lokalGebunden: boolean}} optionen loopback flag (server/index.js computes it from API_HOST)
+ * @param {{lokalGebunden: boolean, anfrageEntfernt?: (req: any) => boolean}} optionen loopback flag
+ *   (server/index.js computes it from API_HOST); anfrageEntfernt = this request comes from another device
+ *   (93-03 office mode: server/bueroRouter.js sets req.bitZugang) — default: never
  * @returns {import('express').Router}
  */
-export function personalRouter(db, blobs, { lokalGebunden } = /** @type {any} */ ({})) {
+export function personalRouter(db, blobs, { lokalGebunden, anfrageEntfernt = () => false } = /** @type {any} */ ({})) {
   const r = express.Router();
 
   // D-P80-05: outside loopback, refuse unless the office explicitly opted in.
   // r.use() with a path prefix matches every method under it, same pattern as
-  // the LlmConnection sperre in routes.js.
-  const sperre = (_req, res, next) => {
-    if (!lokalGebunden && process.env.PERSONAL_LAN !== '1') {
+  // the LlmConnection sperre in routes.js. 93-03: also per request — a paired
+  // LAN device of the office mode is "outside loopback" even though the server
+  // still binds 127.0.0.1 (defence in depth behind the office-mode gate).
+  const sperre = (req, res, next) => {
+    if ((!lokalGebunden || anfrageEntfernt(req)) && process.env.PERSONAL_LAN !== '1') {
       return res.status(403).json({
         error:
           'Personaldaten nur lokal erreichbar (Server nicht an Loopback gebunden). ' +

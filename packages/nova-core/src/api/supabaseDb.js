@@ -25,9 +25,21 @@ import {
   datensatzAusZeile,
   zeileAusDatensatz,
 } from './abfrage.js';
+import { mitgliedschaftAuswerten } from '../lib/rollen.js';
+// 89-07 (D-BW-05): in the hosted edition the Supabase row is the truth and every BimModel layer
+// merges last-write-wins on its updatedAt — a late write of an older layer never wins.
+import { layerLww } from '../lib/speicherWahrheit.js';
 
 /** Plain-text message for every auth failure — users must know why nothing saved. */
 const AUTH_MELDUNG = 'Anmeldung abgelaufen — bitte neu anmelden';
+
+/**
+ * Plain-text message when a row rule refused (Postgres 42501/42502: RLS
+ * violation, missing column grant). NOT the session message: a fresh login
+ * changes nothing, and pointing at the session sends people searching at the
+ * wrong end for half an hour (74-01 Task 14).
+ */
+export const REGEL_MELDUNG = 'Kein Zugriff auf diesen Datensatz (Regel greift)';
 
 /**
  * Error class carrying an HTTP-ish status (and optional PostgREST code) so
@@ -64,7 +76,9 @@ function wirf(error, kontext) {
   let status = Number(error?.status || error?.statusCode) || 500;
   let message = `${kontext}: ${meldung}`;
   if (/^PGRST3\d\d$/.test(code)) status = 401;
-  if (code === '42501' || code === '42502') status = 403;
+  if (code === '42501' || code === '42502') {
+    throw new ApiFehler(`${REGEL_MELDUNG} (${kontext}: ${meldung})`, 403, code);
+  }
   if (status === 401 || status === 403) {
     // Session problem: the actionable message wins, the technical detail rides
     // along in parentheses for the console/support.
@@ -197,7 +211,11 @@ export function entityClientSupabase(name) {
       // `jsonb ||` RPC was considered (57-02 <interfaces>) and deferred until
       // a measurement shows the extra round trip hurts.
       const vorhandene = await this.get(id); // throws 404 like Express
-      const gemergt = { ...vorhandene, ...datensatz, id };
+      // 89-07: BimModel layers last-write-wins per layer (layerLww); other entities and the
+      // non-layer fields keep the flat merge.
+      const gemergt = name === 'BimModel'
+        ? { ...layerLww(vorhandene, datensatz).ergebnis, id }
+        : { ...vorhandene, ...datensatz, id };
       // updated_date is set by the DB trigger (57-01/0001) — never from here.
       const { id: _i, created_date: _c, updated_date: _u, ...nurData } = gemergt;
       const { data, error } = await supabaseClient()
@@ -233,8 +251,13 @@ let orgCache = null;
 export const authSupabase = {
   /**
    * The current user in the Express DEV_USER-compatible shape, so no page has
-   * to branch on the data path.
-   * @returns {Promise<{ id: string, full_name: string, email: string, role: string }>}
+   * to branch on the data path — plus role group and rights (74-01).
+   * @returns {Promise<{ id: string, full_name: string, email: string, role: string,
+   *   intern: boolean, extern: boolean, zugriffstrennung: boolean, stufe: string,
+   *   rechte: Record<string, boolean> }>}
+   *   role in the 0006 vocabulary (stage-1 admin/mitglied normalised to
+   *   owner/planner); no membership → 'gast' without rights (fail-shut) but
+   *   extern=false, so the office shell keeps its "no office assigned" message
    * @throws {ApiFehler} with status 401 when there is no session
    */
   async me() {
@@ -242,19 +265,27 @@ export const authSupabase = {
     if (error) wirf(error, 'auth.me');
     const user = data?.user;
     if (!user) throw new ApiFehler(AUTH_MELDUNG, 401);
-    // Role from the org membership (57-01: 'admin'|'mitglied'); own rows only,
-    // per the org_members select policy.
+    // Own rows only, per the org_members select policy. `select('*')` on
+    // purpose: before migration 0006 the flag columns do not exist, and naming
+    // them would break the login of the live project; rollen.js reads both
+    // schemas.
     const { data: mitgliedschaft } = await supabaseClient()
       .from('org_members')
-      .select('role')
+      .select('*')
       .eq('user_id', user.id)
       .limit(1)
       .maybeSingle();
+    const m = mitgliedschaftAuswerten(mitgliedschaft);
     return {
       id: user.id,
       full_name: user.user_metadata?.full_name || user.email || 'Nutzer',
       email: user.email || '',
-      role: mitgliedschaft?.role || 'mitglied',
+      role: m.rolle,
+      intern: m.intern,
+      extern: m.extern,
+      zugriffstrennung: m.zugriffstrennung,
+      stufe: m.stufe,
+      rechte: m.rechte,
     };
   },
 
@@ -502,3 +533,32 @@ export const blobsSupabase = {
     return { deleted: true };
   },
 };
+
+/**
+ * 78-04 (RC-30): source of the full export — every record of the caller's org (all entities, paged by
+ * 1 000 rows, PostgREST's default cap) and every object of the org's blob folder. RLS limits both to the
+ * org; the org_id predicate is defense in depth as in basis().
+ * @returns {Promise<{org: string, datensaetze: Array<object>, blobs: Array<{id: string, json: any}>}>}
+ */
+export async function gesamtExportQuelleSupabase() {
+  const org = await authSupabase.aktuelleOrgId();
+  const datensaetze = [];
+  for (let von = 0; ; von += 1000) {
+    const { data, error } = await supabaseClient().from('records').select(SPALTEN).eq('org_id', org)
+      .order('id', { ascending: true }).range(von, von + 999);
+    if (error) wirf(error, 'gesamtexport records');
+    for (const z of data || []) datensaetze.push({ entity: z.entity, ...datensatzAusZeile(z) });
+    if (!data || data.length < 1000) break;
+  }
+  const blobs = [];
+  for (let von = 0; ; von += 1000) {
+    const { data, error } = await supabaseClient().storage.from('blobs').list(org, { limit: 1000, offset: von });
+    if (error) wirf(error, 'gesamtexport blobs');
+    for (const o of data || []) {
+      const id = String(o.name || '').replace(/\.json$/, '');
+      if (id) blobs.push({ id, json: await blobsSupabase.get(id) });
+    }
+    if (!data || data.length < 1000) break;
+  }
+  return { org, datensaetze, blobs };
+}

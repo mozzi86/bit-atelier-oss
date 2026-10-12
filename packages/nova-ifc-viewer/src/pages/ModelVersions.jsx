@@ -160,12 +160,12 @@ export default function ModelVersions() {
                   <>
                     <div className="flex items-center gap-2 mb-3">
                       <Select value={aId} onValueChange={setAId}>
-                        <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-label={t("Ausgangsstand")} className="w-40"><SelectValue /></SelectTrigger>
                         <SelectContent>{versions.map((v) => <SelectItem key={v.id} value={v.id}>v{v.version} — {v.message}</SelectItem>)}</SelectContent>
                       </Select>
                       <span className="text-slate-400">→</span>
                       <Select value={bId} onValueChange={setBId}>
-                        <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-label={t("Vergleichsstand")} className="w-40"><SelectValue /></SelectTrigger>
                         <SelectContent>{versions.map((v) => <SelectItem key={v.id} value={v.id}>v{v.version} — {v.message}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>

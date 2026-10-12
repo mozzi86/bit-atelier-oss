@@ -2,6 +2,10 @@
 // @designer darf @designer importieren (ESLint-Boundary) — die
 // Barrierefreiheits-Faustformeln kommen aus der Fachlib statt aus einer Kopie.
 import { aufzugPflicht, erfBarrierefreiErreichbar } from "@designer/lib/accessibility";
+import { OFFEN } from "@designer/lib/pruefStatus";
+
+// 72-04: shared vocabulary of the concept checks, re-exported for the planner components.
+export { OFFEN, gesamtStatus, konzeptAuswertung } from "@designer/lib/pruefStatus";
 
 export const UNIT_TYPES = {
   studio: { label: "Studio", min: 25, default: 32 },
@@ -150,4 +154,9 @@ export const STATUS_STYLE = {
   warn: { color: "bg-amber-100 text-amber-800", dot: "bg-amber-500", label: "Hinweis" },
   fail: { color: "bg-rose-100 text-rose-700", dot: "bg-rose-500", label: "Nicht erfüllt" },
   [UNCHECKED]: { color: "bg-slate-100 text-slate-600", dot: "bg-slate-300", label: "nicht geprüft" },
+  // 72-04: input missing — not evaluable, neither met nor violated (pruefStatus.js).
+  [OFFEN]: { color: "bg-slate-100 text-slate-600 border border-dashed border-slate-300", dot: "bg-white border border-slate-400", label: "offen" },
+  // 73-13: fourth state — rule broken, deviation / protection of existing use documented (abweichung.js).
+  // Not a pass and not "nicht geprüft": the rule was checked and is knowingly not met.
+  abweichung: { color: "bg-violet-100 text-violet-800", dot: "bg-violet-500", label: "Abweichung" },
 };

@@ -66,7 +66,7 @@ export default function ProFormaAnalysis({ data, projectData, onChange }) {
             ].map(({ key, label }) => (
               <div key={key} className="space-y-1">
                 <Label>{label}</Label>
-                <Input type="number" value={financials[key]} onChange={(e) => update(key, e.target.value)} />
+                <Input aria-label={label} type="number" value={financials[key]} onChange={(e) => update(key, e.target.value)} />
               </div>
             ))}
             <div className="p-3 bg-slate-100 rounded-lg">
@@ -91,7 +91,7 @@ export default function ProFormaAnalysis({ data, projectData, onChange }) {
             ].map(({ key, label }) => (
               <div key={key} className="space-y-1">
                 <Label>{label}</Label>
-                <Input type="number" step="0.01" value={financials[key]} onChange={(e) => update(key, e.target.value)} />
+                <Input aria-label={label} type="number" step="0.01" value={financials[key]} onChange={(e) => update(key, e.target.value)} />
               </div>
             ))}
             <div className="grid grid-cols-2 gap-3">

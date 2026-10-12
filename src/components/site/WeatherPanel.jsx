@@ -3,15 +3,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/ca
 import { Button } from "@core/components/ui/button";
 import { Badge } from "@core/components/ui/badge";
 import { CloudSun, Wind, RefreshCw, Plane } from "lucide-react";
+import { useI18n } from "@core/lib/i18n";
 
 export default function WeatherPanel({ weather, restrictions, loading, refresh, isSimulated, onSimulate, onClearSim }) {
+  const { t } = useI18n();
   const gust = weather?.wind_gusts ?? weather?.wind_speed ?? 0;
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between text-base">
           <span className="flex items-center gap-2"><CloudSun className="w-4 h-4" /> Wetter & Sperren</span>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={refresh} title="Aktualisieren">
+          <Button aria-label={t("Wetter aktualisieren")} variant="ghost" size="icon" className="h-7 w-7" onClick={refresh} title="Aktualisieren">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </CardTitle>

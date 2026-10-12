@@ -19,6 +19,7 @@ import { useBuildingProgram, programMetrics, footprintWD } from "@core/lib/useBu
 import ErdbebenSimulation from "@designer/components/ErdbebenSimulation";
 // Phase 40: Tragwerk auf dem Grundriss (Lasteinzug je echter Stütze, Träger, Berechnungslauf).
 import TragwerkPlan from "./TragwerkPlan";
+import { useI18n } from "@core/lib/i18n";
 
 const de = (n) => Math.round(Number(n) || 0).toLocaleString("de-DE");
 
@@ -44,6 +45,7 @@ const GRUENDUNGSARTEN = [
 ];
 
 export default function StaticsPlanner() {
+  const { t } = useI18n();
   const store = useBuildingProgram();
   const pm = programMetrics(store);
   const { d } = footprintWD(store.footprintM);
@@ -127,28 +129,28 @@ export default function StaticsPlanner() {
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Bauweise</label>
                 <Select value={bauweise} onValueChange={setBauweise}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Bauweise")}><SelectValue /></SelectTrigger>
                   <SelectContent>{BAUWEISEN.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Tragsystem</label>
                 <Select value={tragsystem} onValueChange={setTragsystem}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Tragsystem")}><SelectValue /></SelectTrigger>
                   <SelectContent>{TRAGSYSTEME.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Deckensystem</label>
                 <Select value={deckensystem} onValueChange={setDeckensystem}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Deckensystem")}><SelectValue /></SelectTrigger>
                   <SelectContent>{DECKENSYSTEME.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Aussteifung</label>
                 <Select value={aussteifung} onValueChange={setAussteifung}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Aussteifung")}><SelectValue /></SelectTrigger>
                   <SelectContent>{AUSSTEIFUNGEN.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
@@ -172,7 +174,7 @@ export default function StaticsPlanner() {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Nutzungskategorie</label>
                 <Select value={nutzungskategorie} onValueChange={onKategorie}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Nutzungskategorie")}><SelectValue /></SelectTrigger>
                   <SelectContent>{Object.entries(LOAD_CATEGORIES).map(([k, c]) => <SelectItem key={k} value={k}>{c.label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
@@ -182,7 +184,7 @@ export default function StaticsPlanner() {
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Schneelastzone</label>
                 <Select value={schneezone} onValueChange={setSchneezone}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Schneelastzone")}><SelectValue /></SelectTrigger>
                   <SelectContent>{["1", "2", "3"].map((o) => <SelectItem key={o} value={o}>Zone {o}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
@@ -190,7 +192,7 @@ export default function StaticsPlanner() {
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Windzone</label>
                 <Select value={windzone} onValueChange={setWindzone}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Windzone")}><SelectValue /></SelectTrigger>
                   <SelectContent>{["1", "2", "3", "4"].map((o) => <SelectItem key={o} value={o}>WZ {o}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
@@ -203,7 +205,7 @@ export default function StaticsPlanner() {
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Gründungsart</label>
                 <Select value={gruendungsart} onValueChange={setGruendungsart}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Gründungsart")}><SelectValue /></SelectTrigger>
                   <SelectContent>{GRUENDUNGSARTEN.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
@@ -211,7 +213,7 @@ export default function StaticsPlanner() {
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Grundwasserstand relevant</label>
                 <Select value={grundwasser} onValueChange={setGrundwasser}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Grundwasserstand relevant")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="nein">nein</SelectItem>
                     <SelectItem value="ja">ja (Auftrieb prüfen)</SelectItem>
@@ -227,21 +229,21 @@ export default function StaticsPlanner() {
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Betongüte</label>
                 <Select value={betonguete} onValueChange={setBetonguete}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Betongüte")}><SelectValue /></SelectTrigger>
                   <SelectContent>{Object.entries(BETON_GRADES).map(([k, g]) => <SelectItem key={k} value={k}>{g.label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Betonstahl</label>
                 <Select value="B500B" disabled>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Betonstahl")}><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="B500B">B500B</SelectItem></SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Erdbebenzone (EC8 / früher DIN 4149)</label>
                 <Select value={erdbebenzone} onValueChange={setErdbebenzone}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Erdbebenzone (EC8 / früher DIN 4149)")}><SelectValue /></SelectTrigger>
                   <SelectContent>{["0", "1", "2", "3"].map((o) => <SelectItem key={o} value={o}>Zone {o}</SelectItem>)}</SelectContent>
                 </Select>
               </div>

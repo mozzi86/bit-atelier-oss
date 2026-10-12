@@ -8,6 +8,10 @@
 
 /** Vorlage für ein neues Projekt: die Ablage-Systematik des Büros. */
 export const ORDNER_VORLAGE = [
+  // Phase 81 (81-01): contract and fee documents of the office (fee offers, the
+  // architect's contract with its confirmation, fee amendments). "Nachträge" under
+  // 05_Ausschreibung are CONSTRUCTION change orders — a different thing.
+  { name: "00_Vertrag & Honorar", kinder: ["Angebote", "Vertrag", "Honorarnachträge"] },
   { name: "01_Grundlagen", kinder: ["Bestandsunterlagen", "Gutachten", "Vermessung"] },
   { name: "02_Planung", kinder: ["Entwurf", "Genehmigung", "Ausführung"] },
   // Fachplanung spiegelt die Reiter des Komplex-Designers — ein Brandschutzplan gehört
@@ -25,7 +29,8 @@ export const ORDNER_VORLAGE = [
   { name: "06_Kosten", kinder: ["Kostenberechnung", "Kostenkontrolle"] },
   { name: "07_Berichtswesen", kinder: ["Protokolle", "Wochenstatus"] },
   { name: "08_Behörden", kinder: [] },
-  { name: "09_Schriftverkehr", kinder: [] },
+  // 82-01: incoming and outgoing mail of the register (Postbuch) in their own folders.
+  { name: "09_Schriftverkehr", kinder: ["Eingang", "Ausgang"] },
 ];
 
 // EINZIGE QUELLE der Ablage-Regel (Weisung 26.08.2026: „das Prinzip der einzigen Quelle,
@@ -70,8 +75,18 @@ export const ZIELORDNER = {
   "Wochenstatus": ["07_Berichtswesen", "Wochenstatus"],
   "Nachweis": ["01_Grundlagen", "Gutachten"],
   "Gutachten": ["01_Grundlagen", "Gutachten"],
+  // 73-10: photo of a finding on an existing element (opening, damage …)
+  "Bestandsfoto": ["01_Grundlagen", "Bestandsunterlagen"],
   "Behörde": ["08_Behörden"],
   "Schriftverkehr": ["09_Schriftverkehr"],
+  // Phase 82: the mail register (82-05) files scans and letters by direction.
+  "Posteingang": ["09_Schriftverkehr", "Eingang"],
+  "Postausgang": ["09_Schriftverkehr", "Ausgang"],
+  // Phase 81: fee chain of the office (never the construction "Nachtrag" above)
+  "Honorarangebot": ["00_Vertrag & Honorar", "Angebote"],
+  "Architektenvertrag": ["00_Vertrag & Honorar", "Vertrag"],
+  "Auftragsbestätigung": ["00_Vertrag & Honorar", "Vertrag"],
+  "Honorarnachtrag": ["00_Vertrag & Honorar", "Honorarnachträge"],
 };
 
 // Zweiter Zugang zur selben Regel: der Reiter-Schlüssel des Komplex-Designers.
@@ -80,6 +95,7 @@ export const ZIELORDNER = {
 // „erzeugt keine ablagefähigen Dokumente".
 export const REITER_ZU_ORDNER = {
   site: ["01_Grundlagen", "Vermessung"],
+  bauaufnahme: ["01_Grundlagen", "Bestandsunterlagen"], // 73-09
   studio: ["02_Planung", "Entwurf"],
   program: ["02_Planung", "Entwurf"],
   compliance: ["02_Planung", "Genehmigung"],

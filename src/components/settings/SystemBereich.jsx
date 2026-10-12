@@ -1,6 +1,8 @@
 // Settings area "System & Info" (key `system`, 80-01): what this installation is,
 // read-only — build, data path, API base, user and role, personnel access, and
-// Setting keys that exist in more than one row.
+// Setting keys that exist in more than one row. 92-04: the "Updates" card of the
+// local app (UpdateEinstellungen.jsx) — a writable part of this area; 93-03: the card
+// "Büro-Modus (Mehrplatz)" (BueroModusKarte.jsx) — the other one.
 //
 // Duplicates are only COUNTED here, never deleted: which row holds the value the
 // user meant cannot be decided by the app (@core/lib/einstellungen.js). A second
@@ -18,6 +20,9 @@ import { doppelteSchluessel } from "@core/lib/einstellungen";
 import { DATENQUELLE, IST_LOKAL } from "@core/lib/umgebung";
 import { APP_VERSION } from "@core/lib/projektInfo";
 import { appInstallieren, beiInstallAenderung, browserHinweis, installStatus } from "@/lib/settings/appInstall";
+import UpdateEinstellungen from "@/components/update/UpdateEinstellungen.jsx";
+import BueroModusKarte from "./BueroModusKarte.jsx";
+import ProgrammBeenden from "./ProgrammBeenden.jsx";
 
 /** Ready since 80-01. */
 export const BEREIT = true;
@@ -147,6 +152,12 @@ export default function SystemBereich({ kontext }) {
         <Info className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("System & Info")}
       </h2>
       <AppInstallieren t={t} />
+      {/* 92-04: version, last update check, automatic check, "hold this version until" (local app only). */}
+      <UpdateEinstellungen />
+      {/* 93-03: office mode (second workstation / site tablet in the LAN), local express build only. */}
+      <BueroModusKarte />
+      {/* 93-11: the hidden server keeps running after the last window — "Programm beenden" (local express build only). */}
+      <ProgrammBeenden />
       <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]">
         {zeilen.map((z) => (
           <React.Fragment key={z.name}>

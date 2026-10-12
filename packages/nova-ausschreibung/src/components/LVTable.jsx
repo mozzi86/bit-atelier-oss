@@ -1,7 +1,10 @@
-import React, { useState, useRef } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Button, buttonVariants } from "@core/components/ui/button";
 import { Badge } from "@core/components/ui/badge";
+import { Input } from "@core/components/ui/input";
+import FensterTabelle from "@core/components/FensterTabelle";
+import { passtFilter } from "@core/lib/fenster";
 import { cn } from "@core/lib/utils";
 import { useI18n } from "@core/lib/i18n";
 import {
@@ -10,7 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  eur, eur0, num, gp, groupByTrade, lvTotal, dinLabel, toCsv, downloadCsv,
+  eur, eur0, num, gp, groupByTrade, lvTotal, lvBedarfSumme, istBedarfsposition, dinLabel, toCsv, downloadCsv,
   positionMode, MODUS_LABEL, MODUS_BADGE, AUSSCHLUSS_LABEL, modellbindungsGrad,
 } from "./avaUtils";
 import { filterTreffer } from "@ava/lib/avaFilters";
@@ -23,6 +26,10 @@ import LVPositionForm from "./LVPositionForm";
 // "Mengen aus dem BIM-Modell" via onZuBimMengen), the trade toggle announces its
 // state (aria-expanded), row icons carry the OZ in their name, and deleting a
 // position asks inline ("Wirklich löschen?" Ja/Nein) instead of acting on one click.
+// 72-21 (register no. 134): a filter field above the trades filters the DATA (OZ, title,
+// short text, trade, cost group, unit) before grouping; each trade table draws only its
+// visible rows above 60 positions (FensterTabelle). Exports (CSV, GAEB) and the
+// headline total keep working on the full list; printing draws every row.
 export default function LVTable({
   positions, onCreate, onUpdate, onDelete, onShowDetail = null, onImport,
   filters = [], elements = [], dinKatalog = [],
@@ -40,6 +47,7 @@ export default function LVTable({
   const [collapsed, setCollapsed] = useState({});
   // Id of the position whose delete icon was pressed once; null = no question open.
   const [loeschFrage, setLoeschFrage] = useState(null);
+  const [filterText, setFilterText] = useState("");
   const loeschKnopfRef = useRef(null);
   // Native buttons with the shadcn classes: <Button> costs a tsc error per use.
   const iconKnopf = cn(buttonVariants({ variant: "ghost", size: "icon" }), "h-7 w-7");
@@ -50,8 +58,15 @@ export default function LVTable({
     loeschKnopfRef.current?.focus();
   };
 
-  const groups = groupByTrade(positions);
+  const gefiltert = useMemo(
+    () => (filterText.trim()
+      ? positions.filter((p) => passtFilter(filterText, [p.oz, p.title, p.short_text, p.trade, p.din276, p.unit]))
+      : positions),
+    [positions, filterText],
+  );
+  const groups = groupByTrade(gefiltert);
   const total = lvTotal(positions);
+  const bedarfSumme = lvBedarfSumme(positions); // 73-08: contingency items, shown but not in the total
   const bindung = modellbindungsGrad(positions);
 
   const openNew = (trade) => { setEditing(null); setDefaultTrade(trade || ""); setShowForm(true); };
@@ -89,6 +104,7 @@ export default function LVTable({
         langtext: p.long_text || "",
         menge_final: p.quantity,
         einheit: p.unit,
+        bedarfsposition: istBedarfsposition(p),
         titel: p.titel_pfad || [p.trade || "", p.title || ""],
         titel_oz: p.titel_oz || [String(p.oz || "").slice(0, 2), String(p.oz || "").slice(2, 4)],
       })),
@@ -167,7 +183,29 @@ export default function LVTable({
         </div>
       </div>
 
-      {groups.length === 0 && (
+      {positions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            placeholder={t("Positionen filtern: OZ, Titel, Kurztext, Gewerk, KG")}
+            aria-label={t("Positionen filtern")}
+            data-testid="lv-filter"
+            className="h-8 max-w-md text-sm"
+          />
+          {filterText.trim() && (
+            <span className="text-xs text-slate-500" data-testid="lv-filter-stand">
+              {t("{{n}} von {{m}} Positionen").replace("{{n}}", String(gefiltert.length)).replace("{{m}}", String(positions.length))}
+            </span>
+          )}
+        </div>
+      )}
+
+      {positions.length > 0 && groups.length === 0 && (
+        <p className="text-sm text-slate-500" data-testid="lv-filter-leer">{t("Keine Position passt zum Filter.")}</p>
+      )}
+
+      {positions.length === 0 && (
         <Card><CardContent className="p-8 text-center space-y-4">
           <p className="text-slate-500">
             {t("Noch keine Positionen. Legen Sie die erste Position an oder übernehmen Sie Mengen aus dem BIM-Modell.")}
@@ -219,9 +257,12 @@ export default function LVTable({
           </CardHeader>
           {!collapsed[grp.trade] && (
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
+              <FensterTabelle
+                liste={grp.items}
+                spalten={7}
+                tabelleKlasse="w-full text-sm"
+                testId="lv-gewerk-tabelle"
+                kopf={(
                     <tr className="text-left text-xs text-slate-400 border-b">
                       <th className="py-2 px-3">OZ</th>
                       <th className="py-2 px-3">Position</th>
@@ -231,9 +272,8 @@ export default function LVTable({
                       <th className="py-2 px-3 text-right">GP</th>
                       <th className="py-2 px-3 text-right">Aktion</th>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {grp.items.map((p) => (
+                )}
+                zeile={(p) => (
                       <tr
                         key={p.id}
                         onClick={onSelect ? () => onSelect(p.id === selectedId ? null : p.id) : undefined}
@@ -314,7 +354,9 @@ export default function LVTable({
                               return badge;
                             })()}
                           </div>
-                          <div className="text-xs text-slate-400">{p.short_text} · {dinLabel(p.din276, dinKatalog)}</div>
+                          <div className="text-xs text-slate-400">{p.short_text} · {dinLabel(p.din276, dinKatalog)}
+                            {istBedarfsposition(p) && <span className="ml-1 rounded bg-amber-100 px-1 text-amber-800" data-testid="lv-bedarf">{t("Bedarfsposition — nicht in der Summe")}</span>}
+                          </div>
                         </td>
                         <td className="py-2 px-3 text-right tabular-nums">{num(p.quantity)}</td>
                         <td className="py-2 px-3 text-slate-500">{p.unit}</td>
@@ -392,10 +434,8 @@ export default function LVTable({
                           </div>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                )}
+              />
             </CardContent>
           )}
         </Card>
@@ -404,7 +444,9 @@ export default function LVTable({
       {positions.length > 0 && (
         <Card className="bg-slate-900 text-white">
           <CardContent className="p-4 flex items-center justify-between">
-            <span className="text-sm text-slate-300">Kostenanschlag gesamt (netto)</span>
+            <span className="text-sm text-slate-300">Kostenanschlag gesamt (netto)
+              {bedarfSumme > 0 && <span className="block text-xs text-amber-300" data-testid="lv-bedarf-summe">{t("ohne Bedarfspositionen")}: {eur0(bedarfSumme)}</span>}
+            </span>
             <span className="text-2xl font-bold">{eur0(total)}</span>
           </CardContent>
         </Card>

@@ -1,0 +1,39 @@
+{
+  "name": "efh-beispiel",
+  "geschosse": [
+    {
+      "name": "EG",
+      "z_m": 0.0,
+      "hoehe_m": 3.0,
+      "decke": {"dicke_m": 0.25},
+      "wandzuege": [
+        {"punkte": [[0, 0], [10, 0], [10, 8], [0, 8]], "geschlossen": true, "dicke_m": 0.365, "aussen": true},
+        {"punkte": [[5, 0.1825], [5, 7.8175]], "dicke_m": 0.115, "aussen": false},
+        {"punkte": [[0.1825, 4], [4.9425, 4]], "dicke_m": 0.115, "aussen": false}
+      ],
+      "oeffnungen": [
+        {"wand": "Wand EG 01", "typ": "fenster", "abstand_m": 1.5, "breite_m": 1.5, "hoehe_m": 1.4, "bruestung_m": 0.9},
+        {"wand": "Wand EG 01", "typ": "tuer", "abstand_m": 6.5, "breite_m": 1.01, "hoehe_m": 2.135},
+        {"wand": "Wand EG 02", "typ": "fenster", "abstand_m": 3.0, "breite_m": 1.2, "hoehe_m": 1.4, "bruestung_m": 0.9},
+        {"wand": "Wand EG 03", "typ": "fenster", "abstand_m": 2.0, "breite_m": 1.2, "hoehe_m": 1.4, "bruestung_m": 0.9},
+        {"wand": "Wand EG 05", "typ": "tuer", "abstand_m": 2.0, "breite_m": 0.885, "hoehe_m": 2.01}
+      ]
+    },
+    {
+      "name": "OG",
+      "hoehe_m": 3.0,
+      "decke": {"dicke_m": 0.2},
+      "wandzuege": [
+        {"punkte": [[0, 0], [10, 0], [10, 8], [0, 8]], "geschlossen": true, "dicke_m": 0.365, "aussen": true},
+        {"punkte": [[5, 0.1825], [5, 7.8175]], "dicke_m": 0.115, "aussen": false},
+        {"punkte": [[5.0575, 4], [9.8175, 4]], "dicke_m": 0.115, "aussen": false}
+      ],
+      "oeffnungen": [
+        {"wand": "Wand OG 01", "typ": "fenster", "abstand_m": 2.0, "breite_m": 1.2, "hoehe_m": 1.4, "bruestung_m": 0.9},
+        {"wand": "Wand OG 02", "typ": "fenster", "abstand_m": 2.0, "breite_m": 1.2, "hoehe_m": 1.4, "bruestung_m": 0.9},
+        {"wand": "Wand OG 04", "typ": "fenster", "abstand_m": 3.0, "breite_m": 1.2, "hoehe_m": 1.4, "bruestung_m": 0.9}
+      ]
+    }
+  ],
+  "dach": {"form": "satteldach", "neigung_grad": 38, "dicke_m": 0.25, "ueberstand_m": 0.0}
+}

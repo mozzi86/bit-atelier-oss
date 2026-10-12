@@ -14,7 +14,10 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, FlaskConical } from "lucide-react";
 import { useI18n } from "@core/lib/i18n";
-import { naechsteSchritteFuer, zielPfad } from "../naechsteSchritte";
+import { zielPfad } from "../naechsteSchritte";
+import { navFlach } from "../navigation";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
+import { weiterMitFuer } from "@/lib/zugriffFilter.js";
 
 /**
  * Next-step bar for the page at `pathname`.
@@ -29,7 +32,9 @@ export default function WeiterMit({ pathname, labor = false }) {
   const { t } = useI18n();
   // The table never points at its own route (unit test); the filter keeps a
   // future slip from rendering a link that goes nowhere.
-  const schritte = naechsteSchritteFuer(pathname).filter((s) => zielPfad(s.ziel) !== pathname);
+  // 82-02: targets whose module the role may not read are left out.
+  const zugriff = useZugriff();
+  const schritte = weiterMitFuer(pathname, zugriff, navFlach).filter((s) => zielPfad(s.ziel) !== pathname);
   if (schritte.length === 0 && !labor) return null;
 
   return (

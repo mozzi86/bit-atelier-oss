@@ -64,6 +64,16 @@ describe("selbstUpdate helpers", () => {
     assert.ok(n.sha?.url.endsWith(".sha256"));
   });
 
+  it("falls back to the releases/latest redirect when the API rate limit is used up", async () => {
+    const fetchFn = async (url) => (String(url).includes("api.github.com")
+      ? new Response("rate limit", { status: 403 })
+      : new Response(null, { status: 302, headers: { location: "https://github.com/mozzi86/bit-atelier-oss/releases/tag/v1.2.3" } }));
+    const n = await neuesteVersion({ fetchFn });
+    assert.equal(n.version, "1.2.3");
+    assert.equal(n.zip?.url, "https://github.com/mozzi86/bit-atelier-oss/releases/download/v1.2.3/BIT-Atelier.zip");
+    assert.ok(n.sha?.url.endsWith("/v1.2.3/BIT-Atelier.zip.sha256"));
+  });
+
   it("allows only GitHub hosts over https; reads the checksum token", () => {
     assert.equal(hostErlaubt("https://objects.githubusercontent.com/a"), true);
     assert.equal(hostErlaubt("http://github.com/a"), false);

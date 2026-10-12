@@ -225,11 +225,11 @@ describe("landscape.js — aussenanlagenChecks() Invarianten", () => {
     assert.equal(c.verdict, "Konzept plausibel");
   });
 
-  it("versiegelung/gruen === null ⇒ warn mit \"nicht berechenbar\", kein stiller pass", () => {
+  it("72-04: versiegelung/gruen === null ⇒ offen mit \"nicht berechenbar\", kein stiller pass", () => {
     const c = aussenanlagenChecks({ ...BASIS, versiegelung: null, gruen: null, plot: 0 });
     for (const key of ["versiegelung", "gruen"]) {
       const item = c.items.find((i) => i.key === key);
-      assert.equal(item.status, "warn", `${key}`);
+      assert.equal(item.status, "offen", `${key}`);
       assert.match(item.detail, /nicht berechenbar/);
       assert.match(item.detail, /Grundstücksfläche eingeben/);
     }
@@ -263,7 +263,7 @@ describe("landscape.js — aussenanlagenChecks() Invarianten", () => {
     for (const v of varianten) {
       const c = aussenanlagenChecks(v);
       for (const i of c.items) {
-        assert.ok(["pass", "warn"].includes(i.status), `unerwarteter Status "${i.status}" (${i.key})`);
+        assert.ok(["pass", "warn", "offen"].includes(i.status), `unerwarteter Status "${i.status}" (${i.key})`);
       }
     }
   });
@@ -274,8 +274,8 @@ describe("landscape.js — aussenanlagenChecks() Invarianten", () => {
       const passes = c.items.filter((i) => i.status === "pass").length;
       assert.equal(c.score, Math.round((passes / c.items.length) * 100));
       assert.ok(c.score >= 0 && c.score <= 100);
-      assert.equal(c.warns, c.items.length - passes);
-      assert.equal(c.verdict, c.warns > 0 ? "Konzept mit Hinweisen" : "Konzept plausibel");
+      assert.equal(c.warns + c.offen, c.items.length - passes); // 72-04: not met = warn + offen
+      assert.equal(c.verdict, c.warns > 0 && c.offen > 0 ? "Konzept mit Hinweisen — Angaben fehlen" : c.warns > 0 ? "Konzept mit Hinweisen" : c.offen > 0 ? "Konzept unvollständig — Angaben fehlen" : "Konzept plausibel"); // 72-04
     }
   });
 

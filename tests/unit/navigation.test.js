@@ -12,6 +12,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { navGroups, navFlach, navSichtbar, seitenBreite } from "@/navigation.js";
+import { MODULE } from "@core/lib/rechte.js";
 
 const APP = new URL("../../src/App.jsx", import.meta.url);
 const I18N = new URL("../../packages/nova-core/src/lib/i18n.jsx", import.meta.url);
@@ -77,8 +78,13 @@ test("jede Route außer /, * und Umleitungen steht im Menü", () => {
   // 80-01 (E-01): the German aliases of /People and /Settings keep the query too.
   assert.ok(routen.some((r) => r.path === "/Personal" && r.umleitung), "/Personal ist keine Umleitung");
   assert.ok(routen.some((r) => r.path === "/Einstellungen" && r.umleitung), "/Einstellungen ist keine Umleitung");
+  // 81-01: Zeit & Honorar vor Büro, E-02 — German route aliases keep the query (E-01).
+  // 82-01 (E-01): /Fristen, /Abwesenheiten, /Schriftverkehr keep the query too.
+  for (const alias of ["/Zeiterfassung", "/Honorar", "/Auftrag", "/Projektcontrolling", "/Fristen", "/Abwesenheiten", "/Schriftverkehr"]) {
+    assert.ok(routen.some((r) => r.path === alias && r.umleitung), `${alias} ist keine Umleitung`);
+  }
   const quelle = fs.readFileSync(APP, "utf8");
-  assert.equal((quelle.match(/<Navigate to="\/(People|Settings)"/g) || []).length, 0, "schlichtes <Navigate> verliert ?tab — UmleitungMitSuche nutzen");
+  assert.equal((quelle.match(/<Navigate to="\/(People|Settings|TimeTracking|Fees|Controlling|Deadlines|Absences|Correspondence)"/g) || []).length, 0, "schlichtes <Navigate> verliert ?tab — UmleitungMitSuche nutzen");
 });
 
 test("jeder Titel und jedes Gruppenlabel hat einen englischen Wörterbucheintrag", () => {
@@ -108,7 +114,9 @@ test("projektfrei und umfang nur an existierenden Routen und mit gültigem Wert"
   const pfade = new Set(routenAusApp().map((r) => r.path));
   // 80-01: "zugang" joins the allowed fields (personnel gate, see the check below).
   // 75-16: "breite" marks drawing pages (one width rule in the shell).
-  const erlaubt = new Set(["title", "url", "icon", "labor", "projektfrei", "umfang", "zugang", "breite"]);
+  // 70-06: "netz" marks modules that need the internet (sidebar hint while offline).
+  // 82-01: "modul" — the rights module of every entry (@core/lib/rechte.js MODULE).
+  const erlaubt = new Set(["title", "url", "icon", "labor", "projektfrei", "umfang", "zugang", "breite", "netz", "modul"]);
   for (const g of navGroups) {
     for (const e of g.items) {
       for (const feld of Object.keys(e)) assert.ok(erlaubt.has(feld), `${e.title}: unbekanntes Feld ${feld}`);
@@ -124,6 +132,8 @@ test("projektfrei und umfang nur an existierenden Routen und mit gültigem Wert"
         assert.equal(e.zugang, "personal", `${e.title}: zugang muss 'personal' sein`);
         assert.equal(e.url, "/People", `${e.title}: zugang nur am Personal-Eintrag`);
       }
+      assert.ok(MODULE.includes(e.modul), `${e.title}: modul ${e.modul} unbekannt`);
+      if ("netz" in e) assert.ok(["teilweise", "noetig"].includes(e.netz), `${e.title}: netz muss 'teilweise' oder 'noetig' sein`);
       if ("breite" in e) {
         assert.equal(e.breite, "voll", `${e.title}: breite muss 'voll' sein`);
         assert.ok(pfade.has(e.url), `${e.title}: breite an ${e.url} ohne Route`);
@@ -131,13 +141,17 @@ test("projektfrei und umfang nur an existierenden Routen und mit gültigem Wert"
     }
   }
   // 80-01: Büro-Gruppe vervollständigt (E-02) — Personal and Einstellungen work without a project.
+  // 81-01: Zeit & Honorar vor Büro, E-02 — the time tracking works without a project (office time).
   const projektfrei = navFlach.filter((e) => e.projektfrei).map((e) => e.url).sort();
-  assert.deepEqual(projektfrei, ["/Accounting", "/AddressBook", "/BitAegis", "/IfcViewer", "/ModelCheck", "/People", "/Settings", "/SketchStudio"]);
+  // 82-01: deadlines, absences and correspondence work without a project.
+  assert.deepEqual(projektfrei, ["/Absences", "/Accounting", "/AddressBook", "/BitAegis", "/Correspondence", "/Deadlines", "/IfcViewer", "/ModelCheck", "/People", "/Settings", "/SketchStudio", "/TimeTracking"]);
   // 75-16: the drawing pages that lift the 1280 px page cap.
   const voll = navFlach.filter((e) => e.breite === "voll").map((e) => e.url).sort();
   assert.deepEqual(voll, ["/BimViewer", "/ComplexDesigner", "/ModelCheck", "/SiteControl"]);
+  // 81-01: time tracking and controlling span all projects.
   const portfolio = navFlach.filter((e) => e.umfang === "portfolio").map((e) => e.url).sort();
-  assert.deepEqual(portfolio, ["/AIDashboard", "/Accounting", "/AtelierDeveloper", "/Dashboard", "/InvestmentPlatform"]);
+  // 82-01: the three office pages of phase 82 span all projects.
+  assert.deepEqual(portfolio, ["/AIDashboard", "/Absences", "/Accounting", "/AtelierDeveloper", "/Controlling", "/Correspondence", "/Dashboard", "/Deadlines", "/InvestmentPlatform", "/TimeTracking"]);
 });
 
 test("verbindliche Namenstabelle: Gruppen, Reihenfolge und Titel je Route", () => {
@@ -148,10 +162,14 @@ test("verbindliche Namenstabelle: Gruppen, Reihenfolge und Titel je Route", () =
       ["/Dashboard", "Projektübersicht"],
       ["/Projects", "Projekte"],
       ["/Reports", "Berichte & Dokumente"],
+      // 82-01 (E-02): deadlines and appointments in "Übersicht".
+      ["/Deadlines", "Fristen & Termine"],
     ]],
     ["Planung", [
       ["/RealEstateFeasibility", "Machbarkeit"],
       ["/ComplexDesigner", "Komplex-Designer"],
+      // 88-06: page "Werkplanung & Baustelle" (plan list; openings, sampling, H&S follow).
+      ["/Werkplanung", "Werkplanung & Baustelle"],
     ]],
     ["Modell & Prüfung", [
       ["/ModelCheck", "Prüf-Suite"],
@@ -166,17 +184,26 @@ test("verbindliche Namenstabelle: Gruppen, Reihenfolge und Titel je Route", () =
     ["KI & Analyse", [
       ["/AIDashboard", "KI-Zentrale"],
     ]],
+    // 81-01: Zeit & Honorar vor Büro, E-02 — 8 groups, "Büro" unchanged.
+    ["Zeit & Honorar", [
+      ["/TimeTracking", "Zeiterfassung"],
+      ["/Fees", "Angebot & Auftrag"],
+      ["/Controlling", "Projektcontrolling"],
+    ]],
     // E-02 (79-01): the former master-data group, renamed to "Büro" in place.
     // 80-01: Büro-Gruppe vervollständigt (E-02) — Personal and Einstellungen inserted,
     // Adressbuch moved behind Personal (order [ASSUMED], D-P80-02); still 7 groups.
     ["Büro", [
       ["/Accounting", "Buchhaltung"],
       ["/People", "Personal"],
+      // 82-01 (E-02): Abwesenheiten after Personal, Schriftverkehr after Adressbuch.
+      ["/Absences", "Abwesenheiten"],
       ["/AddressBook", "Adressbuch"],
+      ["/Correspondence", "Schriftverkehr"],
       ["/Settings", "Einstellungen"],
     ]],
     ["Labor", [
-      ["/SketchStudio", "Constraint-Zeichner"],
+      ["/SketchStudio", "Skizze"],
       ["/SiteControl", "Baustellen-Leitstand"],
       ["/InvestmentPlatform", "Investment"],
       ["/BitAegis", "PDF & Ablage"],
@@ -186,10 +213,11 @@ test("verbindliche Namenstabelle: Gruppen, Reihenfolge und Titel je Route", () =
   ]);
   assert.equal(LABOR?.label, "Labor", "genau die Labor-Gruppe ist zuklappbar");
   assert.equal(navGroups.filter((g) => g.collapsible).length, 1);
-  assert.equal(navGroups.length, 7, "80-01 legt keine Gruppe an und löst keine auf");
+  assert.equal(navGroups.length, 8, "81-01 legt genau die Gruppe „Zeit & Honorar“ an (E-02)");
   // The moved address book entry keeps its 79 fields.
   const adressbuch = navFlach.find((e) => e.url === "/AddressBook");
-  assert.deepEqual(Object.keys(adressbuch).sort(), ["gruppe", "icon", "projektfrei", "title", "url"]);
+  // 82-01: plus the rights module.
+  assert.deepEqual(Object.keys(adressbuch).sort(), ["gruppe", "icon", "modul", "projektfrei", "title", "url"]);
 });
 
 test("navSichtbar: der Personal-Eintrag nur mit Personal-Zugang, alle anderen immer (80-01, DS-12)", () => {

@@ -76,6 +76,8 @@ const EURO_SUFFIX = Object.freeze({ "Euro/Stunde": "/Stunde", "Euro/Monat": "/Mo
 const EINHEIT_UEBERSETZT = new Set([
   "Tag", "Tage", "Monate", "Jahre", "Prozentpunkte", "Werktage", "Arbeitstage",
   "Tage/Woche", "Stunden/Woche", "Anzahl", "MB", "km", "g/km", "Byte",
+  // 81-01: unit of the time rules of the group zeit_honorar.
+  "Minuten",
 ]);
 
 const FELD = "h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";

@@ -6,9 +6,11 @@ import { NumberField, Stat } from "@core/components/Field";
 import { Building, Car, Home, Plus, Trash2 } from "lucide-react";
 import { useBuildingProgram, programMetrics, footprintWD } from "@core/lib/useBuildingProgram";
 import { pxToM, mToPx } from "@core/lib/geo";
+import { useI18n } from "@core/lib/i18n";
 
 // Configure buildings, unit types and parking. data via complexData + callbacks.
 export default function BuildingConfig({ complexData, onBuildingsChange, onUnitsChange, onParkingChange }) {
+  const { t } = useI18n();
   const buildings = complexData?.buildings || [];
   const units = complexData?.unit_types || [];
   const parking = complexData?.parking || { total_spaces: 0, parking_key: 1, barrier_free_spaces: 0, ev_charging_stations: 0 };
@@ -112,7 +114,7 @@ export default function BuildingConfig({ complexData, onBuildingsChange, onUnits
                 <Input value={u.type} onChange={(e) => updUnit(i, { type: e.target.value })} />
                 <Input type="number" value={u.count} onChange={(e) => updUnit(i, { count: Number(e.target.value) })} />
                 <Input type="number" value={u.area} onChange={(e) => updUnit(i, { area: Number(e.target.value) })} />
-                <Button variant="ghost" size="icon" className="text-red-500" onClick={() => removeUnit(i)}>
+                <Button aria-label={t("Einheit entfernen")} variant="ghost" size="icon" className="text-red-500" onClick={() => removeUnit(i)}>
                   <Trash2 className="w-4 h-4" />
                 </Button>
               </div>

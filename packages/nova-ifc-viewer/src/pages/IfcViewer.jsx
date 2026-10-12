@@ -14,6 +14,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { parseZustand, viewerLink } from "@ifc/lib/viewerLink";
 import { neuesTicketUrl } from "@ifc/lib/ticketLink";
+import AttributEditor from "@ifc/components/AttributEditor";
 import { DATENQUELLE } from "@core/lib/umgebung";
 import { seitenWurzel } from "@core/lib/utils";
 import { useI18n } from "@core/lib/i18n";
@@ -22,16 +23,20 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import {
   parseIfcModel, expressIdAtFaceIndex, recolorElements, expandWithDescendants,
-  extractSubGeometry, STATUS_COLORS, HIGHLIGHT_COLOR, SELECT_COLOR, DIM_COLOR,
+  extractSubGeometry, STATUS_COLORS, HIGHLIGHT_COLOR, SELECT_COLOR, DIM_COLOR, sichtbarkeitAnwenden,
 } from "@ifc/lib/ifcGeometry";
+import { statusZaehler, STATUS_OHNE_LABEL } from "@core/lib/bimClassification";
 import { getPositionLink, clearPositionLink, onPositionLink, getTakeoffTarget, setTakeoffTarget, onTakeoffTarget } from "@ifc/lib/ifcLinkStore";
 import { bitApi } from "@core/api/bitApi";
 import { useProject } from "@core/lib/ProjectContext";
-import { saveBimModel } from "@core/lib/useBimModelSync";
+import { saveBimModel, storeGehoertZu } from "@core/lib/useBimModelSync";
+import { buildingProgram } from "@core/lib/useBuildingProgram";
+import { footprintQuelleGemessen } from "@core/lib/footprintQuelle";
 import { grundrissAusModell, geschosseAusModell } from "@ifc/lib/grundriss";
 import { toast } from "sonner";
 import { parseFilterXml, applyNovaFilter } from "@ifc/lib/novaFilters";
 import { byTrade } from "@core/lib/tradeSort";
+import { pruefeAttributeVorUebernahme } from "@ifc/lib/mengenAttributPruefung";
 // Modul-Cache: geparstes Modell überlebt Routen-/Tab-Wechsel (kein Re-Import).
 let MODEL_CACHE = null;
 // Label of the model held in MODEL_CACHE — lets ?beispiel=1 see that the cached model
@@ -88,6 +93,11 @@ export default function IfcViewer({ embedded = false }) {
   const [progress, setProgress] = useState("");
   const [busy, setBusy] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
+  // 89-04 (D-BW-03): show/hide by status. "ohne" = the model does not say — its own switch,
+  // never folded into "neubau".
+  const [statusSichtbar, setStatusSichtbar] = useState({ abbruch: true, neubau: true, bestand: true, ohne: true });
+  const statusSichtbarRef = useRef(statusSichtbar);
+  const [ausgeblendet, setAusgeblendet] = useState(0);
   const [kgFilter, setKgFilter] = useState("");
   const [matchInfo, setMatchInfo] = useState(null);
   const [picked, setPicked] = useState(null);
@@ -234,6 +244,20 @@ export default function IfcViewer({ embedded = false }) {
     };
   }, []);
 
+  // 89-04: status key of an element for the visibility switches ("ohne" for null/unknown).
+  const statusSchluessel = (s) => (s === "abbruch" || s === "neubau" || s === "bestand" ? s : "ohne");
+  // Apply the current switches to the rendered index (degenerate triangles, see ifcGeometry.js).
+  const sichtbarkeitNachStatus = () => {
+    const model = modelRef.current;
+    const attr = meshRef.current?.geometry?.index;
+    if (!model?.merged || !attr) return;
+    const byEid = new Map(model.elements.map((el) => [el.expressId, el]));
+    const sicht = statusSichtbarRef.current;
+    const n = sichtbarkeitAnwenden(model.merged, attr.array, (eid) => sicht[statusSchluessel(byEid.get(eid)?.status)] !== false);
+    attr.needsUpdate = true;
+    setAusgeblendet(n);
+  };
+
   // Modell → Mesh (bei Cache-Treffer auch nach Remount)
   const buildMesh = (model) => {
     const t = threeRef.current;
@@ -254,12 +278,14 @@ export default function IfcViewer({ embedded = false }) {
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
     geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    geo.setIndex(new THREE.BufferAttribute(index, 1));
+    // 89-04: own copy — status hiding rewrites the rendered index, merged.index stays the source.
+    geo.setIndex(new THREE.BufferAttribute(index.slice(), 1));
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide,
       clippingPlanes: [clipPlaneRef.current] });
     const mesh = new THREE.Mesh(geo, mat);
     t.scene.add(mesh);
     meshRef.current = mesh;
+    sichtbarkeitNachStatus();
     // Kamera einpassen
     const cx = (bbox.min[0] + bbox.max[0]) / 2;
     const cy = (bbox.min[1] + bbox.max[1]) / 2;
@@ -714,9 +740,14 @@ export default function IfcViewer({ embedded = false }) {
 
       // Grundriss UND Geschosszahl in einem Zug — beide speisen dieselben Kennzahlen,
       // und ein Grundriss mit falscher Geschosszahl ergibt wieder eine falsche BGF.
-      const patch = { footprintM: r.polygon };
+      // 73-05: the outline carries its provenance (measured, source, storey, raster deviation, date) —
+      // before, quelle/hinweis only reached a toast and nobody could tell a sketch from a survey later.
+      const patch = { footprintM: r.polygon, footprintQuelle: footprintQuelleGemessen(r) };
       if (g.anzahl > 0) patch.storeys = g.anzahl;
       await saveBimModel(projectId, patch);
+      // ...and the shared program store when it holds this project: otherwise the designer's write-back
+      // (useBimModelSync) would overwrite the measured outline with the next program value.
+      if (storeGehoertZu(projectId)) buildingProgram.set(patch);
 
       const wo = r.geschoss ? `Geschoss ${r.geschoss}` : "alle Geschosse vereinigt";
       toast.success(
@@ -743,6 +774,30 @@ export default function IfcViewer({ embedded = false }) {
     }
   };
 
+  // 72-04: attribute check of the marked elements against the target position (DIN 276,
+  // fire rating, load-bearing). Shown before the takeover, stored with it; never a block
+  // (reason in mengenAttributPruefung.js).
+  const attributPruefung = (() => {
+    const model = modelRef.current;
+    const ziel = positionen.find((p) => p.id === zielId);
+    const eids = aktiveTreffer();
+    if (!model || !ziel || !eids.length) return null;
+    const set = new Set(eids);
+    return pruefeAttributeVorUebernahme(model.elements.filter((el) => set.has(el.expressId)), ziel);
+  })();
+  /** @param {{ key: string, anzahl: number, werte?: string[] }} b */
+  const befundText = (b) => {
+    const TEXTE = {
+      kg_abgeleitet: "{n} Bauteil(e) ohne DIN-276-Klassifikation im Modell — Kostengruppe nur aus dem Bauteiltyp abgeleitet",
+      kg_abweichend: "{n} Bauteil(e) mit anderer Kostengruppe als die Position: {werte}",
+      feuer_fehlt: "{n} Bauteil(e) ohne Feuerwiderstand (FireRating)",
+      feuer_gemischt: "Feuerwiderstand gemischt: {werte} — eine Position, verschiedene Qualitäten?",
+      tragend_fehlt: "{n} Bauteil(e) ohne Angabe tragend/nichttragend (LoadBearing)",
+      tragend_gemischt: "Tragende und nichttragende Bauteile gemischt — DIN 276 trennt 341/342",
+    };
+    return t(TEXTE[b.key] || b.key).replace("{n}", fmt(b.anzahl)).replace("{werte}", (b.werte || []).join(", "));
+  };
+
   const uebernehmen = async () => {
     const model = modelRef.current;
     const ziel = positionen.find((p) => p.id === zielId);
@@ -750,6 +805,7 @@ export default function IfcViewer({ embedded = false }) {
     if (!model || !ziel || !eids.length) return;
     const byEid = new Map(model.elements.map((el) => [el.expressId, el]));
     const els = eids.map((e) => byEid.get(e)).filter(Boolean);
+    const pruefung = pruefeAttributeVorUebernahme(els, ziel);
     const menge = basis === "count"
       ? els.length * faktor
       : els.reduce((s, el) => s + (el.mengen?.[basis] || 0), 0) * faktor;
@@ -765,7 +821,12 @@ export default function IfcViewer({ embedded = false }) {
         ifc_faktor: faktor,
         ifc_stand: new Date().toISOString().slice(0, 10),
         mengen_modus: "manuell",
+        // 72-04 (additive field): what the attribute check found at takeover time.
+        ifc_pruefung: { stand: new Date().toISOString().slice(0, 10), geprueft: pruefung.geprueft, befunde: pruefung.befunde },
       });
+      if (pruefung.befunde.length) {
+        toast.warning(t("Übernommen mit offenen Attributen — Befunde an der Position vermerkt."), { duration: 8000 });
+      }
       toast.success(`Menge ${menge.toLocaleString("de-DE", { maximumFractionDigits: 2 })} `
         + `an Position ${ziel.oz} übernommen (${els.length} Bauteile)`);
       setPositionen((list) => list.map((p) => (p.id === ziel.id
@@ -903,13 +964,20 @@ export default function IfcViewer({ embedded = false }) {
     setPicked(null);
   };
 
+  useEffect(() => {
+    statusSichtbarRef.current = statusSichtbar;
+    sichtbarkeitNachStatus();
+  }, [statusSichtbar, modelInfo]); // eslint-disable-line react-hooks/exhaustive-deps
+  const zaehlerStatus = modelInfo && modelRef.current ? statusZaehler(modelRef.current.elements) : null;
+
   const highlightFilter = () => {
     const model = modelRef.current;
     if (!model) return;
     const byEid = new Map(model.elements.map((el) => [el.expressId, el]));
     const matched = new Set();
     for (const [eid, el] of byEid) {
-      const stOk = !statusFilter || el.status === statusFilter;
+      // 89-04: "ohne" marks the elements the model gives no status (null), shown as "ohne Status".
+      const stOk = !statusFilter || (statusFilter === "ohne" ? statusSchluessel(el.status) === "ohne" : el.status === statusFilter);
       const code = String(el.classification?.code || "");
       const kgOk = !kgFilter || code.startsWith(kgFilter);
       if (stOk && kgOk && (statusFilter || kgFilter)) matched.add(eid);
@@ -1091,6 +1159,7 @@ export default function IfcViewer({ embedded = false }) {
           <option value="abbruch">Abbruch</option>
           <option value="neubau">Neubau</option>
           <option value="bestand">Bestand</option>
+          <option value="ohne">{t(STATUS_OHNE_LABEL)}</option>
         </select>
         <input value={kgFilter} onChange={(e) => setKgFilter(e.target.value)} placeholder="KG"
           title="Kostengruppe, z. B. 33" className="w-16 rounded border border-slate-300 px-1.5 py-1" />
@@ -1098,6 +1167,21 @@ export default function IfcViewer({ embedded = false }) {
           className="rounded bg-amber-500 px-2.5 py-1 text-white disabled:opacity-40">markieren</button>
         <span className="mx-1 h-5 w-px bg-slate-200" />
         <button onClick={resetColors} className="rounded bg-slate-200 px-2.5 py-1 text-slate-700">zurücksetzen</button>
+        {zaehlerStatus && (
+          <>
+            <span className="mx-1 h-5 w-px bg-slate-200" />
+            <span className="text-xs text-slate-500" data-testid="status-sichtbarkeit" data-ausgeblendet={ausgeblendet}>{t("Sichtbar")}:</span>
+            {[["abbruch", "Abbruch", "#ef4444"], ["neubau", "Neubau", "#22c55e"], ["bestand", "Bestand", "#94a3b8"], ["ohne", STATUS_OHNE_LABEL, "#c8d0db"]].map(([k, l, c]) => (
+              <button key={k} type="button" aria-pressed={statusSichtbar[k]} data-testid={`status-sichtbar-${k}`}
+                onClick={() => setStatusSichtbar((alt) => ({ ...alt, [k]: !alt[k] }))}
+                title={statusSichtbar[k] ? t("Ausblenden") : t("Einblenden")}
+                className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs ${statusSichtbar[k] ? "border-slate-300 bg-white text-slate-700" : "border-dashed border-slate-300 bg-slate-100 text-slate-400 line-through"}`}>
+                <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: c }} />
+                {t(l)} <span className="tabular-nums" data-testid={`status-anzahl-${k}`}>{fmt(zaehlerStatus[k])}</span>
+              </button>
+            ))}
+          </>
+        )}
       </div>
 
       {/* Richtung 2: Mengenübernahme aus dem Modell in eine LV-Position */}
@@ -1153,6 +1237,26 @@ export default function IfcViewer({ embedded = false }) {
           <span className="text-xs text-slate-500">
             {aktiveTreffer().length ? `${fmt(aktiveTreffer().length)} Bauteile` : "—"}
           </span>
+          {attributPruefung && (
+            <div className="basis-full text-xs" data-testid="attribut-pruefung">
+              {attributPruefung.befunde.length === 0 ? (
+                <span className="text-emerald-700">{t("Attribute vollständig: DIN 276, Feuerwiderstand, tragend")}</span>
+              ) : (
+                <ul className="space-y-0.5">
+                  {attributPruefung.befunde.map((b) => (
+                    <li key={b.key} data-testid={`attribut-befund-${b.key}`} data-status={b.status}
+                      className={b.status === "warn" ? "text-amber-800" : "text-slate-600"}>
+                      <span className={`mr-1 inline-block rounded px-1 ${b.status === "warn" ? "bg-amber-100" : "border border-dashed border-slate-300 bg-white"}`}>
+                        {b.status === "warn" ? t("Hinweis") : t("offen")}
+                      </span>
+                      {befundText(b)}
+                    </li>
+                  ))}
+                  <li className="text-slate-500">{t("Übernahme bleibt möglich — die Befunde werden an der Position vermerkt.")}</li>
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1179,7 +1283,7 @@ export default function IfcViewer({ embedded = false }) {
           )}
           <div ref={fpsRef} />
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            {[["#ef4444", "Abbruch"], ["#22c55e", "Neubau"], ["#94a3b8", "Bestand"],
+            {[["#ef4444", "Abbruch"], ["#22c55e", "Neubau"], ["#94a3b8", "Bestand"], ["#c8d0db", t(STATUS_OHNE_LABEL)],
               ["#ff9e0a", "markiert"], ["#3b82f6", "ausgewählt"]].map(([c, l]) => (
               <span key={l} className="flex items-center gap-1">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: c }} /> {l}
@@ -1313,6 +1417,12 @@ export default function IfcViewer({ embedded = false }) {
                   </div>
                   {picked.typ2 && <div className="mt-1 text-[10px] text-slate-400">Typ: {picked.typ2}</div>}
                 </div>
+                {/* 71-06: attribute editor + change journal (IFC itself stays untouched). */}
+                <AttributEditor
+                  element={modelRef.current?.elements?.find((x) => x.expressId === picked.eid) || null}
+                  modell={modelInfo?.label || loadedIfcName || ""}
+                  projectId={projectId}
+                />
               </div>
             )}
           </div>

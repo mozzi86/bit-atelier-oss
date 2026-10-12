@@ -30,6 +30,7 @@ export const RECHTSWEG_TITEL = Object.freeze({
   "/nutzungsbedingungen": "Nutzungsbedingungen",
   "/rueckerstattung": "Rückerstattung",
   "/cookies": "Cookies",
+  "/barrierefreiheit": "Erklärung zur Barrierefreiheit",
   "/anmeldung": "Anmeldung",
   "/registrieren": "Registrieren",
   "/passwort-zuruecksetzen": "Passwort zurücksetzen",

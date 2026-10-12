@@ -82,10 +82,11 @@ export const AFA_METHODEN = Object.freeze(["linear", "gwg", "sammel", "sofort"])
  * @typedef {{
  *   id: string, project_id: string, leistungsbild: string,
  *   bauherr_contact_id?: string, bauherr_name?: string, bauherr_anschrift?: string, bauherr_ust_idnr?: string,
- *   bauherr_art?: "unternehmer"|"verbraucher"|"oeffentlich",
+ *   bauherr_art?: "unternehmer"|"verbraucher"|"oeffentlich", bauherr_leitweg_id?: string,
  *   zahlungsziel_tage?: number, zahlungsziel_vertraglich?: boolean,
  *   anrechenbare_quelle?: "manuell"|"lv", kg300_euro?: number, kg400_euro?: number, sonstige_euro?: number,
- *   bezugswert?: number, mvb_euro?: number, honorarzone?: string, satz_position_prozent?: number,
+ *   bezugswert?: number, mvb_euro?: number, mvb_grundlage?: {quelle: string, menge_m2?: number, anzahl?: number, satz_euro_m2?: number, modell?: string}|null,
+ *   honorarzone?: string, satz_position_prozent?: number,
  *   lph?: Array<{beauftragt: boolean, prozent: number}>, umbauzuschlag_prozent?: number,
  *   nebenkosten_prozent?: number, pauschal_euro?: number|null, ust_satz?: number, textform_am?: string,
  *   beispiel?: boolean,
@@ -95,9 +96,10 @@ export const AFA_METHODEN = Object.freeze(["linear", "gwg", "sammel", "sofort"])
 /**
  * Outgoing invoice. `netto`, `ust`, `brutto` and payment amounts in Euro; `nummer`
  * only once "gestellt"; recipient, number, due date and term are frozen on "Stellen".
+ * Phase 81-04: a fee-amendment position in `lp_pos` carries `lp: null`, `nachtrag_id` and `bezeichnung`.
  * @typedef {{
  *   id: string, project_id?: string, project_name?: string, honorarvertrag_id?: string, nummer?: string,
- *   art?: string, lp_pos?: Array<{lp: number, stand: number, netto: number}>,
+ *   art?: string, lp_pos?: Array<{lp: number|null, stand: number, netto: number, nachtrag_id?: string, bezeichnung?: string}>,
  *   netto: number, ust_satz: number, ust: number, brutto: number,
  *   rechnungsdatum?: string, leistung_von?: string, leistung_bis?: string,
  *   zahlungsziel_tage?: number, faellig_am?: string,
@@ -105,7 +107,7 @@ export const AFA_METHODEN = Object.freeze(["linear", "gwg", "sammel", "sofort"])
  *   empfaenger?: object, verzugshinweis?: boolean,
  *   zahlungen?: Array<{datum: string, betrag: number, bankumsatz_id?: string}>,
  *   mahnungen?: Array<{stufe: number, datum: string, frist?: string, zinsen?: number, pauschale?: number}>,
- *   storno_von?: string, beispiel?: boolean,
+ *   storno_von?: string, beispiel?: boolean, leitweg_id?: string,
  * }} Ausgangsrechnung
  */
 
@@ -204,9 +206,10 @@ export const AFA_METHODEN = Object.freeze(["linear", "gwg", "sammel", "sofort"])
  */
 
 /**
- * Receipt file (data URL, at most BUERO_STANDARD.beleg_max_bytes). `groesse` in bytes.
+ * Receipt file (data URL, at most BUERO_STANDARD.beleg_max_bytes). `groesse` in bytes. Storage rule
+ * (speicherOrt.js): small receipts keep `data` in the record; large ones carry `data_blob` and `data` null.
  * @typedef {{
- *   id: string, name: string, mime: string, groesse: number, data: string,
+ *   id: string, name: string, mime: string, groesse: number, data: string|null, data_blob?: string,
  *   bezug?: {typ: string, id: string}, beispiel?: boolean,
  * }} Beleg
  */

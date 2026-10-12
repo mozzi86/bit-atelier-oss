@@ -26,6 +26,15 @@
 // Four elements (one per sort) deliberately lack a material or a classification
 // so that a checker has something to report — see KOEDER.
 //
+// 69-19 (decision D-HR-03, register no. 30): a sample of nine elements did not look
+// like a project. The hall stays (same nine elements FIRST, same GlobalIds — the
+// sample BCF points at them) and gets a three-storey office block beside it: 514
+// more elements (slabs, walls, doors, windows, beams, ducts, pipes, cable trays,
+// air terminals, desks), 39 more rooms and 21 more deliberate findings, so the run
+// reports 24 graded findings spread over three storeys (BUEROBAU.befunde). The
+// #numbers of the old file are NOT kept any more (the storeys come first); every
+// consumer addresses elements by GlobalId or name.
+//
 // Usage: node tools/beispielmodell-erzeugen.mjs
 
 import fs from 'node:fs';
@@ -44,17 +53,25 @@ const ZIEL = path.join(REPO, 'public', 'beispiel');
  * the engine shows up as a failing expectation rather than a nicer-looking demo.
  */
 export const BEISPIEL_ERWARTET = {
-  /** Hard collision: the duct runs through the western downstand beam. */
-  hart: 1,
-  /** The eastern wall was modelled twice. */
-  duplikate: 1,
-  /** One wall lacks the fire rating the IDS demands. */
-  idsFehler: 1,
+  /** Hard collisions: the hall duct in its beam + 11 in the office block (69-19). */
+  hart: 12,
+  /** Elements modelled twice: the hall's east wall + 5 in the office block. */
+  duplikate: 6,
+  /** Walls without the fire rating the IDS demands: hall north wall + 5 office walls. */
+  idsFehler: 6,
+  /** All findings of a default run (hard + duplicates + IDS violations). */
+  befunde: 24,
+  /** Findings per storey (hard, duplicates, IDS) — the hall belongs to the ground floor. */
+  jeGeschoss: {
+    'Erdgeschoss': { hart: 5, duplikate: 2, idsFehler: 2 },
+    '1. Obergeschoss': { hart: 4, duplikate: 2, idsFehler: 2 },
+    '2. Obergeschoss': { hart: 3, duplikate: 2, idsFehler: 2 },
+  },
   /** Elements carrying geometry. Rooms are no elements here: they carry none. */
-  bauteile: 9,
-  geschosse: 1,
-  /** IfcSpace entities, at least one per storey (69-32). */
-  raeume: 1,
+  bauteile: 523,
+  geschosse: 3,
+  /** IfcSpace entities: the hall + 13 per office storey (69-19). */
+  raeume: 40,
   /** Deliberately incomplete elements, one per sort — see KOEDER (69-32). */
   koeder: 4,
 };
@@ -83,6 +100,11 @@ const MATERIALIEN = {
   beton: { name: 'Stahlbeton C25/30', kategorie: 'Beton' },
   mauerwerk: { name: 'Kalksandstein-Mauerwerk', kategorie: 'Mauerwerk' },
   stahlblech: { name: 'Verzinktes Stahlblech', kategorie: 'Stahl' },
+  // 69-19 office block. [ASSUMED] demo choices like the three above.
+  gips: { name: 'Gipskarton-Staenderwand', kategorie: 'Trockenbau' },
+  glas: { name: 'Isolierglas', kategorie: 'Glas' },
+  holz: { name: 'Holzwerkstoff', kategorie: 'Holz' },
+  stahl: { name: 'Stahlrohr', kategorie: 'Stahl' },
 };
 
 /**
@@ -102,7 +124,19 @@ const MATERIALIEN = {
 const KOSTENGRUPPEN = {
   '322': 'Flachgründungen',
   '331': 'Tragende Außenwände',
+  // 69-19: 334, 341, 342, 344 and 361 carry the wording of the app catalog (DIN276_2018).
+  '334': 'Außenwandöffnungen',
+  '341': 'Tragende Innenwände',
+  '342': 'Nichttragende Innenwände',
+  '344': 'Innenwandöffnungen',
   '351': 'Deckenkonstruktionen',
+  '361': 'Dachkonstruktionen',
+  // [ASSUMED] 422/431/444/610 quoted from memory (services and furniture are not in the
+  // app catalog); the app import reads only 3xx and files these under the default group.
+  '422': 'Wärmeverteilnetze',
+  '431': 'Lüftungsanlagen',
+  '444': 'Niederspannungsinstallationsanlagen',
+  '610': 'Allgemeine Ausstattung',
 };
 
 /**
@@ -114,10 +148,16 @@ const KOSTENGRUPPEN = {
  * @property {Record<string, string>} [pset] single values of the Pset_*Common set
  * @property {string} [material] key into MATERIALIEN — MISSING means "no material" (bait)
  * @property {string} [kg] key into KOSTENGRUPPEN — MISSING means "no classification" (bait)
+ * @property {string} [geschoss] storey name (GESCHOSSE); the hall elements are on the ground floor
+ * @property {{hoehe: number, breite: number}} [oeffnung] door/window overall height and width (m)
  */
 
-/** @type {Bauteil[]} */
-const BAUTEILE = [
+/**
+ * The hall of the first sample (65-03/69-32): nine elements, ground floor. Order and
+ * content are frozen — the GlobalIds derive from the position in this list.
+ * @type {Bauteil[]}
+ */
+const HALLE = [
   {
     // Absicht (Koeder Decke): OHNE Material — die einzige Platte hat kein Material
     // im Modell, ein Mengenermittler kann sie keiner Betonposition zuordnen.
@@ -209,6 +249,253 @@ const BAUTEILE = [
   },
 ];
 
+// --------------------------------------------------------------------------
+// 69-19 (D-HR-03) — the office block: three storeys, ~500 elements, 24 graded
+// findings. Built by a loop, not typed in, so the numbers stay checkable.
+//
+// Layout (metres, IFC Z up): 2 m east of the hall, x 14…50 (six bays of 6 m),
+// y 0…16 (two office strips of 7 m, a 1.6 m corridor between two corridor walls).
+// Storey height 3.5 m: floor slab [e − 0.25, e], walls [e, e + 3.25], downstand
+// beams and services below the next slab. Every position is chosen so that the
+// clash rules of the suite (TGA × structure, TGA × architecture, architecture ×
+// structure; touching faces never count, clash.js broadphase depth > tolerance)
+// report EXACTLY the findings listed in BUEROBAU.befunde — and nothing else.
+// [ASSUMED] Plausible office dimensions for a demo, no structural or services design.
+// --------------------------------------------------------------------------
+
+/** Storeys of the model: name, short tag for element names, elevation (m). */
+export const GESCHOSSE = Object.freeze([
+  { name: 'Erdgeschoss', kurz: 'EG', nr: 0, hoehe: 0 },
+  { name: '1. Obergeschoss', kurz: '1.OG', nr: 1, hoehe: 3.5 },
+  { name: '2. Obergeschoss', kurz: '2.OG', nr: 2, hoehe: 7.0 },
+]);
+
+/** Office block geometry (m). */
+const BB = Object.freeze({
+  x0: 14, felder: 6, feld: 6, tiefe: 16,
+  aussen: 0.3, flurwand: 0.2, trennwand: 0.15,
+  flurSued: 7.0, flurNord: 8.8, // y of the south face of each corridor wall
+  lichteHoehe: 3.25, decke: 0.25, dachOben: 10.5,
+});
+
+/** Rounds to millimetres — keeps STEP numbers free of binary float noise. */
+const mm = (v) => Math.round(v * 1000) / 1000;
+
+/**
+ * The office block: elements and the documented findings.
+ * @returns {{bauteile: Bauteil[], befunde: Array<{art: 'hart'|'duplikat'|'ids', geschoss: string, wo: string, was: string}>}}
+ */
+function buerobauErzeugen() {
+  /** @type {Bauteil[]} */
+  const teile = [];
+  /** @type {Array<{art: 'hart'|'duplikat'|'ids', geschoss: string, wo: string, was: string}>} */
+  const befunde = [];
+  const box = (name, typ, geschoss, min, max, extra = {}) => {
+    const b = { name, typ, geschoss: geschoss.name, min: min.map(mm), max: max.map(mm), ...extra };
+    teile.push(b);
+    return b;
+  };
+  const xA = (i) => BB.x0 + i * BB.feld; // west edge of bay i (grid line)
+  const xE = (i) => xA(i) + BB.feld;
+  const innenW = BB.x0 + BB.aussen; // inner face of the west gable
+  const innenO = BB.x0 + BB.felder * BB.feld - BB.aussen; // inner face of the east gable
+  const raumNr = (g, n) => `${g.nr}.${String(n).padStart(2, '0')}`;
+
+  // Deliberate findings, keyed "<storey short>|<what>" → applied in the loops below.
+  const ohneBrandschutz = new Set(['EG|Flurwand Sued 3', '1.OG|Trennwand Nord 2', '1.OG|Trennwand Sued 4', '2.OG|Aussenwand Nord 5', '2.OG|Flurwand Nord 1']);
+
+  for (const g of GESCHOSSE) {
+    const e = g.hoehe;
+    const z0 = e;
+    const zDecke = e + BB.lichteHoehe; // underside of the next slab
+
+    // --- Floor slab, one field per bay (EG: ground slab 322, upper floors 351) ---
+    for (let i = 0; i < BB.felder; i++) {
+      box(g.nr === 0 ? `Bodenplatte Feld ${i + 1}` : `Geschossdecke ${g.kurz} Feld ${i + 1}`, 'IFCSLAB', g,
+        [xA(i), 0, e - BB.decke], [xE(i), BB.tiefe, e],
+        { pset: { LoadBearing: 'T' }, material: 'beton', kg: g.nr === 0 ? '322' : '351' });
+    }
+
+    // --- External walls: per bay south/north, two segments per gable ---
+    for (let i = 0; i < BB.felder; i++) {
+      for (const [seite, y0, y1] of [['Sued', 0, BB.aussen], ['Nord', BB.tiefe - BB.aussen, BB.tiefe]]) {
+        const ohne = ohneBrandschutz.has(`${g.kurz}|Aussenwand ${seite} ${i + 1}`);
+        box(`Aussenwand ${seite} ${g.kurz} Achse ${i + 1}`, 'IFCWALL', g, [xA(i), y0, z0], [xE(i), y1, zDecke], {
+          pset: ohne ? { LoadBearing: 'T', IsExternal: 'T' } : { FireRating: 'F90', LoadBearing: 'T', IsExternal: 'T' },
+          material: 'mauerwerk', kg: '331',
+        });
+        if (ohne) befunde.push({ art: 'ids', geschoss: g.name, wo: `Aussenwand ${seite} ${g.kurz} Achse ${i + 1}`, was: 'FireRating fehlt' });
+      }
+    }
+    for (const [seite, x0, x1] of [['West', BB.x0, innenW], ['Ost', innenO, BB.x0 + BB.felder * BB.feld]]) {
+      for (const [teil, y0, y1] of [['Sued', BB.aussen, BB.tiefe / 2], ['Nord', BB.tiefe / 2, BB.tiefe - BB.aussen]]) {
+        box(`Giebelwand ${seite} ${g.kurz} ${teil}`, 'IFCWALL', g, [x0, y0, z0], [x1, y1, zDecke], {
+          pset: { FireRating: 'F90', LoadBearing: 'T', IsExternal: 'T' }, material: 'mauerwerk', kg: '331',
+        });
+      }
+    }
+
+    // --- Corridor walls (load bearing, F30) per bay ---
+    for (let i = 0; i < BB.felder; i++) {
+      for (const [seite, y0] of [['Sued', BB.flurSued], ['Nord', BB.flurNord]]) {
+        const ohne = ohneBrandschutz.has(`${g.kurz}|Flurwand ${seite} ${i + 1}`);
+        box(`Flurwand ${seite} ${g.kurz} Achse ${i + 1}`, 'IFCWALL', g,
+          [Math.max(innenW, xA(i)), y0, z0], [Math.min(innenO, xE(i)), y0 + BB.flurwand, zDecke], {
+            pset: ohne ? { LoadBearing: 'T', IsExternal: 'F' } : { FireRating: 'F30', LoadBearing: 'T', IsExternal: 'F' },
+            material: 'mauerwerk', kg: '341',
+          });
+        if (ohne) befunde.push({ art: 'ids', geschoss: g.name, wo: `Flurwand ${seite} ${g.kurz} Achse ${i + 1}`, was: 'FireRating fehlt' });
+      }
+    }
+
+    // --- Partition walls (drywall) on the inner grid lines, south and north strip ---
+    for (let k = 1; k < BB.felder; k++) {
+      const x = xA(k);
+      for (const [seite, y0, y1] of [['Sued', BB.aussen, BB.flurSued], ['Nord', BB.flurNord + BB.flurwand, BB.tiefe - BB.aussen]]) {
+        const ohne = ohneBrandschutz.has(`${g.kurz}|Trennwand ${seite} ${k}`);
+        box(`Trennwand ${seite} ${g.kurz} Achse ${k}/${k + 1}`, 'IFCWALL', g,
+          [x - BB.trennwand / 2, y0, z0], [x + BB.trennwand / 2, y1, zDecke], {
+            pset: ohne ? { LoadBearing: 'F', IsExternal: 'F' } : { FireRating: 'F30', LoadBearing: 'F', IsExternal: 'F' },
+            material: 'gips', kg: '342',
+          });
+        if (ohne) befunde.push({ art: 'ids', geschoss: g.name, wo: `Trennwand ${seite} ${g.kurz} Achse ${k}/${k + 1}`, was: 'FireRating fehlt' });
+      }
+    }
+
+    // --- Per bay and strip: door, two windows, downstand beam, air terminal, three desks ---
+    for (let i = 0; i < BB.felder; i++) {
+      for (const [seite, n0, yWand, yRaum0, yRaum1, yFenster0, yFenster1] of [
+        ['Sued', 1, BB.flurSued, BB.aussen, BB.flurSued, 0, BB.aussen],
+        ['Nord', 7, BB.flurNord, BB.flurNord + BB.flurwand, BB.tiefe - BB.aussen, BB.tiefe - BB.aussen, BB.tiefe],
+      ]) {
+        const nr = raumNr(g, n0 + i);
+        const yMitte = (yRaum0 + yRaum1) / 2;
+        // Door in the corridor wall (1.01 m wide, 2.135 m high).
+        box(`Tuer ${nr}`, 'IFCDOOR', g, [xA(i) + 4.0, yWand, z0], [xA(i) + 5.01, yWand + BB.flurwand, z0 + 2.135],
+          { material: 'holz', kg: '344', oeffnung: { hoehe: 2.135, breite: 1.01 } });
+        // Two windows in the facade.
+        for (const [w, xa] of [[1, 1.0], [2, 3.5]]) {
+          box(`Fenster ${nr}-${w}`, 'IFCWINDOW', g, [xA(i) + xa, yFenster0, z0 + 0.9], [xA(i) + xa + 1.5, yFenster1, z0 + 2.4],
+            { material: 'glas', kg: '334', oeffnung: { hoehe: 1.5, breite: 1.5 } });
+        }
+        // Downstand beam across the strip, mid-bay, from facade to corridor wall.
+        box(`Unterzug ${g.kurz} Achse ${i + 1} ${seite}`, 'IFCBEAM', g,
+          [xA(i) + 2.85, yRaum0, zDecke - 0.4], [xA(i) + 3.15, yRaum1, zDecke],
+          { pset: { LoadBearing: 'T' }, material: 'beton', kg: '351' });
+        // Air terminal below the beam level, beside the beam.
+        box(`Luftauslass ${nr}`, 'IFCAIRTERMINAL', g, [xA(i) + 1.3, yMitte - 0.3, z0 + 2.6], [xA(i) + 1.9, yMitte + 0.3, z0 + 2.7],
+          { material: 'stahlblech', kg: '431' });
+        // Three desks (furniture is in no clash rule — it never collides).
+        for (const [t, xa] of [[1, 0.6], [2, 2.4], [3, 4.2]]) {
+          box(`Schreibtisch ${nr}-${t}`, 'IFCFURNITURE', g, [xA(i) + xa, yMitte - 0.4, z0], [xA(i) + xa + 1.6, yMitte + 0.4, z0 + 0.75],
+            { material: 'holz', kg: '610' });
+        }
+      }
+    }
+
+    // --- Corridor services per bay: supply duct, flow and return pipe, cable tray ---
+    for (let i = 0; i < BB.felder; i++) {
+      const xa = Math.max(innenW + 0.1, xA(i));
+      const xe = Math.min(innenO - 0.1, xE(i));
+      box(`Zuluftkanal ${g.kurz} Abschnitt ${i + 1}`, 'IFCDUCTSEGMENT', g, [xa, 7.6, z0 + 2.75], [xe, 8.4, z0 + 3.15],
+        { material: 'stahlblech', kg: '431' });
+      box(`Heizung Vorlauf ${g.kurz} Abschnitt ${i + 1}`, 'IFCPIPESEGMENT', g, [xa, 7.3, z0 + 2.5], [xe, 7.4, z0 + 2.6],
+        { material: 'stahl', kg: '422' });
+      box(`Heizung Ruecklauf ${g.kurz} Abschnitt ${i + 1}`, 'IFCPIPESEGMENT', g, [xa, 7.45, z0 + 2.5], [xe, 7.55, z0 + 2.6],
+        { material: 'stahl', kg: '422' });
+      box(`Kabeltrasse ${g.kurz} Abschnitt ${i + 1}`, 'IFCCABLECARRIERSEGMENT', g, [xa, 8.45, z0 + 2.55], [xe, 8.7, z0 + 2.65],
+        { material: 'stahlblech', kg: '444' });
+    }
+
+    // --- Roof slab above the top storey ---
+    if (g.nr === GESCHOSSE.length - 1) {
+      for (let i = 0; i < BB.felder; i++) {
+        box(`Dachdecke Feld ${i + 1}`, 'IFCSLAB', g, [xA(i), 0, zDecke], [xE(i), BB.tiefe, BB.dachOben],
+          { pset: { LoadBearing: 'T' }, material: 'beton', kg: '361' });
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------------
+  // The deliberate findings of the office block (the hall keeps its three).
+  // ------------------------------------------------------------------------
+  const [EG, OG1, OG2] = GESCHOSSE;
+  const hart = (geschoss, wo, was, ...teil) => {
+    teil.forEach((t) => box(t.name, t.typ, geschoss, t.min, t.max, t.extra));
+    befunde.push({ art: 'hart', geschoss: geschoss.name, wo, was });
+  };
+  const doppelt = (geschoss, original, was) => {
+    const o = teile.find((t) => t.name === original);
+    if (!o) throw new Error(`Doppelung: ${original} fehlt`);
+    teile.push({ ...o, name: `${o.name} (Doppelung)` });
+    befunde.push({ art: 'duplikat', geschoss: geschoss.name, wo: o.name, was });
+  };
+  const st = { material: 'stahlblech', kg: '431' };
+
+  // EG — branch duct through the south corridor wall (no opening modelled).
+  hart(EG, 'Zuluft-Abzweig Buero 0.03 × Flurwand Sued EG Achse 3', 'Kanal ohne Wanddurchbruch',
+    { name: 'Zuluft-Abzweig Buero 0.03', typ: 'IFCDUCTSEGMENT', min: [xA(2) + 1.0, 6.0, 2.75], max: [xA(2) + 1.4, 7.6, 3.05], extra: st });
+  // EG — heating branch through the north corridor wall.
+  hart(EG, 'Heizungsabzweig Buero 0.08 × Flurwand Nord EG Achse 2', 'Rohr ohne Wanddurchbruch',
+    { name: 'Heizungsabzweig Buero 0.08', typ: 'IFCPIPESEGMENT', min: [xA(1) + 1.6, 8.0, 2.45], max: [xA(1) + 1.7, 10.5, 2.55], extra: { material: 'stahl', kg: '422' } });
+  // EG — air terminal hung into the downstand beam.
+  hart(EG, 'Luftauslass Buero 0.05 (zu hoch) × Unterzug EG Achse 5 Sued', 'Auslass haengt im Unterzug',
+    { name: 'Luftauslass Buero 0.05 (zu hoch)', typ: 'IFCAIRTERMINAL', min: [xA(4) + 2.7, 2.0, 2.75], max: [xA(4) + 3.3, 2.6, 2.95], extra: st });
+  // EG — cable tray across the beam of its room.
+  hart(EG, 'Kabeltrasse Buero 0.10 × Unterzug EG Achse 4 Nord', 'Trasse quert den Unterzug',
+    { name: 'Kabeltrasse Buero 0.10', typ: 'IFCCABLECARRIERSEGMENT', min: [xA(3) + 0.5, 12.0, 2.9], max: [xA(3) + 5.5, 12.3, 3.05], extra: { material: 'stahlblech', kg: '444' } });
+  // 1.OG — branch duct through the north corridor wall.
+  hart(OG1, 'Zuluft-Abzweig Buero 1.09 × Flurwand Nord 1.OG Achse 3', 'Kanal ohne Wanddurchbruch',
+    { name: 'Zuluft-Abzweig Buero 1.09', typ: 'IFCDUCTSEGMENT', min: [xA(2) + 1.0, 8.4, 3.5 + 2.75], max: [xA(2) + 1.4, 10.0, 3.5 + 3.05], extra: st });
+  // 1.OG — riser through the floor slab without a slab opening.
+  hart(OG1, 'Steigleitung Buero 1.02 × Geschossdecke 1.OG Feld 2', 'Rohr ohne Deckendurchbruch',
+    { name: 'Steigleitung Buero 1.02', typ: 'IFCPIPESEGMENT', min: [xA(1) + 5.4, 1.0, 2.7], max: [xA(1) + 5.5, 1.1, 4.1], extra: { material: 'stahl', kg: '422' } });
+  // 1.OG — cable tray across the beam of its room.
+  hart(OG1, 'Kabeltrasse Buero 1.03 × Unterzug 1.OG Achse 3 Sued', 'Trasse quert den Unterzug',
+    { name: 'Kabeltrasse Buero 1.03', typ: 'IFCCABLECARRIERSEGMENT', min: [xA(2) + 0.5, 4.0, 3.5 + 2.9], max: [xA(2) + 5.5, 4.3, 3.5 + 3.05], extra: { material: 'stahlblech', kg: '444' } });
+  // 1.OG — corridor beam (added by structure) into the supply duct.
+  hart(OG1, 'Zuluftkanal 1.OG Abschnitt 4 × Unterzug Flur 1.OG Achse 4', 'Unterzug im Kanal',
+    { name: 'Unterzug Flur 1.OG Achse 4', typ: 'IFCBEAM', min: [xA(3) + 2.85, BB.flurSued + BB.flurwand, 3.5 + 2.85], max: [xA(3) + 3.15, BB.flurNord, 3.5 + 3.25], extra: { pset: { LoadBearing: 'T' }, material: 'beton', kg: '351' } });
+  // 2.OG — branch duct through the south corridor wall.
+  hart(OG2, 'Zuluft-Abzweig Buero 2.05 × Flurwand Sued 2.OG Achse 5', 'Kanal ohne Wanddurchbruch',
+    { name: 'Zuluft-Abzweig Buero 2.05', typ: 'IFCDUCTSEGMENT', min: [xA(4) + 1.0, 6.0, 7.0 + 2.75], max: [xA(4) + 1.4, 7.6, 7.0 + 3.05], extra: st });
+  // 2.OG — pipe across the beam of its room.
+  hart(OG2, 'Heizleitung Buero 2.11 × Unterzug 2.OG Achse 5 Nord', 'Rohr quert den Unterzug',
+    { name: 'Heizleitung Buero 2.11', typ: 'IFCPIPESEGMENT', min: [xA(4) + 0.5, 13.0, 7.0 + 2.9], max: [xA(4) + 5.5, 13.1, 7.0 + 3.0], extra: { material: 'stahl', kg: '422' } });
+  // 2.OG — exhaust duct through the roof slab.
+  hart(OG2, 'Abluft ueber Dach × Dachdecke Feld 2', 'Kanal ohne Dachdurchbruch',
+    { name: 'Abluft ueber Dach', typ: 'IFCDUCTSEGMENT', min: [xA(1) + 4.0, 7.7, 7.0 + 3.15], max: [xA(1) + 4.6, 8.3, 11.0], extra: st });
+
+  doppelt(EG, 'Bodenplatte Feld 3', 'Platte zweimal modelliert — Menge doppelt');
+  doppelt(OG1, 'Fenster 1.04-2', 'Fenster zweimal modelliert');
+  doppelt(OG1, 'Schreibtisch 1.10-2', 'Moebel zweimal platziert');
+  doppelt(OG2, 'Trennwand Sued 2.OG Achse 3/4', 'Wand zweimal modelliert');
+  doppelt(OG2, 'Heizung Vorlauf 2.OG Abschnitt 6', 'Leitung zweimal modelliert');
+
+  return { bauteile: teile, befunde };
+}
+
+const BUEROBAU = buerobauErzeugen();
+
+/**
+ * All elements: the hall first (GlobalIds unchanged), then the office block.
+ * @type {Bauteil[]}
+ */
+const BAUTEILE = [...HALLE.map((b) => ({ ...b, geschoss: 'Erdgeschoss' })), ...BUEROBAU.bauteile];
+
+/**
+ * Every deliberate finding of the model, hall first — the source of the README table
+ * and of the per-storey numbers in BEISPIEL_ERWARTET (the unit test recounts them
+ * with the real check engine).
+ * @type {Array<{art: 'hart'|'duplikat'|'ids', geschoss: string, wo: string, was: string}>}
+ */
+const BEFUNDE = [
+  { art: 'hart', geschoss: 'Erdgeschoss', wo: 'Lueftungskanal Zuluft × Unterzug Achse B (Halle)', was: 'Kanal laeuft auf 2,60–3,00 m durch den Unterzug' },
+  { art: 'duplikat', geschoss: 'Erdgeschoss', wo: 'Aussenwand Ost (Halle)', was: 'zweimal deckungsgleich modelliert — Menge doppelt' },
+  { art: 'ids', geschoss: 'Erdgeschoss', wo: 'Aussenwand Nord (Halle)', was: 'FireRating fehlt' },
+  ...BUEROBAU.befunde,
+];
+
 /**
  * The four deliberate gaps, one per sort (slab, wall, beam, duct): an element
  * without a `material` or `kg` key IS the bait. Derived from BAUTEILE so the
@@ -220,8 +507,8 @@ const KOEDER = BAUTEILE.flatMap((b) => [
   ...(b.kg ? [] : [{ name: b.name, typ: b.typ, fehlt: /** @type {const} */ ('klassifikation') }]),
 ]);
 
-/** Name of the single storey. 69-19 turns this into a list of storeys. */
-const GESCHOSS_NAME = 'Erdgeschoss';
+/** Storey of the hall (and of the office ground floor). */
+const GESCHOSS_NAME = GESCHOSSE[0].name;
 
 /**
  * The rooms of the model: one per storey. The box is NOT typed in but derived
@@ -253,7 +540,32 @@ function raumDefinitionen() {
       min: [west.max[0], sued.max[1], platte.max[2]],
       max: [ost.min[0], nord.min[1], sued.max[2]],
     },
+    ...bueroRaeume(),
   ];
+}
+
+/**
+ * Office block rooms (69-19): per storey six offices south, six north, one corridor —
+ * clear boxes between the wall faces, floor to slab underside.
+ * @returns {{name: string, langname: string, nummer: string, geschoss: string, min: number[], max: number[]}[]}
+ */
+function bueroRaeume() {
+  const raeume = [];
+  for (const g of GESCHOSSE) {
+    const z0 = g.hoehe;
+    const z1 = mm(g.hoehe + BB.lichteHoehe);
+    for (let i = 0; i < BB.felder; i++) {
+      const x0 = mm(i === 0 ? BB.x0 + BB.aussen : BB.x0 + i * BB.feld + BB.trennwand / 2);
+      const x1 = mm(i === BB.felder - 1 ? BB.x0 + BB.felder * BB.feld - BB.aussen : BB.x0 + (i + 1) * BB.feld - BB.trennwand / 2);
+      raeume.push({ name: 'Büro', langname: `Büro ${g.nr}.${String(i + 1).padStart(2, '0')}`, nummer: `${g.nr}.${String(i + 1).padStart(2, '0')}`,
+        geschoss: g.name, min: [x0, BB.aussen, z0], max: [x1, BB.flurSued, z1] });
+      raeume.push({ name: 'Büro', langname: `Büro ${g.nr}.${String(i + 7).padStart(2, '0')}`, nummer: `${g.nr}.${String(i + 7).padStart(2, '0')}`,
+        geschoss: g.name, min: [x0, mm(BB.flurNord + BB.flurwand), z0], max: [x1, mm(BB.tiefe - BB.aussen), z1] });
+    }
+    raeume.push({ name: 'Flur', langname: `Flur ${g.kurz}`, nummer: `${g.nr}.13`, geschoss: g.name,
+      min: [mm(BB.x0 + BB.aussen), mm(BB.flurSued + BB.flurwand), z0], max: [mm(BB.x0 + BB.felder * BB.feld - BB.aussen), BB.flurNord, z1] });
+  }
+  return raeume;
 }
 
 const RAEUME = raumDefinitionen();
@@ -280,6 +592,40 @@ function guid(praefix, n) {
   }
   return raus;
 }
+
+/**
+ * 69-19: GlobalId for everything beyond the first ten of a prefix. guid() above can
+ * repeat itself for large running numbers (its characters depend on n only modulo the
+ * alphabet); this variant mixes prefix and number through FNV-1a and a xorshift
+ * stream. Deterministic, 22 characters of the IFC alphabet.
+ * @param {string} praefix short tag
+ * @param {number} n running number
+ * @returns {string}
+ */
+function guidHash(praefix, n) {
+  let h = 0x811c9dc5;
+  for (const c of `${praefix}#${n}`) {
+    h ^= c.charCodeAt(0);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  let raus = '';
+  for (let i = 0; i < 22; i++) {
+    h ^= h << 13; h >>>= 0;
+    h ^= h >>> 17;
+    h ^= h << 5; h >>>= 0;
+    raus += GUID_ZEICHEN[h % GUID_ZEICHEN.length];
+  }
+  return raus;
+}
+
+/**
+ * GlobalId by prefix and running number: the original function for n ≤ 10 (keeps every
+ * GlobalId of the old sample), the hash variant above that.
+ * @param {string} praefix
+ * @param {number} n
+ * @returns {string}
+ */
+const gid = (praefix, n) => (n <= 10 ? guid(praefix, n) : guidHash(praefix, n));
 
 /** Formats a number the way STEP wants it: always with a decimal point. */
 function z(v) {
@@ -357,6 +703,29 @@ export function mengenVon(b) {
         A('GrossArea', dx * dy), A('NetArea', dx * dy),
         V('GrossVolume', volumen), V('NetVolume', volumen),
       ];
+    case 'IFCDOOR':
+    case 'IFCWINDOW':
+      // Opening: width along the wall, height, area of the opening (m, m²).
+      return [
+        L('Width', laenge), L('Height', dz), A('NetArea', laenge * dz),
+        V('GrossVolume', volumen), V('NetVolume', volumen),
+      ];
+    case 'IFCFURNITURE':
+      return [
+        L('Length', laenge), L('Width', breite), L('Height', dz),
+        A('NetArea', dx * dy), V('NetVolume', volumen),
+      ];
+    case 'IFCPIPESEGMENT':
+    case 'IFCCABLECARRIERSEGMENT':
+    case 'IFCAIRTERMINAL': {
+      const lang = Math.max(dx, dy, dz); // a riser runs vertically
+      const quer = [dx, dy, dz].sort((p, q) => p - q);
+      return [
+        L('Length', lang), L('Width', quer[1]), L('Height', quer[0]),
+        A('NetArea', 2 * (quer[0] + quer[1]) * lang),
+        V('GrossVolume', volumen), V('NetVolume', volumen),
+      ];
+    }
     case 'IFCDUCTSEGMENT':
       return [
         L('Length', laenge), L('Width', breite), L('Height', dz),
@@ -466,14 +835,29 @@ export function erzeugeIfc() {
     `IFCBUILDING('${guid('BLD', 1)}',${owner},'Musterhalle',$,$,${platzSite},$,$,.ELEMENT.,$,$,$)`,
   );
   const platzBau = s.add(`IFCLOCALPLACEMENT(${platzSite},${achsen})`);
-  const geschoss = s.add(
-    `IFCBUILDINGSTOREY('${guid('STY', 1)}',${owner},'${GESCHOSS_NAME}',$,$,${platzBau},$,$,.ELEMENT.,0.)`,
-  );
+  // 69-19: three storeys; the elevation is the storey's floor level (m). The element
+  // placements stay relative to the building — every box carries world coordinates.
+  /** @type {Record<string, string>} storey name → reference */
+  const geschosse = {};
+  GESCHOSSE.forEach((g, k) => {
+    geschosse[g.name] = s.add(
+      `IFCBUILDINGSTOREY('${gid('STY', k + 1)}',${owner},${stepText(g.name)},$,$,${platzBau},$,$,.ELEMENT.,${z(g.hoehe)})`,
+    );
+  });
   s.add(`IFCRELAGGREGATES('${guid('AGG', 1)}',${owner},$,$,${projekt},(${grundstueck}))`);
   s.add(`IFCRELAGGREGATES('${guid('AGG', 2)}',${owner},$,$,${grundstueck},(${gebaeude}))`);
-  s.add(`IFCRELAGGREGATES('${guid('AGG', 3)}',${owner},$,$,${gebaeude},(${geschoss}))`);
+  s.add(`IFCRELAGGREGATES('${guid('AGG', 3)}',${owner},$,$,${gebaeude},(${Object.values(geschosse).join(',')}))`);
 
   // --- Bauteile mit echter Körpergeometrie ---
+  // 69-19: the 2D profile origin and the element placement are the same for every
+  // element and therefore written ONCE and shared (IFC allows it). This keeps the file
+  // at ~9 300 entities instead of ~10 800. Side effect that matters: STEP #numbers are
+  // whole words to the NDA blocklist (tests/unit/projektneutral.test.js) — at the larger
+  // size one five-digit #number collided with a blocked entry. Re-run that test after
+  // every change of the element count.
+  const p2d = s.add('IFCCARTESIANPOINT((0.,0.))');
+  const pl2d = s.add(`IFCAXIS2PLACEMENT2D(${p2d},$)`);
+  const platz = s.add(`IFCLOCALPLACEMENT(${platzBau},${achsen})`);
   const refs = [];
   BAUTEILE.forEach((b, i) => {
     const bx = b.max[0] - b.min[0];
@@ -483,9 +867,7 @@ export function erzeugeIfc() {
     // Rechteckprofil liegt um seinen Mittelpunkt; die Extrusion beginnt an der
     // Unterkante und geht nach +Z. Damit ist die Weltlage vollständig durch die
     // Platzierung des Solids beschrieben — das lokale Placement bleibt Identität.
-    const p2d = s.add('IFCCARTESIANPOINT((0.,0.))');
-    const pl2d = s.add(`IFCAXIS2PLACEMENT2D(${p2d},$)`);
-    const profil = s.add(`IFCRECTANGLEPROFILEDEF(.AREA.,'${b.name}',${pl2d},${z(bx)},${z(by)})`);
+    const profil = s.add(`IFCRECTANGLEPROFILEDEF(.AREA.,${stepText(b.name)},${pl2d},${z(bx)},${z(by)})`);
     const mitte = s.add(
       `IFCCARTESIANPOINT((${z(b.min[0] + bx / 2)},${z(b.min[1] + by / 2)},${z(b.min[2])}))`,
     );
@@ -493,20 +875,23 @@ export function erzeugeIfc() {
     const solid = s.add(`IFCEXTRUDEDAREASOLID(${profil},${plSolid},${dirZ},${z(bz)})`);
     const form = s.add(`IFCSHAPEREPRESENTATION(${kontext},'Body','SweptSolid',(${solid}))`);
     const gestalt = s.add(`IFCPRODUCTDEFINITIONSHAPE($,$,(${form}))`);
-    const platz = s.add(`IFCLOCALPLACEMENT(${platzBau},${achsen})`);
 
-    const g = guid(b.typ.slice(3, 7), i + 1);
+    const g = gid(b.typ.slice(3, 7), i + 1);
+    // IFC4 attribute tail after Representation: Tag, PredefinedType for walls, slabs,
+    // beams, services and furniture; doors and windows carry OverallHeight/OverallWidth
+    // (m) and two more enumerations (OperationType / PartitioningType, left unset).
+    const rest = b.oeffnung ? `$,${z(b.oeffnung.hoehe)},${z(b.oeffnung.breite)},$,$,$` : '$,$';
     const ref = s.add(
-      `${b.typ}('${g}',${owner},'${b.name}',$,$,${platz},${gestalt},$,$)`,
+      `${b.typ}('${g}',${owner},${stepText(b.name)},$,$,${platz},${gestalt},${rest})`,
     );
     refs.push({ ref, bauteil: b, guid: g });
   });
 
-  s.add(
-    `IFCRELCONTAINEDINSPATIALSTRUCTURE('${guid('CON', 1)}',${owner},$,$,(${refs
-      .map((r) => r.ref)
-      .join(',')}),${geschoss})`,
-  );
+  GESCHOSSE.forEach((g, k) => {
+    const imGeschoss = refs.filter((r) => (r.bauteil.geschoss || GESCHOSS_NAME) === g.name).map((r) => r.ref);
+    if (imGeschoss.length === 0) return;
+    s.add(`IFCRELCONTAINEDINSPATIALSTRUCTURE('${gid('CON', k + 1)}',${owner},$,$,(${imGeschoss.join(',')}),${geschosse[g.name]})`);
+  });
 
   // --- Eigenschaften (Pset_WallCommon / Pset_SlabCommon / Pset_BeamCommon) ---
   refs.forEach((r, i) => {
@@ -523,10 +908,10 @@ export function erzeugeIfc() {
       : r.bauteil.typ === 'IFCSLAB' ? 'Pset_SlabCommon'
         : 'Pset_BeamCommon';
     const menge = s.add(
-      `IFCPROPERTYSET('${guid('PST', i + 1)}',${owner},'${gruppe}',$,(${werte.join(',')}))`,
+      `IFCPROPERTYSET('${gid('PST', i + 1)}',${owner},'${gruppe}',$,(${werte.join(',')}))`,
     );
     s.add(
-      `IFCRELDEFINESBYPROPERTIES('${guid('RDP', i + 1)}',${owner},$,$,(${r.ref}),${menge})`,
+      `IFCRELDEFINESBYPROPERTIES('${gid('RDP', i + 1)}',${owner},$,$,(${r.ref}),${menge})`,
     );
   });
 
@@ -538,7 +923,6 @@ export function erzeugeIfc() {
   // (IFC4: spaces are aggregated by their storey, not "contained"; the app import
   // follows the aggregation chain, ifcImport.js buildAggregateIndex / L7.) No body:
   // see raumDefinitionen(). IfcRelSpaceBoundary is not written — nothing reads it.
-  const geschosse = { [GESCHOSS_NAME]: geschoss };
   const raumRefs = RAEUME.map((r, i) => {
     const ecke = s.add(`IFCCARTESIANPOINT((${z(r.min[0])},${z(r.min[1])},${z(r.min[2])}))`);
     const achse = s.add(`IFCAXIS2PLACEMENT3D(${ecke},${dirZ},${dirX})`);
@@ -546,7 +930,7 @@ export function erzeugeIfc() {
     // IFC4 IfcSpace: ..., ObjectPlacement, Representation, LongName, CompositionType,
     // PredefinedType, ElevationWithFlooring.
     const ref = s.add(
-      `IFCSPACE('${guid('SPC', i + 1)}',${owner},${stepText(r.name)},$,$,${platz},$,${stepText(r.langname)},.ELEMENT.,.INTERNAL.,$)`,
+      `IFCSPACE('${gid('SPC', i + 1)}',${owner},${stepText(r.name)},$,$,${platz},$,${stepText(r.langname)},.ELEMENT.,.INTERNAL.,$)`,
     );
     return { ref, raum: r };
   });
@@ -554,7 +938,7 @@ export function erzeugeIfc() {
     const refsImGeschoss = raumRefs.filter((x) => x.raum.geschoss === name).map((x) => x.ref);
     if (refsImGeschoss.length === 0) return;
     s.add(
-      `IFCRELAGGREGATES('${guid('AGG', 4 + k)}',${owner},$,$,${geschosse[name]},(${refsImGeschoss.join(',')}))`,
+      `IFCRELAGGREGATES('${gid('AGG', 4 + k)}',${owner},$,$,${geschosse[name]},(${refsImGeschoss.join(',')}))`,
     );
   });
   raumRefs.forEach((x, i) => {
@@ -562,9 +946,9 @@ export function erzeugeIfc() {
     const nummer = s.add(`IFCPROPERTYSINGLEVALUE('Reference',$,IFCIDENTIFIER(${stepText(x.raum.nummer)}),$)`);
     const extern = s.add("IFCPROPERTYSINGLEVALUE('IsExternal',$,IFCBOOLEAN(.F.),$)");
     const pset = s.add(
-      `IFCPROPERTYSET('${guid('PSS', i + 1)}',${owner},'Pset_SpaceCommon',$,(${nummer},${extern}))`,
+      `IFCPROPERTYSET('${gid('PSS', i + 1)}',${owner},'Pset_SpaceCommon',$,(${nummer},${extern}))`,
     );
-    s.add(`IFCRELDEFINESBYPROPERTIES('${guid('RDS', i + 1)}',${owner},$,$,(${x.ref}),${pset})`);
+    s.add(`IFCRELDEFINESBYPROPERTIES('${gid('RDS', i + 1)}',${owner},$,$,(${x.ref}),${pset})`);
   });
 
   // --- Mengen: ein IfcElementQuantity je Bauteil und je Raum ---
@@ -573,10 +957,10 @@ export function erzeugeIfc() {
     mengenNr += 1;
     const q = mengen.map((m) => s.add(`IFCQUANTITY${m.art}('${m.name}',$,$,${z(m.wert)},$)`));
     const menge = s.add(
-      `IFCELEMENTQUANTITY('${guid('QTO', mengenNr)}',${owner},'BaseQuantities',$,` +
+      `IFCELEMENTQUANTITY('${gid('QTO', mengenNr)}',${owner},'BaseQuantities',$,` +
         `${stepText('BIT-Atelier generator: box dimensions of the body geometry')},(${q.join(',')}))`,
     );
-    s.add(`IFCRELDEFINESBYPROPERTIES('${guid('RDQ', mengenNr)}',${owner},$,$,(${elementRef}),${menge})`);
+    s.add(`IFCRELDEFINESBYPROPERTIES('${gid('RDQ', mengenNr)}',${owner},$,$,(${elementRef}),${menge})`);
   };
   refs.forEach((r) => schreibeMengen(r.ref, mengenVon(r.bauteil)));
   raumRefs.forEach((x) => schreibeMengen(x.ref, raumMengenVon(x.raum)));
@@ -587,7 +971,7 @@ export function erzeugeIfc() {
     const elemente = refs.filter((r) => r.bauteil.material === schluessel).map((r) => r.ref);
     if (elemente.length === 0) return; // an unused material is not written
     const mat = s.add(`IFCMATERIAL(${stepText(m.name)},$,${stepText(m.kategorie)})`);
-    s.add(`IFCRELASSOCIATESMATERIAL('${guid('RAM', i + 1)}',${owner},$,$,(${elemente.join(',')}),${mat})`);
+    s.add(`IFCRELASSOCIATESMATERIAL('${gid('RAM', i + 1)}',${owner},$,$,(${elemente.join(',')}),${mat})`);
   });
 
   // --- Klassifikation: DIN 276 mit je einer IfcClassificationReference je Kostengruppe ---
@@ -602,7 +986,7 @@ export function erzeugeIfc() {
     const elemente = refs.filter((r) => r.bauteil.kg === code).map((r) => r.ref);
     if (elemente.length === 0) return; // an unused cost group is not written
     const kg = s.add(`IFCCLASSIFICATIONREFERENCE($,'${code}',${stepText(titel)},${din},$,$)`);
-    s.add(`IFCRELASSOCIATESCLASSIFICATION('${guid('RAC', i + 1)}',${owner},$,$,(${elemente.join(',')}),${kg})`);
+    s.add(`IFCRELASSOCIATESCLASSIFICATION('${gid('RAC', i + 1)}',${owner},$,$,(${elemente.join(',')}),${kg})`);
   });
 
   return s.text();
@@ -610,7 +994,7 @@ export function erzeugeIfc() {
 
 /**
  * The IDS that goes with the model: every wall must carry a fire rating.
- * Exactly one wall does not — see BAUTEILE above.
+ * Six walls do not (the hall's north wall + five office walls, 69-19) — see BEFUNDE.
  * @returns {string}
  */
 export function erzeugeIds() {
@@ -660,6 +1044,16 @@ export function erzeugeReadme() {
     .map(([code, titel]) => `${code} ${titel}`)
     .join(' · ');
   const materialListe = Object.values(MATERIALIEN).map((m) => m.name).join(' · ');
+  const artText = { hart: 'Kollision', duplikat: 'Doppelung', ids: 'IDS-Verstoß' };
+  const befundTabelle = BEFUNDE
+    .map((f, i) => `| ${i + 1} | ${f.geschoss} | ${artText[f.art]} | ${f.wo} | ${f.was} |`)
+    .join('\n');
+  const jeTyp = {};
+  for (const t of BAUTEILE) jeTyp[t.typ] = (jeTyp[t.typ] || 0) + 1;
+  const typListe = Object.entries(jeTyp)
+    .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
+    .map(([typ, n]) => `${typ} ${n}`)
+    .join(' · ');
   return `# Musterprojekt der Online-Demo
 
 **Synthetisch erzeugt — enthält keinerlei Projekt- oder Kundendaten.**
@@ -675,28 +1069,33 @@ feste Reihenfolge. Ein zweiter Lauf ändert die Dateien nicht.
 
 ## Was drin ist
 
-Eine Halle 12 × 8 m, lichte Höhe 3 m, ein Geschoss, ${BAUTEILE.length} Bauteile:
-Bodenplatte, vier Außenwände (eine davon doppelt), zwei Unterzüge, ein Lüftungskanal —
-dazu ${RAEUME.length} Raum (kein Bauteil, ohne Körper).
+Seit Plan 69-19 (Entscheidung D-HR-03) ein Projekt in glaubwürdiger Größe:
+${GESCHOSSE.length} Geschosse, ${BAUTEILE.length} Bauteile, ${RAEUME.length} Räume.
+
+- **Halle** (Erdgeschoss, die ersten ${HALLE.length} Bauteile, unverändert seit 65-03): 12 × 8 m,
+  lichte Höhe 3 m — Bodenplatte, vier Außenwände (eine davon doppelt), zwei Unterzüge,
+  ein Lüftungskanal, ein Raum. Ihre GlobalIds sind dieselben wie vorher; das Beispiel-BCF
+  zeigt auf sie.
+- **Bürobau** 2 m östlich: 36 × 16 m, ${GESCHOSSE.map((g) => g.name).join(', ')}, Geschosshöhe 3,5 m,
+  sechs Achsen à 6 m, je Geschoss zwölf Büros und ein Flur. Bodenplatte bzw. Geschossdecke und
+  Dachdecke je Achse, Außen-, Flur- und Trennwände, Türen, Fenster, Unterzüge, Zuluftkanal,
+  Heizungsleitungen, Kabeltrasse, Luftauslässe und Schreibtische.
+- Bauteile je Klasse: ${typListe}.
 
 ## Räume, Mengen, Material, Klassifikation
 
-Seit Plan 69-32 ist das Modell mehr als Geometrie:
-
-- **Raum:** \`${RAEUME[0].name}\` (Langname \`${RAEUME[0].langname}\`, Nummer ${RAEUME[0].nummer} in
-  \`Pset_SpaceCommon.Reference\`), dem Geschoss per \`IfcRelAggregates\` zugeordnet. Der Raum hat
-  bewusst keinen Körper: Kollisionsprüfung und „Bauteil-Geometrien“ bleiben bei ${BAUTEILE.length};
-  die App zählt ihn unter „Bauteile mit Eigenschaften“.
+- **Räume:** je Büro, Flur und die Halle ein \`IfcSpace\` mit Nummer in
+  \`Pset_SpaceCommon.Reference\` (Geschoss.laufende Nummer), dem Geschoss per
+  \`IfcRelAggregates\` zugeordnet, ohne Körper — Kollisionsprüfung und „Bauteil-Geometrien“
+  bleiben bei ${BAUTEILE.length}.
 - **Mengen:** je Bauteil und Raum ein \`IfcElementQuantity\` „BaseQuantities“ mit Länge (m),
-  Fläche (m²) und Volumen (m³), aus den Quadermaßen derselben Geometrie berechnet; Net gleich
-  Brutto, weil das Modell keine Öffnungen hat. Raum: Nettogrundfläche aus dem lichten Maß
-  zwischen den Wänden.
+  Fläche (m²) und Volumen (m³), aus den Quadermaßen derselben Geometrie berechnet.
 - **Material:** ${materialListe}.
-- **Klassifikation:** DIN 276, Kostengruppen ${kgListe} (Bezeichnungen sinngemäß).
-- **Außenwände** tragen \`Pset_WallCommon.IsExternal = true\` — sonst liest der Import sie als
-  Innenwand (Gewerk „Ausbau“).
+- **Klassifikation:** DIN 276, Kostengruppen ${kgListe} (Bezeichnungen sinngemäß; die App liest
+  beim Import nur 3xx, TGA und Ausstattung fallen dort auf die Vorgabe zurück).
+- **Außenwände** tragen \`Pset_WallCommon.IsExternal = true\`.
 
-### Die vier Köder (je Sorte ein unvollständiges Bauteil)
+### Die vier Köder (je Sorte ein unvollständiges Bauteil, Halle)
 
 | Bauteil | Sorte | Es fehlt |
 |---|---|---|
@@ -707,20 +1106,22 @@ selbst (die mitgelieferte IDS fragt nur den Brandschutz ab); sichtbar werden sie
 (Material „–“, Kostengruppe fällt auf die Vorgabe zurück) und mit einer IDS-Regel auf Material
 oder Klassifikation.
 
-## Die drei eingebauten Befunde
+## Die ${BEFUNDE.length} eingebauten Befunde
 
-| Befund | Wo | Was die Prüf-Suite meldet |
-|---|---|---|
-| **Harte Kollision** | Lüftungskanal Zuluft × Unterzug Achse B | Der Kanal läuft auf 2,60–3,00 m durch den Unterzug. |
-| **Doppelte Modellierung** | Aussenwand Ost | Zweimal deckungsgleich modelliert, eigene GlobalId — im 3D unsichtbar, in der Menge doppelt. |
-| **IDS-Verstoß** | Aussenwand Nord | Ohne \`Pset_WallCommon.FireRating\`, das \`musterprojekt.ids\` verlangt. |
+Gestuft nach Schwere (Kollision hoch, Doppelung mittel) und über alle Geschosse verteilt —
+die IDS-Verstöße meldet \`musterprojekt.ids\` (jede Wand braucht \`Pset_WallCommon.FireRating\`).
+
+| Nr. | Geschoss | Art | Wo | Was |
+|---|---|---|---|---|
+${befundTabelle}
 
 Erwartete Zahlen (auch im Test festgehalten, \`tests/unit/beispielmodell.test.js\`):
 ${JSON.stringify(BEISPIEL_ERWARTET, null, 2)}
 
-Alles andere ist bewusst kollisionsfrei: die Unterzüge beginnen bei x = 0,50 m
-und berühren die Wände nicht, der Kanal endet bei x = 7,00 m und erreicht die
-Ostwand nicht, die Bodenplatte liegt vollständig unter z = 0.
+Alles andere ist bewusst kollisionsfrei: Bauteile berühren sich höchstens flächig (das zählt
+die Prüfung nicht), Leitungen halten Abstand zu Wänden, Decken und Unterzügen. Geprüft mit
+denselben Regeln wie die Prüf-Suite (TGA gegen Tragwerk, TGA gegen Architektur, Architektur
+gegen Tragwerk) und derselben Paargrenze (500 000).
 
 ## Beispiel-BCF (\`musterprojekt.bcf\`)
 
@@ -763,4 +1164,4 @@ function main() {
 
 if (process.argv[1] && process.argv[1].endsWith('beispielmodell-erzeugen.mjs')) main();
 
-export { BAUTEILE, RAEUME, KOEDER, MATERIALIEN, KOSTENGRUPPEN };
+export { BAUTEILE, HALLE, BEFUNDE, RAEUME, KOEDER, MATERIALIEN, KOSTENGRUPPEN };

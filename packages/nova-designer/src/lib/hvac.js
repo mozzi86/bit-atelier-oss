@@ -8,6 +8,8 @@
 // coerced (num). Einheiten-Umrechnungen (/1000, ·365/1000) sind im Code kommentiert.
 
 // Härtende Division: nie durch <0.1 teilen (gegen 0/leer/negativ).
+import { OFFEN, konzeptAuswertung } from "@designer/lib/pruefStatus";
+
 const safeDiv = (a, b) => a / Math.max(0.1, b);
 // Defensive, nicht-negative Zahl.
 const num = (x) => Math.max(0, Number(x) || 0);
@@ -120,6 +122,8 @@ export function pvPotenzial({ dachflaeche = 0, kwpJeM2 = DEFAULT_PV_KWP_M2, ertr
 
 // Plausibilitäts-Checks (Konzept) — bewusst NUR "pass"/"warn", nie "fail" (Haftung):
 // Richtwerte dürfen nicht als prüffähiger GEG-/DIN-Nachweis erscheinen (T-17-04).
+// 72-04: missing input (heat load, heated area, flats = 0) is "offen", not "warn".
+// Standard, generator and ventilation are selects with visible defaults.
 export function tgaChecks({
   standard = "geg-neubau", qHeizlast = 0, erzeuger = "wp-luft",
   lueftungssystem = "zentral-wrg", beheizteFlaeche = 0, we = 0,
@@ -134,7 +138,7 @@ export function tgaChecks({
     {
       key: "heizlast",
       label: "Spez. Heizlast (Richtwert)",
-      status: q >= bandMin && q <= bandMax ? "pass" : "warn",
+      status: q <= 0 ? OFFEN : q >= bandMin && q <= bandMax ? "pass" : "warn",
       detail: `q ${de(q)} W/m² (Orientierung ${de(bandMin)}–${de(bandMax)} für ${std.label})`,
     },
     {
@@ -156,7 +160,7 @@ export function tgaChecks({
     {
       key: "flaeche",
       label: "Beheizte Fläche erfasst",
-      status: num(beheizteFlaeche) > 0 ? "pass" : "warn",
+      status: num(beheizteFlaeche) > 0 ? "pass" : OFFEN,
       detail: num(beheizteFlaeche) > 0
         ? `${de(beheizteFlaeche)} m² beheizte Fläche`
         : "Beheizte Fläche eingeben / Gebäudemodell pflegen",
@@ -164,13 +168,10 @@ export function tgaChecks({
     {
       key: "we",
       label: "Wohneinheiten erfasst",
-      status: num(we) > 0 ? "pass" : "warn",
+      status: num(we) > 0 ? "pass" : OFFEN,
       detail: num(we) > 0 ? `${de(we)} WE als Sanitär-/Elektro-Bezug` : "Wohneinheiten eingeben",
     },
   ];
 
-  const score = Math.round((items.filter((i) => i.status === "pass").length / Math.max(1, items.length)) * 100);
-  const warns = items.filter((i) => i.status === "warn").length;
-  const verdict = warns > 0 ? "Konzept mit Hinweisen" : "Konzept plausibel";
-  return { items, score, warns, verdict };
+  return konzeptAuswertung(items);
 }

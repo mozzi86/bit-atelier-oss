@@ -5,7 +5,12 @@ import { Badge } from "@core/components/ui/badge";
 import {
   FileUp, Loader2, AlertTriangle, CheckCircle2, Undo2, Building2, Boxes,
 } from "lucide-react";
-import { parseIfcFile, mapToClassifiedElements } from "@ifc/lib/ifcImport";
+import { mapToClassifiedElements } from "@ifc/lib/ifcImport";
+import { ifcLesen } from "@ifc/lib/ifcLesen";
+import { modellstandAusIfc, modellstandSpeichern } from "@ifc/lib/ifcSnapshot";
+import { useProject } from "@core/lib/ProjectContext";
+import { useI18n } from "@core/lib/i18n";
+import { DATENQUELLE } from "@core/lib/umgebung";
 
 const nf = new Intl.NumberFormat("de-DE");
 
@@ -45,7 +50,9 @@ export default function IfcImportPanel({ onUse, active = false, count = 0, onRes
       const buffer = await file.arrayBuffer();
       // Mikro-Yield, damit der Spinner sicher gerendert ist, bevor WASM rechnet.
       await new Promise((r) => setTimeout(r, 0));
-      const result = await parseIfcFile(buffer, setStatusText);
+      // 69-21: semantics read in a Web Worker; its error message is the one parseIfcFile throws.
+      const { parsed: result, parseFehler } = await ifcLesen(buffer, { parse: true }, setStatusText);
+      if (!result) throw new Error(parseFehler || "Die Datei konnte nicht als IFC-Modell geöffnet werden.");
       setParsed(result);
     } catch (err) {
       setError(err?.message || "Die IFC-Datei konnte nicht gelesen werden.");
@@ -59,6 +66,26 @@ export default function IfcImportPanel({ onUse, active = false, count = 0, onRes
   const useAsSource = () => {
     if (!parsed || busy) return;
     onUse?.(mapToClassifiedElements(parsed));
+  };
+
+  // 73-06: second button — keep the import as a model state (BimSnapshot + element blob) so it survives
+  // the reload and the survey tabs (73-02 "Gemessen", Raumprogramm aus Bestand) can read it.
+  const { t } = useI18n();
+  const { project } = useProject();
+  const [speichern, setSpeichern] = useState({ laeuft: false, text: "", fehler: false });
+  const speicherGrund = DATENQUELLE === "serverlos"
+    ? t("In der Browser-Fassung gibt es keinen Ablageort für Bauteile — Modellstände speichert die installierte App.")
+    : !project?.id ? t("Erst ein Projekt wählen.") : "";
+  const alsModellstand = async () => {
+    if (!parsed || busy || speicherGrund) return;
+    setSpeichern({ laeuft: true, text: "", fehler: false });
+    try {
+      const m = modellstandAusIfc(parsed, { projectId: project.id, datei: fileName });
+      await modellstandSpeichern(m);
+      setSpeichern({ laeuft: false, fehler: false, text: `${t("Modellstand gespeichert")}: ${m.snapshot.name} · ${nf.format(m.snapshot.anzahl)} ${t("Bauteile")} · ${nf.format(m.snapshot.ohne_status)} ${t("ohne Status")}` });
+    } catch (err) {
+      setSpeichern({ laeuft: false, fehler: true, text: `${t("Speichern fehlgeschlagen")}: ${err?.message || err}` });
+    }
   };
 
   return (
@@ -197,6 +224,13 @@ export default function IfcImportPanel({ onUse, active = false, count = 0, onRes
             <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={useAsSource}>
               <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Als Mengenquelle verwenden
             </Button>
+            <Button size="sm" variant="outline" onClick={alsModellstand} disabled={Boolean(speicherGrund) || speichern.laeuft}
+              title={speicherGrund || t("Import als Modellstand speichern — übersteht den Neustart, die Bauaufnahme-Reiter lesen ihn")} data-testid="ifc-modellstand">
+              {speichern.laeuft ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Building2 className="w-3.5 h-3.5 mr-1.5" />}
+              {t("Als Modellstand speichern")}
+            </Button>
+            {speicherGrund && <span className="text-xs text-slate-500" data-testid="ifc-modellstand-grund">{speicherGrund}</span>}
+            {speichern.text && <span className={`text-xs ${speichern.fehler ? "text-rose-600" : "text-emerald-700"}`} data-testid="ifc-modellstand-status">{speichern.text}</span>}
           </div>
         )}
       </CardContent>

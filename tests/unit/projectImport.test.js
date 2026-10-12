@@ -137,13 +137,22 @@ test("mit Bestätigung wird in Fremdschlüssel-Reihenfolge geschrieben", async (
   assert.ok(reihe.indexOf("Project") < reihe.indexOf("Los"));
   assert.ok(reihe.indexOf("AvaFilter") < reihe.indexOf("LVPosition"));
   assert.ok(reihe.indexOf("LVPosition") < reihe.indexOf("MengenRegel"));
-  assert.ok(reihe.indexOf("BimSnapshot") < reihe.indexOf("blob"));
-
-  // Bauteile als EIN Blob — nicht als Entitäten.
-  const blob = schritte.find((s) => s.art === "blob");
-  assert.equal(blob.n, 2);
-  assert.equal(res.geschrieben.BimElementBlob, 2);
+  // Speicherregel (11.10.2026): zwei kleine Bauteile liegen inline am Modellstand — kein Blob.
+  assert.equal(schritte.find((s) => s.art === "blob"), undefined);
+  assert.equal(res.geschrieben.BimElementInline, 2);
   assert.ok(!("BimElement" in res.geschrieben));
+});
+
+test("große Bauteilliste (> 256 KB) geht als EIN Blob nach dem Modellstand", async () => {
+  const { io, schritte } = sammler();
+  const gross = Array.from({ length: 3000 }, (_, i) => ({ guid: `g${i}`, name: "x".repeat(100) }));
+  const b = parseBundle({ ...minimal(), snapshot: { id: "s1" }, elemente: gross });
+  const res = await applyBundle(b, io, { bestaetigt: true });
+  assert.equal(res.ok, true);
+  const reihe = schritte.map((s) => s.entity || s.art);
+  assert.ok(reihe.indexOf("BimSnapshot") < reihe.indexOf("blob"));
+  assert.equal(schritte.find((s) => s.art === "blob").n, 3000);
+  assert.equal(res.geschrieben.BimElementBlob, 3000);
 });
 
 test("ein Abbruch liefert einen Bericht darüber, was schon geschrieben wurde", async () => {

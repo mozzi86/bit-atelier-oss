@@ -6,7 +6,8 @@
 // admin; the real boundary is the storage class of 80-02, which refuses personnel
 // data outside its own namespace. The role model of phase 82 replaces the role check.
 //
-// In:  data path and role of the signed-in user. Out: PERSONAL_ZUGAENGE, personalZugang.
+// In:  data path and role of the signed-in user; since 82-01 optionally the access
+//      object of the role model (zugriff). Out: PERSONAL_ZUGAENGE, personalZugang.
 //      Import-free.
 
 /**
@@ -26,11 +27,14 @@ const ROLLEN_MIT_ZUGANG = new Set(["admin", "owner"]);
  * - role admin or owner → 'erlaubt'.
  * - anything else → 'keine-berechtigung', also `undefined` while the user loads —
  *   the gate never opens on missing data.
- * @param {{datenquelle?: string, rolle?: string|null}} [kontext] datenquelle:
- *   'serverlos' | 'express' | 'supabase' (umgebung.js DATENQUELLE); rolle: user.role
+ * - with `zugriff` (82-01, role model): after the cloud check, 'erlaubt' exactly when
+ *   the role may read the module personal — without `zugriff` unchanged.
+ * @param {{datenquelle?: string, rolle?: string|null, zugriff?: {stufen?: Record<string, string>}|null}} [kontext] datenquelle:
+ *   'serverlos' | 'express' | 'supabase' (umgebung.js DATENQUELLE); rolle: user.role; zugriff: access (82)
  * @returns {'erlaubt'|'nur-lokal'|'keine-berechtigung'}
  */
-export function personalZugang({ datenquelle, rolle } = {}) {
+export function personalZugang({ datenquelle, rolle, zugriff } = {}) {
   if (datenquelle === "supabase") return "nur-lokal";
+  if (zugriff) return zugriff.stufen?.personal === "lesen" || zugriff.stufen?.personal === "voll" ? "erlaubt" : "keine-berechtigung";
   return typeof rolle === "string" && ROLLEN_MIT_ZUGANG.has(rolle) ? "erlaubt" : "keine-berechtigung";
 }

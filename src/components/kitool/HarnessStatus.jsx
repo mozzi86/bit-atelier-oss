@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@core/components/ui/select';
 import { useI18n } from '@core/lib/i18n';
-import { Bot, Cpu, FolderOpen, Coins, Gauge } from 'lucide-react';
+import { Bot, Cpu, FolderOpen, Coins, Gauge, ShieldCheck } from 'lucide-react';
 
 const nf = new Intl.NumberFormat('de-DE');
 const eur = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 4 });
@@ -38,10 +38,16 @@ export default function HarnessStatus({ status, projekte = [], verbindung, onPro
       <Badge variant="outline" className="gap-1 text-slate-700 dark:text-slate-200">
         <Cpu className="w-3.5 h-3.5" /> {status.provider}/{status.model}
       </Badge>
+      {/* 93-12: the service itself reports "Nur lokale KI" (BIT_NUR_LOKAL from the app). */}
+      {status.nur_lokal && (
+        <Badge variant="outline" className="gap-1 border-emerald-300 text-emerald-800 dark:text-emerald-200" data-testid="harness-nur-lokal">
+          <ShieldCheck className="w-3.5 h-3.5" /> {t('Nur lokale KI')}
+        </Badge>
+      )}
       <span className="flex items-center gap-1 text-slate-600 dark:text-slate-300">
         <FolderOpen className="w-4 h-4" />
         <Select value={status.projekt || ''} onValueChange={onProjekt}>
-          <SelectTrigger className="h-7 w-[200px] text-xs" data-testid="harness-projekt">
+          <SelectTrigger aria-label={t("Projekt")} className="h-7 w-[200px] text-xs" data-testid="harness-projekt">
             <SelectValue placeholder={t('Projekt wählen')} />
           </SelectTrigger>
           <SelectContent>

@@ -11,6 +11,8 @@
 // database was a single localStorage JSON blob that was rewritten on every
 // write and silently failed at the ~5 MB cap. An existing blob is migrated once
 // on first start, so nobody loses the state they already had.
+// Desktop client (70-03): the same facade writes into files in the user's
+// storage folder instead — dateiSpeicher.js, mounted via setzeSpeicher.
 //
 // In:  entity name + record data, exactly as the Express API takes it.
 // Out: the same records the server would return.
@@ -20,10 +22,11 @@
 // A failed write is ALSO re-thrown. The old code swallowed it, which is how the
 // UI ended up claiming "saved" while nothing was stored.
 
-import { demoIdb, speicherDauerhaft } from './demoIdb.js';
+import { demoIdb, speicherDauerhaft, speicherStand } from './demoIdb.js';
 // 80-02 Task 1: id/sort/filter extracted to sammlungKern.js so the "personal"
 // storage class's own module reuses them instead of growing a second copy.
 import { neueId as id, sortiereDatensaetze as sortRecords, passtFilter } from './sammlungKern.js';
+import { mitBehaltenem } from './projektDateiFormat.js';
 
 const STORE_KEY = 'bit-atelier-demo-db-v1'; // legacy localStorage blob, read only to migrate it
 
@@ -41,11 +44,18 @@ let seedLader = async () => ({});
 let persistAngefragt = false;
 
 /**
- * Replaces storage and seed — for unit tests, which run without a browser.
- * Production code never calls this. Tests that exercise the snapshot ring
- * (69-13) inject the same adapter there too via
- * schnappschuesse.setzeSchnappschussSpeicher — a forwarding import here would
- * create a static cycle (demoDb → schnappschuesse → projektDatei → demoDb).
+ * Replaces storage and seed. Two callers:
+ * - unit tests, which run without a browser (an in-memory adapter);
+ * - since 70-03 PRODUCTION: the desktop client mounts the file adapter
+ *   (dateiSpeicher.js) here once at start, BEFORE anything reads the database
+ *   (src/client/ablage.js speicherEinhaengen, called by the start gate in
+ *   main.jsx). The browser build never calls it and stays on demoIdb.
+ * Whoever swaps the storage also swaps the snapshot ring
+ * (schnappschuesse.setzeSchnappschussSpeicher) and the personal class
+ * (setzePersonalSpeicher of the personal storage class) — a forwarding import here would create a
+ * static cycle (demoDb → schnappschuesse → projektDatei → demoDb).
+ * An adapter MAY carry two extras: `stand()` (storage readout, see
+ * speicherStandAktuell) and `blobs` (put/get/delete, see blobSpeicher).
  * @param {typeof demoIdb} neuerAdapter
  * @param {() => Promise<Record<string, object[]>>} [neuerSeedLader]
  */
@@ -55,6 +65,34 @@ export function setzeSpeicher(neuerAdapter, neuerSeedLader) {
   cache = null;
   ladeVorgang = null;
   persistAngefragt = false;
+}
+
+/**
+ * Storage readout for the status line and Settings: the adapter's own
+ * `stand()` when it has one (file storage in the desktop client: bytes in the
+ * folder, no quota), else the browser's estimate (IndexedDB).
+ * @returns {Promise<{benutzt: number, gesamt: number|null, ort?: string}|null>} bytes; null = unknown
+ */
+export async function speicherStandAktuell() {
+  const eigener = /** @type {any} */ (adapter).stand;
+  if (typeof eigener === 'function') {
+    try {
+      return await eigener();
+    } catch {
+      return null;
+    }
+  }
+  return speicherStand();
+}
+
+/**
+ * The blob store of the current storage, or null when it has none (the
+ * browser's IndexedDB path has none — bitApi.blobs then says so in plain
+ * text). The desktop client's file storage keeps blobs as files (70-03).
+ * @returns {{put: (id: string, json: unknown) => Promise<unknown>, get: (id: string) => Promise<unknown>, delete: (id: string) => Promise<unknown>}|null}
+ */
+export function blobSpeicher() {
+  return /** @type {any} */ (adapter).blobs ?? null;
 }
 
 /**
@@ -239,10 +277,12 @@ export async function demoDbAuslesen() {
  * `db` (byte-compatible when both lists are empty, the default).
  * @param {Record<string, object[]>} db
  * @param {string|null} [grund] snapshot reason; null = caller already snapshotted
- * @param {{behalte?: string[], behalteSettingKeys?: string[]}} [optionen]
+ * 82-02: `behalteDokumentBereiche` does the same for Document rows by `bereich` — the
+ * local rows of those areas stay, rows of those areas in the file are not taken.
+ * @param {{behalte?: string[], behalteSettingKeys?: string[], behalteDokumentBereiche?: string[]}} [optionen]
  * @returns {Promise<{schnappschuss: object|null, schnappschussFehler: string|null}>}
  */
-export async function demoDbErsetzen(db, grund = 'vor Import', { behalte = [], behalteSettingKeys = [] } = {}) {
+export async function demoDbErsetzen(db, grund = 'vor Import', { behalte = [], behalteSettingKeys = [], behalteDokumentBereiche = [] } = {}) {
   let schnappschuss = null;
   let schnappschussFehler = null;
   if (grund != null) {
@@ -255,21 +295,10 @@ export async function demoDbErsetzen(db, grund = 'vor Import', { behalte = [], b
       schnappschussFehler = err?.message || String(err);
     }
   }
-  let neu = db;
-  if (behalte.length || behalteSettingKeys.length) {
-    const vorher = await demoDbAuslesen(); // isolated copy, safe to read after the snapshot above
-    neu = { ...db };
-    for (const entity of behalte) {
-      if (!Object.prototype.hasOwnProperty.call(db, entity) && vorher[entity]) neu[entity] = vorher[entity];
-    }
-    if (behalteSettingKeys.length) {
-      const alteZeilen = (vorher.Setting || []).filter((r) => behalteSettingKeys.includes(r?.key));
-      if (alteZeilen.length) {
-        const neueZeilen = (neu.Setting || []).filter((r) => !behalteSettingKeys.includes(r?.key));
-        neu.Setting = [...neueZeilen, ...alteZeilen];
-      }
-    }
-  }
+  // 93-10: the keep-what-the-file-lacks merge is shared with the server import (projektDateiFormat.js).
+  const neu = (behalte.length || behalteSettingKeys.length || behalteDokumentBereiche.length)
+    ? mitBehaltenem(await demoDbAuslesen(), db, { behalte, behalteSettingKeys, behalteDokumentBereiche }) // isolated copy, read after the snapshot
+    : db;
   const bisher = await adapter.entities();
   for (const entity of bisher) await adapter.leeren(entity);
   cache = structuredClone(neu);

@@ -65,7 +65,21 @@ const EINTRAEGE = [
   { schluessel: 'bit-atelier-sicherung-spaeter', speicher: 'sessionStorage', zweck: 'Sicherungs-Hinweis für diese Sitzung ausgeblendet', kategorie: 'notwendig', fassung: 'lokale Fassung', loeschbar: false, inRichtlinie: true, geraetecache: false },
   // 92-01: "Später" in the update banner — the version number whose banner the user hid.
   { schluessel: 'bit.update.spaeter', speicher: 'localStorage', zweck: 'Update-Hinweis für eine bestimmte Version ausgeblendet („Später“)', kategorie: 'notwendig', fassung: 'lokale Fassung', loeschbar: true, inRichtlinie: true, geraetecache: false },
+  // 81-02: time tracking — the running device timer (work in progress: a reset would
+  // lose the minutes, so not deletable in bulk) and the person chosen under "Stunden für".
+  { schluessel: 'bit-atelier.zeit.timer.v1', speicher: 'localStorage', zweck: 'Laufender Timer der Zeiterfassung (Startzeit und Projekt)', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: false, inRichtlinie: true, geraetecache: false },
+  { schluessel: 'bit-atelier.zeit.person.v1', speicher: 'localStorage', zweck: 'Auswahl „Stunden für“ der Zeiterfassung auf diesem Gerät', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: false },
+  // 82-03: source filter of the agenda "Fristen & Termine" (QuellenFilter.jsx) — a device setting.
+  { schluessel: 'bit-atelier-fristen-quellen', speicher: 'localStorage', zweck: 'Quellenfilter der Agenda „Fristen & Termine“', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: false },
+  // 72-07: recently opened projects of this device (ids only, at most 5) — a convenience.
+  { schluessel: 'bit-atelier-zuletzt-projekte', speicher: 'localStorage', zweck: 'Zuletzt geöffnete Projekte (höchstens 5 Projekt-IDs) für die Projektwahl', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: false },
+  // 72-20: work focus of the sidebar ("Wofür sind Sie hier?") — a display setting, no permission.
+  { schluessel: 'bit-atelier-fokus', speicher: 'localStorage', zweck: 'Arbeitsfokus der Seitenleiste („Wofür sind Sie hier?“)', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: false },
+  { schluessel: 'bit-atelier-ansicht-als', speicher: 'localStorage', zweck: '„Ansicht als …“: gewählter Nutzer dieses Geräts (keine Anmeldung)', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: false },
   { schluessel: 'kitool.verlauf.v1', speicher: 'sessionStorage', zweck: 'Chatverlauf des KI-Assistenten (max. 200 Nachrichten); endet mit dem Tab', kategorie: 'notwendig', fassung: 'lokale Fassung mit Harness', loeschbar: false, inRichtlinie: true, geraetecache: false },
+  // 93-10: desktop client only — path, size and modification time of the .bitproj this state was opened
+  // from, for "Zurück in die Datei speichern". Local on purpose (the path must never travel in an export).
+  { schluessel: 'bit-atelier.dateiquelle.v1', speicher: 'localStorage', zweck: 'Verknüpfte Projektdatei (Pfad, Größe, Änderungszeit) für „Zurück in die Datei speichern“', kategorie: 'notwendig', fassung: 'Desktop-Client', loeschbar: false, inRichtlinie: true, geraetecache: false },
   { schluessel: null, speicher: 'IndexedDB', zweck: 'Sämtliche Projekt- und Eingabedaten der lokalen Fassung', kategorie: 'notwendig', fassung: 'lokale Fassung', loeschbar: false, inRichtlinie: true, geraetecache: false },
   { schluessel: null, speicher: 'Cache Storage', zweck: 'Anwendungsdateien für den Offline-Betrieb', kategorie: 'notwendig', fassung: 'lokale Fassung', loeschbar: false, inRichtlinie: true, geraetecache: false },
 ];

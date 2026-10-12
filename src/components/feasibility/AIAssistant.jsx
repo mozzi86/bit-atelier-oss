@@ -6,6 +6,7 @@ import { Badge } from "@core/components/ui/badge";
 import { Bot, Loader2, Sparkles, ArrowRight } from "lucide-react";
 import { InvokeLLM } from "@core/integrations/Core";
 import { IMPACT_LABELS, labelFor } from "./labels";
+import { useI18n } from "@core/lib/i18n";
 
 const impactColors = {
   high: "bg-red-100 text-red-800",
@@ -16,6 +17,7 @@ const impactColors = {
 // KI-Assistent der Machbarkeit: zeigt Optimierungsvorschläge und beantwortet Fragen
 // zu den aktuellen Machbarkeitsdaten über den LLM-Proxy.
 export default function AIAssistant({ suggestions = [], feasibilityData }) {
+  const { t } = useI18n();
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState("");
@@ -85,7 +87,7 @@ export default function AIAssistant({ suggestions = [], feasibilityData }) {
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && ask()}
             />
-            <Button onClick={ask} disabled={loading || !question.trim()}>
+            <Button aria-label={t("Frage stellen")} onClick={ask} disabled={loading || !question.trim()}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             </Button>
           </div>

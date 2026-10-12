@@ -9,7 +9,12 @@ import {
   ShieldAlert, DoorOpen, Siren, Map, Gauge, AlertTriangle,
 } from "lucide-react";
 import { NumberField, Stat } from "@core/components/Field";
-import { STATUS_STYLE } from "@designer/lib/compliance";
+import { STATUS_STYLE, gesamtStatus } from "@designer/lib/compliance";
+import PruefZeile from "@designer/components/PruefZeile";
+import { mitAbweichungen } from "@designer/lib/abweichung";
+import { useFachlayer } from "@designer/lib/useFachlayer";
+import { useProject } from "@core/lib/ProjectContext";
+import { bauartVon } from "@core/lib/bauart";
 import {
   NUTZUNGEN, ANLEITER_ARTEN, SCHUTZUMFANG, FEUERWEHRPLAN_BESTANDTEILE,
   DEFAULT_MAX_FLUCHTWEG, DEFAULT_FLAECHE_JE_TR, DEFAULT_FLAECHE_JE_MELDER,
@@ -21,14 +26,23 @@ import { useBuildingProgram, programMetrics, footprintWD } from "@core/lib/useBu
 // Phase 38: der Fluchtweg-Plan (Phase 34) ist zum Brandschutz-Plan-Editor gewachsen
 // (Fluchtwege, Brandabschnitte, Symbole, Melder-Raster) — eigene Komponente.
 import BrandschutzPlanEditor from "./BrandschutzPlanEditor";
+import { useI18n } from "@core/lib/i18n";
 
 const de = (n) => Math.round(Number(n) || 0).toLocaleString("de-DE");
 const de1 = (n) => (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 1 });
 
+/** Default of the planner's own deviation layer (73-13). */
+const VERMERKE_DEFAULT = { abweichungen: {} };
+
 export default function BrandschutzPlanner() {
+  const { t } = useI18n();
   // Geometrie READ-only aus der gemeinsamen Quelle — nie duplizieren, nie zurückschreiben.
   const store = useBuildingProgram();
   const pm = programMetrics(store);
+  // 73-13 (rest): documented deviations of the summary checks. Own field "brandschutz_vermerke_layer" with
+  // { abweichungen } only — this planner is its single writer (KD-17).
+  const { project } = useProject();
+  const [vermerke, setVermerke] = useFachlayer(project?.id, "brandschutz_vermerke_layer", VERMERKE_DEFAULT);
 
   // Lokaler State (useState only — keine DB, kein bitApi, keine Store-Persistenz).
   // Card 1 — Gebäudeklasse (BRAND-01)
@@ -138,7 +152,7 @@ export default function BrandschutzPlanner() {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Nutzung</label>
                 <Select value={nutzung} onValueChange={setNutzung}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Nutzung")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(NUTZUNGEN).map(([k, v]) => (
                       <SelectItem key={k} value={k}>{v}</SelectItem>
@@ -149,7 +163,7 @@ export default function BrandschutzPlanner() {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Freistehend</label>
                 <Select value={freistehend} onValueChange={setFreistehend}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Freistehend")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ja">ja</SelectItem>
                     <SelectItem value="nein">nein</SelectItem>
@@ -172,7 +186,7 @@ export default function BrandschutzPlanner() {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">2. Rettungsweg über Anleiterung</label>
                 <Select value={anleiterArt} onValueChange={setAnleiterArt}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("2. Rettungsweg über Anleiterung")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(ANLEITER_ARTEN).map(([k, v]) => (
                       <SelectItem key={k} value={k}>{v}</SelectItem>
@@ -198,7 +212,7 @@ export default function BrandschutzPlanner() {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">BMA erforderlich</label>
                 <Select value={bmaMode} onValueChange={setBmaMode}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("BMA erforderlich")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="auto">automatisch (aus Hochhaus/Sonderbau)</SelectItem>
                     <SelectItem value="ja">ja</SelectItem>
@@ -209,7 +223,7 @@ export default function BrandschutzPlanner() {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Schutzumfang (DIN 14675)</label>
                 <Select value={schutzumfang} onValueChange={setSchutzumfang}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Schutzumfang (DIN 14675)")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(SCHUTZUMFANG).map(([k, v]) => (
                       <SelectItem key={k} value={k}>{v.label}</SelectItem>
@@ -228,7 +242,7 @@ export default function BrandschutzPlanner() {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Feuerwehrpläne erforderlich</label>
                 <Select value={fwpMode} onValueChange={setFwpMode}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Feuerwehrpläne erforderlich")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="auto">automatisch (aus BMA/Sonderbau)</SelectItem>
                     <SelectItem value="ja">ja</SelectItem>
@@ -240,7 +254,7 @@ export default function BrandschutzPlanner() {
                 <div key={k} className="space-y-1 col-span-2">
                   <label className="text-xs text-slate-500">{label}</label>
                   <Select value={bestandteile[k]} onValueChange={(v) => setBestandteil(k, v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-label={label}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ja">ja</SelectItem>
                       <SelectItem value="nein">nein</SelectItem>
@@ -270,23 +284,17 @@ export default function BrandschutzPlanner() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between text-base">
                 <span className="flex items-center gap-2"><Gauge className="w-4 h-4" /> Zusammenfassung & Plausibilität (Richtwert)</span>
-                <Badge className={STATUS_STYLE[kpi.checks.warns > 0 ? "warn" : "pass"].color}>{kpi.checks.verdict}</Badge>
+                <Badge className={STATUS_STYLE[gesamtStatus(kpi.checks)].color} data-testid="brand-urteil">{kpi.checks.verdict}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {kpi.checks.items.map((it) => {
-                const s = STATUS_STYLE[it.status];
-                return (
-                  <div key={it.key} className="flex items-center gap-3 rounded-lg border p-2">
-                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${s.dot}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-800">{it.label}</div>
-                      <div className="text-[11px] text-slate-500">{it.detail}</div>
-                    </div>
-                    <Badge className={`${s.color} shrink-0`}>{s.label}</Badge>
-                  </div>
-                );
-              })}
+              {/* 73-13: documented deviations overlay the checks; notes live in brandschutz_vermerke_layer.abweichungen. */}
+              {mitAbweichungen(kpi.checks.items, vermerke?.abweichungen).items.map((it) => (
+                <div key={it.key} data-testid={`brand-check-${it.key}`} data-status={it.status}>
+                  <PruefZeile it={it} styles={STATUS_STYLE} bauart={bauartVon(project).bauart}
+                    onVermerk={(key, v) => setVermerke({ ...vermerke, abweichungen: { ...(vermerke?.abweichungen || {}), [key]: v || undefined } })} />
+                </div>
+              ))}
               <div className="text-xs text-slate-500 border-t pt-2">
                 Feuerwehr-Aufstellflächen & Zufahrten (DIN 14090) im Reiter „Landschaft“ — der Brandschutz-Reiter behandelt DIN 14095 (Feuerwehrpläne) und Konzept-Richtwerte.
               </div>

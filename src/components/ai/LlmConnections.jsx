@@ -4,7 +4,7 @@ import { Button } from "@core/components/ui/button";
 import { Badge } from "@core/components/ui/badge";
 import {
   Plug, KeyRound, Loader2, CheckCircle2, XCircle, Trash2, Pencil,
-  ShieldCheck, Zap,
+  ShieldCheck, Zap, ListRestart, Cpu,
 } from "lucide-react";
 import { toast } from "sonner";
 import { bitApi } from "@core/api/bitApi";
@@ -14,6 +14,11 @@ import { useI18n } from "@core/lib/i18n";
 // the server's llm.js uses too — the hint "Anfragen gehen an" shows exactly the
 // URL the server will call.
 import { KI_TYPEN, KI_VORLAGEN, endpunktUrl, vorlageFuer } from "@core/lib/kiVorlagen";
+// 93-12: local servers as first-class option — one-click presets, model discovery (/llm/modelle), a test
+// with elapsed seconds and cancel (the first call of a local model loads it: minutes), reload when the
+// server changed the list (pull finished, "Verwenden" in LokaleKi.jsx).
+import { istLoopbackUrl } from "@core/lib/kiLokal";
+import { VERBINDUNGEN_EVENT } from "@/lib/kiLokalApi";
 
 /**
  * Default base URL per connection type. Resolves to the same endpoints as
@@ -50,6 +55,11 @@ export default function LlmConnections() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
+  const [modelle, setModelle] = useState(/** @type {{ liste: string[], fehler?: string }|null} */ (null));
+  const [suche, setSuche] = useState(false);
+  const [testStart, setTestStart] = useState(/** @type {number|null} */ (null));
+  const [, setTick] = useState(0);
+  const testCtrl = React.useRef(/** @type {AbortController|null} */ (null));
 
   const reload = useCallback(async () => {
     try {
@@ -60,17 +70,56 @@ export default function LlmConnections() {
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    window.addEventListener(VERBINDUNGEN_EVENT, reload);
+    return () => window.removeEventListener(VERBINDUNGEN_EVENT, reload);
+  }, [reload]);
+  // Elapsed seconds while a test runs.
+  useEffect(() => {
+    if (testStart == null) return undefined;
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [testStart]);
 
   const set = (patch) => setForm((p) => ({ ...p, ...patch }));
 
   // A preset fills type + base URL; the model name stays the user's choice.
   const onVorlageChange = (id) => {
     const vorlage = KI_VORLAGEN.find((v) => v.id === id);
+    setModelle(null);
     if (!vorlage) { set({ vorlage: "" }); return; }
     set({ vorlage: id, provider: vorlage.provider, base_url: vorlage.baseUrl });
   };
 
+  // Model discovery: GET /v1/models (OpenAI-compatible) or /api/tags (Ollama), server-side.
+  const modelleAbrufen = async (/** @type {Partial<typeof form>} */ werte = {}) => {
+    const f = { ...form, ...werte };
+    setSuche(true);
+    setModelle(null);
+    try {
+      const body = { provider: f.provider, base_url: f.base_url, ...(f.id ? { id: f.id } : {}), ...(f.api_key ? { api_key: f.api_key } : {}) };
+      const r = await api("/llm/modelle", { method: "POST", body: JSON.stringify(body) });
+      setModelle({ liste: r.modelle || [], fehler: r.fehler });
+      if (r.modelle?.length && !f.model) set({ model: r.modelle[0] });
+    } catch (e) {
+      setModelle({ liste: [], fehler: e.message });
+    } finally {
+      setSuche(false);
+    }
+  };
+
+  // One click: preset + model list of the running local server.
+  const lokalWaehlen = (/** @type {string} */ id) => {
+    const vorlage = KI_VORLAGEN.find((v) => v.id === id);
+    if (!vorlage) return;
+    const werte = { vorlage: id, provider: vorlage.provider, base_url: vorlage.baseUrl, api_key: "", model: "" };
+    set(werte);
+    setTestResult(null);
+    modelleAbrufen(werte);
+  };
+
   const onProviderChange = (v) => {
+    setModelle(null);
     const base_url = TYP_STANDARD_URL[v] ?? "";
     set({ provider: v, base_url, vorlage: vorlageFuer(v, base_url) });
   };
@@ -79,7 +128,8 @@ export default function LlmConnections() {
 
   const vorlageMeta = KI_VORLAGEN.find((v) => v.id === form.vorlage) || null;
   const providerLabel = (v) => t(KI_TYPEN.find((p) => p.v === v)?.label || v);
-  const istLokal = form.provider === "ollama" || Boolean(vorlageMeta?.lokal);
+  const istLokal = form.provider === "ollama" || Boolean(vorlageMeta?.lokal) || istLoopbackUrl(form.base_url);
+  const testSekunden = testStart != null ? Math.round((Date.now() - testStart) / 1000) : 0;
   const modellBeispiel = vorlageMeta?.beispielModell || "mein-modell";
   // What the server will call — the same rule llm.js applies (empty base → type default).
   const zielUrl = endpunktUrl(form.provider, form.base_url.trim() || TYP_STANDARD_URL[form.provider] || "");
@@ -87,17 +137,23 @@ export default function LlmConnections() {
   const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
+    setTestStart(Date.now());
+    const ctrl = new AbortController();
+    testCtrl.current = ctrl;
     try {
       const body = { ...form };
       delete body.vorlage; // form-only field, the server knows provider + base_url
       if (!body.api_key) delete body.api_key; // leer = gespeicherten Schlüssel nutzen
       if (!body.id) delete body.id;
-      const r = await api("/llm/test", { method: "POST", body: JSON.stringify(body) });
+      const r = await api("/llm/test", { method: "POST", body: JSON.stringify(body), signal: ctrl.signal });
       setTestResult(r);
+      if (r.modelle?.length) setModelle({ liste: r.modelle });
     } catch (e) {
-      setTestResult({ ok: false, fehler: e.message });
+      setTestResult({ ok: false, fehler: e.name === "AbortError" ? t("Test abgebrochen.") : e.message });
     } finally {
       setTesting(false);
+      setTestStart(null);
+      testCtrl.current = null;
     }
   };
 
@@ -171,6 +227,12 @@ export default function LlmConnections() {
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-2 space-y-3">
+          <div className="flex flex-wrap items-center gap-2 rounded-md bg-emerald-50/70 px-2.5 py-2 text-xs text-slate-700 dark:bg-emerald-950/20 dark:text-slate-200">
+            <Cpu className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
+            <span>{t("Lokal auf diesem Rechner:")}</span>
+            <Button variant="outline" size="sm" className="h-7 px-2 text-xs" data-testid="ki-lokal-lmstudio" onClick={() => lokalWaehlen("lmstudio")}>LM Studio</Button>
+            <Button variant="outline" size="sm" className="h-7 px-2 text-xs" data-testid="ki-lokal-ollama" onClick={() => lokalWaehlen("ollama")}>Ollama</Button>
+          </div>
           <label className="block">
             <span className="text-xs text-slate-500">{t("Bezeichnung (optional)")}</span>
             <input className={inputCls} value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder={t("z. B. Büro-Claude")} />
@@ -193,7 +255,7 @@ export default function LlmConnections() {
 
           <label className="block">
             <span className="text-xs text-slate-500">{t("Basis-URL")}</span>
-            <input className={inputCls} value={form.base_url} onChange={(e) => onBaseUrlChange(e.target.value)} placeholder={TYP_STANDARD_URL[form.provider] || "https://mein-server.de/v1"} />
+            <input className={inputCls} data-testid="ki-basis-url" value={form.base_url} onChange={(e) => onBaseUrlChange(e.target.value)} placeholder={TYP_STANDARD_URL[form.provider] || "https://mein-server.de/v1"} />
             {zielUrl && (
               <span className="mt-1 block text-[11px] text-slate-400 break-all" data-testid="ki-ziel-url">
                 {t("Anfragen gehen an:")} {zielUrl}
@@ -201,10 +263,24 @@ export default function LlmConnections() {
             )}
           </label>
 
-          <label className="block">
-            <span className="text-xs text-slate-500">{t("Modellname")}</span>
-            <input className={inputCls} value={form.model} onChange={(e) => set({ model: e.target.value })} placeholder={t("z. B. {modell}").replace("{modell}", modellBeispiel)} />
-          </label>
+          <div className="block">
+            <label className="block">
+              <span className="text-xs text-slate-500">{t("Modellname")}</span>
+              <input className={inputCls} value={form.model} onChange={(e) => set({ model: e.target.value })} placeholder={t("z. B. {modell}").replace("{modell}", modellBeispiel)} data-testid="ki-modell" />
+            </label>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1" onClick={() => modelleAbrufen()} disabled={suche || form.provider === "anthropic"} data-testid="ki-modelle-abrufen">
+                {suche ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ListRestart className="w-3.5 h-3.5" />} {t("Modelle abrufen")}
+              </Button>
+              {modelle?.liste?.length > 0 && (
+                <select className="h-7 rounded-md border border-slate-200 px-1.5 text-xs" value={modelle.liste.includes(form.model) ? form.model : ""} onChange={(e) => set({ model: e.target.value })} data-testid="ki-modell-liste" aria-label={t("Gefundene Modelle")}>
+                  <option value="">{t("{n} Modelle gefunden — wählen").replace("{n}", String(modelle.liste.length))}</option>
+                  {modelle.liste.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              )}
+            </div>
+            {modelle?.fehler && <p className="mt-1 text-[11px] text-rose-700" data-testid="ki-modelle-fehler">{modelle.fehler}</p>}
+          </div>
 
           <label className="block">
             <span className="text-xs text-slate-500 flex items-center gap-1"><KeyRound className="w-3 h-3" /> {t("API-Schlüssel")}{form.id ? ` ${t("(leer lassen = unverändert)")}` : ""}</span>
@@ -228,10 +304,13 @@ export default function LlmConnections() {
           </p>
 
           <div className="flex gap-2 pt-1">
-            <Button variant="outline" size="sm" onClick={handleTest} disabled={testing}>
+            <Button variant="outline" size="sm" onClick={handleTest} disabled={testing} data-testid="ki-testen">
               {testing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
-              {testing ? t("Teste…") : t("Verbindung testen")}
+              {testing ? `${t("Teste…")} ${testSekunden} s` : t("Verbindung testen")}
             </Button>
+            {testing && (
+              <Button variant="ghost" size="sm" onClick={() => testCtrl.current?.abort()} data-testid="ki-test-abbrechen">{t("Abbrechen")}</Button>
+            )}
             <Button size="sm" onClick={handleSave} disabled={saving}>
               {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               {form.id ? t("Aktualisieren") : t("Speichern")}
@@ -241,8 +320,11 @@ export default function LlmConnections() {
             )}
           </div>
 
+          {testing && istLokal && testSekunden >= 5 && (
+            <p className="text-[11px] text-slate-500" data-testid="ki-test-geduld">{t("Lokale Modelle brauchen beim ersten Aufruf oft Minuten, weil das Modell erst in den Speicher geladen wird.")}</p>
+          )}
           {testResult && (
-            <div className={`rounded-lg border px-3 py-2 text-sm ${testResult.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`}>
+            <div data-testid="ki-test-ergebnis" className={`rounded-lg border px-3 py-2 text-sm ${testResult.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`}>
               <div className="flex items-center gap-2 font-medium">
                 {testResult.ok ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                 {testResult.ok ? t("Verbindung erfolgreich") : t("Verbindung fehlgeschlagen")}

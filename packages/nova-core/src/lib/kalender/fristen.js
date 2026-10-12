@@ -11,9 +11,9 @@
 //
 // In:  Datumsstrings 'YYYY-MM-DD' und Fristdauern {jahre?, monate?, wochen?, tage?}.
 // Out: fristEnde, fristEndeBeginn, monatsende, naechster15OderMonatsende,
-//      volleJahre, volleMonate. null bei ungültiger Eingabe.
+//      volleJahre, volleMonate; 82-01 additiv: faelligkeit. null bei ungültiger Eingabe.
 
-import { parseTag, plusMonate, plusTage, tag, tageImMonat } from "./datum.js";
+import { parseTag, plusMonate, plusTage, tag, tageImMonat, tageZwischen } from "./datum.js";
 
 /**
  * Dauer einer Frist in Kalendereinheiten. Alle Felder optional, fehlende
@@ -149,4 +149,32 @@ export function volleMonate(vonIso, bisIso) {
   let monate = (by - vy) * 12 + (bm - vm);
   if (bd < vd) monate -= 1; // Tag im Zielmonat noch nicht erreicht
   return Math.max(0, monate);
+}
+
+/**
+ * Due state of a term on a day (82-01, additive to 80-04): "today" is a
+ * mandatory parameter (pattern funding.js fristStatus) — no clock in here.
+ * The lead stage is the smallest lead time (days) that still covers the
+ * remaining days, so a deadline 4 days ahead with leads [30, 7, 1] is in
+ * stage 7. Only deadlines (klasse 'frist') are ever overdue; a past
+ * appointment or notice is simply 'vergangen'. The lead times come from the
+ * rule book (fristen.vorlauf_*_tage, E-16) as a parameter, never as a constant
+ * here. A limitation reminder is not moved by § 193 BGB (D-P82-09): § 193
+ * shifts the end of a period for a declaration or performance, not the date a
+ * reminder should appear — reminding on the weekend before is the safe side.
+ * @param {{datum: string, klasse?: string, erledigt?: boolean}} termin datum 'YYYY-MM-DD'
+ * @param {string} heuteIso 'YYYY-MM-DD'
+ * @param {ReadonlyArray<number>} [vorlaufTage] lead times in days, any order
+ * @returns {{status: 'erledigt'|'ueberfaellig'|'heute'|'faellig'|'geplant'|'vergangen', stufe: number|null, tage: number}|null}
+ *   tage = days from today to the term (negative = past); null for invalid dates
+ */
+export function faelligkeit(termin, heuteIso, vorlaufTage = []) {
+  const tage = tageZwischen(heuteIso, termin?.datum);
+  if (tage === null) return null;
+  if (termin?.erledigt) return { status: "erledigt", stufe: null, tage };
+  if (tage < 0) return { status: termin?.klasse === "frist" ? "ueberfaellig" : "vergangen", stufe: null, tage };
+  if (tage === 0) return { status: "heute", stufe: 0, tage };
+  const stufen = [...(vorlaufTage || [])].filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+  const stufe = stufen.find((v) => v >= tage);
+  return stufe === undefined ? { status: "geplant", stufe: null, tage } : { status: "faellig", stufe, tage };
 }

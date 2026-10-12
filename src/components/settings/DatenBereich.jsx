@@ -15,17 +15,31 @@ import { Link } from "react-router-dom";
 import { Database, Download, Upload, History, RotateCcw, Eraser } from "lucide-react";
 import { useI18n } from "@core/lib/i18n";
 import { useBestaetigung } from "@core/lib/useBestaetigung";
-import { DATENQUELLE } from "@core/lib/umgebung";
+import { DATENQUELLE, SERVERLOS } from "@core/lib/umgebung";
+import { wahrheitFuer } from "@core/lib/speicherWahrheit";
 import { speicherStand, speicherDauerhaft } from "@core/api/demoIdb";
 import { demoDbAuslesen, letzteSicherungLesen } from "@core/api/demoDb";
 import { exportProjekt } from "@core/api/projektDatei";
 import { tageZwischen, heuteLokal } from "@core/lib/kalender/datum.js";
 import { geraetespeicherSchluessel } from "@core/lib/browserSpeicher.js";
 import { EXPORT_BEREICHE } from "@/lib/exportBereiche";
+import DatenOrdner from "@/components/settings/DatenOrdner.jsx";
+import DateiSichernLaden from "@/components/settings/DateiSichernLaden.jsx";
+import AutoSicherung from "@/components/settings/AutoSicherung.jsx";
+// 93-10: the .bitproj this state was opened from (double-click) and "Zurück in die Datei speichern".
+import DateiQuelleKarte from "@/components/dateiOeffnen/DateiQuelleKarte.jsx";
+import CloudGesamtExport from "@/components/settings/CloudGesamtExport.jsx";
+// 70-03: the desktop client shows its storage folder instead of the browser storage.
+// Lazy and behind SERVERLOS: the card pulls the file storage layer, which the
+// office and cloud builds must not carry.
+import { inHuelle } from "@/client/huelle.js";
 import {
   ImportVorschauDialog, ZuruecksetzenDialog, SchnappschussDialog, ExportDialog,
   useSpeicherAktionen, fokusZurueck,
 } from "@/demo/speicherDialoge.jsx";
+
+// Lazy and behind SERVERLOS (70-03) — see the import comment above.
+const Ablageort = SERVERLOS ? React.lazy(() => import("@/client/Ablageort.jsx")) : () => null;
 
 /** Ready since 80-05. */
 export const BEREIT = true;
@@ -44,6 +58,7 @@ export default function DatenBereich({ kontext }) {
   const { t } = useI18n();
   const bestaetige = useBestaetigung();
   const datenquelle = kontext?.datenquelle ?? DATENQUELLE;
+  const imClient = inHuelle();
 
   // --- Status readout (serverlos) --------------------------------------------
   const [letzteSicherung, setLetzteSicherung] = React.useState(/** @type {{zeit: string, datensaetze: number}|null|undefined} */ (undefined));
@@ -54,9 +69,11 @@ export default function DatenBereich({ kontext }) {
   React.useEffect(() => {
     if (datenquelle !== "serverlos") return;
     letzteSicherungLesen().then(setLetzteSicherung).catch(() => setLetzteSicherung(null));
+    // Browser quota and "persistent storage" mean nothing for a folder on disk.
+    if (imClient) return;
     speicherStand().then(setStand).catch(() => setStand(null));
     speicherDauerhaft().then(setDauerhaft).catch(() => setDauerhaft(null));
-  }, [datenquelle]);
+  }, [datenquelle, imClient]);
 
   // --- Shared dialogs (speicherDialoge.jsx) -----------------------------------
   const aktionen = useSpeicherAktionen();
@@ -178,6 +195,11 @@ export default function DatenBereich({ kontext }) {
         <Database className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("Daten & Sicherung")}
       </h2>
 
+      {/* 89-07 (D-BW-05): which store holds the truth in this edition — said once, plainly. */}
+      <p className="text-sm text-slate-600 dark:text-slate-300" data-testid="daten-wahrheit" data-quelle={wahrheitFuer(datenquelle).quelle}>
+        {t("Wahrheit dieser Fassung")}: {t(wahrheitFuer(datenquelle).text)}
+      </p>
+
       {fehler && (
         <p role="alert" className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
           {String(fehler.message || fehler)}
@@ -186,6 +208,8 @@ export default function DatenBereich({ kontext }) {
 
       {datenquelle === "serverlos" && (
         <>
+          {imClient && <React.Suspense fallback={null}><Ablageort /></React.Suspense>}
+          {imClient && <DateiQuelleKarte huelle />}
           <dl className="rounded-xl border border-slate-200 bg-white p-4 text-sm dark:border-slate-700 dark:bg-slate-900 grid gap-2 sm:grid-cols-3">
             <div>
               <dt className="text-slate-500 dark:text-slate-400">{t("Letzte Sicherung")}</dt>
@@ -197,6 +221,7 @@ export default function DatenBereich({ kontext }) {
                     : t("noch nie")}
               </dd>
             </div>
+            {!imClient && <>
             <div>
               <dt className="text-slate-500 dark:text-slate-400">{t("Füllstand")}</dt>
               <dd className="font-medium text-slate-800 dark:text-slate-100">{stand ? `${mb(stand.benutzt)} / ${mb(stand.gesamt)}` : "…"}</dd>
@@ -205,6 +230,7 @@ export default function DatenBereich({ kontext }) {
               <dt className="text-slate-500 dark:text-slate-400">{t("Dauerhafter Speicher")}</dt>
               <dd className="font-medium text-slate-800 dark:text-slate-100">{dauerhaft === null ? t("unbekannt") : dauerhaft ? t("Ja") : t("Nein")}</dd>
             </div>
+            </>}
           </dl>
 
           <div className="flex flex-wrap gap-2">
@@ -248,27 +274,34 @@ export default function DatenBereich({ kontext }) {
         </>
       )}
 
+      {datenquelle === "express" && <DateiQuelleKarte />}
+      {/* 93-13: save / load a .bitproj in the installed edition (server-side). */}
+      {datenquelle === "express" && <DateiSichernLaden />}
+
       {datenquelle === "express" && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200 space-y-2">
+          {/* 92-07: the folder the server really writes to (BIT_DATA_DIR / datenPfad.js), with "Ordner öffnen".
+              The file names below live in that folder — "server/" was only true for a source checkout. */}
+          <DatenOrdner />
+          {/* 93-06: the server backs the data up by itself (server/sicherung.js). */}
+          <AutoSicherung />
           <p>
-            {t("Projektdaten liegen in")} <code className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-900">server/db.json</code>
+            {t("Projektdaten liegen in")} <code className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-900">db.json</code>
             {" "}({t("Sicherungskopie")} <code className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-900">db.json.bak</code>).
           </p>
           <p>
-            {t("Personaldaten liegen getrennt in")} <code className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-900">server/personal.json</code>.
+            {t("Personaldaten liegen getrennt in")} <code className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-900">personal.json</code>.
           </p>
-          <p>
-            {t("Sicherungsskript")}: <code className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-900">backup-export.ps1</code>.{" "}
+          {/* 93-06: this used to name backup-export.ps1 — the operator's dump script of the hosted database,
+              not part of the open-source app. A local user restores from the zips of "Automatische Sicherung". */}
+          <p data-testid="daten-sicherung-hinweis">
+            {t("Wiederherstellen: App beenden, die gewünschte Sicherung (ZIP) in den Datenordner entpacken, App starten.")}{" "}
             {t("Liegt das Verzeichnis in OneDrive, synchronisiert das automatisch — ohne Verschlüsselung dieser Dateien selbst.")}
           </p>
         </div>
       )}
 
-      {datenquelle === "supabase" && (
-        <p className="rounded-xl border border-dashed border-slate-300 bg-white/70 p-6 text-center text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-900/60 dark:text-slate-300">
-          {t("Cloud-Gesamtexport folgt (78-04).")}
-        </p>
-      )}
+      {datenquelle === "supabase" && <CloudGesamtExport />}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
         <h3 className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-200">{t("Gerätespeicher")}</h3>

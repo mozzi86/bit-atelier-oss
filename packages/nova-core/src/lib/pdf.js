@@ -4,6 +4,23 @@ import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import { dokumentAblegen } from "@core/lib/ablage";
 
+/** Largest canvas side Chromium/Firefox still rasterise (px); a taller canvas comes back blank. */
+export const CANVAS_MAX_PX = 32767;
+
+/**
+ * Raster scale for html2canvas (72-21): 2 (sharp) as long as the canvas stays below
+ * the browser limit, otherwise as large as the limit allows — a report with all
+ * findings must not turn into blank pages. Below scale 1 the text gets blurry; the
+ * caller limits its rows so that scale 1 is reached (ModelCheck BERICHT_MAX_ZEILEN).
+ * @param {number} hoehePx height of the element (CSS px)
+ * @returns {number} scale factor (≤ 2)
+ */
+export function pdfMassstab(hoehePx) {
+  const h = Number(hoehePx) || 0;
+  if (h <= 0) return 2;
+  return Math.min(2, Math.floor(((CANVAS_MAX_PX - 64) / h) * 100) / 100);
+}
+
 /**
  * Ein DOM-Element als mehrseitiges A4-PDF exportieren.
  *
@@ -32,7 +49,7 @@ import { dokumentAblegen } from "@core/lib/ablage";
  */
 export async function exportElementToPdf(el, filename, { orientation = "portrait", ablage, alsBytes = false } = {}) {
   if (!el) return;
-  const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false });
+  const canvas = await html2canvas(el, { scale: pdfMassstab(el.scrollHeight), backgroundColor: "#ffffff", useCORS: true, logging: false });
   const img = canvas.toDataURL("image/jpeg", 0.92);
   const pdf = new jsPDF({ orientation, unit: "mm", format: "a4" });
   const pageW = pdf.internal.pageSize.getWidth();

@@ -51,13 +51,19 @@ export function pruefeRegistrierung(angaben = {}) {
   return fehler;
 }
 
+/** Cap of the mail body in characters, same as the feedback mail
+ *  (feedback.js MAX_MAILTO_TEXT): mail programs cut long mailto URLs silently. */
+export const MAX_MAILTEXT = 1500;
+
 /**
- * The prepared request mail. Labels stay German: the mail goes to the operator.
+ * Subject and body of the request mail. Labels stay German: the mail goes to
+ * the operator. The confirmation screen shows the same text, so a request is
+ * never lost when no mail program opens (mailto gives no success signal).
  * @param {RegistrierungsAngaben} angaben validated form values
- * @param {string} empfaenger ANBIETER.anfrageEmail
- * @returns {string} mailto URL
+ * @returns {{ betreff: string, text: string, gekuerzt: boolean }} body capped at
+ *   MAX_MAILTEXT characters; `gekuerzt` says whether the cap cut it
  */
-export function registrierungMailto(angaben, empfaenger) {
+export function registrierungText(angaben) {
   const rolle = REGISTRIERUNG_ROLLEN.find((r) => r.wert === angaben.rolle)?.label || angaben.rolle || '—';
   const buero = String(angaben.buero || '').trim();
   const zeilen = [
@@ -72,9 +78,21 @@ export function registrierungMailto(angaben, empfaenger) {
     'Nachricht:',
     String(angaben.nachricht || '').trim() || '—',
   ];
-  // Same cap as the feedback mail (feedback.js MAX_MAILTO_TEXT): mail programs
-  // cut long mailto URLs silently.
-  const body = zeilen.join('\n').slice(0, 1500);
-  const betreff = `BIT-Atelier Zugangsanfrage – ${buero}`;
-  return `mailto:${empfaenger}?subject=${encodeURIComponent(betreff)}&body=${encodeURIComponent(body)}`;
+  const voll = zeilen.join('\n');
+  return {
+    betreff: `BIT-Atelier Zugangsanfrage – ${buero}`,
+    text: voll.slice(0, MAX_MAILTEXT),
+    gekuerzt: voll.length > MAX_MAILTEXT,
+  };
+}
+
+/**
+ * The prepared request mail.
+ * @param {RegistrierungsAngaben} angaben validated form values
+ * @param {string} empfaenger ANBIETER.anfrageEmail
+ * @returns {string} mailto URL
+ */
+export function registrierungMailto(angaben, empfaenger) {
+  const { betreff, text } = registrierungText(angaben);
+  return `mailto:${empfaenger}?subject=${encodeURIComponent(betreff)}&body=${encodeURIComponent(text)}`;
 }

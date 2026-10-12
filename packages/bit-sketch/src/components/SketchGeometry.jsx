@@ -12,6 +12,19 @@
 
 import React from "react";
 import { CONSTRAINT_GLYPHS, constraintRefs } from "../lib/sketchModel.js";
+import { strichUmriss, punkteVon } from "../lib/freihand.js";
+
+/**
+ * SVG path of a freehand stroke outline (72-05) in target units.
+ * @param {{punkte: Array<[number, number, number]>, breite: number}} st stored stroke
+ * @param {(x: number) => number} X @param {(y: number) => number} Y world → target transforms
+ * @returns {string}
+ */
+export function strichPfad(st, X, Y) {
+  const um = strichUmriss(punkteVon(st), st.breite);
+  if (!um.length) return "";
+  return `${um.map(([x, y], i) => `${i ? "L" : "M"}${X(x).toFixed(1)} ${Y(y).toFixed(1)}`).join(" ")} Z`;
+}
 
 export const SKETCH_FARBEN = {
   normal: "#334155",
@@ -67,6 +80,11 @@ export default function SketchGeometry({
 
   return (
     <g data-sketch-geometry>
+      {/* 72-05: freehand ink first — under lines, points and glyphs. */}
+      {[...(sketch.strokes?.values?.() || [])].map((st) => (
+        <path key={st.id} d={strichPfad(st, X, Y)} data-strich={st.id}
+          fill={selection.has(st.id) ? SKETCH_FARBEN.auswahl : st.farbe} fillOpacity={0.92} />
+      ))}
       {/* Linien */}
       {[...sketch.lines.values()].map((l) => {
         const a = sketch.points.get(l.p1);

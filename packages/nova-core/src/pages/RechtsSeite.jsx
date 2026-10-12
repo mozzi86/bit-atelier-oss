@@ -60,6 +60,7 @@ export default function RechtsSeite({ titel, children }) {
           <Link to="/nutzungsbedingungen" className="underline hover:text-slate-900">Nutzungsbedingungen</Link>
           <Link to="/rueckerstattung" className="underline hover:text-slate-900">Rückerstattung</Link>
           <Link to="/cookies" className="underline hover:text-slate-900">Cookies</Link>
+          <Link to="/barrierefreiheit" className="underline hover:text-slate-900">Barrierefreiheit</Link>
         </nav>
         <p className="mt-3 text-center text-xs">
           <Link

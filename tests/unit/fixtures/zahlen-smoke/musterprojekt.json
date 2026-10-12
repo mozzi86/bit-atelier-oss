@@ -1,60 +1,96 @@
 {
-  "bauteile": 10,
-  "mit_qty": 10,
+  "bauteile": 563,
+  "mit_qty": 563,
   "uebersprungen": 0,
   "klassen": {
+    "IfcAirTerminal": {
+      "anzahl": 37,
+      "area_m2": 31.2,
+      "volume_m3": 1.37,
+      "length_m": 22.2
+    },
     "IfcBeam": {
-      "anzahl": 2,
-      "area_m2": 11,
-      "volume_m3": 3.3,
-      "length_m": 22
+      "anzahl": 39,
+      "area_m2": 108.12,
+      "volume_m3": 32.44,
+      "length_m": 264.8
+    },
+    "IfcCableCarrierSegment": {
+      "anzahl": 20,
+      "area_m2": 82.92,
+      "volume_m3": 3.09,
+      "length_m": 115.6
+    },
+    "IfcDoor": {
+      "anzahl": 36,
+      "area_m2": 77.63,
+      "volume_m3": 15.53,
+      "length_m": 76.86
     },
     "IfcDuctSegment": {
-      "anzahl": 1,
-      "area_m2": 9.6,
-      "volume_m3": 0.96,
-      "length_m": 6
+      "anzahl": 23,
+      "area_m2": 271.5,
+      "volume_m3": 35.63,
+      "length_m": 117
+    },
+    "IfcFurniture": {
+      "anzahl": 109,
+      "area_m2": 139.52,
+      "volume_m3": 104.64,
+      "length_m": 174.4
+    },
+    "IfcPipeSegment": {
+      "anzahl": 40,
+      "area_m2": 90.28,
+      "volume_m3": 2.26,
+      "length_m": 225.7
     },
     "IfcSlab": {
-      "anzahl": 1,
-      "area_m2": 96,
-      "volume_m3": 24,
-      "length_m": 12
+      "anzahl": 26,
+      "area_m2": 2496,
+      "volume_m3": 624,
+      "length_m": 412
     },
     "IfcSpace": {
-      "anzahl": 1,
-      "area_m2": 86.63,
-      "volume_m3": 259.89,
-      "length_m": 38.08
+      "anzahl": 40,
+      "area_m2": 1649.48,
+      "volume_m3": 5339.15,
+      "length_m": 1158.28
     },
     "IfcWall": {
-      "anzahl": 5,
-      "area_m2": 139.68,
-      "volume_m3": 33.52,
-      "length_m": 46.56
+      "anzahl": 120,
+      "area_m2": 2507.31,
+      "volume_m3": 573.53,
+      "length_m": 775.06
+    },
+    "IfcWindow": {
+      "anzahl": 73,
+      "area_m2": 164.25,
+      "volume_m3": 49.27,
+      "length_m": 109.5
     }
   },
   "positionen": {
     "Wand Beton": {
-      "menge": 33.52,
-      "treffer": 5,
-      "gp_eur": 10726.4
+      "menge": 573.53,
+      "treffer": 120,
+      "gp_eur": 183529.6
     },
     "Decke Beton": {
-      "menge": 24,
-      "treffer": 1,
-      "gp_eur": 6720
+      "menge": 624,
+      "treffer": 26,
+      "gp_eur": 174720
     },
     "Träger": {
-      "menge": 2,
-      "treffer": 2,
-      "gp_eur": 2900
+      "menge": 39,
+      "treffer": 39,
+      "gp_eur": 56550
     },
     "Räume": {
-      "menge": 86.63,
-      "treffer": 1,
-      "gp_eur": 86.63
+      "menge": 1649.48,
+      "treffer": 40,
+      "gp_eur": 1649.48
     }
   },
-  "kosten_eur": 20433.03
+  "kosten_eur": 416449.08
 }

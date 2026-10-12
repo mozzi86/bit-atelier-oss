@@ -81,7 +81,7 @@ export default function MoebelKatalogPflege({ eigene = [], moeblierung = {}, onC
               <li key={e.id} className="flex items-center gap-2 py-1.5 text-sm" data-testid="kp-typ" data-id={e.id}>
                 <span className="font-medium text-slate-800">{e.name}</span>
                 <span className="text-xs text-slate-500">{de2(e.b)} × {de2(e.t)} m · {t(KATEGORIE_LABEL[e.kategorie] || "Möbel")}{e.benutzerseite ? ` · ${t("Benutzerseite")}` : ""}</span>
-                <Button type="button" variant="ghost" size="icon" className="ml-auto h-7 w-7 text-red-500" disabled={benutzt}
+                <Button aria-label={t("Typ löschen")} type="button" variant="ghost" size="icon" className="ml-auto h-7 w-7 text-red-500" disabled={benutzt}
                   title={benutzt ? t("In Benutzung — erst die Möbel dieses Typs entfernen") : t("Typ löschen")}
                   onClick={() => loeschen(e.id)} data-testid="kp-loeschen">
                   <Trash2 className="w-4 h-4" />

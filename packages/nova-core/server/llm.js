@@ -9,6 +9,10 @@
 // shared with the connection form); default models are configurable through
 // ANTHROPIC_MODEL / OPENAI_MODEL (LLM_MODEL stays as the old shared fallback).
 import { endpunktUrl, chatCompletionsUrl } from '../src/lib/kiVorlagen.js';
+import { geschuetzterPrompt, antwortBereinigen } from './llmSchutz.js';
+// 93-12: loopback targets go through node:http with a long timeout; "Nur lokale KI" guard.
+import { senden, nurLokalPruefen, lokalTimeoutMs } from './llmLokal.js';
+import { istLoopbackUrl, lokalerFehlerText } from '../src/lib/kiLokal.js';
 
 export { endpunktUrl, chatCompletionsUrl };
 
@@ -171,29 +175,47 @@ function buildPrompts({ prompt, response_json_schema }) {
 // OpenAI-kompatibles Chat Completions oder Ollama /api/chat). Die Ziel-URL
 // bildet endpunktUrl() (83-03) — eine Regel für alle Anbieter.
 // Der API-Schlüssel wird ausschließlich hier serverseitig verwendet.
-export async function callConnection(conn, params, { signal } = {}) {
-  const { sys, fullPrompt } = buildPrompts(params);
+export async function callConnection(conn, params, { signal, timeoutMs, deps } = {}) {
+  const url = zielUrlFuer(conn);
+  if (!url) throw new Error('Keine Basis-URL konfiguriert');
+  // 93-12: a local server that is not running answers with ECONNREFUSED — say so in plain German.
+  try {
+    return await verbindungAufrufen(conn, url, params, { signal, timeoutMs, deps });
+  } catch (err) {
+    if (istLoopbackUrl(url) && (err?.code || err?.cause?.code || err?.name === 'AbortError')) {
+      throw new Error(lokalerFehlerText(err, { provider: conn.provider, url, timeoutS: Math.round((timeoutMs ?? lokalTimeoutMs()) / 1000) }));
+    }
+    throw err;
+  }
+}
+
+/**
+ * Endpoint URL a connection talks to (empty base → the type's default).
+ * @param {{provider: string, base_url?: string}} conn
+ * @returns {string} '' when no base URL can be resolved
+ */
+export function zielUrlFuer(conn) {
   const base = baseUrlFor(conn);
-  if (!base) throw new Error('Keine Basis-URL konfiguriert');
+  return base ? endpunktUrl(conn.provider, base) : '';
+}
+
+async function verbindungAufrufen(conn, url, params, { signal, timeoutMs, deps }) {
+  const { sys, fullPrompt } = buildPrompts(params);
   const { response_json_schema } = params;
-  const url = endpunktUrl(conn.provider, base);
+  // Loopback: node:http with our own timeout (default 15 min); cloud: fetch as before.
+  const post = (headers, body) => senden(url, { method: 'POST', headers, body, signal, timeoutMs }, deps);
 
   if (conn.provider === 'anthropic') {
-    const resp = await fetch(url, {
-      method: 'POST',
-      signal,
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': conn.api_key || '',
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: conn.model || STANDARD_ANTHROPIC_MODELL,
-        max_tokens: 2048,
-        system: sys,
-        messages: [{ role: 'user', content: fullPrompt }],
-      }),
-    });
+    const resp = await post({
+      'content-type': 'application/json',
+      'x-api-key': conn.api_key || '',
+      'anthropic-version': '2023-06-01',
+    }, JSON.stringify({
+      model: conn.model || STANDARD_ANTHROPIC_MODELL,
+      max_tokens: 2048,
+      system: sys,
+      messages: [{ role: 'user', content: fullPrompt }],
+    }));
     if (!resp.ok) throw new Error(`Anthropic ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
     const text = data.content?.map((c) => c.text).join('') ?? '';
@@ -201,19 +223,14 @@ export async function callConnection(conn, params, { signal } = {}) {
   }
 
   if (conn.provider === 'ollama') {
-    const resp = await fetch(url, {
-      method: 'POST',
-      signal,
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: conn.model || 'llama3',
-        stream: false,
-        messages: [
-          { role: 'system', content: sys },
-          { role: 'user', content: fullPrompt },
-        ],
-      }),
-    });
+    const resp = await post({ 'content-type': 'application/json' }, JSON.stringify({
+      model: conn.model || 'llama3',
+      stream: false,
+      messages: [
+        { role: 'system', content: sys },
+        { role: 'user', content: fullPrompt },
+      ],
+    }));
     if (!resp.ok) throw new Error(`Ollama ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
     const text = data.message?.content ?? '';
@@ -223,27 +240,42 @@ export async function callConnection(conn, params, { signal } = {}) {
   // 'openai' und 'custom' → OpenAI-kompatibles Chat-Completions-API.
   const headers = { 'content-type': 'application/json' };
   if (conn.api_key) headers.authorization = `Bearer ${conn.api_key}`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    signal,
-    headers,
-    body: JSON.stringify({
-      model: conn.model || STANDARD_OPENAI_MODELL,
-      messages: [
-        { role: 'system', content: sys },
-        { role: 'user', content: fullPrompt },
-      ],
-    }),
-  });
+  const resp = await post(headers, JSON.stringify({
+    model: conn.model || STANDARD_OPENAI_MODELL,
+    messages: [
+      { role: 'system', content: sys },
+      { role: 'user', content: fullPrompt },
+    ],
+  }));
   if (!resp.ok) throw new Error(`Endpoint ${resp.status}: ${await resp.text()}`);
   const data = await resp.json();
   const text = data.choices?.[0]?.message?.content ?? '';
   return response_json_schema ? safeParse(text) : text;
 }
 
-export async function invokeLLM(params, connection) {
+/**
+ * Invoke the active model (Base44 InvokeLLM contract: string, or parsed JSON with a schema).
+ * @param {object} params { prompt, response_json_schema?, daten? }
+ * @param {object|null} connection active LlmConnection or null (env-key fallback / offline mock)
+ * @param {{ nurLokal?: boolean, deps?: object }} [opt] nurLokal = "Nur lokale KI" (93-12): every
+ *   target that is not on this computer is refused BEFORE any request, including the env-key
+ *   fallbacks and the offline mock (the user asked for local AI — a mock answer would hide that none
+ *   is connected); deps = injectable transports for tests
+ * @returns {Promise<any>}
+ * @throws {Error & {status?: number}} 403 when refused by "Nur lokale KI"
+ */
+export async function invokeLLM(params, connection, opt = {}) {
+  if (opt.nurLokal) nurLokalPruefen(connection ? zielUrlFuer(connection) : '', true);
+  // 78-12: external content as data (params.daten = [{ quelle, text }]) behind a fixed preamble, and the
+  // answer as plain text only (llmSchutz.js). Without params.daten the prompt is unchanged.
+  const geschuetzt = { ...params, prompt: geschuetzterPrompt(params?.prompt, params?.daten) };
+  delete geschuetzt.daten;
+  return antwortBereinigen(await rufen(geschuetzt, connection, opt.deps));
+}
+
+async function rufen(params, connection, deps) {
   // Aktive benutzerdefinierte Verbindung hat Vorrang; Fallback bleibt unverändert.
-  if (connection) return callConnection(connection, params);
+  if (connection) return callConnection(connection, params, { deps });
   if (process.env.ANTHROPIC_API_KEY) return callAnthropic(params);
   if (process.env.OPENAI_API_KEY) return callOpenAI(params);
   return mockResponse(params);

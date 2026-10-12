@@ -11,6 +11,7 @@ import { AlertTriangle, Building2, Info, Plus, Save, X } from "lucide-react";
 import {
   KATALOG_ENTITAETEN, SCHLUESSELFELD, validiereKatalogZeile, wirksameZeilen,
 } from "@core/lib/rules/catalogs";
+import { useI18n } from "@core/lib/i18n";
 
 // KatalogEditor — GENERISCHE Pflege über alle 14 büroweiten Kataloge.
 //
@@ -60,6 +61,7 @@ export default function KatalogEditor({
   onDelete,
   startKatalog = "MengenMuster",
 }) {
+  const { t } = useI18n();
   const [entity, setEntity] = useState(startKatalog);
   const [entwurf, setEntwurf] = useState(null);
   const [fehler, setFehler] = useState([]);
@@ -122,7 +124,7 @@ export default function KatalogEditor({
           <span>Kataloge — büroweite Standards</span>
           <div className="flex items-center gap-2">
             <Select value={entity} onValueChange={(v) => { setEntity(v); setEntwurf(null); setFehler([]); }}>
-              <SelectTrigger className="h-8 w-64 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("Katalog")} className="h-8 w-64 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-80">
                 {KATALOG_ENTITAETEN.map((e) => (
                   <SelectItem key={e} value={e}>
@@ -159,7 +161,7 @@ export default function KatalogEditor({
               <span className="text-xs font-semibold text-slate-700">
                 {entwurf.id ? "Zeile ändern" : "Neue Zeile"} · {entity}
               </span>
-              <button type="button" onClick={() => setEntwurf(null)} className="text-slate-400 hover:text-slate-600">
+              <button aria-label={t("Zeilen-Entwurf schließen")} type="button" onClick={() => setEntwurf(null)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -182,7 +184,7 @@ export default function KatalogEditor({
                     <Label className="text-xs text-slate-500">{feld}</Label>
                     {optionen ? (
                       <Select value={wert ?? ""} onValueChange={(v) => setFeld(feld, v)}>
-                        <SelectTrigger className={`h-8 text-xs ${fe ? "border-red-400" : ""}`}>
+                        <SelectTrigger aria-label={feld} className={`h-8 text-xs ${fe ? "border-red-400" : ""}`}>
                           <SelectValue placeholder="wählen" />
                         </SelectTrigger>
                         <SelectContent className="max-h-72">
@@ -191,7 +193,7 @@ export default function KatalogEditor({
                       </Select>
                     ) : typeof wert === "boolean" ? (
                       <Select value={wert ? "ja" : "nein"} onValueChange={(v) => setFeld(feld, v === "ja")}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-label={feld} className="h-8 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="ja">ja</SelectItem>
                           <SelectItem value="nein">nein</SelectItem>

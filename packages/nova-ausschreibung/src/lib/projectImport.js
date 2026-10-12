@@ -57,6 +57,8 @@ export const ENTITAET = {
   snapshot: "BimSnapshot",
 };
 
+import { speicherOrt } from "@core/lib/speicherOrt";
+
 export const STAPEL = 500; // express.json steht auf 10 MB — 500 Sätze bleiben darunter
 
 const arr = (x) => (Array.isArray(x) ? x : []);
@@ -336,18 +338,22 @@ export async function applyBundle(bundle, io, opt = {}) {
     melde("Lose…");
     await schreibe("lose", mitProjekt(bundle.lose));
 
-    // 4. Modellstand + Bauteile (Blob, NICHT als Entitäten)
+    // 4. Modellstand + Bauteile (NICHT als Entitäten). Speicherregel 11.10.2026 (speicherOrt.js): kleine
+    // Bauteillisten (< 256 KB) liegen inline am Modellstand, große im Blob — gelesen über snapshotElemente.
     if (bundle.snapshot) {
       melde("Modellstand…");
       const blobId = `elemente-${projektId}`.replace(/[^A-Za-z0-9_-]/g, "-");
+      const alsBlob = bundle.elemente.length > 0 && speicherOrt(bundle.elemente, { art: "bauteile" }).ort === "blob";
       const snap = await io.createOne("BimSnapshot", {
         ...bundle.snapshot,
         project_id: projektId,
-        elemente_blob: bundle.elemente.length ? blobId : null,
+        elemente_blob: alsBlob ? blobId : null,
+        ...(bundle.elemente.length && !alsBlob ? { elemente: bundle.elemente } : {}),
         anzahl: bundle.elemente.length,
       });
       geschrieben.BimSnapshot = 1;
-      if (bundle.elemente.length) {
+      if (bundle.elemente.length && !alsBlob) geschrieben.BimElementInline = bundle.elemente.length;
+      if (alsBlob) {
         melde(`${bundle.elemente.length} Bauteile (Blob)…`);
         await io.putBlob(blobId, {
           snapshot_id: snap?.id ?? blobId,

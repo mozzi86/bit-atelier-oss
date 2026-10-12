@@ -142,5 +142,7 @@ describe("DS-11 — importPersonal(falsches Passwort) ändert nichts", () => {
 });
 
 describe("PERSONAL_ENTITAETEN unverändert bei alledem", () => {
-  it("9 Entitäten", () => assert.equal(PERSONAL_ENTITAETEN.length, 9));
+  // 81-01 (E-14): Kostensatz added as the tenth HR entity.
+  // 82-01 (D-P82-38): Abwesenheit is the eleventh HR entity.
+  it("11 Entitäten (mit Kostensatz und Abwesenheit)", () => assert.equal(PERSONAL_ENTITAETEN.length, 11));
 });

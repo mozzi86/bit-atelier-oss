@@ -9,6 +9,7 @@ import {
 } from "@core/components/ui/table";
 import { format } from "date-fns";
 import { ScrollText, RefreshCw, Download } from "lucide-react";
+import { useI18n } from "@core/lib/i18n";
 
 const actorColor = {
   Bediener: "bg-blue-100 text-blue-800",
@@ -19,6 +20,7 @@ const actorColor = {
 
 // Persistent, exportable audit trail of autonomous actions (liability record).
 export default function AuditLogPanel({ projectId }) {
+  const { t } = useI18n();
   const [entries, setEntries] = useState([]);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(false);
@@ -70,7 +72,7 @@ export default function AuditLogPanel({ projectId }) {
         <CardTitle className="flex items-center justify-between text-base">
           <span className="flex items-center gap-2"><ScrollText className="w-4 h-4" /> Audit-Log ({filtered.length})</span>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={load} title="Aktualisieren">
+            <Button aria-label={t("Protokoll aktualisieren")} variant="ghost" size="icon" className="h-8 w-8" onClick={load} title="Aktualisieren">
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
             <Button variant="outline" size="sm" onClick={exportCsv}><Download className="w-4 h-4 mr-1" /> CSV</Button>

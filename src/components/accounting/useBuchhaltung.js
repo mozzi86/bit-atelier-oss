@@ -55,7 +55,10 @@ const text = (fehler) => /** @type {any} */ (fehler)?.message || String(fehler);
  */
 export function useBuchhaltung(optionen = {}) {
   const heute = optionen.heute || heuteLokal();
-  const { projects, projectId, loading: projekteLaden } = useProject();
+  // All projects including archived ones (B-81-09): old invoices, expenses and
+  // trips keep their project name, and editing them keeps the selected project.
+  const { alleProjekte, projects: sichtbar, projectId, loading: projekteLaden } = useProject();
+  const projects = alleProjekte ?? sichtbar;
   const verfuegbar = speicher.verfuegbar(DATENQUELLE);
   const api = /** @type {any} */ (bitApi);
   const [zustand, setZustand] = useState(() => ({

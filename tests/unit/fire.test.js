@@ -446,7 +446,7 @@ describe("fire.js — brandChecks() Invarianten", () => {
       const r = brandChecks(v);
       assert.ok(!r.items.some((i) => i.status === "fail"), `fail-Status bei ${JSON.stringify(v)}`);
       for (const i of r.items) {
-        assert.ok(["pass", "warn"].includes(i.status), `unerwarteter Status "${i.status}" (${i.key})`);
+        assert.ok(["pass", "warn", "offen"].includes(i.status), `unerwarteter Status "${i.status}" (${i.key})`);
       }
     }
   });
@@ -457,14 +457,16 @@ describe("fire.js — brandChecks() Invarianten", () => {
       const passes = r.items.filter((i) => i.status === "pass").length;
       assert.equal(r.score, Math.round((passes / r.items.length) * 100));
       assert.ok(r.score >= 0 && r.score <= 100);
-      assert.equal(r.warns, r.items.length - passes);
+      assert.equal(r.warns + r.offen, r.items.length - passes); // 72-04: not met = warn + offen
     }
   });
 
   it("INVARIANTE: Verdict folgt der Hinweiszahl", () => {
     const mitHinweis = brandChecks({ okf: 27.5, footArea: 730 });
     assert.ok(mitHinweis.warns > 0);
-    assert.equal(mitHinweis.verdict, "Konzept mit Hinweisen");
+    // 72-04: without an escape route length the list is also incomplete.
+    assert.equal(mitHinweis.verdict, "Konzept mit Hinweisen — Angaben fehlen");
+    assert.equal(brandChecks({ okf: 27.5, footArea: 730, laengsteFlucht: 20 }).verdict, "Konzept mit Hinweisen");
 
     const sauber = brandChecks({
       okf: 6, groessteNE: 300, freistehend: true, nutzung: "wohnen",
@@ -489,7 +491,7 @@ describe("fire.js — brandChecks() Invarianten", () => {
   it("HI-02: fehlende Brüstung UND fehlende OKF ⇒ Anleiterbarkeit nicht bewertbar (kein stiller pass)", () => {
     const r = brandChecks({ okf: 0, bruestung: 0, anleiterArt: "drehleiter" });
     const rw2 = r.items.find((i) => i.key === "rettungsweg2");
-    assert.equal(rw2.status, "warn");
+    assert.equal(rw2.status, "offen"); // 72-04
     assert.match(rw2.detail, /nicht bewertbar/);
   });
 
@@ -499,11 +501,11 @@ describe("fire.js — brandChecks() Invarianten", () => {
     assert.match(r.items.find((i) => i.key === "treppenraeume").detail, /^2 notwendige/);
   });
 
-  it("fehlende OKF bzw. Grundfläche werden als Pflegehinweis (warn) ausgegeben, nicht als pass", () => {
+  it("72-04: fehlende OKF bzw. Grundfläche werden als offen ausgegeben, nicht als pass", () => {
     const r = brandChecks({ okf: 0, footArea: 0 });
-    assert.equal(r.items.find((i) => i.key === "gk").status, "warn");
+    assert.equal(r.items.find((i) => i.key === "gk").status, "offen");
     assert.match(r.items.find((i) => i.key === "gk").detail, /pflegen/);
-    assert.equal(r.items.find((i) => i.key === "treppenraeume").status, "warn");
+    assert.equal(r.items.find((i) => i.key === "treppenraeume").status, "offen");
     assert.match(r.items.find((i) => i.key === "treppenraeume").detail, /pflegen/);
   });
 

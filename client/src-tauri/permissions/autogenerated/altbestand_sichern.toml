@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-altbestand-sichern"
+description = "Enables the altbestand_sichern command without any pre-configured scope."
+commands.allow = ["altbestand_sichern"]
+
+[[permission]]
+identifier = "deny-altbestand-sichern"
+description = "Denies the altbestand_sichern command without any pre-configured scope."
+commands.deny = ["altbestand_sichern"]

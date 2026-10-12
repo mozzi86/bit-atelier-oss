@@ -18,6 +18,8 @@
 
 import { BUCHHALTUNG_ENTITAETEN, SETTING_KEY } from "./accounting/datenmodell.js";
 import { PERSONAL_EXPORT_BEREICH } from "./people/exportBereich.js";
+import { ZEIT_HONORAR_ENTITAETEN, ZEIT_HONORAR_SETTING_KEYS } from "./zeitHonorar/entitaeten.js";
+import { BUERO_ORGA_EXPORT_BEREICHE } from "./bueroOrga/entitaeten.js";
 
 /**
  * @typedef {object} ExportBereich
@@ -28,6 +30,9 @@ import { PERSONAL_EXPORT_BEREICH } from "./people/exportBereich.js";
  *   shared collection across areas, rows are told apart by `key`)
  * @property {string|null} separat non-null = this area never enters the `.bitproj` at all
  *   (E-14: it goes into its own file with this extension instead, e.g. ".bitpers")
+ * @property {ReadonlyArray<string>} [dokumentBereiche] 82-02, optional: values of `Document.bereich`
+ *   whose rows leave the office only with this row ticked (Document is one shared collection,
+ *   rows told apart by `bereich`); a value several rows name goes only when all of them are ticked
  */
 
 /**
@@ -47,6 +52,15 @@ export const EXPORT_BEREICHE = Object.freeze([
   // 80-10 (E-07/E-14): die eine Registry-Zeile "Personal" — nie im .bitproj,
   // immer als eigene verschlüsselte Sicherungsdatei (siehe deren Bereichsdatei).
   PERSONAL_EXPORT_BEREICH,
+  // Phase 81 (E-07): time bookings, working times, fee offers and fee amendments plus the
+  // marker and the zeit_honorar.* rule overrides (overhead and charge-out rates are the
+  // office's calculation basis). Fee contracts and outgoing invoices belong to "Buchhaltung".
+  // 82-02: the fee PDFs of 81-03/04 (Document.bereich 'buero' in "00_Vertrag & Honorar") travel only with
+  // this row — closes the 81-06 finding B-81-01 by the row filter (an intervention in the 81 row).
+  Object.freeze({ key: "zeiten", label: "Zeiten & Aufträge", entitaeten: ZEIT_HONORAR_ENTITAETEN, settingKeys: ZEIT_HONORAR_SETTING_KEYS, separat: null, dokumentBereiche: Object.freeze(["buero"]) }),
+  // Phase 82 (82-01, E-07): "Termine & Gewährleistung", "Schriftverkehr & Postbuch" and
+  // "Nutzer & Rechte" — standard off; importing a file without them keeps the local data.
+  ...BUERO_ORGA_EXPORT_BEREICHE,
 ]);
 
 /**
@@ -56,7 +70,8 @@ export const EXPORT_BEREICHE = Object.freeze([
  * for the caller (Phase 80 builds the encrypted side file from that).
  * @param {string[]} gewaehlt checked area keys
  * @param {ReadonlyArray<ExportBereich>} [registry]
- * @returns {{ohne: string[], ohneSettingKeys: string[], art: "sicherung"|"weitergabe", bereiche: string[], separat: string[]}}
+ * @returns {{ohne: string[], ohneSettingKeys: string[], art: "sicherung"|"weitergabe", bereiche: string[], separat: string[], ohneDokumentBereiche: string[]}}
+ *   ohneDokumentBereiche (82-02): Document.bereich values of unticked (or separat) rows
  */
 export function exportOptionen(gewaehlt, registry = EXPORT_BEREICHE) {
   const gewaehltSet = new Set(gewaehlt || []);
@@ -85,7 +100,15 @@ export function exportOptionen(gewaehlt, registry = EXPORT_BEREICHE) {
       alleGewaehlt = false;
     }
   }
-  return { ohne, ohneSettingKeys, art: alleGewaehlt ? "sicherung" : "weitergabe", bereiche, separat };
+  /** @type {string[]} */
+  const ohneDokumentBereiche = [];
+  for (const bereich of registry) {
+    if (!bereich.dokumentBereiche?.length) continue;
+    if (bereich.separat || !gewaehltSet.has(bereich.key)) {
+      for (const d of bereich.dokumentBereiche) if (!ohneDokumentBereiche.includes(d)) ohneDokumentBereiche.push(d);
+    }
+  }
+  return { ohne, ohneSettingKeys, art: alleGewaehlt ? "sicherung" : "weitergabe", bereiche, separat, ohneDokumentBereiche };
 }
 
 /**
@@ -118,7 +141,8 @@ export function bereicheInDatei(obj, registry = EXPORT_BEREICHE) {
  * own books.
  * @param {object} obj parsed project file
  * @param {ReadonlyArray<ExportBereich>} [registry]
- * @returns {{behalte: string[], behalteSettingKeys: string[], ersetzt: string[], behalten: string[]}}
+ * @returns {{behalte: string[], behalteSettingKeys: string[], ersetzt: string[], behalten: string[], behalteDokumentBereiche: string[]}}
+ *   behalteDokumentBereiche (82-02): Document.bereich values of rows the file lacks — local rows stay
  */
 export function importOptionen(obj, registry = EXPORT_BEREICHE) {
   const vorhanden = new Set(bereicheInDatei(obj, registry));
@@ -126,6 +150,8 @@ export function importOptionen(obj, registry = EXPORT_BEREICHE) {
   const behalteSettingKeys = [];
   const ersetzt = [];
   const behalten = [];
+  /** @type {string[]} */
+  const behalteDokumentBereiche = [];
   for (const bereich of registry) {
     if (vorhanden.has(bereich.key)) {
       ersetzt.push(bereich.key);
@@ -133,7 +159,8 @@ export function importOptionen(obj, registry = EXPORT_BEREICHE) {
       behalte.push(...bereich.entitaeten);
       behalteSettingKeys.push(...bereich.settingKeys);
       behalten.push(bereich.key);
+      for (const d of bereich.dokumentBereiche || []) if (!behalteDokumentBereiche.includes(d)) behalteDokumentBereiche.push(d);
     }
   }
-  return { behalte, behalteSettingKeys, ersetzt, behalten };
+  return { behalte, behalteSettingKeys, ersetzt, behalten, behalteDokumentBereiche };
 }

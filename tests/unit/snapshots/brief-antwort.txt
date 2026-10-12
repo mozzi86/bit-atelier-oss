@@ -1,0 +1,13 @@
+1|20|42|Büro Beispiel · Beispielweg 1 · 90000 Musterstadt
+1|20|45|Stadtwerke Musterstadt
+1|20|50|Kontakt Beispiel
+1|20|55|Am Werk 3
+1|20|60|90001 Musterstadt
+1|173|45|28.09.2026
+1|25|93|Ihr Schreiben vom 21.09.2026 – Rückfrage Bemusterung Fassade
+1|25|98|Sehr geehrte Damen und Herren,
+1|25|108|vielen Dank für Ihr Schreiben vom 21.09.2026.
+1|25|118|Wir melden uns zur Bemusterung bis Ende der Woche.
+1|25|128|Mit freundlichen Grüßen
+1|25|287|Büro Beispiel · Beispielweg 1, 90000 Musterstadt · Tel. 0000 000000
+1|174|287|Seite 1 von 1

@@ -13,14 +13,25 @@ import {
 } from '@/lib/exportBereiche.js';
 import { BUCHHALTUNG_ENTITAETEN, SETTING_KEY } from '@/lib/accounting/datenmodell.js';
 import { PERSONAL_EXPORT_BEREICH } from '@/lib/people/exportBereich.js';
+import { ZEIT_HONORAR_ENTITAETEN, ZEIT_HONORAR_SETTING_KEYS } from '@/lib/zeitHonorar/entitaeten.js';
+import { BUERO_ORGA_EXPORT_BEREICHE, BUERO_ORGA_ENTITAETEN } from '@/lib/bueroOrga/entitaeten.js';
+import { FRISTEN_REGELN } from '@/lib/termine/fristenRegeln.js';
+import { KALENDER_REGELN } from '@/lib/abwesenheit/kalenderRegeln.js';
+
+// 82-01: the three rows of phase 82, in registry order.
+const E82 = BUERO_ORGA_EXPORT_BEREICHE.flatMap((b) => b.entitaeten);
+const S82 = BUERO_ORGA_EXPORT_BEREICHE.flatMap((b) => b.settingKeys);
+const K82 = BUERO_ORGA_EXPORT_BEREICHE.map((b) => b.key);
 import { englischePaareAlle } from './helpers/woerterbuch.mjs';
 
 describe('EXPORT_BEREICHE — Registry (79-12 + 80-10)', () => {
   // 80-10: registry-allgemein statt "genau ein Eintrag" (Task 7b) — die
   // Schlüsselliste ist jetzt ['buchhaltung', 'personal'], die Buchhaltungszeile
   // selbst bleibt unverändert.
-  it('Schlüsselliste ["buchhaltung", "personal"]; die Buchhaltungszeile unverändert', () => {
-    assert.deepEqual(EXPORT_BEREICHE.map((b) => b.key), ['buchhaltung', 'personal']);
+  // 81-06: Zeile zeiten — die Schlüsselliste ist jetzt ['buchhaltung', 'personal', 'zeiten'].
+  // 82-01: drei Zeilen der Phase 82 angehängt.
+  it('Schlüsselliste ["buchhaltung", "personal", "zeiten", "fristen", "schriftverkehr", "rechte"]; die Buchhaltungszeile unverändert', () => {
+    assert.deepEqual(EXPORT_BEREICHE.map((b) => b.key), ['buchhaltung', 'personal', 'zeiten', 'fristen', 'schriftverkehr', 'rechte']);
     const buchhaltung = EXPORT_BEREICHE.find((b) => b.key === 'buchhaltung');
     assert.equal(buchhaltung.entitaeten.length, 13);
     assert.deepEqual([...buchhaltung.entitaeten].sort(), [...BUCHHALTUNG_ENTITAETEN].sort());
@@ -37,6 +48,18 @@ describe('EXPORT_BEREICHE — Registry (79-12 + 80-10)', () => {
     assert.ok(personal.settingKeys.includes('personal.zaehlkarte'));
   });
 
+  // 81-06: Zeile zeiten (E-07) — die 81-Sammlungen, Marker plus regel:zeit_honorar.*, nicht separat.
+  it('die Zeile "zeiten" trägt ZEIT_HONORAR_ENTITAETEN und ZEIT_HONORAR_SETTING_KEYS, separat null', () => {
+    const zeiten = EXPORT_BEREICHE.find((b) => b.key === 'zeiten');
+    assert.equal(zeiten.label, 'Zeiten & Aufträge');
+    assert.strictEqual(zeiten.entitaeten, ZEIT_HONORAR_ENTITAETEN);
+    assert.strictEqual(zeiten.settingKeys, ZEIT_HONORAR_SETTING_KEYS);
+    assert.ok(zeiten.settingKeys.includes('zeit_honorar'));
+    assert.ok(zeiten.settingKeys.includes('regel:zeit_honorar.gemeinkosten'));
+    assert.equal(zeiten.separat, null);
+    assert.ok(!zeiten.entitaeten.includes('Honorarvertrag') && !zeiten.entitaeten.includes('Kostensatz'));
+  });
+
   it('jedes label hat einen englischen Wörterbucheintrag', () => {
     const en = new Set(englischePaareAlle().map(([k]) => k));
     for (const bereich of EXPORT_BEREICHE) {
@@ -46,11 +69,12 @@ describe('EXPORT_BEREICHE — Registry (79-12 + 80-10)', () => {
 });
 
 describe('exportOptionen — die reale Registry', () => {
-  it('nichts gewählt → weitergabe, ohne = alle Sammlungen beider Bereiche, ohneSettingKeys, bereiche leer', () => {
+  // 81-06: Zeile zeiten — "alle Bereiche" sind jetzt drei.
+  it('nichts gewählt → weitergabe, ohne = alle Sammlungen aller Bereiche, ohneSettingKeys, bereiche leer', () => {
     const opt = exportOptionen([]);
     assert.equal(opt.art, 'weitergabe');
-    assert.deepEqual([...opt.ohne].sort(), [...BUCHHALTUNG_ENTITAETEN, ...PERSONAL_EXPORT_BEREICH.entitaeten].sort());
-    assert.deepEqual(opt.ohneSettingKeys, [SETTING_KEY, ...PERSONAL_EXPORT_BEREICH.settingKeys]);
+    assert.deepEqual([...opt.ohne].sort(), [...BUCHHALTUNG_ENTITAETEN, ...PERSONAL_EXPORT_BEREICH.entitaeten, ...ZEIT_HONORAR_ENTITAETEN, ...E82].sort());
+    assert.deepEqual(opt.ohneSettingKeys, [SETTING_KEY, ...PERSONAL_EXPORT_BEREICH.settingKeys, ...ZEIT_HONORAR_SETTING_KEYS, ...S82]);
     assert.deepEqual(opt.bereiche, []);
     assert.deepEqual(opt.separat, []);
   });
@@ -60,18 +84,55 @@ describe('exportOptionen — die reale Registry', () => {
     const opt = exportOptionen(['buchhaltung']);
     assert.equal(opt.art, 'weitergabe');
     assert.deepEqual(opt.bereiche, ['buchhaltung']);
-    assert.deepEqual(opt.ohne, [...PERSONAL_EXPORT_BEREICH.entitaeten]);
+    assert.deepEqual(opt.ohne, [...PERSONAL_EXPORT_BEREICH.entitaeten, ...ZEIT_HONORAR_ENTITAETEN, ...E82]); // 81-06/82-01: zeiten und 82 nicht gewählt
     assert.deepEqual(opt.separat, []);
   });
 
-  // 80-10 (E-18): beide gewählt → sicherung, Personal bleibt in `ohne` UND wandert nach `separat`.
-  it('„buchhaltung“ + „personal“ gewählt → sicherung, separat: ["personal"], ohneSettingKeys enthält alle Personal-settingKeys', () => {
+  // 81-06: „buchhaltung“ + „personal“ ist ohne „zeiten“ nur noch eine weitergabe.
+  it('„buchhaltung“ + „personal“ gewählt → weitergabe, solange „zeiten“ fehlt; separat: ["personal"]', () => {
     const opt = exportOptionen(['buchhaltung', 'personal']);
+    assert.equal(opt.art, 'weitergabe');
+    assert.deepEqual(opt.ohne, [...PERSONAL_EXPORT_BEREICH.entitaeten, ...ZEIT_HONORAR_ENTITAETEN, ...E82]);
+    assert.deepEqual(opt.ohneSettingKeys, [...PERSONAL_EXPORT_BEREICH.settingKeys, ...ZEIT_HONORAR_SETTING_KEYS, ...S82]);
+    assert.deepEqual(opt.separat, ['personal']);
+  });
+
+  // 80-10 (E-18), seit 81-06 mit allen drei Häkchen: sicherung, Personal bleibt in `ohne` UND wandert nach `separat`.
+  it('alle Registry-Schlüssel gewählt → sicherung, separat: ["personal"], ohneSettingKeys enthält alle Personal-settingKeys', () => {
+    const opt = exportOptionen(EXPORT_BEREICHE.map((b) => b.key));
     assert.equal(opt.art, 'sicherung');
     assert.deepEqual(opt.ohne, [...PERSONAL_EXPORT_BEREICH.entitaeten]); // E-14: nie in der .bitproj, auch angehakt
     assert.deepEqual(opt.ohneSettingKeys, [...PERSONAL_EXPORT_BEREICH.settingKeys]);
-    assert.deepEqual(opt.bereiche, ['buchhaltung']); // separat-Bereiche nicht in `bereiche`
+    assert.deepEqual(opt.bereiche, ['buchhaltung', 'zeiten', ...K82]); // separat-Bereiche nicht in `bereiche`
     assert.deepEqual(opt.separat, ['personal']);
+    assert.ok(!opt.ohneSettingKeys.includes('buero_orga'), '82-01: marker travels with all three rows');
+  });
+});
+
+// 82-01 (E-07): the three rows of phase 82.
+describe('EXPORT_BEREICHE — Zeilen der Phase 82', () => {
+  it('fristen, schriftverkehr, rechte mit Entitäten, Marker und Regel-Overrides', () => {
+    const [fristen, schrift, rechte] = BUERO_ORGA_EXPORT_BEREICHE;
+    assert.deepEqual([...fristen.entitaeten], ['Termin', 'Terminquittung', 'Abnahme']);
+    assert.deepEqual([...schrift.entitaeten], ['Schreiben', 'Briefvorlage', 'Postbucheintrag']);
+    assert.deepEqual([...rechte.entitaeten], ['Nutzer']);
+    assert.deepEqual([...fristen.settingKeys].sort(), ['buero_orga', ...[...FRISTEN_REGELN, ...KALENDER_REGELN].map((r) => 'regel:' + r.id)].sort());
+    assert.deepEqual([...schrift.settingKeys], ['buero_orga']);
+    assert.deepEqual([...rechte.settingKeys], ['rechte', 'buero_orga']);
+    for (const b of BUERO_ORGA_EXPORT_BEREICHE) assert.equal(b.separat, null);
+    assert.deepEqual([...E82].sort(), [...BUERO_ORGA_ENTITAETEN].sort(), 'alle sieben Sammlungen');
+  });
+  it('kein Häkchen → alle sieben 82-Sammlungen, rechte, Marker und Regeln bleiben im Büro; nur zwei der drei → Marker bleibt', () => {
+    const opt = exportOptionen([]);
+    for (const e of BUERO_ORGA_ENTITAETEN) assert.ok(opt.ohne.includes(e), e);
+    for (const k of ['rechte', 'buero_orga', 'regel:fristen.vorlauf_frist_tage', 'regel:kalender.bundesland']) assert.ok(opt.ohneSettingKeys.includes(k), k);
+    assert.ok(exportOptionen(['fristen', 'schriftverkehr']).ohneSettingKeys.includes('buero_orga'));
+  });
+  it('Import einer Datei ohne 82-Sammlungen behält alle sieben, rechte und den Marker', () => {
+    const opt = importOptionen({ daten: { Project: [] } });
+    for (const e of BUERO_ORGA_ENTITAETEN) assert.ok(opt.behalte.includes(e), e);
+    assert.ok(opt.behalteSettingKeys.includes('rechte'));
+    assert.ok(opt.behalteSettingKeys.includes('buero_orga'));
   });
 });
 
@@ -146,13 +207,14 @@ describe('importOptionen — die reale Registry', () => {
     assert.equal(opt.behalte.length, ALLE_ENTITAETEN_ANZAHL);
   });
 
-  it('Datei mit den Buchhaltungs-Sammlungen (auch leer) → buchhaltung ersetzt, personal bleibt lokal (E-14: Personal ist ohnehin nie in der .bitproj)', () => {
+  it('Datei mit den Buchhaltungs-Sammlungen (auch leer) → buchhaltung ersetzt, personal und zeiten bleiben lokal (E-14: Personal ist ohnehin nie in der .bitproj)', () => {
     const daten = { Project: [{ id: 'p1' }] };
     for (const e of BUCHHALTUNG_ENTITAETEN) daten[e] = [];
     const opt = importOptionen({ daten, bereiche: ['buchhaltung'] });
     assert.deepEqual(opt.ersetzt, ['buchhaltung']);
-    assert.deepEqual(opt.behalte, [...PERSONAL_EXPORT_BEREICH.entitaeten]);
-    assert.deepEqual(opt.behalten, ['personal']);
+    // 81-06: die 81-Sammlungen fehlen in der Datei → sie bleiben lokal.
+    assert.deepEqual(opt.behalte, [...PERSONAL_EXPORT_BEREICH.entitaeten, ...ZEIT_HONORAR_ENTITAETEN, ...E82]);
+    assert.deepEqual(opt.behalten, ['personal', 'zeiten', ...K82]);
   });
 
   it('alte Datei (kein art, keine Bereichs-Sammlungen — Stand vor Phase 79) behält alle Bücher', () => {

@@ -1,4 +1,4 @@
-# Gates auf jedem Push und Pull Request (Plan 87-03).
+# Gates auf jedem Push und Pull Request (Plan 87-03; Größen-Budget seit 93-09).
 #
 # Bis hierhin liefen Lint, Unit-Tests, Build und Typecheck nur auf dem Rechner des
 # Owners bzw. in den Nacht-Agenten — „Gates grün“ war ein Selbstbericht. Dieser
@@ -46,6 +46,11 @@ jobs:
           npx vite build > build.log 2>&1; EXIT=$?
           tail -n 30 build.log
           exit $EXIT
+
+      # 93-09: the build may not grow past budget.json (gzip bytes of entry, CSS, vendor, first paint,
+      # largest route, named chunks). Raising a limit is a deliberate commit: --schreiben.
+      - name: Größen-Budget
+        run: node scripts/groessen-budget.mjs
 
       - name: tsc-Baseline (Fehlerzahl darf nicht steigen)
         run: node scripts/tsc-baseline.mjs --je-datei

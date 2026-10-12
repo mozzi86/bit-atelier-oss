@@ -13,12 +13,16 @@
 // are a different thing and keep their own data-tuer attribute; these zone doors
 // carry data-tuer-zone so specs can count them apart.
 //
+// 89-07 (BW-09): a zone door IS the door component — every symbol carries the component's
+// stable GUID (data-guid, @core werkstattBauteile.tuerGuid: same key as the swing override).
+//
 // In:  zonen (with tueren), X/Z/SCALE (host plan), px (screen px → viewBox units).
 // Out: a <g> of SVG shapes.
 
 import React from "react";
 import { tuerGeometrie } from "@designer/lib/wohnungsErschliessung";
 import { WANDSTAERKEN } from "@designer/lib/tesselierung";
+import { tuerGuid } from "@core/lib/werkstattBauteile";
 
 /**
  * @param {object} p
@@ -56,6 +60,7 @@ export default function ZonenTueren({ zonen, X, Z, SCALE, px = null, nurOeffnung
           key={`${zone.name}-${idx}`}
           data-testid={`${prefix}-tuer`}
           data-tuer-zone={zone.name}
+          data-guid={tuerGuid(zone.level, String(zone.name), idx)}
           data-tuer={t.aufschlag === "rechts" ? "rechts" : "links"}
           data-breite={String(t.breite_m)}
           data-typ={t.typ || "zimmer"}

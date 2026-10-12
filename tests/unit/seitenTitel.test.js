@@ -4,15 +4,13 @@
 // against the real navFlach: a new menu entry gets its tab title for free, and
 // a legal route added to App.jsx without a title shows up here.
 //
-// In:  seitenTitel.js, navFlach and App.jsx read as text. Out: assertions only.
+// In:  seitenTitel.js, navFlach and the public route list. Out: assertions only.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import { navFlach } from "@/navigation.js";
 import { seitenTitelFuer, dokumentTitel, RECHTSWEG_TITEL, PRODUKTNAME } from "@/seitenTitel.js";
-
-const APP = new URL("../../src/App.jsx", import.meta.url);
+import { OEFFENTLICHE_WEGE } from "@core/lib/oeffentlicheWege";
 
 test("jeder Menüeintrag liefert seinen Menütitel", () => {
   assert.ok(navFlach.length >= 19, `nur ${navFlach.length} Menüeinträge`);
@@ -43,13 +41,11 @@ test("Rechtswege haben einen Titel, auch ohne Menüliste", () => {
   assert.equal(seitenTitelFuer("/passwort-zuruecksetzen", []), "Passwort zurücksetzen");
 });
 
-test("jeder Rechtsweg aus App.jsx (RECHTSWEGE) steht in der Titeltabelle", () => {
-  const quelle = fs.readFileSync(APP, "utf8");
-  const start = quelle.indexOf("const RECHTSWEGE");
-  assert.ok(start >= 0, "RECHTSWEGE nicht gefunden in App.jsx");
-  const block = quelle.slice(start, quelle.indexOf("];", start));
-  const wege = [...block.matchAll(/'(\/[^']+)'/g)].map((m) => m[1]);
-  assert.ok(wege.length >= 7, `nur ${wege.length} Rechtswege gelesen`);
+// 57-06: the list moved from App.jsx into @core/lib/oeffentlicheWege.js; App.jsx
+// reads it from there (tests/unit/rechtstexte.test.js checks routes ↔ list).
+test("jeder öffentliche Weg (oeffentlicheWege.js) steht in der Titeltabelle", () => {
+  const wege = [...OEFFENTLICHE_WEGE];
+  assert.ok(wege.length >= 7, `nur ${wege.length} öffentliche Wege gelesen`);
   assert.deepEqual(wege.filter((w) => !RECHTSWEG_TITEL[w]), [], "Rechtswege ohne Titel");
   assert.deepEqual(Object.keys(RECHTSWEG_TITEL).filter((w) => !wege.includes(w)), [], "Titel ohne Route");
 });

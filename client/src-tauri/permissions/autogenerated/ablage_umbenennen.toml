@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ablage-umbenennen"
+description = "Enables the ablage_umbenennen command without any pre-configured scope."
+commands.allow = ["ablage_umbenennen"]
+
+[[permission]]
+identifier = "deny-ablage-umbenennen"
+description = "Denies the ablage_umbenennen command without any pre-configured scope."
+commands.deny = ["ablage_umbenennen"]

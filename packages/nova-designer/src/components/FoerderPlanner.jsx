@@ -12,14 +12,17 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { NumberField, Stat } from "@core/components/Field";
-import { STATUS_STYLE } from "@designer/lib/compliance";
+import { STATUS_STYLE, gesamtStatus } from "@designer/lib/compliance";
 import { useProject } from "@core/lib/ProjectContext";
+import { bauartVon } from "@core/lib/bauart";
+import FoerderReihenfolge from "@designer/components/FoerderReihenfolge";
 import { useBuildingProgram } from "@core/lib/useBuildingProgram";
 import {
   PROGRAMM_KATALOG, TYP_LABEL, ANTRAG_STATUS,
   KUNST_PCT_MIN, KUNST_PCT_MAX, KUNST_PCT_DEFAULT,
-  foerderSchaetzung, kunstAmBauBetrag, kunstAmBauSatzVorschlag, fristStatus, fundingChecks,
+  foerderSchaetzung, kunstAmBauBetrag, kunstAmBauSatzVorschlag, fristStatus, fundingChecks, programmPasstZurBauart,
 } from "@designer/lib/funding";
+import { useI18n } from "@core/lib/i18n";
 
 const de = (n) => Math.round(Number(n) || 0).toLocaleString("de-DE");
 const eur = (n) => `${de(n)} €`;
@@ -46,9 +49,11 @@ const FRIST_BADGE = {
 const EMPTY_FORM = { titel: "", programm_key: "beg_em", kosten: 0, frist: "" };
 
 export default function FoerderPlanner() {
+  const { t } = useI18n();
   // Globales aktuelles Projekt — gleicher Weg wie andere Designer-Panels
   // (UnitMixCompliance/SpaceProgram): useProject() aus dem ProjectContext.
-  const { projectId } = useProject();
+  const { projectId, project } = useProject();
+  const bauart = bauartVon(project).bauart; // 73-11: catalogue and applications marked by kind of work
   // Geometrie/Kosten READ-only aus der gemeinsamen Quelle — nie zurückschreiben.
   const store = useBuildingProgram();
 
@@ -196,11 +201,12 @@ export default function FoerderPlanner() {
             </CardHeader>
             <CardContent className="space-y-2">
               {Object.entries(PROGRAMM_KATALOG).map(([key, p]) => (
-                <div key={key} className="rounded-lg border p-2.5 space-y-1">
+                <div key={key} className={`rounded-lg border p-2.5 space-y-1 ${programmPasstZurBauart(key, bauart) ? "" : "opacity-60"}`}>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-slate-800">{p.label}</span>
                     <Badge variant="outline" className="text-[10px]">{TYP_LABEL[p.typ] || p.typ}</Badge>
                     <span className="text-[11px] text-slate-400">{p.traeger}</span>
+                    {!programmPasstZurBauart(key, bauart) && <Badge variant="outline" className="text-[10px] text-slate-400" data-testid={`fp-bauart-${key}`}>passt nicht zur Bauart</Badge>}
                     <Button
                       variant="outline" size="sm" className="ml-auto h-7 text-xs"
                       onClick={() => vorbelegen(key)}
@@ -229,7 +235,7 @@ export default function FoerderPlanner() {
               <div className="space-y-1 col-span-2">
                 <label className="text-xs text-slate-500">Öffentlicher Bauherr</label>
                 <Select value={oeffentlich} onValueChange={setOeffentlich}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Öffentlicher Bauherr")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ja">ja</SelectItem>
                     <SelectItem value="nein">nein</SelectItem>
@@ -282,7 +288,7 @@ export default function FoerderPlanner() {
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Programm</label>
                 <Select value={programmKey} onValueChange={setProgrammKey}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Programm")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(PROGRAMM_KATALOG).map(([k, p]) => (
                       <SelectItem key={k} value={k}>{p.label}</SelectItem>
@@ -313,7 +319,7 @@ export default function FoerderPlanner() {
               <div className="rounded-lg border border-dashed p-3 grid grid-cols-2 gap-3">
                 <div className="space-y-1 col-span-2">
                   <label className="text-xs text-slate-500">Titel</label>
-                  <Input
+                  <Input aria-label={t("Titel")}
                     value={form.titel} placeholder="z. B. BEG-Zuschuss Gebäudehülle"
                     onChange={(e) => setForm((f) => ({ ...f, titel: e.target.value }))}
                   />
@@ -321,7 +327,7 @@ export default function FoerderPlanner() {
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500">Programm</label>
                   <Select value={form.programm_key} onValueChange={(v) => setForm((f) => ({ ...f, programm_key: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-label={t("Programm")}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {Object.entries(PROGRAMM_KATALOG).map(([k, p]) => (
                         <SelectItem key={k} value={k}>{p.label}</SelectItem>
@@ -335,7 +341,7 @@ export default function FoerderPlanner() {
                 />
                 <div className="space-y-1">
                   <label className="text-xs text-slate-500">Frist</label>
-                  <Input
+                  <Input aria-label={t("Frist")}
                     type="date" value={form.frist}
                     onChange={(e) => setForm((f) => ({ ...f, frist: e.target.value }))}
                   />
@@ -389,8 +395,8 @@ export default function FoerderPlanner() {
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
                         <label className="text-[11px] text-slate-500">Status</label>
-                        <Select value={a.status || "geplant"} onValueChange={(v) => updateAntrag(a, { status: v })}>
-                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                        <Select value={a.status || "geplant"} onValueChange={(v) => updateAntrag(a, { status: v, ...(v === "eingereicht" && !a.eingereicht_am ? { eingereicht_am: heute } : {}) })}>
+                          <SelectTrigger aria-label={t("Status")} className="h-8"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {Object.entries(ANTRAG_STATUS).map(([k, label]) => (
                               <SelectItem key={k} value={k}>{label}</SelectItem>
@@ -402,7 +408,7 @@ export default function FoerderPlanner() {
                         <label className="text-[11px] text-slate-500">Frist</label>
                         {/* ME-05: Commit erst bei onBlur — onChange feuert bei Datums-
                             Segmenteingabe (TT/MM/JJJJ) sonst pro Tastendruck PUT+Reload. */}
-                        <Input
+                        <Input aria-label={t("Frist")}
                           type="date" className="h-8"
                           key={`${a.id}-frist-${a.frist || ""}`}
                           defaultValue={a.frist || ""}
@@ -423,7 +429,7 @@ export default function FoerderPlanner() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between text-base">
                 <span className="flex items-center gap-2"><Gauge className="w-4 h-4" /> Plausibilität (Konzept)</span>
-                <Badge className={STATUS_STYLE[kpi.checks.warns > 0 ? "warn" : "pass"].color}>{kpi.checks.verdict}</Badge>
+                <Badge className={STATUS_STYLE[gesamtStatus(kpi.checks)].color}>{kpi.checks.verdict}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -448,6 +454,9 @@ export default function FoerderPlanner() {
           </Card>
         </div>
       </div>
+
+      {/* 73-11 (BEST-13): order check — application before project start. */}
+      <FoerderReihenfolge antraege={antraege} heute={heute} onAntragDatum={(a, d) => updateAntrag(a, { eingereicht_am: d || "" })} />
     </div>
   );
 }

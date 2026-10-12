@@ -1,0 +1,246 @@
+// DurchbruchListe — openings planning tab of the page "Werkplanung & Baustelle" (88-01,
+// RE-01): request openings/slots/core drillings, review matrix structural engineer →
+// architect, "executed", jump to the penetrated element in the IFC viewer, BCF per
+// opening and for all.
+//
+// In:  projectId, projektName. Loads/writes Durchbruch. Rules: src/lib/werkplanung/durchbrueche.js,
+//      BCF: @ifc/lib/bcf.js buildBcfZip, viewer link: @ifc/lib/viewerLink.js (?sel=<GUID>).
+// Out: UI; data-testids db-neu, db-form-*, db-speichern, db-zeile (data-nr, data-status),
+//      db-statik-ok, db-statik-ab, db-architekt-ok, db-architekt-ab, db-pruefer, db-pruef-ok,
+//      db-ausgefuehrt, db-viewer, db-bcf, db-bcf-alle, db-fehler.
+import React, { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
+import { Button } from "@core/components/ui/button";
+import { Input } from "@core/components/ui/input";
+import { Label } from "@core/components/ui/label";
+import FormModal from "@core/components/common/FormModal";
+import { bitApi } from "@core/api/bitApi";
+import { useI18n } from "@core/lib/i18n";
+import { useAuth } from "@core/lib/AuthContext";
+import { dateiAnbieten } from "@core/lib/tabellenExport";
+import { buildBcfZip } from "@ifc/lib/bcf";
+import { serialisiereZustand } from "@ifc/lib/viewerLink";
+import { Plus } from "lucide-react";
+import {
+  DURCHBRUCH_ARTEN, DURCHBRUCH_STATUS, DURCHBRUCH_GEWERKE, FEUERWIDERSTAENDE,
+  labelAus, masseText, durchbruchHinweise, pruefSchritt, ausgefuehrtPatch, neuerDurchbruch, alsBcfTopic,
+} from "@/lib/werkplanung/durchbrueche";
+
+const LEER = { art: "durchbruch", form: "rechteck", x: "", y: "", z: "", b_mm: "", h_mm: "", d_mm: "", t_mm: "", bauteil_guid: "", bauteil_name: "", geschoss: "", gewerk: "GH", feuerwiderstand: "ohne", abschottung: "", kommentar: "" };
+const fehlerText = (e) => (e instanceof Error ? e.message : String(e));
+const dateiTeil = (s) => String(s || "Projekt").replace(/[^\p{L}\p{N}_-]+/gu, "_");
+
+/**
+ * @param {{projectId: string, projektName?: string}} props
+ */
+export default function DurchbruchListe({ projectId, projektName = "" }) {
+  const { t } = useI18n();
+  const { user } = useAuth();
+  const [liste, setListe] = useState(/** @type {Array<any>} */ ([]));
+  const [formular, setFormular] = useState(/** @type {null | Record<string, string>} */ (null));
+  const [pruefen, setPruefen] = useState(/** @type {null | {d: any, rolle: 'statik'|'architekt', ergebnis: 'ok'|'abgelehnt', von: string, kommentar: string}} */ (null));
+  const [fehler, setFehler] = useState(/** @type {string|null} */ (null));
+
+  const laden = useCallback(async () => {
+    try {
+      const r = await bitApi.entities.Durchbruch.filter({ project_id: projectId });
+      const l = Array.isArray(r) ? r : [];
+      l.sort((a, b) => String(a.nr || "").localeCompare(String(b.nr || ""), "de"));
+      setListe(l);
+    } catch (e) { setFehler(`${t("Durchbrüche konnten nicht geladen werden")}: ${fehlerText(e)}`); }
+  }, [projectId, t]);
+  useEffect(() => { laden(); }, [laden]);
+
+  const speichern = async (e) => {
+    e.preventDefault();
+    if (!formular) return;
+    setFehler(null);
+    try {
+      await bitApi.entities.Durchbruch.create({ ...neuerDurchbruch(formular, { projectId, alle: liste }), created_date: new Date().toISOString() });
+      setFormular(null);
+      await laden();
+    } catch (err) { setFehler(`${t("Durchbruch konnte nicht gespeichert werden")}: ${fehlerText(err)}`); }
+  };
+
+  const pruefungSpeichern = async () => {
+    if (!pruefen) return;
+    const patch = pruefSchritt(pruefen.d, pruefen.rolle, pruefen.ergebnis, pruefen.von, pruefen.kommentar);
+    if (!patch) { setFehler(t("Prüfschritt nicht möglich (Reihenfolge Statik → Architekt, Name nötig)")); return; }
+    try { await bitApi.entities.Durchbruch.update(pruefen.d.id, patch); setPruefen(null); await laden(); }
+    catch (err) { setFehler(`${t("Durchbruch konnte nicht gespeichert werden")}: ${fehlerText(err)}`); }
+  };
+
+  const ausgefuehrt = async (d) => {
+    const patch = ausgefuehrtPatch(d);
+    if (!patch) return;
+    try { await bitApi.entities.Durchbruch.update(d.id, patch); await laden(); }
+    catch (err) { setFehler(`${t("Durchbruch konnte nicht gespeichert werden")}: ${fehlerText(err)}`); }
+  };
+
+  const bcf = (auswahl, name) => {
+    try {
+      const bytes = buildBcfZip(auswahl.map((d) => alsBcfTopic(d, { autor: user?.full_name || "BIT-Atelier" })));
+      dateiAnbieten(bytes, name, "application/octet-stream");
+    } catch (err) { setFehler(`${t("BCF-Export fehlgeschlagen")}: ${fehlerText(err)}`); }
+  };
+
+  const feld = (key, label, props = {}) => (
+    <div className="space-y-1">
+      <Label htmlFor={`db-form-${key}`}>{t(label)}</Label>
+      <Input id={`db-form-${key}`} data-testid={`db-form-${key}`} value={formular?.[key] ?? ""}
+        onChange={(e) => setFormular((f) => f && { ...f, [key]: e.target.value })} {...props} />
+    </div>
+  );
+  const auswahl = (key, label, optionen) => (
+    <div className="space-y-1">
+      <Label htmlFor={`db-form-${key}`}>{t(label)}</Label>
+      <select id={`db-form-${key}`} data-testid={`db-form-${key}`} className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+        value={formular?.[key] ?? ""} onChange={(e) => setFormular((f) => f && { ...f, [key]: e.target.value })}>
+        {optionen.map((o) => <option key={o.wert} value={o.wert}>{o.text}</option>)}
+      </select>
+    </div>
+  );
+  const vermerk = (v) => (v ? `${v.ergebnis === "ok" ? "✓" : "✗"} ${v.von}` : "—");
+  const offenePruefung = (d, rolle, ergebnis) => setPruefen({ d, rolle, ergebnis, von: user?.full_name || "", kommentar: "" });
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
+        <CardTitle className="text-base">{t("Durchbrüche")} ({liste.length})</CardTitle>
+        <div className="flex gap-2">
+          {liste.length > 0 && (
+            <Button size="sm" variant="outline" data-testid="db-bcf-alle"
+              onClick={() => bcf(liste.filter((d) => d.status !== "abgelehnt"), `Durchbrueche_${dateiTeil(projektName)}.bcf`)}>
+              {t("Alle als BCF")}
+            </Button>
+          )}
+          <Button size="sm" data-testid="db-neu" onClick={() => setFormular({ ...LEER })}><Plus className="w-4 h-4 mr-1" />{t("Durchbruch beantragen")}</Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {liste.length === 0 ? (
+          <p className="text-sm text-slate-500">{t("Noch keine Durchbrüche beantragt.")}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-400 border-b">
+                  <th className="py-2 px-2">{t("Nr.")}</th>
+                  <th className="py-2 px-2">{t("Art / Maße")}</th>
+                  <th className="py-2 px-2">{t("Bauteil")}</th>
+                  <th className="py-2 px-2">{t("Gewerk")}</th>
+                  <th className="py-2 px-2">{t("Brandschutz")}</th>
+                  <th className="py-2 px-2">{t("Statik")}</th>
+                  <th className="py-2 px-2">{t("Architekt")}</th>
+                  <th className="py-2 px-2">{t("Status")}</th>
+                  <th className="py-2 px-2">{t("Hinweise")}</th>
+                  <th className="py-2 px-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {liste.map((d) => {
+                  const hw = durchbruchHinweise(d, liste);
+                  const guidOk = /^[0-9A-Za-z_$]{22}$/.test(String(d.bauteil_guid || ""));
+                  return (
+                    <tr key={d.id} className="border-b last:border-0 align-top" data-testid="db-zeile" data-nr={d.nr} data-status={d.status}>
+                      <td className="py-1.5 px-2 font-mono text-xs">{d.nr}</td>
+                      <td className="py-1.5 px-2">{t(labelAus(DURCHBRUCH_ARTEN, d.art))}<div className="text-xs text-slate-500">{masseText(d)}</div></td>
+                      <td className="py-1.5 px-2 text-xs">{d.bauteil_name || "—"}<div className="font-mono text-slate-400">{d.bauteil_guid || ""}</div>{d.geschoss && <div>{d.geschoss}</div>}</td>
+                      <td className="py-1.5 px-2 text-xs">{d.gewerk || "—"}</td>
+                      <td className="py-1.5 px-2 text-xs">{d.feuerwiderstand || "ohne"}{d.abschottung && <div className="text-slate-500">{d.abschottung}</div>}</td>
+                      <td className="py-1.5 px-2 text-xs" data-testid="db-statik">{vermerk(d.pruefung?.statik)}</td>
+                      <td className="py-1.5 px-2 text-xs" data-testid="db-architekt">{vermerk(d.pruefung?.architekt)}</td>
+                      <td className="py-1.5 px-2">{t(labelAus(DURCHBRUCH_STATUS, d.status))}</td>
+                      <td className="py-1.5 px-2 text-xs">
+                        {hw.map((h) => <div key={h.code} data-code={h.code} className={h.stufe === "warn" ? "text-amber-700" : "text-slate-500"}>{t(h.text)}</div>)}
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <div className="flex flex-wrap gap-1 justify-end">
+                          {d.status === "beantragt" && (<>
+                            <Button size="sm" variant="outline" data-testid="db-statik-ok" onClick={() => offenePruefung(d, "statik", "ok")}>{t("Statik i. O.")}</Button>
+                            <Button size="sm" variant="ghost" data-testid="db-statik-ab" onClick={() => offenePruefung(d, "statik", "abgelehnt")}>{t("Statik lehnt ab")}</Button>
+                          </>)}
+                          {d.status === "statik_geprueft" && (<>
+                            <Button size="sm" data-testid="db-architekt-ok" onClick={() => offenePruefung(d, "architekt", "ok")}>{t("Architekt gibt frei")}</Button>
+                            <Button size="sm" variant="ghost" data-testid="db-architekt-ab" onClick={() => offenePruefung(d, "architekt", "abgelehnt")}>{t("Architekt lehnt ab")}</Button>
+                          </>)}
+                          {d.status === "freigegeben" && (
+                            <Button size="sm" variant="outline" data-testid="db-ausgefuehrt" onClick={() => ausgefuehrt(d)}>{t("Ausgeführt")}</Button>
+                          )}
+                          {guidOk && (
+                            <Link data-testid="db-viewer" className="text-xs text-blue-700 underline-offset-4 hover:underline self-center"
+                              to={`/IfcViewer?${serialisiereZustand({ sel: d.bauteil_guid })}`}>{t("Im Modell zeigen")}</Link>
+                          )}
+                          <Button size="sm" variant="ghost" data-testid="db-bcf" onClick={() => bcf([d], `${d.nr}_${dateiTeil(projektName)}.bcf`)}>BCF</Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {fehler && <p className="text-sm text-rose-700" role="alert" data-testid="db-fehler">{fehler}</p>}
+        <p className="text-xs text-slate-400">
+          {t("Ablauf: beantragt → Statik prüft → Architekt gibt frei → ausgeführt. Hinweise ersetzen keine Prüfung durch Tragwerks- und Brandschutzplanung.")}
+        </p>
+      </CardContent>
+
+      {formular && (
+        <FormModal title={t("Durchbruch beantragen")} onClose={() => setFormular(null)}>
+          <form onSubmit={speichern} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              {auswahl("art", "Art", DURCHBRUCH_ARTEN.map((a) => ({ wert: a.key, text: t(a.label) })))}
+              {auswahl("form", "Form", [{ wert: "rechteck", text: t("rechteckig") }, { wert: "rund", text: t("rund") }])}
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              {formular.form === "rund" || formular.art === "kernbohrung"
+                ? feld("d_mm", "Ø (mm)", { type: "number", step: "any" })
+                : (<>{feld("b_mm", "Breite (mm)", { type: "number", step: "any" })}{feld("h_mm", "Höhe (mm)", { type: "number", step: "any" })}</>)}
+              {formular.art === "schlitz" && feld("t_mm", "Tiefe (mm)", { type: "number", step: "any" })}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {feld("x", "x (m)", { type: "number", step: "any" })}
+              {feld("y", "y (m)", { type: "number", step: "any" })}
+              {feld("z", "z (m)", { type: "number", step: "any" })}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {feld("bauteil_guid", "Bauteil (IFC-GUID)")}
+              {feld("bauteil_name", "Bauteil (Bezeichnung)")}
+              {feld("geschoss", "Geschoss")}
+              {auswahl("gewerk", "Gewerk", DURCHBRUCH_GEWERKE.map((g) => ({ wert: g.wert, text: `${g.wert} ${g.text}` })))}
+              {auswahl("feuerwiderstand", "Feuerwiderstand des Bauteils", FEUERWIDERSTAENDE.map((f) => ({ wert: f, text: f === "ohne" ? t("ohne") : f })))}
+              {feld("abschottung", "Abschottung (System, Zulassung)")}
+            </div>
+            {feld("kommentar", "Kommentar")}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="ghost" onClick={() => setFormular(null)}>{t("Abbrechen")}</Button>
+              <Button type="submit" data-testid="db-speichern">{t("Beantragen")}</Button>
+            </div>
+          </form>
+        </FormModal>
+      )}
+
+      {pruefen && (
+        <FormModal title={`${pruefen.d.nr} · ${pruefen.rolle === "statik" ? t("Statik") : t("Architekt")}: ${pruefen.ergebnis === "ok" ? t("i. O.") : t("abgelehnt")}`} onClose={() => setPruefen(null)}>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="db-pruefer">{t("Geprüft von")}</Label>
+              <Input id="db-pruefer" data-testid="db-pruefer" value={pruefen.von} onChange={(e) => setPruefen({ ...pruefen, von: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="db-pruef-kommentar">{t("Kommentar")}</Label>
+              <Input id="db-pruef-kommentar" value={pruefen.kommentar} onChange={(e) => setPruefen({ ...pruefen, kommentar: e.target.value })} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setPruefen(null)}>{t("Abbrechen")}</Button>
+              <Button data-testid="db-pruef-ok" disabled={!pruefen.von.trim()} onClick={pruefungSpeichern}>{t("Vermerk speichern")}</Button>
+            </div>
+          </div>
+        </FormModal>
+      )}
+    </Card>
+  );
+}

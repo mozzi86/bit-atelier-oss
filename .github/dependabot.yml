@@ -1,0 +1,30 @@
+# Dependabot (plan 92-08, lever register Nr. 146): weekly update pull requests for
+#  - npm: package-lock.json is what the start scripts install on every user's machine (npm ci --omit=dev),
+#  - github-actions: the actions used by ci.yml and release.yml.
+# Minor and patch updates arrive GROUPED (one pull request per group and week) — dozens of single PRs are
+# noise that gets clicked away. Major updates stay single PRs: they need a look. The CI gates (lint, unit,
+# build) decide whether an update can be merged. Security updates come independently of this schedule.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      laufzeit:
+        dependency-type: production
+        update-types: [minor, patch]
+      entwicklung:
+        dependency-type: development
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]

@@ -13,13 +13,13 @@
 // - `personal` (80): HR_REGELN, one Setting row "regel:<id>" per override with
 //   "gültig ab" (E-16), only with personnel access (DS-12).
 //
-// Docking point for phase 81 (E-16: overhead, employer share, productivity … "alles
-// einstellbar, mit Quelle und gültig ab") — one line in REGELWERKE, e.g.
-//   { gruppe: "zeit_honorar", titel: "Zeit & Honorar", regeln: ZEIT_HONORAR_REGELN,
-//     speicher: { art: "zeilen" }, sichtbar: (k) => k.datenquelle !== "supabase" },
-// with `zeit_honorar.ag_anteil` as the only source of the employer share.
+// - `zeit_honorar` (81-01, E-16: overhead, employer share, productivity … "alles
+//   einstellbar, mit Quelle und gültig ab"): ZEIT_HONORAR_REGELWERK from
+//   src/lib/zeitHonorar/regeln.js, one Setting row "regel:<id>" per override,
+//   visible like the accounting group (cloud only with E-20); `zeit_honorar.ag_anteil`
+//   is the only source of the employer share.
 //
-// In:  the 79 accounting settings, the HR rule book. Out: REGELWERKE, RECHTSFORM_LABEL,
+// In:  the 79 accounting settings, the HR rule book, the 81 rule book. Out: REGELWERKE, RECHTSFORM_LABEL,
 //      angepassteBuchhaltungsRegeln, sichtbareRegelwerke, regelNachId.
 //      Loads under node (the i18n guard imports it); storage loads only on demand.
 
@@ -27,6 +27,9 @@ import { SETTING_KEY } from "../accounting/datenmodell.js";
 import { alsRegeln } from "../accounting/einstellungen.js";
 import { RECHTSFORMEN } from "../accounting/rechtsform.js";
 import { HR_REGELN } from "../people/hrRegeln.js";
+import { ZEIT_HONORAR_REGELWERK } from "../zeitHonorar/regeln.js";
+import { FRISTEN_REGELWERK } from "../termine/fristenRegeln.js";
+import { KALENDER_REGELWERK } from "../abwesenheit/kalenderRegeln.js";
 
 /**
  * Context the visibility of a group depends on.
@@ -139,6 +142,12 @@ export const REGELWERKE = tiefGefroren([
     speicher: { art: "zeilen" },
     sichtbar: (k) => k?.personalZugang === "erlaubt",
   },
+  // 81-01: Gruppe zeit_honorar angehängt (E-16) — calculation values of time, fees and controlling.
+  ZEIT_HONORAR_REGELWERK,
+  // 82-01: Gruppen fristen und kalender angehängt (E-16) — reminder leads, warranty periods,
+  // holidays and absences; one line each, like zeit_honorar.
+  FRISTEN_REGELWERK,
+  KALENDER_REGELWERK,
 ]);
 
 /**

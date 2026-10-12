@@ -20,6 +20,8 @@
 //       dateiname: string|null, datum_ist: 'YYYY-MM-DD'|null,
 //       bemerkung: string,     // intern — NICHT im Protokoll (T-71-12)
 //       hinweis_ag: string,    // geht ins Übergabeprotokoll
+//       geschosse: string[],   // 66-15 (v2): storeys of the section; [] = same-named storey
+//                              // or whole building (befundAbschnitt.js)
 //     }]
 //   }
 //
@@ -80,6 +82,23 @@ export function datumText(iso) {
   return a ? `${a.slice(8, 10)}.${a.slice(5, 7)}.${a.slice(0, 4)}` : "—";
 }
 
+/**
+ * Storey names of a section (66-15): trimmed strings, no blanks, no duplicates, max. 50.
+ * @param {unknown} roh stored value (array expected)
+ * @returns {string[]}
+ */
+export function geschosseListe(roh) {
+  if (!Array.isArray(roh)) return [];
+  const out = [];
+  for (const g of roh) {
+    if (g === null || g === undefined) continue;
+    const s = String(g).trim();
+    if (s && !out.includes(s)) out.push(s);
+    if (out.length >= 50) break;
+  }
+  return out;
+}
+
 export function leeresLieferungLayer() {
   return { fachsicht: FACHSICHT_DEFAULT, lieferungen: [] };
 }
@@ -102,6 +121,7 @@ export function normalisiereLayer(roh) {
       datum_ist: isoTag(l.datum_ist),
       bemerkung: String(l.bemerkung || ""),
       hinweis_ag: String(l.hinweis_ag || ""),
+      geschosse: geschosseListe(l.geschosse),
     }))
     : [];
   return { fachsicht, lieferungen };
@@ -117,7 +137,7 @@ function neueId() {
  * Lieferung anhängen — nr = max(nr)+1, Status geplant.
  * @returns {{layer: object, lieferung: object}} neuer Layer (immutable) + die neue Lieferung
  */
-export function lieferungAnlegen(layer, { termin = null, bauabschnitt = "", log = 300, bemerkung = "", hinweis_ag = "" } = {}) {
+export function lieferungAnlegen(layer, { termin = null, bauabschnitt = "", log = 300, bemerkung = "", hinweis_ag = "", geschosse = [] } = {}) {
   const basis = normalisiereLayer(layer);
   const nr = basis.lieferungen.reduce((m, l) => Math.max(m, l.nr), 0) + 1;
   const lieferung = {
@@ -125,6 +145,7 @@ export function lieferungAnlegen(layer, { termin = null, bauabschnitt = "", log 
     log: [300, 400, 500].includes(Number(log)) ? Number(log) : 300,
     status: "geplant", dateiname: null, datum_ist: null,
     bemerkung: String(bemerkung || ""), hinweis_ag: String(hinweis_ag || ""),
+    geschosse: geschosseListe(geschosse),
   };
   return { layer: { ...basis, lieferungen: [...basis.lieferungen, lieferung] }, lieferung };
 }

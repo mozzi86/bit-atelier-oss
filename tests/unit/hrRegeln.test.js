@@ -58,10 +58,12 @@ test("Behavior 9: die Kündigungsstaffel ist eine feste Tabelle nach § 622 Abs.
   assert.deepEqual(s.werte[0].wert, [[2, 1], [5, 2], [8, 3], [10, 4], [12, 5], [15, 6], [20, 7]]);
 });
 
-test("Behavior 10: REGELWERKE hat genau buchhaltung und personal; Sichtbarkeit je Kontext", () => {
-  assert.deepEqual(REGELWERKE.map((g) => g.gruppe), ["buchhaltung", "personal"]);
-  assert.deepEqual(sichtbareRegelwerke({ datenquelle: "serverlos", personalZugang: "erlaubt" }).map((g) => g.gruppe), ["buchhaltung", "personal"]);
-  assert.deepEqual(sichtbareRegelwerke({ datenquelle: "express", personalZugang: "keine-berechtigung" }).map((g) => g.gruppe), ["buchhaltung"]);
+// 81-01: Gruppe zeit_honorar angehängt (E-16) — the third group, visible like buchhaltung.
+// 82-01: Gruppen fristen und kalender angehängt (E-16) — five groups.
+test("Behavior 10: REGELWERKE hat genau buchhaltung, personal, zeit_honorar, fristen und kalender; Sichtbarkeit je Kontext", () => {
+  assert.deepEqual(REGELWERKE.map((g) => g.gruppe), ["buchhaltung", "personal", "zeit_honorar", "fristen", "kalender"]);
+  assert.deepEqual(sichtbareRegelwerke({ datenquelle: "serverlos", personalZugang: "erlaubt" }).map((g) => g.gruppe), ["buchhaltung", "personal", "zeit_honorar", "fristen", "kalender"]);
+  assert.deepEqual(sichtbareRegelwerke({ datenquelle: "express", personalZugang: "keine-berechtigung" }).map((g) => g.gruppe), ["buchhaltung", "zeit_honorar", "fristen", "kalender"]);
   assert.deepEqual(sichtbareRegelwerke({ datenquelle: "supabase", personalZugang: "nur-lokal" }), [], "E-03");
   assert.equal(REGELWERKE[1].regeln.length, HR_REGELN.length);
   assert.deepEqual(REGELWERKE[1].speicher, { art: "zeilen" });

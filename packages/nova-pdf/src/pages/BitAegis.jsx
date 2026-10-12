@@ -1,5 +1,7 @@
 import { seitenWurzel } from "@core/lib/utils";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { projekteNachZugriff, sichtbareDokumente } from "@core/lib/rechte.js";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
 import { bitApi } from "@core/api/bitApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Badge } from "@core/components/ui/badge";
@@ -25,11 +27,16 @@ import { useI18n } from "@core/lib/i18n";
 export default function BitAegis() {
   // 72-08 (N-02): the h1 is the menu title (src/navigation.js), same key.
   const { t } = useI18n();
-  const [projects, setProjects] = useState([]);
+  // 82-02: the role's project view (same filter as ProjectContext) — applied on render, so "Ansicht als" needs no reload.
+  const zugriff = useZugriff();
+  const [rohProjekte, setProjects] = useState([]);
+  const projects = useMemo(() => projekteNachZugriff(rohProjekte, zugriff), [rohProjekte, zugriff]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [tab, setTab] = useState("tools");
-  const [docs, setDocs] = useState([]);
+  // 82-02: only documents the role may see (Document.bereich: personnel, accounting, correspondence, fee PDFs).
+  const [rohDocs, setDocs] = useState([]);
+  const docs = useMemo(() => sichtbareDokumente(rohDocs, zugriff), [rohDocs, zugriff]);
   const [openDoc, setOpenDoc] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -46,7 +53,7 @@ export default function BitAegis() {
     setIsLoading(true);
     const data = await bitApi.entities.Project.list("name");
     setProjects(data);
-    setSelectedProject((cur) => cur || data.find((p) => p.id === aktivesProjekt) || null);
+    setSelectedProject((cur) => cur || projekteNachZugriff(data, zugriff).find((p) => p.id === aktivesProjekt) || null);
     setIsLoading(false);
   };
 

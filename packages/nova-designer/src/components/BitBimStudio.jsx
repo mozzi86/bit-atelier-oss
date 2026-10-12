@@ -50,6 +50,9 @@ const SHORTCUTS = [
 // Deutsche Werkzeugnamen (Favoriten-Labels, BIM-F)
 const TOOL_NAMES = { wall: "Wand", column: "Stütze", window: "Fenster", door: "Tür", zone: "Zone", slab: "Decke", roof: "Dach" };
 import { useProject } from "@core/lib/ProjectContext";
+import { bauartVon } from "@core/lib/bauart";
+import { useI18n } from "@core/lib/i18n";
+import { zustandFelder } from "@designer/components/ZustandFelder";
 import { useElevationGrid } from "@designer/lib/useElevationGrid";
 import { useOsmBuildings } from "@designer/lib/useOsmBuildings";
 import { useOsmEnvironment } from "@designer/lib/useOsmEnvironment";
@@ -65,6 +68,7 @@ import BimPlan2D from "@designer/components/BimPlan2D";
 import { exportExposePng } from "@designer/components/MassingView3D";
 import { exportIFC } from "@designer/lib/ifcExport";
 import { useBuildingProgram, buildingProgram, fmtLen } from "@core/lib/useBuildingProgram";
+import { werkstattBauteile } from "@core/lib/werkstattBauteile";
 import { istGeneriert } from "@designer/lib/apartments";
 import { istWerkstattZone } from "@designer/lib/tesselierung";
 
@@ -395,6 +399,7 @@ function autoOpeningType(o) {
  */
 export default function BitBimStudio({ complexData }) {
   const { project } = useProject();
+  const { t: tz } = useI18n(); // 73-07: inspector rows for condition / Erfassungsgrad
   const { grid, min, max, offline } = useElevationGrid(project?.location, 10, 0.2); // 200 m-Patch (≤100 Punkte = Open-Meteo-Limit)
   const osm = useOsmBuildings(project?.location, 350);
   const env = useOsmEnvironment(project?.location, 300);
@@ -1196,6 +1201,8 @@ export default function BitBimStudio({ complexData }) {
       customWalls, customColumns, customWindows, envOpenings, autoOpenings,
       customZones, customSlabs, customRoofs, storeyHeight,
       netz: netzLayer, // Phase 41 (NETZ-05): Leitungen als Segment-Elemente
+      // 89-03: workshop walls/doors/rooms with stable GUIDs and Pset_BIT_Bauteil (store zones).
+      werkstatt: werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight }),
       projectName: project?.name || "BIT-Atelier",
       onWarn: (msg) => meldungen.push(msg),
     });
@@ -1909,7 +1916,7 @@ export default function BitBimStudio({ complexData }) {
             {/* 34-05: parametrisches Zeichnen direkt im Grundriss (BIT Sketcher) */}
             <button onClick={() => (sketchEdit ? stopSketchEdit() : startSketchEdit())}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 border-l border-slate-200 ${sketchEdit ? "bg-teal-600 text-white" : "text-teal-700 hover:bg-teal-50"}`}
-              aria-pressed={sketchEdit} aria-label="Sketch bearbeiten" title="Parametrisches Zeichnen (Constraint-Zeichner) im Grundriss">
+              aria-pressed={sketchEdit} aria-label="Sketch bearbeiten" title="Parametrisches Zeichnen (Skizze, Constraint-Modus) im Grundriss">
               ✏ Sketch
             </button>
           </div>
@@ -1932,8 +1939,8 @@ export default function BitBimStudio({ complexData }) {
                   : sketchSolve.dof === 0 ? "voll bestimmt"
                   : `${sketchSolve.dof} DOF offen`}
               </span>
-              <Link to="/SketchStudio" className="text-teal-700 underline text-[11px]"
-                title="Constraints, Maße und Parameter im Constraint-Zeichner pflegen">Im Constraint-Zeichner öffnen</Link>
+              <Link to="/SketchStudio?modus=constraint" className="text-teal-700 underline text-[11px]"
+                title="Constraints, Maße und Parameter in der Skizze (Constraint-Modus) pflegen">In der Skizze öffnen</Link>
             </div>
           )}
           <div className="flex items-center gap-4">
@@ -2300,6 +2307,8 @@ export default function BitBimStudio({ complexData }) {
                 </label>
               );
               const storeyOpts = model.storeys.map((s) => <option key={s.level} value={s.level}>{s.name}</option>);
+              // 73-07: condition + Erfassungsgrad rows, only in an existing-building project.
+              const zfOpts = { bauart: bauartVon(project).bauart, field, selCls, t: tz };
               let title = "Objekt", body = null, readOnly = false, favSpec = null; // favSpec: ★-Favorit aus der Auswahl (BIM-F)
 
               if (panelSel.type === "wall") {
@@ -2312,6 +2321,7 @@ export default function BitBimStudio({ complexData }) {
                   field("Aufbau", <select className={selCls} value={w.composite || "single24"} onChange={(e) => patchWall(w._idx, { composite: e.target.value })}>{WALL_COMPOSITES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>),
                   !hasComp && field("Dicke (m)", <input type="number" className={numCls} step="0.05" min="0.1" max="0.6" value={w.thickness ?? 0.3} onChange={(e) => patchWall(w._idx, { thickness: +e.target.value })} />),
                   field("Bezug", <select className={selCls} value={w.refLine || "center"} onChange={(e) => patchWall(w._idx, { refLine: e.target.value })}><option value="center">Mitte</option><option value="outside">Außen</option><option value="inside">Innen</option></select>),
+                  ...zustandFelder(w, (p) => patchWall(w._idx, p), zfOpts),
                 ];
               } else if (panelSel.type === "column") {
                 const c = customColumns.find((x) => x._idx === panelSel.index); if (!c) return null;
@@ -2319,6 +2329,7 @@ export default function BitBimStudio({ complexData }) {
                 body = [
                   field("Geschoss", <select className={selCls} value={c.level} onChange={(e) => patchColumn(c._idx, { level: +e.target.value })}>{storeyOpts}</select>),
                   field("Größe (m)", <input type="number" className={numCls} step="0.05" min="0.2" max="1.2" value={c.size ?? 0.4} onChange={(e) => patchColumn(c._idx, { size: +e.target.value })} />),
+                  ...zustandFelder(c, (p) => patchColumn(c._idx, p), zfOpts),
                 ];
               } else if (panelSel.type === "opening") {
                 const scope = panelSel.scope || "custom";
@@ -2330,6 +2341,7 @@ export default function BitBimStudio({ complexData }) {
                   field("Typ", <select className={selCls} value={o.typeId} onChange={(e) => patchOpening(o._idx, scope, { typeId: e.target.value })}>{types.map((ty) => <option key={ty.id} value={ty.id}>{ty.name}</option>)}</select>),
                   field("Position (m)", <input type="number" className={numCls} step="0.25" value={+o.u.toFixed(2)} onChange={(e) => patchOpening(o._idx, scope, { u: Math.max(0.2, +e.target.value) })} />),
                   field("Lage", <span className="text-slate-400">{scope === "env" ? "Hüllwand" : "Innenwand"}</span>),
+                  ...zustandFelder(o, (p) => patchOpening(o._idx, scope, p), zfOpts),
                 ];
               } else if (panelSel.type === "zone") {
                 const z = customZones.find((x) => x._idx === panelSel.index); if (!z) return null;
@@ -2343,13 +2355,14 @@ export default function BitBimStudio({ complexData }) {
               } else if (panelSel.type === "slab") {
                 const s = customSlabs.find((x) => x._idx === panelSel.index); if (!s) return null;
                 title = "Decke";
-                body = [field("Geschoss", <select className={selCls} value={s.level} onChange={(e) => patchSlab(s._idx, { level: +e.target.value })}>{storeyOpts}</select>)];
+                body = [field("Geschoss", <select className={selCls} value={s.level} onChange={(e) => patchSlab(s._idx, { level: +e.target.value })}>{storeyOpts}</select>), ...zustandFelder(s, (p) => patchSlab(s._idx, p), zfOpts)];
               } else if (panelSel.type === "roof") {
                 const rf = customRoofs.find((x) => x._idx === panelSel.index); if (!rf) return null;
                 title = "Dach";
                 body = [
                   field("Geschoss", <select className={selCls} value={rf.level} onChange={(e) => patchRoof(rf._idx, { level: +e.target.value })}>{storeyOpts}</select>),
                   field("Firsthöhe (m)", <input type="number" className={numCls} step="0.25" min="0.5" max="6" value={rf.pitch ?? 2.5} onChange={(e) => patchRoof(rf._idx, { pitch: +e.target.value })} />),
+                  ...zustandFelder(rf, (p) => patchRoof(rf._idx, p), zfOpts),
                 ];
               } else if (panelSel.type === "hullwall") {
                 const w = model.walls.find((x) => x.level === panelSel.level && x.edge === panelSel.edge); if (!w) return null;

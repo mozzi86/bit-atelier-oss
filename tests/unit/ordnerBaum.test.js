@@ -130,3 +130,18 @@ test("findeOderLegeAn — legt nur fehlende Ebenen an und nutzt vorhandene weite
   const r2 = await findeOderLegeAn(bestand, [], anlegen);
   assert.equal(r2.id, null, "leerer Pfad => Projektwurzel");
 });
+
+// --- Phase 81 (81-01): Vertrag & Honorar --------------------------------------
+
+test("ORDNER_VORLAGE — 00_Vertrag & Honorar additiv, Honorar-Dokumente landen dort (81-01)", () => {
+  assert.deepEqual(ORDNER_VORLAGE[0], { name: "00_Vertrag & Honorar", kinder: ["Angebote", "Vertrag", "Honorarnachträge"] });
+  assert.deepEqual(ORDNER_VORLAGE.slice(1).map((v) => v.name), [
+    "01_Grundlagen", "02_Planung", "03_Fachplanung", "04_Zeichnungen", "05_Ausschreibung",
+    "06_Kosten", "07_Berichtswesen", "08_Behörden", "09_Schriftverkehr",
+  ], "bestehende Reihenfolge unverändert");
+  assert.deepEqual(zielPfadFuer("Honorarangebot"), ["00_Vertrag & Honorar", "Angebote"]);
+  assert.deepEqual(zielPfadFuer("Architektenvertrag"), ["00_Vertrag & Honorar", "Vertrag"]);
+  assert.deepEqual(zielPfadFuer("Auftragsbestätigung"), ["00_Vertrag & Honorar", "Vertrag"]);
+  assert.deepEqual(zielPfadFuer("Honorarnachtrag"), ["00_Vertrag & Honorar", "Honorarnachträge"]);
+  assert.deepEqual(zielPfadFuer("Nachtrag"), ["05_Ausschreibung", "Nachträge"], "Bau-Nachtrag bleibt");
+});

@@ -11,6 +11,7 @@ import { Layers, Lock, Calculator, AlertTriangle, Plus } from "lucide-react";
 import { bewerteSchichten, rangfolge } from "@core/lib/rules/priceStack";
 import { ARTEN, neueSchicht } from "@ava/lib/preisschichten";
 import { eur } from "./avaUtils";
+import { useI18n } from "@core/lib/i18n";
 
 // Alle Preisschichten EINER Position — mit Rang, Herkunft, Historie.
 //
@@ -35,6 +36,7 @@ export default function PreisSchichtPanel({
   rangfolgeKatalog = [],
   onAddSchicht = null,
 }) {
+  const { t } = useI18n();
   const rf = useMemo(() => rangfolge(rangfolgeKatalog), [rangfolgeKatalog]);
   const bewertet = useMemo(
     () => bewerteSchichten(schichten, { reihen, rangfolge: rf }),
@@ -159,17 +161,17 @@ export default function PreisSchichtPanel({
                 <div>
                   <Label className="text-[11px]">Art</Label>
                   <Select value="markt" disabled>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-label={t("Art")}><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="markt">Marktpreis</SelectItem></SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label className="text-[11px]">EP [€]</Label>
-                  <Input type="number" step="any" value={neu.ep} onChange={(e) => setNeu({ ...neu, ep: e.target.value })} />
+                  <Input aria-label={t("EP [€]")} type="number" step="any" value={neu.ep} onChange={(e) => setNeu({ ...neu, ep: e.target.value })} />
                 </div>
                 <div>
                   <Label className="text-[11px]">Beleg (Pflicht)</Label>
-                  <Input value={neu.beleg} onChange={(e) => setNeu({ ...neu, beleg: e.target.value })} placeholder="Angebot / Shop / Recherche vom …" />
+                  <Input aria-label={t("Beleg (Pflicht)")} value={neu.beleg} onChange={(e) => setNeu({ ...neu, beleg: e.target.value })} placeholder="Angebot / Shop / Recherche vom …" />
                 </div>
               </div>
               {fehler && <p className="text-xs text-red-700">{fehler}</p>}

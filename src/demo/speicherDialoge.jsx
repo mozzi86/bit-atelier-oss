@@ -24,13 +24,16 @@ import { exportProjekt, leseProjektDatei, uebernehmeProjekt } from '@core/api/pr
 import { schnappschussWiederherstellen } from '@core/api/schnappschuesse';
 // 79-12 (E-07): the export-dialog registry lives in src/ (app-only), because a
 // package under packages/ may not import from "@/" — see the file header there.
-import { EXPORT_BEREICHE, exportOptionen, importOptionen } from '@/lib/exportBereiche';
+import { EXPORT_BEREICHE, exportOptionen } from '@/lib/exportBereiche';
+import { vorschauAufbauen, anzahlenVon } from '@/lib/dateiOeffnen.js';
 import { personalZugang } from '@/lib/people/zugang.js';
+import { useZugriff } from '@core/lib/ZugriffContext.jsx';
+import { exportBereicheFuer } from '@/lib/zugriffFilter.js';
 // B-2 (BEFUNDE-80): the wired .bitpers step itself — PersonalSicherung.jsx is a
 // JSX file like this one (loaded through Vite at build time), so importing it
 // here does not affect exportSchritte.js's React-free, node-testable status.
 import { bitpersSchritt } from '@/components/people/PersonalSicherung.jsx';
-import { separatPlan, vorschauZeilen, passphraseGueltig, PASSPHRASE_MINDESTLAENGE } from './exportSchritte.js';
+import { separatPlan, passphraseGueltig, PASSPHRASE_MINDESTLAENGE } from './exportSchritte.js';
 
 /**
  * Steps for `separat` export areas (E-14): key = an area's `separat` VALUE
@@ -57,16 +60,6 @@ export function fokusZurueck(ref) {
     e.preventDefault();
     ref.current?.focus();
   };
-}
-
-/**
- * Sum of a registry area's entity counts in a plain data object (demoDb shape).
- * @param {{entitaeten: readonly string[]}} bereich
- * @param {Record<string, object[]>} daten
- * @returns {number}
- */
-function anzahlIn(bereich, daten) {
-  return bereich.entitaeten.reduce((n, e) => n + (Array.isArray(daten?.[e]) ? daten[e].length : 0), 0);
 }
 
 /**
@@ -97,7 +90,7 @@ export function useSpeicherAktionen() {
     // data (importOptionen, presence-based); an area the file DOES carry, but
     // empty, over a locally FILLED one needs an extra, explicit confirmation
     // (leerErsetztGefuellt) before the import is allowed to proceed.
-    const importOpt = importOptionen(gelesen.obj);
+    // 93-10: built by the shared vorschauAufbauen (also used by the double-click import).
     /** @type {Record<string, object[]>} */
     let lokal = {};
     try {
@@ -105,14 +98,7 @@ export function useSpeicherAktionen() {
     } catch {
       lokal = {};
     }
-    const { zeilen: basisZeilen, separatHinweis } = vorschauZeilen(EXPORT_BEREICHE, importOpt);
-    const zeilen = basisZeilen.map((zeile) => {
-      const bereich = EXPORT_BEREICHE.find((b) => b.key === zeile.key);
-      const lokalAnzahl = anzahlIn(bereich, lokal);
-      const dateiAnzahl = zeile.enthalten ? anzahlIn(bereich, gelesen.obj?.daten || {}) : 0;
-      return { ...zeile, leerErsetztGefuellt: zeile.enthalten && dateiAnzahl === 0 && lokalAnzahl > 0 };
-    });
-    setImportVorschau({ ...gelesen, importOptionen: importOpt, zeilen, separatHinweis });
+    setImportVorschau(vorschauAufbauen(gelesen.obj, anzahlenVon(lokal)));
   };
 
   const importAbbrechen = () => setImportVorschau(null);
@@ -160,10 +146,20 @@ export function useSpeicherAktionen() {
  *   onAbbrechen: () => void,
  *   onUebernehmen: (vorherSichern: boolean) => void,
  *   rueckfokus: (e: Event) => void,
+ *   onKopie?: () => void,
+ *   ohneVorherSichern?: boolean,
+ *   beschreibung?: string,
+ *   beschaeftigt?: boolean,
  * }} props
+ *   93-10 (double-click import), all optional — the file-picker import passes none of them:
+ *   `vorschau.wiederOeffnen` (projects of the file that already exist here) switches the buttons to
+ *   "Abbrechen / Als Kopie / Aktualisieren"; `onKopie` adds the copy button ("Als Kopie hinzufügen" on a
+ *   first open); `ohneVorherSichern` hides "Vorher sichern" (the local server takes its own pre-import
+ *   copy); `beschreibung` replaces the browser wording; `beschaeftigt` disables the buttons while a
+ *   request runs; `vorschau.quelle.name` adds a "Datei" row.
  * @returns {React.ReactElement}
  */
-export function ImportVorschauDialog({ vorschau, onAbbrechen, onUebernehmen, rueckfokus }) {
+export function ImportVorschauDialog({ vorschau, onAbbrechen, onUebernehmen, rueckfokus, onKopie, ohneVorherSichern = false, beschreibung, beschaeftigt = false }) {
   const { t } = useI18n();
   const [leerBestaetigt, setLeerBestaetigt] = React.useState(false);
   // A freshly offered file (a new `vorschau` object) always starts unconfirmed —
@@ -174,17 +170,28 @@ export function ImportVorschauDialog({ vorschau, onAbbrechen, onUebernehmen, rue
 
   const importWarnungNoetig = (vorschau?.zeilen || []).some((z) => z.leerErsetztGefuellt);
   const importGesperrt = importWarnungNoetig && !leerBestaetigt;
+  /** @type {Array<{id: string, name: string}>} */
+  const wieder = /** @type {any} */ (vorschau)?.wiederOeffnen || [];
+  const quelleName = /** @type {any} */ (vorschau)?.quelle?.name || '';
 
   return (
     <Dialog open={!!vorschau} onOpenChange={(offen) => { if (!offen) onAbbrechen(); }}>
       <DialogContent showCloseButton={false} className="max-w-md p-5" data-testid="import-dialog" onCloseAutoFocus={rueckfokus}>
         <DialogTitle className="text-base mb-1">{t('Projekt laden')}</DialogTitle>
         <DialogDescription className="mb-3">
-          {t('Der aktuelle Stand in diesem Browser wird dabei vollständig ersetzt.')}{' '}
-          {t('Ein Schnappschuss der aktuellen Daten wird automatisch angelegt.')}
+          {beschreibung ?? <>
+            {t('Der aktuelle Stand in diesem Browser wird dabei vollständig ersetzt.')}{' '}
+            {t('Ein Schnappschuss der aktuellen Daten wird automatisch angelegt.')}
+          </>}
         </DialogDescription>
         {vorschau && (
           <dl className="text-sm border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-200 dark:divide-slate-700 mb-4">
+            {quelleName && (
+              <div className="flex justify-between gap-3 px-3 py-2">
+                <dt className="text-slate-500">{t('Datei')}</dt>
+                <dd className="min-w-0 truncate" data-testid="import-quelle">{quelleName}</dd>
+              </div>
+            )}
             <div className="flex justify-between px-3 py-2">
               <dt className="text-slate-500">{t('Projekt')}</dt>
               <dd className="font-medium">{vorschau.vorschau.projektname}</dd>
@@ -241,33 +248,58 @@ export function ImportVorschauDialog({ vorschau, onAbbrechen, onUebernehmen, rue
             </label>
           </div>
         )}
+        {/* 93-10: the file's project already exists here (same id) — say so and offer update or copy. */}
+        {wieder.length > 0 && (
+          <div
+            role="status"
+            data-testid="import-wieder-hinweis"
+            className="mb-3 rounded-lg border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/40 px-3 py-2 text-xs text-sky-900 dark:text-sky-100"
+          >
+            <p className="font-medium">{t('Dieses Projekt ist hier schon vorhanden:')} {wieder.map((p) => p.name || p.id).join(', ')}</p>
+            <p className="mt-1">{t('Aktualisieren ersetzt den Stand durch die Datei. Als Kopie übernimmt nur die Projektdaten mit neuen IDs, ohne Büro-Bereiche und Einstellungen.')}</p>
+          </div>
+        )}
         {/* 69-13 must-have 3: "save first" is an EQUAL choice beside cancel. */}
         <div className="flex flex-wrap justify-end gap-2">
           <button
             type="button"
             onClick={onAbbrechen}
+            disabled={beschaeftigt}
             data-testid="import-abbrechen"
-            className="px-3 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="px-3 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
           >
             {t('Abbrechen')}
           </button>
-          <button
-            type="button"
-            onClick={() => onUebernehmen(true)}
-            disabled={importGesperrt}
-            data-testid="import-vorher-sichern"
-            className="px-3 py-2 rounded-lg border border-emerald-600 text-emerald-700 dark:text-emerald-300 text-sm font-medium hover:bg-emerald-50 dark:hover:bg-emerald-950 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-          >
-            {t('Vorher sichern (.bitproj)')}
-          </button>
+          {onKopie && (
+            <button
+              type="button"
+              onClick={onKopie}
+              disabled={beschaeftigt}
+              data-testid="import-als-kopie"
+              className="px-3 py-2 rounded-lg border border-slate-400 text-slate-700 dark:text-slate-200 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
+            >
+              {wieder.length > 0 ? t('Als Kopie') : t('Als Kopie hinzufügen')}
+            </button>
+          )}
+          {!ohneVorherSichern && wieder.length === 0 && (
+            <button
+              type="button"
+              onClick={() => onUebernehmen(true)}
+              disabled={importGesperrt || beschaeftigt}
+              data-testid="import-vorher-sichern"
+              className="px-3 py-2 rounded-lg border border-emerald-600 text-emerald-700 dark:text-emerald-300 text-sm font-medium hover:bg-emerald-50 dark:hover:bg-emerald-950 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            >
+              {t('Vorher sichern (.bitproj)')}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onUebernehmen(false)}
-            disabled={importGesperrt}
-            data-testid="import-ersetzen"
+            disabled={importGesperrt || beschaeftigt}
+            data-testid={wieder.length > 0 ? 'import-aktualisieren' : 'import-ersetzen'}
             className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
           >
-            {t('Laden und ersetzen')}
+            {wieder.length > 0 ? t('Aktualisieren') : t('Laden und ersetzen')}
           </button>
         </div>
       </DialogContent>
@@ -452,7 +484,12 @@ export function ExportDialog({ registry = EXPORT_BEREICHE, anzahlen, onAbbrechen
   const { user } = useAuth();
   // Same gate PersonalZaehlkarte.jsx/usePersonalkostenPlan.js use — locally
   // cosmetic (see @/lib/people/zugang.js), bitpersSchritt checks it again itself.
-  const zugangAktuell = personalZugang({ datenquelle: DATENQUELLE, rolle: user?.role });
+  // 82-02: the dialog shows only the rows the role may read completely, but computes the
+  // options against the FULL registry — a filtered registry would drop a hidden row from
+  // `ohne` and let it travel. A non-owner can therefore never tick everything (no backup).
+  const zugriff = useZugriff();
+  const sichtbar = exportBereicheFuer(registry, zugriff);
+  const zugangAktuell = personalZugang({ datenquelle: DATENQUELLE, rolle: user?.role, zugriff });
   const [gewaehlt, setGewaehlt] = React.useState(/** @type {Set<string>} */ (new Set()));
   const [fehlendeSchritte, setFehlendeSchritte] = React.useState(/** @type {Array<{key: string, label: string}>} */ ([]));
   const [passphrasen, setPassphrasen] = React.useState(/** @type {Record<string, {a: string, b: string}>} */ ({}));
@@ -532,7 +569,7 @@ export function ExportDialog({ registry = EXPORT_BEREICHE, anzahlen, onAbbrechen
           <li className="flex items-center justify-between px-3 py-2 text-slate-500 dark:text-slate-400">
             <span>{t('Projektdaten (immer)')}</span>
           </li>
-          {registry.map((bereich) => (
+          {sichtbar.map((bereich) => (
             <li key={bereich.key} className="flex items-center justify-between px-3 py-2">
               <label className="flex items-center gap-2">
                 <input

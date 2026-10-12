@@ -20,8 +20,10 @@ import {
   glaser, taupunktAusLuft, bauphysikChecks, U_REFERENZ_AUSSENWAND,
 } from "@designer/lib/bauteilAufbau";
 import { useProject } from "@core/lib/ProjectContext";
+import AufbauHerkunftWahl from "@designer/components/AufbauHerkunftWahl";
 import { useSiteClimate } from "@designer/lib/useSiteClimate";
 import { usePlanModel } from "@designer/lib/usePlanModel";
+import { useI18n } from "@core/lib/i18n";
 
 // de-DE-Formatter: de1 (°C, dB) · de2 (U, f_Rsi, R) · de3 nur wo nötig.
 const de1 = (n) => (Number(n) || 0).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -115,6 +117,7 @@ let layerUid = 0;
 const mitUid = (l) => (l._uid ? l : { ...l, _uid: ++layerUid });
 
 export default function BauphysikStudio() {
+  const { t } = useI18n();
   const { project } = useProject();
   const plan = usePlanModel(project?.id);
   const klima = useSiteClimate(project?.location);
@@ -245,7 +248,7 @@ export default function BauphysikStudio() {
             <div className="space-y-1">
               <div className="text-xs text-slate-500">Aufbau-Quelle</div>
               <Select value={quelle} onValueChange={onQuelle}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("Aufbau-Quelle")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="modell">
                     {`Aus Gebäudemodell${modellCompositeId ? ` (${compositeById(modellCompositeId)?.name || modellCompositeId})` : " (kein Aufbau gewählt → Standard)"}`}
@@ -257,6 +260,7 @@ export default function BauphysikStudio() {
                 </SelectContent>
               </Select>
             </div>
+            <AufbauHerkunftWahl />
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={() => addLayer(true)}><Plus className="w-4 h-4 mr-1" /> Schicht innen</Button>
               <Button variant="outline" size="sm" onClick={() => addLayer(false)}><Plus className="w-4 h-4 mr-1" /> Schicht außen</Button>
@@ -271,7 +275,7 @@ export default function BauphysikStudio() {
                   <span className="w-6 text-xs text-slate-400 text-right shrink-0">{i + 1}</span>
                   <div className="flex-1 min-w-0">
                     <Select value={l.material || ""} onValueChange={(v) => setLayer(i, { material: v })}>
-                      <SelectTrigger className="h-9">
+                      <SelectTrigger aria-label={t("Material der Schicht")} className="h-9">
                         <SelectValue placeholder={l.name ? `${l.name} (ohne Kennwerte)` : "Material wählen"} />
                       </SelectTrigger>
                       <SelectContent>

@@ -16,6 +16,8 @@
 // die Näherung OKF ≈ (storeys−1)·storeyHeight erzeugt die Komponente.
 
 // Härtende Division: nie durch <0.1 teilen (gegen 0/leer/negativ).
+import { OFFEN, konzeptAuswertung } from "@designer/lib/pruefStatus";
+
 const safeDiv = (a, b) => a / Math.max(0.1, b);
 // Defensive, nicht-negative Zahl.
 const num = (x) => Math.max(0, Number(x) || 0);
@@ -112,6 +114,11 @@ export function sanitaerOk({ stufe = "R", bewegung, dusche = "ja", wcSeitlich = 
 // als geprüfter DIN-18040-Nachweis nach Landesbauordnung erscheinen (T-19-04).
 // Genau 8 Items (Keys: aufzug, erschliessung, erreichbar, rollstuhl, bewegung,
 // tuer, flur, sanitaer).
+// 72-04: a missing input is "offen", never "pass": before, 0 WE gave "0/0 barrier-free flats"
+// and no storeys gave "keine Aufzugspflicht" — both green for an empty form. Missing
+// dimensions (movement area, door, corridor, sanitary) were "warn", which reads as a
+// violated rule; they are "offen" now. The select "stufenlose Erschließung" keeps its
+// visible default "ja" (an explicit choice in the form, not a missing value).
 /** @param {Record<string, any>} [o] storeys, okf (m), aufzugMode, kabineB/kabineT (m), erschliessung, we, quotePct (%), vorhErreichbar, vorhR, … — see the destructuring below */
 export function bfChecks({
   storeys = 0, okf = 0, aufzugMode = "auto", kabineB, kabineT, // Kabinenmaße ohne Default — fehlend ≠ Mindestmaß erfüllt (ME-05)
@@ -124,6 +131,8 @@ export function bfChecks({
   const kab = kabErfasst && kabineOk(kabineB, kabineT);
   const erfErr = erfBarrierefreiErreichbar(we, storeys, pflicht);
   const erfR = erfRollstuhlgerecht(we, quotePct);
+  const weErfasst = num(we) > 0;
+  const hoeheErfasst = num(storeys) > 0 || num(okf) > 0;
 
   const aufzugItem = (() => {
     if (pflicht && kab) {
@@ -136,6 +145,9 @@ export function bfChecks({
           ? "Aufzugspflicht abgeleitet — Kabine unter 1,10 × 1,40 m (DIN EN 81-70 Typ 2)"
           : "Aufzugspflicht abgeleitet — Kabinenmaße pflegen (DIN EN 81-70 Typ 2)",
       };
+    }
+    if (aufzugMode === "auto" && !hoeheErfasst) {
+      return { status: OFFEN, detail: "Geschosszahl/OKF fehlt — Aufzugspflicht nicht ableitbar" };
     }
     if (aufzugMode === "nein" && aufzugPflicht(storeys, okf)) {
       return { status: "warn", detail: "manuell auf nein gesetzt, Ableitung ergibt Aufzugspflicht — Landesbauordnung prüfen" };
@@ -160,53 +172,62 @@ export function bfChecks({
     {
       key: "erreichbar",
       label: "Barrierefrei erreichbare Wohnungen (Richtwert)",
-      status: num(vorhErreichbar) >= erfErr ? "pass" : "warn",
-      detail: `${de(vorhErreichbar)}/${de(erfErr)} barrierefrei erreichbare Wohnungen (mit Aufzug: alle Geschosse)`,
+      status: !weErfasst ? OFFEN : num(vorhErreichbar) >= erfErr ? "pass" : "warn",
+      detail: !weErfasst
+        ? "Wohneinheiten fehlen — Bedarf nicht ableitbar"
+        : `${de(vorhErreichbar)}/${de(erfErr)} barrierefrei erreichbare Wohnungen (mit Aufzug: alle Geschosse)`,
     },
     {
       key: "rollstuhl",
       label: "Rollstuhlgerechte Wohnungen (Richtwert)",
-      status: num(quotePct) === 0 || num(vorhR) >= erfR ? "pass" : "warn",
-      detail: num(quotePct) === 0
+      status: num(quotePct) > 0 && !weErfasst ? OFFEN : num(quotePct) === 0 || num(vorhR) >= erfR ? "pass" : "warn",
+      detail: num(quotePct) > 0 && !weErfasst
+        ? "Wohneinheiten fehlen — Zahl rollstuhlgerechter Wohnungen nicht ableitbar"
+        : num(quotePct) === 0
         ? "R-Quote 0 % — Landesbauordnung prüfen (teils feste Zahl/Quote gefordert)"
         : `${de(vorhR)}/${de(erfR)} rollstuhlgerechte Wohnungen bei ${de(quotePct)} % Quote`,
     },
     {
       key: "bewegung",
       label: "Bewegungsflächen (Richtwert)",
-      status: num(bewegung) >= bewegungsflaeche(stufe) ? "pass" : "warn",
-      detail: num(bewegung) >= bewegungsflaeche(stufe)
+      status: num(bewegung) <= 0 ? OFFEN : num(bewegung) >= bewegungsflaeche(stufe) ? "pass" : "warn",
+      detail: num(bewegung) <= 0
+        ? "Bewegungsfläche fehlt — Maß eingeben"
+        : num(bewegung) >= bewegungsflaeche(stufe)
         ? `Bewegungsfläche ≥ ${de1(bewegungsflaeche(stufe))} m (Ausbaustufe ${stufe === "R" ? "R" : "B"}) eingehalten`
         : `Bewegungsfläche unter Zielwert ${de1(bewegungsflaeche(stufe))} m (B 1,20 / R 1,50 m, DIN 18040-2)`,
     },
     {
       key: "tuer",
       label: "Türbreiten & Türhöhe (Richtwert)",
-      status: tuerBreiteOk(tuerBreite, stufe) && num(tuerHoehe) >= TUER_HOEHE ? "pass" : "warn",
-      detail: tuerBreiteOk(tuerBreite, stufe) && num(tuerHoehe) >= TUER_HOEHE
+      status: num(tuerBreite) <= 0 || num(tuerHoehe) <= 0 ? OFFEN : tuerBreiteOk(tuerBreite, stufe) && num(tuerHoehe) >= TUER_HOEHE ? "pass" : "warn",
+      detail: num(tuerBreite) <= 0 || num(tuerHoehe) <= 0
+        ? "Türbreite/-höhe fehlt — Maße eingeben"
+        : tuerBreiteOk(tuerBreite, stufe) && num(tuerHoehe) >= TUER_HOEHE
         ? `Türbreite ${de1(tuerBreite)} m und Höhe ${de1(tuerHoehe)} m ausreichend (Ausbaustufe ${stufe === "R" ? "R" : "B"})`
         : "Türbreite B ≥ 0,80 / R ≥ 0,90 m, Höhe ≥ 2,05 m (DIN 18040-2) prüfen",
     },
     {
       key: "flur",
       label: "Flurbreite (Richtwert)",
-      status: flurOk(flur) ? "pass" : "warn",
-      detail: flurOk(flur)
+      status: num(flur) <= 0 ? OFFEN : flurOk(flur) ? "pass" : "warn",
+      detail: num(flur) <= 0
+        ? "Flurbreite fehlt — Maß eingeben"
+        : flurOk(flur)
         ? `Flurbreite ${de1(flur)} m ≥ 1,20 m eingehalten`
         : "Flurbreite unter 1,20 m (DIN 18040-2)",
     },
     {
       key: "sanitaer",
       label: "Sanitärräume (Richtwert)",
-      status: sanitaerOk({ stufe: saniStufe, bewegung: saniBewegung, dusche: saniDusche, wcSeitlich: saniWcSeitlich, waschtisch: saniWaschtisch }) ? "pass" : "warn",
-      detail: sanitaerOk({ stufe: saniStufe, bewegung: saniBewegung, dusche: saniDusche, wcSeitlich: saniWcSeitlich, waschtisch: saniWaschtisch })
+      status: num(saniBewegung) <= 0 ? OFFEN : sanitaerOk({ stufe: saniStufe, bewegung: saniBewegung, dusche: saniDusche, wcSeitlich: saniWcSeitlich, waschtisch: saniWaschtisch }) ? "pass" : "warn",
+      detail: num(saniBewegung) <= 0
+        ? "Bewegungsfläche im Sanitärraum fehlt — Maß eingeben"
+        : sanitaerOk({ stufe: saniStufe, bewegung: saniBewegung, dusche: saniDusche, wcSeitlich: saniWcSeitlich, waschtisch: saniWaschtisch })
         ? `Sanitärraum plausibel (Ausbaustufe ${saniStufe === "R" ? "R" : "B"})`
         : "R: 1,50 m vor Objekten, seitlich ≥ 0,90 m, bodengleiche Dusche, unterfahrbarer Waschtisch (DIN 18040-2)",
     },
   ];
 
-  const score = Math.round((items.filter((i) => i.status === "pass").length / Math.max(1, items.length)) * 100);
-  const warns = items.filter((i) => i.status === "warn").length;
-  const verdict = warns > 0 ? "Konzept mit Hinweisen" : "Konzept plausibel";
-  return { items, score, warns, verdict };
+  return konzeptAuswertung(items);
 }

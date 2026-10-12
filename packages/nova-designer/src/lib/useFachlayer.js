@@ -4,7 +4,8 @@
 //   1. Je Reiter genau EIN eigenes Top-Level-Feld im BimModel (z.B.
 //      "brandschutz_layer"). Der Server merged flach — zwei Schreiber auf
 //      DEMSELBEN Feld überschreiben sich still. Feld-Registry (Stand 45):
-//      Programmfelder (useBimModelSync) · Elementfelder (BitBimStudio) ·
+//      Programmfelder (useBimModelSync; 86-07: + achseM, the centre line drawn in the
+//      massing studio) · Elementfelder (BitBimStudio) ·
 //      brandschutz_layer (BrandschutzPlanner) · sketch_layer (BIT Sketcher via
 //      useSketchLayer UND Grundriss-Sketch-Editor in BitBimStudio — beide über
 //      saveBimModel, nie gleichzeitig gemountet [eigene Route vs. Tab]) ·
@@ -13,7 +14,12 @@
 //      Raumarten je Zone, Adjazenz-Ausnahmen, Fenster-/Trennwand-R'w) ·
 //      werkstatt_layer (WohnungsWerkstatt, Phase 61: Typologie, Einheiten-Liste,
 //      angewendet-Flag; 61-06: keller { aktiv, optionen, mengen } — the basement
-//      hand-over list for AVA / Phase 62 lives here, not in a second field) ·
+//      hand-over list for AVA / Phase 62 lives here, not in a second field; 75-12:
+//      raumGrenzen { "<level>|<zoneA>|<zoneB>": m } — written by the workshop only, the
+//      focus reaches it through the onRaumGrenzenChange callback; 86-04: zerlegung
+//      "auto"|"rand" (86-07 "achse", 86-06 "skelett") + geschosseJeRiegel { "<k>": n }; 75-10:
+//      bewertungsGewichte { "<dimension>": weight } via the proposals panel callback — all
+//      written by the workshop) ·
 //      netz_layer (TgaNetzEditor, Phase 41: knoten/kanten des TGA-Netzes je Gewerk,
 //      mengen — Phase 63 erweitert dasselbe Feld additiv, kein zweites Leitungsmodell) ·
 //      brandschutz_layer erweitert (Phase 38: brandabschnitte, symbole, melder neben fluchtwege) ·
@@ -31,12 +37,23 @@
 //      die Statuskette aus, kein zweites Feld anlegen) ·
 //      lieferung_layer (ModelCheck/LieferpaketKarte, Phase 71-03: Modelllieferplan nach
 //      LV-Position Modelllieferung — { fachsicht, lieferungen: [{ id, nr, termin, bauabschnitt, log, status,
-//      dateiname, datum_ist, bemerkung, hinweis_ag }] }; Schema + Soll/Ist in
+//      dateiname, datum_ist, bemerkung, hinweis_ag, geschosse (66-15, v2) }] }; Schema + Soll/Ist in
 //      @ifc/lib/lieferplan.js, Guards nachgebildet wie befunde_layer) ·
 //      pruefung_layer (ModelCheck/IdsEditor, Phase 69-08: { eigene_specs: Spec[] } —
 //      eigene IDS-Regeln in parse-Form (ids.js), geschrieben mit idsWriter.js (71-01);
 //      Guards nachgebildet wie befunde_layer — der Hook liegt in @designer, das
-//      @ifc nicht importieren darf).
+//      @ifc nicht importieren darf) ·
+//      bauaufnahme_layer (BauaufnahmePanel, Phase 73-09: { lieferungen[{ id, verfahren, genauigkeit,
+//      dienstleister, bericht, datum, bemerkung }], georeferenz{ crs, nullpunkt_e, nullpunkt_n (m),
+//      okff_eg_nhn (m ü. NHN), drehung_grad (°) } } — Schema in @designer/lib/bauaufnahme.js) ·
+//      befunde_layer.bestand (BestandsBefundKarte im Reiter Bauaufnahme, 73-10: additive Liste
+//      neben den BCF-Topics — zweiter Schreiber wie bei sketch_layer erlaubt, weil BcfIssues
+//      [Route ModelCheck] und die Karte [Route ComplexDesigner] nie gleichzeitig gemountet sind) ·
+//      brandschutz_vermerke_layer (BrandschutzPlanner, 73-13: { abweichungen[checkKey] } — eigenes Feld,
+//      weil brandschutz_layer dem BrandschutzPlanEditor gehört) ·
+//      barrierefreiheit_layer (BarrierefreiheitPlanner, 73-13: { abweichungen[checkKey] }) ·
+//      schallschutz_vermerke_layer (SchallschutzPlanner-Zusammenfassung, 73-13: { abweichungen[checkKey] } —
+//      eigenes Feld, schallschutz_layer bleibt bei der Plankarte).
 //      Neue Layer hier ergänzen — UND in @core/lib/fachlayerSchema.js (LAYER_VERSION) und
 //      .planning/FACHLAYER-SCHEMA.md (87-07: jeder Layer trägt `v` + `updatedAt`; Migration
 //      und Stempel laufen in loadBimModel/saveBimModel, nicht hier).

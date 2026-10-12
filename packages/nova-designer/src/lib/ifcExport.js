@@ -50,12 +50,17 @@ const S = (v) => {
  * @param {{ customWalls?: Array<object>, customColumns?: Array<object>, customWindows?: Array<object>,
  *   envOpenings?: Array<object>, autoOpenings?: Array<object>, customZones?: Array<object>,
  *   customSlabs?: Array<object>, customRoofs?: Array<object>, storeyHeight?: number, projectName?: string,
- *   timestamp?: number, onWarn?: ((msg: string) => void)|null, netz?: object|null }} [opts]
+ *   timestamp?: number, onWarn?: ((msg: string) => void)|null, netz?: object|null, werkstatt?: any }} [opts]
  *   netz (Phase 41): TGA-Netz (`netz_layer`) — je Kante ein IfcPipe-/Duct-/CableSegment mit
  *   Polylinien-Achse; ohne Netz ist die Datei byte-identisch zu vorher.
+ *   werkstatt (89-03): `werkstattBauteile(...)` of @core — interior walls as IfcWall, doors as
+ *   IfcDoor with a real void in their wall, rooms as IfcSpace, each with its STABLE GUID and the
+ *   property set Pset_BIT_Bauteil (Status, KG, Gewerk, Material, Bauabschnitt …) plus
+ *   Pset_WallCommon; envelope pieces (`huelle`) are skipped (model.walls/autoOpenings carry them).
+ *   Without it the file is byte-identical to before.
  * @returns {string} STEP-Text
  */
-export function exportIFC(model, { customWalls = [], customColumns = [], customWindows = [], envOpenings = [], autoOpenings = [], customZones = [], customSlabs = [], customRoofs = [], storeyHeight = 3, projectName = "BIT-Atelier", timestamp = 0, onWarn = null, netz = null } = {}) {
+export function exportIFC(model, { customWalls = [], customColumns = [], customWindows = [], envOpenings = [], autoOpenings = [], customZones = [], customSlabs = [], customRoofs = [], storeyHeight = 3, projectName = "BIT-Atelier", timestamp = 0, onWarn = null, netz = null, werkstatt = null } = {}) {
   const rows = []; let nid = 0; let gid = 1;
   // args = Attributliste OHNE äußere Klammern (Listen-Attribute klammern selbst).
   const E = (type, args) => { const id = ++nid; rows.push(`#${id}=${type}(${args});`); return `#${id}`; };
@@ -123,6 +128,9 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
   const wallList = [];
   (model.walls || []).forEach((w) => wallList.push({ key: `env:${w.level}:${w.edge}`, a: w.a, b: w.b, th: w.thickness, h: w.height, elev: w.elevation, level: w.level }));
   customWalls.forEach((w) => wallList.push({ key: `cw:${w._idx}`, a: w.a, b: w.b, th: compositeTotalM(w.composite) || w.thickness || 0.3, h: w.height || storeyHeight, elev: (w.level || 0) * storeyHeight, level: w.level || 0 }));
+  // 89-03: workshop interior walls (stable GUID, name, property sets) — envelope pieces skipped.
+  const wtWaende = (werkstatt?.waende || []).filter((w) => !w.huelle);
+  wtWaende.forEach((w) => wallList.push({ key: `wt:${w.guid}`, a: w.a, b: w.b, th: w.dicke_m, h: w.hoehe_m || storeyHeight, elev: (w.level || 0) * storeyHeight, level: w.level || 0, guid: w.guid, name: w.klasse === "tragend" ? "Trennwand" : "Innenwand", bauteil: w }));
   const wallByKey = new Map();
   wallList.forEach((w) => {
     const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z); if (len < 0.05) return;
@@ -130,7 +138,7 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
     const ang = Math.atan2(w.b.z - w.a.z, w.b.x - w.a.x);
     const solid = rectSolid(len, w.th, w.h);
     const pl = placement(mx, mz, w.elev, ang);
-    const wall = E("IFCWALL", `${G()},$,'Wand',$,$,${pl},${shape(solid)},$,.STANDARD.`);
+    const wall = E("IFCWALL", `${w.guid ? `'${w.guid}'` : G()},$,${w.name ? S(w.name) : "'Wand'"},$,$,${pl},${shape(solid)},$,.STANDARD.`);
     contain(w.level, wall);
     // Geometrie für die Öffnungs-Platzierung merken (lokales System der Wand:
     // X entlang a→b ab Wandmitte, Y quer, Z nach oben).
@@ -195,6 +203,20 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
     const ty = openingTypeById(o.kind, o.typeId);
     return { w: ty.w, h: ty.h, sill: ty.sill };
   };
+  // 89-03: property sets (IfcPropertySingleValue: text → IfcLabel, boolean → IfcBoolean, number →
+  // IfcReal; null → "ohne Status"/"—" as text, D-BW-03 no default) attached via IfcRelDefinesByProperties.
+  const pset = (ref, name, props) => {
+    const werte = props.map(([k, v]) => {
+      const nominal = typeof v === "boolean" ? `IFCBOOLEAN(${v ? ".T." : ".F."})` : typeof v === "number" && Number.isFinite(v) ? `IFCREAL(${f(v)})` : `IFCLABEL(${S(v ?? "—")})`;
+      return E("IFCPROPERTYSINGLEVALUE", `${S(k)},$,${nominal},$`);
+    });
+    const ps = E("IFCPROPERTYSET", `${G()},$,${S(name)},$,(${werte.join(",")})`);
+    E("IFCRELDEFINESBYPROPERTIES", `${G()},$,$,$,(${ref}),${ps}`);
+  };
+  const bauteilProps = (b) => [
+    ["Status", b.status ?? "ohne Status"], ["KG", b.kg ?? "—"], ["Gewerk", b.gewerk ?? "—"], ["Material", b.material ?? "—"],
+    ["Bauabschnitt", b.bauabschnitt ?? "—"], ["GUID_Quelle", "Wohnungs-Werkstatt (stabil über Re-Tesselierung)"],
+  ];
   const addOpening = (wallKey, o, label) => {
     const w = wallByKey.get(wallKey);
     if (!w) { warn(`${label}: keine zugehörige Wand (${wallKey}) — nicht exportiert.`); return; }
@@ -218,9 +240,10 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
     const ent = isDoor ? "IFCDOOR" : "IFCWINDOW";
     // IFC4-Attributreihenfolge: …,Tag,OverallHeight,OverallWidth,PredefinedType,
     // OperationType/PartitioningType,UserDefined… (die letzten drei offen).
-    const ref = E(ent, `${G()},$,${S(isDoor ? "Tür" : "Fenster")},$,$,${pl},${shape(rectSolid(d.w, 0.12, d.h))},$,${f(d.h)},${f(d.w)},$,$,$`);
+    const ref = E(ent, `${o.guid ? `'${o.guid}'` : G()},$,${S(o.name || (isDoor ? "Tür" : "Fenster"))},$,$,${pl},${shape(rectSolid(d.w, 0.12, d.h))},$,${f(d.h)},${f(d.w)},$,$,$`);
     E("IFCRELFILLSELEMENT", `${G()},$,$,$,${op},${ref}`);
     contain(w.level, ref);
+    return ref;
   };
   customWindows.forEach((o) => addOpening(`cw:${o.wallIdx}`, o, `${o.kind === "door" ? "Tür" : "Fenster"} auf gezeichneter Wand ${o.wallIdx}`));
   envOpenings.forEach((o) => addOpening(`env:${o.level}:${o.edge}`, o, `${o.kind === "door" ? "Tür" : "Fenster"} auf Hüllwand ${o.level}/${o.edge}`));
@@ -229,6 +252,38 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
   // IFC stehen — sonst gehen Plan und Export auseinander (KD-16). Maße kommen
   // explizit mit (width/height/sill), nicht aus der Typ-Bibliothek.
   autoOpenings.forEach((o) => addOpening(`env:${o.level}:${o.edge}`, o, `${o.kind === "door" ? "Eingangstür" : "Auto-Fenster"} auf Hüllwand ${o.level}/${o.edge}`));
+
+  // ---- 89-03: Werkstatt-Bauteile (Psets, Türen mit Void in ihrer Wand, Räume) ----
+  if (werkstatt) {
+    wtWaende.forEach((w) => {
+      const reg = wallByKey.get(`wt:${w.guid}`);
+      if (!reg?.ref) return;
+      pset(reg.ref, "Pset_BIT_Bauteil", [...bauteilProps(w), ["Klasse", w.klasse], ["LichteLaenge", w.lichteLaenge_m], ["Rohbaulaenge", w.rohbauLaenge_m], ["Dicke", w.dicke_m]]);
+      pset(reg.ref, "Pset_WallCommon", [["IsExternal", false], ["LoadBearing", !!w.tragend]]);
+    });
+    // Door height: DIN 18100 Rohbaurichtmaß 2,01 m [ASSUMED, the workshop has no door height].
+    const TUER_HOEHE_M = 2.01;
+    (werkstatt.tueren || []).filter((t) => !t.huelle).forEach((t) => {
+      const mx = (t.a.x + t.b.x) / 2, mz = (t.a.z + t.b.z) / 2;
+      const wand = wtWaende.find((w) => {
+        if (w.level !== t.level) return false;
+        const dx = w.b.x - w.a.x, dz = w.b.z - w.a.z, l = Math.hypot(dx, dz) || 1;
+        const s = ((mx - w.a.x) * dx + (mz - w.a.z) * dz) / l;
+        return Math.abs(((mx - w.a.x) * dz - (mz - w.a.z) * dx) / l) < 0.01 && s >= -1e-6 && s <= l + 1e-6;
+      });
+      if (!wand) { warn(`Werkstatt-Tür ${t.zone}: keine Innenwand an der Türstelle — nicht exportiert.`); return; }
+      const l = Math.hypot(wand.b.x - wand.a.x, wand.b.z - wand.a.z) || 1;
+      const u = ((mx - wand.a.x) * (wand.b.x - wand.a.x) + (mz - wand.a.z) * (wand.b.z - wand.a.z)) / l;
+      const ref = addOpening(`wt:${wand.guid}`, { kind: "door", width: t.breite_m, height: TUER_HOEHE_M, sill: 0, u, guid: t.guid, name: t.art === "wohnung" ? "Wohnungseingangstür" : "Innentür" }, `Werkstatt-Tür ${t.zone}`);
+      if (ref) pset(ref, "Pset_BIT_Bauteil", [...bauteilProps(t), ["Art", t.art], ["Raum", t.zone], ["Nach", t.nach ?? "—"]]);
+    });
+    (werkstatt.raeume || []).forEach((r) => {
+      if (!Array.isArray(r.points) || r.points.length < 3) return;
+      const sp = E("IFCSPACE", `'${r.guid}',$,${S(r.name.replace(/ ·WT$/, ""))},$,$,${placement(0, 0, (r.level || 0) * storeyHeight)},${shape(polySolid(r.points, storeyHeight * 0.98))},$,.ELEMENT.,.INTERNAL.,$`);
+      contain(r.level || 0, sp);
+      pset(sp, "Pset_BIT_Bauteil", [["Status", r.status ?? "ohne Status"], ["WE", r.we ?? "—"], ["Raumart", r.raumart ?? "—"], ["FlaecheLicht", r.flaeche_m2], ["GUID_Quelle", "Wohnungs-Werkstatt (stabil über Re-Tesselierung)"]]);
+    });
+  }
 
   // ---- TGA-Leitungen (Phase 41, NETZ-05) ----
   // Je Kante des Konzeptnetzes ein Segment-Element mit Achse als 3D-Polylinie

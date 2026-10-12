@@ -90,11 +90,16 @@ export default function LVPositionForm({ position, defaultTrade, onSubmit, onCan
     if (!form.title && !form.short_text) return;
     setAiBusy(true);
     try {
+      // 78-12: position texts may come from a GAEB file of another party — they travel as data, not as
+      // part of the instruction (llmSchutz.js wraps them behind the safety preamble).
       const prompt =
         `Formuliere einen fachlich korrekten, ausschreibungsreifen VOB-Langtext (Leistungsbeschreibung) ` +
-        `für die folgende Bauleistung. Antworte nur mit dem Langtext, ohne Einleitung.\n` +
-        `Position: ${form.title}\nKurztext: ${form.short_text}\nGewerk: ${form.trade}\nEinheit: ${form.unit}`;
-      const res = await InvokeLLM({ prompt, add_context_from_internet: false });
+        `für die Bauleistung im Datenblock „LV-Position". Antworte nur mit dem Langtext, ohne Einleitung.`;
+      const daten = [{
+        quelle: "LV-Position",
+        text: `Position: ${form.title ?? ""}\nKurztext: ${form.short_text ?? ""}\nGewerk: ${form.trade ?? ""}\nEinheit: ${form.unit ?? ""}`,
+      }];
+      const res = await InvokeLLM({ prompt, daten, add_context_from_internet: false });
       set("long_text", typeof res === "string" ? res.trim() : String(res));
     } catch {
       /* ignore */
@@ -121,11 +126,11 @@ export default function LVPositionForm({ position, defaultTrade, onSubmit, onCan
         <div className="grid grid-cols-3 gap-3">
           <div>
             <Label className="text-xs">OZ (Ordnungszahl)</Label>
-            <Input value={form.oz} onChange={(e) => set("oz", e.target.value)} placeholder="1.1.10" />
+            <Input aria-label={t("OZ (Ordnungszahl)")} value={form.oz} onChange={(e) => set("oz", e.target.value)} placeholder="1.1.10" />
           </div>
           <div>
             <Label className="text-xs">Gewerk / Los</Label>
-            <Input value={form.trade} onChange={(e) => set("trade", e.target.value)} placeholder="Rohbau" />
+            <Input aria-label={t("Gewerk / Los")} value={form.trade} onChange={(e) => set("trade", e.target.value)} placeholder="Rohbau" />
           </div>
           <div>
             <div className="flex items-center justify-between">
@@ -143,7 +148,7 @@ export default function LVPositionForm({ position, defaultTrade, onSubmit, onCan
               </Button>
             </div>
             <Select value={form.din276} onValueChange={(v) => set("din276", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("DIN 276 Kostengruppe (dreistellig)")}><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-72">
                 {dinOptionen.map((o) => (
                   <SelectItem key={`${o.code}-${o.fassung || "x"}`} value={o.code}>{o.label}</SelectItem>
@@ -163,12 +168,12 @@ export default function LVPositionForm({ position, defaultTrade, onSubmit, onCan
 
         <div>
           <Label className="text-xs">Titel (Kurzbezeichnung)</Label>
-          <Input value={form.title} onChange={(e) => set("title", e.target.value)} required placeholder="Beton Bodenplatte C25/30" />
+          <Input aria-label={t("Titel (Kurzbezeichnung)")} value={form.title} onChange={(e) => set("title", e.target.value)} required placeholder="Beton Bodenplatte C25/30" />
         </div>
 
         <div>
           <Label className="text-xs">Kurztext</Label>
-          <Input value={form.short_text} onChange={(e) => set("short_text", e.target.value)} placeholder="Stahlbeton Bodenplatte, d=40cm" />
+          <Input aria-label={t("Kurztext")} value={form.short_text} onChange={(e) => set("short_text", e.target.value)} placeholder="Stahlbeton Bodenplatte, d=40cm" />
         </div>
 
         <div>
@@ -186,7 +191,7 @@ export default function LVPositionForm({ position, defaultTrade, onSubmit, onCan
           <div>
             <Label className="text-xs">Einheit</Label>
             <Select value={form.unit} onValueChange={(v) => set("unit", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("Einheit")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
               </SelectContent>
@@ -194,7 +199,7 @@ export default function LVPositionForm({ position, defaultTrade, onSubmit, onCan
           </div>
           <div>
             <Label className="text-xs">Menge</Label>
-            <Input type="number" step="any" value={form.quantity} onChange={(e) => set("quantity", e.target.value)} />
+            <Input aria-label={t("Menge")} type="number" step="any" value={form.quantity} onChange={(e) => set("quantity", e.target.value)} />
           </div>
           <div>
             <Label className="text-xs">Einheitspreis (EP) — abgeleitet</Label>

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ablage-loeschen"
+description = "Enables the ablage_loeschen command without any pre-configured scope."
+commands.allow = ["ablage_loeschen"]
+
+[[permission]]
+identifier = "deny-ablage-loeschen"
+description = "Denies the ablage_loeschen command without any pre-configured scope."
+commands.deny = ["ablage_loeschen"]

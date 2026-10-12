@@ -23,7 +23,7 @@ import { useBuildingProgram, buildingProgram } from "@core/lib/useBuildingProgra
 import { loadBimModel } from "@core/lib/useBimModelSync";
 import { useFachlayer } from "@designer/lib/useFachlayer";
 import { istWerkstattZone, tesseliere } from "@designer/lib/tesselierung";
-import { WERKSTATT_DEFAULT, einheitenAnreichern } from "@designer/lib/werkstattDefaults";
+import { WERKSTATT_DEFAULT, einheitenAnreichern, zerlegungsArt } from "@designer/lib/werkstattDefaults";
 
 /** 86-01: number of mounted workshops (WohnungsWerkstatt registers itself). */
 let werkstattGemountet = 0;
@@ -46,7 +46,7 @@ export function useWerkstattAngemeldet() {
  * instead of null, nordwinkel as number, enriched units, okf from storeys × storey height),
  * anything else would regenerate different zones than the workshop produces live.
  * @param {object|null|undefined} layer werkstatt_layer
- * @param {{footprintM: any, storeys?: number, storeyHeight?: number}} s building programme state
+ * @param {{footprintM: any, storeys?: number, storeyHeight?: number, achseM?: any}} s building programme state (86-07: achseM = drawn centre line)
  * @returns {Array<object>} ·WT zones
  */
 export function werkstattZonenAusLayer(layer, s) {
@@ -62,6 +62,11 @@ export function werkstattZonenAusLayer(layer, s) {
     tuerAufschlaege: layer?.tuerAufschlaege && typeof layer.tuerAufschlaege === "object" ? layer.tuerAufschlaege : {},
     // 84-10: level switch per unit (same guard as the workshop).
     stufeJeWe: layer?.stufeJeWe && typeof layer.stufeJeWe === "object" ? layer.stufeJeWe : {},
+    // 75-12: interior-wall offsets (same guard as the workshop).
+    raumGrenzen: layer?.raumGrenzen && typeof layer.raumGrenzen === "object" ? layer.raumGrenzen : {},
+    // 86-04: building form + storeys per bar (same guard as the workshop).
+    zerlegung: zerlegungsArt(layer?.zerlegung),
+    geschosseJeRiegel: layer?.geschosseJeRiegel && typeof layer.geschosseJeRiegel === "object" ? layer.geschosseJeRiegel : {},
   };
   return tesseliere({
     footprintM: s.footprintM,
@@ -76,6 +81,11 @@ export function werkstattZonenAusLayer(layer, s) {
     nordwinkel: cfg.nordwinkel,
     tuerAufschlaege: cfg.tuerAufschlaege,
     stufeJeWe: cfg.stufeJeWe,
+    raumGrenzen: cfg.raumGrenzen,
+    zerlegung: cfg.zerlegung,
+    geschosseJeRiegel: cfg.geschosseJeRiegel,
+    // 86-07: the drawn centre line comes with the building programme (store.achseM).
+    achse: s.achseM ?? null,
     // 86-01: same lift-duty input as the workshop (it passes okf_m too).
     okf_m: (Math.max(1, Math.round(s.storeys || 1)) - 1) * (s.storeyHeight || 3),
     // 86-05b: bar minimum of the applied proposal (same guard as the workshop; default 120).

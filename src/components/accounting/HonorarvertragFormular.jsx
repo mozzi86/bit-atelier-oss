@@ -71,6 +71,8 @@ export default function HonorarvertragFormular({ bh, modus, vertrag = null, proj
   const [bauherrAnschrift, setBauherrAnschrift] = React.useState(vertrag?.bauherr_anschrift || "");
   const [bauherrUstIdnr, setBauherrUstIdnr] = React.useState(vertrag?.bauherr_ust_idnr || "");
   const [bauherrArt, setBauherrArt] = React.useState(vertrag?.bauherr_art || "unternehmer");
+  // 93-01: routing ID of a public client (XRechnung BT-10/BT-49), frozen into the invoice recipient on "Stellen".
+  const [bauherrLeitwegId, setBauherrLeitwegId] = React.useState(vertrag?.bauherr_leitweg_id || "");
   const [zahlungszielVertrag, setZahlungszielVertrag] = React.useState(vertrag?.zahlungsziel_tage ?? "");
   const [zahlungszielBauherr, setZahlungszielBauherr] = React.useState("");
   const [leistungsstand, setLeistungsstand] = React.useState(/** @type {{stand: Record<number, number>, quelle: string}|null} */ (null));
@@ -142,6 +144,7 @@ export default function HonorarvertragFormular({ bh, modus, vertrag = null, proj
     bauherr_anschrift: bauherrAnschrift,
     bauherr_ust_idnr: bauherrUstIdnr,
     bauherr_art: bauherrArt,
+    bauherr_leitweg_id: bauherrLeitwegId.trim() || undefined,
     zahlungsziel_tage: zahlungszielVertrag === "" ? undefined : Number(zahlungszielVertrag),
     anrechenbare_quelle: lvQuelle || vertrag?.anrechenbare_quelle,
   };
@@ -281,6 +284,9 @@ export default function HonorarvertragFormular({ bh, modus, vertrag = null, proj
                 <option value="oeffentlich">{t("Öffentlich")}</option>
               </select>
             </label>
+            <label className="flex flex-col gap-1 text-xs">{t("Leitweg-ID (für XRechnung)")}
+              <input className={FELD} value={bauherrLeitwegId} placeholder="991-12345-67" data-testid="hv-leitweg-id"
+                onChange={(e) => setBauherrLeitwegId(e.target.value)} /></label>
           </div>
         </fieldset>
 

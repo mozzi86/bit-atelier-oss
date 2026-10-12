@@ -32,6 +32,43 @@ function lizenzdateien() {
   };
 }
 
+/**
+ * Links the PWA manifest of the serverless client build `lokal` (70-01) into
+ * index.html. Installable is only that build, served under /app/ with its own
+ * manifest; the online demo (/demo/) is gone since 83-02 and the office build
+ * (server) stays without a manifest.
+ *
+ * 70-02: the Tauri shell builds the SAME mode with base "/" (build:client). It
+ * is not a PWA — without this check WebView2 would request
+ * /app/manifest.lokal.webmanifest and log a 404 on every start. So the
+ * manifest goes in only when the resolved base is the PWA's base.
+ * @param {string} mode Vite build mode
+ * @returns {import('vite').Plugin}
+ */
+function pwaManifest(mode) {
+  let gebauteBasis = '/';
+  return {
+    name: 'pwa-manifest',
+    configResolved(config) {
+      gebauteBasis = config.base;
+    },
+    transformIndexHtml(html) {
+      const basis = { lokal: '/app/' }[mode];
+      if (!basis || gebauteBasis !== basis) return html;
+      const datei = 'manifest.lokal.webmanifest';
+      return html.replace(
+        '</head>',
+        [
+          `    <link rel="manifest" href="${basis}${datei}" />`,
+          '    <meta name="theme-color" content="#0f172a" />',
+          `    <link rel="apple-touch-icon" href="${basis}icons/icon-192.png" />`,
+          '  </head>',
+        ].join('\n'),
+      );
+    },
+  };
+}
+
 // 83-02: the app version from package.json, shown in the feedback dialog and in
 // Settings › System (packages/nova-core/src/lib/projektInfo.js reads
 // __APP_VERSION__). Read at config time — no dependency, no import assertion.
@@ -45,26 +82,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     lizenzdateien(),
-    // Installierbar ist der serverlose Client-Build `lokal` (70-01) mit seinem
-    // eigenen Manifest. Die Online-Demo (/demo/, eigenes Manifest) ist seit
-    // 83-02 entfernt. Der Bürobetrieb (Server-Build) bleibt ohne Manifest.
-    {
-      name: 'pwa-manifest',
-      transformIndexHtml(html) {
-        const basis = { lokal: '/app/' }[mode];
-        if (!basis) return html;
-        const datei = 'manifest.lokal.webmanifest';
-        return html.replace(
-          '</head>',
-          [
-            `    <link rel="manifest" href="${basis}${datei}" />`,
-            '    <meta name="theme-color" content="#0f172a" />',
-            `    <link rel="apple-touch-icon" href="${basis}icons/icon-192.png" />`,
-            '  </head>',
-          ].join('\n'),
-        );
-      },
-    },
+    pwaManifest(mode),
   ],
   resolve: {
     // Reihenfolge spezifisch→generisch — Vites matches() greift nur bei
@@ -128,6 +146,9 @@ export default defineConfig(({ mode }) => ({
     },
     chunkSizeWarningLimit: 900,
   },
+  // 69-21: the IFC reading worker imports the WASM bootstrap dynamically (code splitting) —
+  // only the ES worker format supports that.
+  worker: { format: 'es' },
   server: {
     // PORT env lets a second dev instance (e.g. the Browser pane of a parallel
     // session) run beside the default 5173 without editing this file.
@@ -135,7 +156,8 @@ export default defineConfig(({ mode }) => ({
     proxy: {
       // Forward API calls to the local Express backend (see /server).
       '/api': {
-        target: 'http://localhost:3001',
+        // API_PORT moves the backend too (E2E beside a running local install on 3001).
+        target: `http://localhost:${Number(process.env.API_PORT) || 3001}`,
         changeOrigin: true,
       },
     },

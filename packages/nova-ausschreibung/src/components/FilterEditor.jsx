@@ -13,6 +13,7 @@ import {
 import { filterQuantity, istWildcard } from "@ava/lib/avaFilters";
 import { QUANTITY_BASES } from "@core/lib/bimElements";
 import { num } from "./avaUtils";
+import { useI18n } from "@core/lib/i18n";
 
 // Leerer Filter-Entwurf (alle Achsen Wildcard).
 const leererEntwurf = (f) => ({
@@ -48,6 +49,7 @@ function Chip({ active, onClick, children }) {
 // Leere Achse = Wildcard (matcht alles) — ein völlig leerer Filter matcht ALLE
 // Bauteile und zeigt eine sichtbare Doppelzählungs-Warnung (RESEARCH §Pitfall 5).
 export default function FilterEditor({ elements = [], initial, onSave, onCancel }) {
+  const { t } = useI18n();
   const [entwurf, setEntwurf] = useState(leererEntwurf(initial));
   // Doppel-Submit-Schutz (HI-03): Button während laufendem await deaktivieren.
   const [busy, setBusy] = useState(false);
@@ -109,7 +111,7 @@ export default function FilterEditor({ elements = [], initial, onSave, onCancel 
       <CardContent className="space-y-3">
         <div>
           <label className="text-xs text-slate-500 mb-1 block">Filtername</label>
-          <Input
+          <Input aria-label={t("Filtername")}
             value={entwurf.name}
             onChange={(e) => setEntwurf((d) => ({ ...d, name: e.target.value }))}
             placeholder="z. B. KG340 Innenwände Trockenbau Neubau"
@@ -167,7 +169,7 @@ export default function FilterEditor({ elements = [], initial, onSave, onCancel 
               value={entwurf.mengenbasis || "area"}
               onValueChange={(v) => setEntwurf((d) => ({ ...d, mengenbasis: v }))}
             >
-              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("Mengenbasis")} className="h-8"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {QUANTITY_BASES.map((b) => (
                   <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>

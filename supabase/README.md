@@ -118,6 +118,8 @@ danach braucht die Cloud-App keinen eigenen Server mehr:
 | `llm` | `routes.js` llmRouter + `llm.js` | POST, Body `{ aktion: 'invoke' \| 'connections.list' \| 'connections.create' \| 'connections.update' \| 'connections.delete' \| 'test' \| 'defaults', … }` |
 | `geo` | `nova-designer/server/routes.js` (ohne archicad) | GET `?dienst=weather\|elevation\|climate\|osm-buildings\|osm-environment&lat=&lng=&radius=` |
 | `preise` | `nova-ausschreibung/server/routes.js` | POST, Body `{ aktion: 'ted-search', … }` |
+| `einladung` | neu (74-01) | POST `{ aktion: 'einladen' \| 'widerruf', org_id, email, rolle, projekt_id, vergabe_id?, kontakt_id? }` — nur `owner`, braucht Migrationen 0006–0014 |
+| `freigabe` | neu (74-01) | POST `{ org_id, record_id }` → signierte URL (60 s) einer freigegebenen Ansicht, Protokoll auch bei Ablehnung — braucht 0006–0014 |
 
 Alle drei: `_shared/auth.ts` verlangt ein gültiges Nutzer-JWT **und**
 Org-Mitgliedschaft (anonym → 401); `_shared/cors.ts` trägt dieselbe
@@ -135,6 +137,9 @@ Client-Verdrahtung: `funktionAusPfad` in
 supabase functions deploy llm    --project-ref <dev-ref>
 supabase functions deploy geo    --project-ref <dev-ref>
 supabase functions deploy preise --project-ref <dev-ref>
+# erst NACH den Migrationen 0006–0014:
+supabase functions deploy einladung --project-ref <dev-ref>
+supabase functions deploy freigabe  --project-ref <dev-ref>
 ```
 
 ### Secrets (Nutzer tippt die Werte — Namen nur hier)
@@ -164,3 +169,71 @@ deno check supabase/functions/**/index.ts    # Erwartung: EXIT 0
 aufgelöst, der Check läuft ohne Registry/Zugriff. Deploy-Verifikation
 (401 ohne JWT, Maskierung, Mock-Parität) steht in der 57-04-SUMMARY als
 Nutzer-/Review-Checkpoint.
+
+## Zugriffstrennung (74-01) — gebaut, NICHT eingespielt
+
+Stand 12.10.2026. Migrationen `0006`–`0011` liegen im Ordner, sind aber **gegen keine Datenbank
+gelaufen** (kein Postgres auf dem Bau-Rechner). Nicht pushen, bevor der Nachweis unten auf einem
+Wegwerf-Projekt grün ist und der Betreiber zugestimmt hat (74-01 Task 11).
+
+**Zwei Sätze, nach denen sich Sichtbarkeit richtet:**
+
+1. Mitgliedschaft und Rolle: das Büro-Tor `ist_mitglied()` bleibt; darin trennen sich interne
+   (`owner`, `planner`, `leser`) und externe Rollen (`bidder`, `investor`, `gast`).
+2. Eigentum oder Freigabe: Externe sehen nur, was sie selbst geschrieben haben, und Projektionen,
+   die für ein Projekt **und** eine Vergabe freigegeben sind, an denen sie teilnehmen. Ein
+   versiegeltes Gebot sieht bis zum Öffnungsakt nur sein Urheber — auch das Büro nicht.
+
+| Datei | Inhalt |
+|---|---|
+| `0006_rollen.sql` | `admin → owner`, `mitglied → planner`, vier Rechte-Flags, NULL-sichere Wächter; alte Schreiber (`admin`/`mitglied`) werden per Trigger übersetzt — die SQL-Vorlage oben und `zugang-freischalten.mjs` funktionieren weiter |
+| `0007_zugang_katalog.sql` | Projektzugang, Vergabeteilnahme, Entitätskatalog — unbekannte Entität = `gesperrt` |
+| `0008_sicht_spalten.sql` | `sicht`, `eigner`, `projekt_id`, `vergabe_id`, `siegel_id`, `blob_name`; Anker-Trigger; Spalten-Grants |
+| `0009_submission.sql` | Submission, Frist, Öffnungsakt mit Niederschrift, Zurückziehen, Zuschlag per RPC |
+| `0010_protokoll.sql` | append-only Zugriffsprotokoll mit Hash-Kette, Lesesicht `zugriffsprotokoll_sicht` |
+| `0011_policies_records.sql` | die vier neuen `records`-Policies + `warum_sichtbar(id)` — **der einzige Schritt, der Verhalten ändert** |
+| `0012_freigabe_projektion.sql` | Freigabe als Projektion mit Feld-Whitelist (`TenderFreigabe`, `MengenFreigabe`, `ModellFreigabe`, `RueckfrageAntwort`) |
+| `0013_storage.sql` | `blobs` nur intern (Modelle mit `can_export_ifc`), neue Buckets `freigaben` und `gebote` |
+| `0014_grants_zugriff.sql` | Grant-Durchgang, Default-Privilegien zu, `grants_bericht()`, Selbstprüfung |
+
+**Nachweis vor jedem Einspielen** (Wegwerf-Projekt mit 0001–0011, nie das Echtsystem):
+
+```powershell
+psql "<Connection string Wegwerf-Projekt>" -v ON_ERROR_STOP=1 -v wegwerf=1 -f supabase/tests/74-01_zugriff.sql
+```
+
+Eine Transaktion, am Ende `ROLLBACK` — es bleibt nichts zurück. Grün endet mit
+`74-01 SQL: ALLE FAELLE PASS`. Danach `node --env-file=.env scripts/supabase-rls-check.mjs` (6/6).
+
+**Rückweg** (von Hand, in dieser Reihenfolge): `supabase/rueckweg/0014_down.sql` → `0013` → `0012` →
+`0011` (reiner Policy-Tausch; als Abbruchschritt beim Einspielen auch allein direkt nach 0011) →
+`0010` → `0009` → `0008` → `0007` → `0006`.
+Bewusst nicht unter `migrations/`, damit `db push` sie nie einspielt.
+
+**„Warum sehe ich das?"** — `select public.warum_sichtbar('<records.id>');` als angemeldeter
+Nutzer antwortet im Klartext („intern, Rolle planner" / „Projektion, Projekt …, Vergabe …" /
+„nicht sichtbar: Siegel …").
+
+**Tagesanker der Hash-Kette** (bis eine Function das übernimmt, von Hand, täglich bei laufender
+Vergabe): `select org_id, max(id), (array_agg(hash order by id desc))[1] from public.zugriffsprotokoll
+group by org_id;` und das Ergebnis per Mail an sich selbst schicken. Erst ein Kettenkopf außerhalb
+der Datenbank macht eine spätere Änderung beweisbar.
+
+**Prüfwerkzeuge** (alle nicht gelaufen, Stand 12.10.2026):
+
+| Skript | Zweck | Ziel |
+|---|---|---|
+| `supabase/tests/74-01_zugriff.sql` | SQL-Nachweis, eine Transaktion, `ROLLBACK` | nur Wegwerf-Projekt (`-v wegwerf=1`) |
+| `scripts/supabase-zugriff-check.mjs` | HTTP-Nachweis mit echten JWTs, PostgREST/Storage/Functions | nur Wegwerf-Projekt: eigene `ZUGRIFF_*`-Variablen, `--wegwerf`, verweigert jede Echtsystem-URL |
+| `scripts/grants-pruefen.mjs` | Rechte-Matrix gegen Sollliste (`grants_bericht()`) | jedes Projekt, nur lesend |
+| `scripts/supabase-bestand.mjs` | Zählung je Entität als angemeldeter Betreiber (anon-Key) | jedes Projekt, nur lesend |
+
+Vor der ersten Einladung eines Externen: SQL-Nachweis grün, `supabase-zugriff-check.mjs` ohne FAIL
+und ohne SKIP (Functions deployt), `grants-pruefen.mjs` Exit 0, Bestandszählung vorher/nachher gleich.
+
+**Grenzen, die bleiben** (gehören in den Produkttext, 74-01 G-1…G-11): Der Betreiber mit
+Service-Schlüssel und Dashboard liest jedes Gebot vor Fristablauf (G-1, nicht schließbar ohne
+Verschlüsselung beim Bieter) — deshalb keine förmlichen Vergaben nach VgV/UVgO. Lesezugriffe werden
+nicht protokolliert (G-2). Signierte Links sind weitergebbar (G-3). Feldweise Trennung nur, wo eine
+Projektion gebaut ist (G-4). Papierangebote des Büros sind sofort intern sichtbar (G-9). Der alte
+`AuditLog` ist kein Nachweis (G-10).

@@ -12,15 +12,16 @@
 //      sichtbareBereiche(kontext), paletteEintraege(kontext).
 
 import { sichtbareRegelwerke } from "./regelwerke.js";
+import { darf } from "@core/lib/rechte.js";
 
 /**
  * Context the areas depend on.
- * @typedef {{datenquelle?: string, personalZugang?: string}} EinstellungsKontext
- *   datenquelle: 'serverlos' | 'express' | 'supabase'; personalZugang: result of personalZugang()
+ * @typedef {{datenquelle?: string, personalZugang?: string, zugriff?: import('@core/lib/rechte.js').Zugriff|null}} EinstellungsKontext
+ *   datenquelle: 'serverlos' | 'express' | 'supabase'; personalZugang: result of personalZugang(); zugriff: access (82)
  */
 
 /**
- * The nine areas in display order: key (URL), title and description (German source
+ * The ten areas in display order (82-01: access): key (URL), title and description (German source
  * for t()), search words for the palette, German aliases. Frozen below.
  * @type {Array<{key: string, titel: string, beschreibung: string, stichworte: string, alias: string[]}>}
  */
@@ -33,6 +34,7 @@ const EINSTELLUNGS_BEREICHE = [
   { key: "catalogs", titel: "Kataloge & Bürostandards", beschreibung: "Mengenregeln und Kataloge der Ausschreibung", stichworte: "Katalog, Mengenregeln, Bürostandard, AVA, Ausschreibung", alias: ["kataloge", "mengenregeln"] },
   { key: "rules", titel: "Regelwerke", beschreibung: "Gesetzliche Werte und Bürowerte mit Quelle und gültig ab", stichworte: "Mindestlohn, Urlaub, Probezeit, Aufbewahrung, Löschfrist, Zahlungsziel, Umsatzsteuer, Kilometer, Rechtsform, Gemeinkosten", alias: ["regeln", "regelwerke", "saetze", "fristen", "buchhaltung"] },
   { key: "templates", titel: "Personal-Vorlagen", beschreibung: "Checklisten für Einstellung und Austritt", stichworte: "Vorlage, Checkliste, Eintritt, Austritt, Personal", alias: ["vorlagen", "personal"] },
+  { key: "access", titel: "Nutzer & Rechte", beschreibung: "Wer welche Module und Projekte sieht", stichworte: "Rollen, Rechte, Nutzer, Zugriff, Ansicht als", alias: ["rechte", "rollen", "nutzer", "zugriff"] },
   { key: "system", titel: "System & Info", beschreibung: "Build, Datenquelle, Rolle und Speicherzustand — nur lesen", stichworte: "Version, Build, Datenquelle, Rolle, Tastenkürzel, Dubletten, Info", alias: ["info"] },
 ];
 for (const b of EINSTELLUNGS_BEREICHE) { Object.freeze(b.alias); Object.freeze(b); }
@@ -43,11 +45,17 @@ export { EINSTELLUNGS_BEREICHE };
  * Visibility per area key; an area without an entry is always visible.
  * - rules: at least one rule book is visible (in the cloud none is, E-03).
  * - templates: HR templates only with personnel access (DS-12).
+ * - access (82-01): users and rights only for a role that may read the module
+ *   rechte; without the role model (no zugriff in the context) visible.
  * @type {Readonly<Record<string, (k: EinstellungsKontext) => boolean>>}
  */
+/** 82-01: the area "Nutzer & Rechte" is registered, but empty until 82-02 fills it. */
+const RECHTE_BEREICH_FERTIG = true; // 82-02 built the area
+
 const SICHTBARKEIT = Object.freeze({
   rules: (k) => sichtbareRegelwerke(k).length > 0,
   templates: (k) => k.personalZugang === "erlaubt",
+  access: (k) => RECHTE_BEREICH_FERTIG && (!k.zugriff || darf(k.zugriff, "rechte", "lesen")),
 });
 
 /** Area keys in display order (module constant, as useTabParam requires). */

@@ -35,10 +35,14 @@ läuft weiter.
 | `/ifc diff` | Vergleich zweier Versionen über `GlobalId`: neu / entfallen / geändert (Attribut- oder Pset-Wert; mit `volumen: true` auch Mesh-Volumen ± 1 %). Relationen werden bewusst NICHT verglichen. | `datei2`, `volumen` |
 | `/ifc check` | Pflicht-Psets je Klasse (`references/pflicht-psets.yaml`), Elemente ohne Container, doppelte GUIDs — **pass/warn/offen, nie fail** | `regeln` |
 | `/ifc setze` | Roundtrip: Property setzen → **immer** in eine neue Datei `<name>_v<n>.ifc`, nie in-place (T-67-11) → Gegenlesen. GUIDs bleiben stabil. | `guid`, `pset`, `eigenschaft`, `wert`, `typ` |
+| `/ifc schreibe` | Änderungsliste oder Journal aus dem Attribut-Editor (71-06) in eine **neue** Datei `<name>_v<n>.ifc` schreiben — IFC2X3 bleibt IFC2X3, alle GlobalIds bleiben (der Writer prüft das nach dem Schreiben). Eine Änderung mit `alt` wird nur geschrieben, solange das Modell noch diesen Wert hat, sonst **Konflikt**. `abgabe: true` schreibt zusätzlich `<name>_abgabe_v<n>.ifc` mit Georeferenz als Metadaten (Geometrie bleibt) | `aenderungen` bzw. `journal`, `abgabe`, `georef`, `erzwingen` |
+| `/ifc aenderungsdienst` | Neuer Modellstand vom AG: Diff je GlobalId (neu/entfallen/geändert) **und** je eigener Änderung aus dem Journal ein Urteil — übertragbar · schon gleich · **Konflikt** (AG hat dieselbe Eigenschaft anders geändert) · entfallen. `anwenden: true` schreibt nur die übertragbaren auf den neuen Stand (neue Datei); Konflikte entscheidet ein Mensch | `datei` = alter Stand, `datei2` = neuer Stand, `journal`, `anwenden` |
 
 ## Beispiele
 
 ```
+/ifc schreibe journal=model/efh.journal.json abgabe=true  → Änderungen + Abgabe-Datei
+/ifc aenderungsdienst datei=model/ag_v1.ifc datei2=model/ag_v2.ifc journal=model/ag_v1.journal.json
 /ifc liste                          → Bauteilliste des aktuellen Modells
 /ifc liste klasse=IfcWall           → nur Wände, nach PredefinedType
 /ifc mengen geometrie=true          → Mengenauszug, Mesh-Fallback ohne Qto
@@ -75,3 +79,13 @@ Viewers überschreiben.
    bleibt unberührt. Sag dem Nutzer den neuen Dateinamen.
 5. Dateien > 50 MB: vor `geometrie=true` warnen (T-67-10 — Mesh-Rechnung auf
    großen Modellen ist langsam).
+
+## Georeferenz für die Abgabe (`schreibe abgabe=true`)
+
+Die Werte stehen **nie im Code**, sondern in `projects/<slug>/georef.yaml` (gewinnt) oder in
+`config.yaml` unter `ifc.georef`: `ostwert`, `nordwert`, `hoehe` (m), `drehung_grad`, `crs`
+(z. B. `EPSG:31468`). `drehung_grad` = Winkel von Gitter-Ost zur Projekt-x-Achse gegen den
+Uhrzeigersinn **[ASSUMED]** — Vermesserangaben „von Nord im Uhrzeigersinn“ vorher umrechnen
+und das Vorzeichen am ersten Abgabemodell gegenprüfen. IFC4 erhält `IfcMapConversion` +
+`IfcProjectedCRS`, IFC2X3 `ePSet_MapConversion` + `ePSet_ProjectedCRS` am IfcProject
+(so liest es Bonsai). Fehlt die Georeferenz, sagt das Werkzeug, wo sie hingehört.

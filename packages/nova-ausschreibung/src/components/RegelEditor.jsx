@@ -15,6 +15,7 @@ import TrefferListe from "@core/components/rules/TrefferListe";
 import { validiereReferenzen } from "@core/lib/rules/catalogs";
 import { buildIndex } from "@core/lib/rules/ruleEngine";
 import { ARTEN, positionsMenge, musterAusRegel } from "@ava/lib/mengenregeln";
+import { useI18n } from "@core/lib/i18n";
 
 // RegelEditor — Mengenregeln einer LV-Position anlegen und ändern.
 //
@@ -85,6 +86,7 @@ export default function RegelEditor({
   onMusterSpeichern,
   onSchliessen,
 }) {
+  const { t } = useI18n();
   const [entwurf, setEntwurf] = useState(null);
   const [fehler, setFehler] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -171,7 +173,7 @@ export default function RegelEditor({
               <Plus className="w-3 h-3 mr-1" /> Regel
             </Button>
             {onSchliessen && (
-              <button type="button" onClick={onSchliessen} className="text-slate-400 hover:text-slate-600">
+              <button aria-label={t("Regel-Editor schließen")} type="button" onClick={onSchliessen} className="text-slate-400 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
             )}
@@ -244,7 +246,7 @@ export default function RegelEditor({
                         ändern
                       </button>
                       {onLoeschen && (
-                        <button type="button" className="ml-2 text-slate-400 hover:text-red-600" onClick={() => onLoeschen(r)}>
+                        <button aria-label={t("Regel löschen")} type="button" className="ml-2 text-slate-400 hover:text-red-600" onClick={() => onLoeschen(r)}>
                           <Trash2 className="w-3 h-3 inline" />
                         </button>
                       )}
@@ -263,7 +265,7 @@ export default function RegelEditor({
               <div className="space-y-1">
                 <Label className="text-xs text-slate-500">Wirkung</Label>
                 <Select value={entwurf.op} onValueChange={(v) => set({ op: v })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Wirkung")} className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(OP_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                   </SelectContent>
@@ -273,7 +275,7 @@ export default function RegelEditor({
               <div className="space-y-1">
                 <Label className="text-xs text-slate-500">Art der Mengenermittlung</Label>
                 <Select value={entwurf.art} onValueChange={(v) => set({ art: v })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Art der Mengenermittlung")} className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ARTEN.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                   </SelectContent>
@@ -285,7 +287,7 @@ export default function RegelEditor({
               <div className="space-y-1">
                 <Label className="text-xs text-slate-500">Mengenbasis (aus MengenbasisKatalog)</Label>
                 <Select value={entwurf.mengenbasis ?? ""} onValueChange={(v) => set({ mengenbasis: v })}>
-                  <SelectTrigger className={`h-8 text-xs ${feldFehler("mengenbasis") ? "border-red-400" : ""}`}>
+                  <SelectTrigger aria-label={t("Mengenbasis (aus MengenbasisKatalog)")} className={`h-8 text-xs ${feldFehler("mengenbasis") ? "border-red-400" : ""}`}>
                     <SelectValue placeholder="wählen" />
                   </SelectTrigger>
                   <SelectContent className="max-h-72">
@@ -309,7 +311,7 @@ export default function RegelEditor({
               <div className="space-y-1">
                 <Label className="text-xs text-slate-500">Einheit (aus EinheitenKatalog)</Label>
                 <Select value={entwurf.einheit ?? ""} onValueChange={(v) => set({ einheit: v })}>
-                  <SelectTrigger className={`h-8 text-xs ${feldFehler("einheit") ? "border-red-400" : ""}`}>
+                  <SelectTrigger aria-label={t("Einheit (aus EinheitenKatalog)")} className={`h-8 text-xs ${feldFehler("einheit") ? "border-red-400" : ""}`}>
                     <SelectValue placeholder="wählen" />
                   </SelectTrigger>
                   <SelectContent className="max-h-72">
@@ -323,7 +325,7 @@ export default function RegelEditor({
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1">
                 <Label className="text-xs text-slate-500">Faktor</Label>
-                <Input
+                <Input aria-label={t("Faktor")}
                   type="number" step="any"
                   className={`h-8 text-xs ${feldFehler("faktor") ? "border-red-400" : ""}`}
                   value={entwurf.faktor ?? ""}
@@ -335,7 +337,7 @@ export default function RegelEditor({
                   Grund für den Faktor{" "}
                   {entwurf.faktor !== 1 && <span className="text-red-600">(Pflicht bei Faktor ≠ 1)</span>}
                 </Label>
-                <Input
+                <Input aria-label={t("Grund für den Faktor")}
                   className={`h-8 text-xs ${feldFehler("faktor_grund") ? "border-red-400" : ""}`}
                   placeholder="z. B. beidseitige Beschichtung der Trockenbauwand"
                   value={entwurf.faktor_grund ?? ""}
@@ -354,7 +356,7 @@ export default function RegelEditor({
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-500">übernommene Menge</Label>
-                  <Input
+                  <Input aria-label={t("übernommene Menge")}
                     type="number" step="any" className="h-8 text-xs"
                     value={entwurf.uebernahme?.menge ?? ""}
                     onChange={(e) => set({ uebernahme: { ...entwurf.uebernahme, menge: e.target.value === "" ? null : Number(e.target.value) } })}
@@ -362,7 +364,7 @@ export default function RegelEditor({
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-500">Quelle (Beleg)</Label>
-                  <Input
+                  <Input aria-label={t("Quelle (Beleg)")}
                     className="h-8 text-xs" placeholder="LV D83 14.01.2020"
                     value={entwurf.uebernahme?.quelle ?? ""}
                     onChange={(e) => set({ uebernahme: { ...entwurf.uebernahme, quelle: e.target.value } })}
@@ -370,7 +372,7 @@ export default function RegelEditor({
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-500">Stand</Label>
-                  <Input
+                  <Input aria-label={t("Stand")}
                     type="date" className="h-8 text-xs"
                     value={entwurf.uebernahme?.stand ?? ""}
                     onChange={(e) => set({ uebernahme: { ...entwurf.uebernahme, stand: e.target.value } })}
@@ -383,7 +385,7 @@ export default function RegelEditor({
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-500">Pauschalmenge</Label>
-                  <Input
+                  <Input aria-label={t("Pauschalmenge")}
                     type="number" step="any" className="h-8 text-xs"
                     value={entwurf.pauschal?.menge ?? ""}
                     onChange={(e) => set({ pauschal: { ...entwurf.pauschal, menge: e.target.value === "" ? null : Number(e.target.value) } })}
@@ -391,7 +393,7 @@ export default function RegelEditor({
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-500">Begründung</Label>
-                  <Input
+                  <Input aria-label={t("Begründung")}
                     className="h-8 text-xs"
                     value={entwurf.pauschal?.begruendung ?? ""}
                     onChange={(e) => set({ pauschal: { ...entwurf.pauschal, begruendung: e.target.value } })}
@@ -407,7 +409,7 @@ export default function RegelEditor({
                   Ausschlussgrund (warum trägt kein Bauteil die Menge?)
                 </Label>
                 <Select value={entwurf.ausschluss_grund ?? ""} onValueChange={(v) => set({ ausschluss_grund: v })}>
-                  <SelectTrigger className={`h-8 text-xs ${feldFehler("ausschluss_grund") ? "border-red-400" : ""}`}>
+                  <SelectTrigger aria-label={t("Ausschlussgrund (warum trägt kein Bauteil die Menge?)")} className={`h-8 text-xs ${feldFehler("ausschluss_grund") ? "border-red-400" : ""}`}>
                     <SelectValue placeholder="kein Ausschluss" />
                   </SelectTrigger>
                   <SelectContent className="max-h-72">
@@ -421,7 +423,7 @@ export default function RegelEditor({
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-slate-500">Begründung im Klartext</Label>
-                <Input
+                <Input aria-label={t("Begründung im Klartext")}
                   className={`h-8 text-xs ${feldFehler("ausschluss_text") ? "border-red-400" : ""}`}
                   value={entwurf.ausschluss_text ?? ""}
                   onChange={(e) => set({ ausschluss_text: e.target.value })}
@@ -443,7 +445,7 @@ export default function RegelEditor({
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-500">Vergleichsmenge</Label>
-                  <Input
+                  <Input aria-label={t("Vergleichsmenge")}
                     type="number" step="any" className="h-8 text-xs"
                     value={entwurf.soll ?? ""}
                     onChange={(e) => set({ soll: e.target.value === "" ? null : Number(e.target.value) })}
@@ -451,11 +453,11 @@ export default function RegelEditor({
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-500">Quelle</Label>
-                  <Input className="h-8 text-xs" value={entwurf.soll_quelle ?? ""} onChange={(e) => set({ soll_quelle: e.target.value })} />
+                  <Input aria-label={t("Quelle")} className="h-8 text-xs" value={entwurf.soll_quelle ?? ""} onChange={(e) => set({ soll_quelle: e.target.value })} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-500">Stand</Label>
-                  <Input type="date" className="h-8 text-xs" value={entwurf.soll_stand ?? ""} onChange={(e) => set({ soll_stand: e.target.value })} />
+                  <Input aria-label={t("Stand")} type="date" className="h-8 text-xs" value={entwurf.soll_stand ?? ""} onChange={(e) => set({ soll_stand: e.target.value })} />
                 </div>
               </div>
             </div>
@@ -499,7 +501,7 @@ export default function RegelEditor({
               <div className="space-y-1">
                 <Label className="text-xs text-slate-500">Konfidenz (Selbsteinschätzung)</Label>
                 <Select value={entwurf.confidence ?? ""} onValueChange={(v) => set({ confidence: v })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="nicht angegeben" /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Konfidenz (Selbsteinschätzung)")} className="h-8 text-xs"><SelectValue placeholder="nicht angegeben" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="hoch">hoch</SelectItem>
                     <SelectItem value="mittel">mittel</SelectItem>
@@ -511,7 +513,7 @@ export default function RegelEditor({
                 <Label className="text-xs text-slate-500">
                   Zulage / Folgeleistung zu Position(en) — kommagetrennt
                 </Label>
-                <Textarea
+                <Textarea aria-label={t("Zulage / Folgeleistung zu Position(en) — kommagetrennt")}
                   rows={1} className="text-xs"
                   placeholder="001/01010010, 001/01010020"
                   value={Array.isArray(entwurf.zulage_zu) ? entwurf.zulage_zu.join(", ") : entwurf.zulage_zu ?? ""}

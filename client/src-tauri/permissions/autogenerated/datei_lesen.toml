@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-datei-lesen"
+description = "Enables the datei_lesen command without any pre-configured scope."
+commands.allow = ["datei_lesen"]
+
+[[permission]]
+identifier = "deny-datei-lesen"
+description = "Denies the datei_lesen command without any pre-configured scope."
+commands.deny = ["datei_lesen"]

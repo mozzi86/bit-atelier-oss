@@ -12,7 +12,11 @@ import { Plus, Trash2, Save, Layers, Building2, Maximize2, Ruler, Boxes } from "
 import { USES, usageInfo, itemArea, autoStack, floorLabel } from "@designer/lib/spaceProgram";
 import { useProject } from "@core/lib/ProjectContext";
 import { programmAusBestand } from "@designer/lib/bestandsProgramm";
+import { snapshotElemente } from "@core/lib/snapshotElemente";
 import { useBuildingProgram, programMetrics } from "@core/lib/useBuildingProgram";
+// 88-05: room book per room type (items[i].raumbuch), saved with the programme.
+import RaumbuchTabelle from "./RaumbuchTabelle";
+import { useI18n } from "@core/lib/i18n";
 
 const m2 = (n) => `${Math.round(n).toLocaleString("de-DE")} m²`;
 
@@ -37,6 +41,7 @@ const Stat = ({ icon: Icon, label, value, sub, tint }) => (
 const SITE_AREA_FALLBACK = 3500;
 
 export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
+  const { t } = useI18n();
   const { projectId, project } = useProject();
   const store = useBuildingProgram();
   const pm = programMetrics(store);
@@ -90,11 +95,16 @@ export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
     Promise.all([
       bitApi.entities.BimSnapshot.filter({ project_id: projectId }).catch(() => []),
       bitApi.entities.AsrRaum.filter({ project_id: projectId }).catch(() => []),
-    ]).then(([snaps, asr]) => {
+    ]).then(async ([snaps, asr]) => {
       if (weg) return;
       const snap = (snaps || [])[0];
       if (!snap) { setBestand(null); return; }
-      const abgeleitet = programmAusBestand(snap, asr || []);
+      // 73-03: imported snapshots keep their elements in a blob (elemente_blob) — read them through the
+      // one access path, otherwise the offer below never fires for an imported project.
+      const { elemente, fehler } = await snapshotElemente(snap);
+      if (weg) return;
+      if (fehler) toast.error(fehler);
+      const abgeleitet = programmAusBestand({ ...snap, elemente }, asr || []);
       setBestand(abgeleitet.kennzahlen.raeume > 0 ? abgeleitet : null);
     });
     return () => { weg = true; };
@@ -137,7 +147,7 @@ export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between text-base">
               <span className="flex items-center gap-2"><Building2 className="w-4 h-4" /> Raumprogramm</span>
-              <Button size="sm" onClick={save} className="bg-gradient-to-r from-emerald-600 to-teal-600"><Save className="w-3.5 h-3.5 mr-1" /> Speichern</Button>
+              <Button size="sm" data-testid="sp-speichern" onClick={save} className="bg-gradient-to-r from-emerald-600 to-teal-600"><Save className="w-3.5 h-3.5 mr-1" /> Speichern</Button>
             </CardTitle>
             {project && <p className="text-xs text-slate-400">{project.name}</p>}
           </CardHeader>
@@ -188,7 +198,7 @@ export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
             {items.map((it, i) => (
               <div key={i} className="grid grid-cols-[1fr_70px_60px_90px_28px] gap-2 items-center">
                 <Select value={it.use} onValueChange={(v) => setItem(i, { use: v, area: it.area || usageInfo(v).unit })}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Nutzung")} className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(USES).map(([k, u]) => <SelectItem key={k} value={k}>{u.label}</SelectItem>)}
                   </SelectContent>
@@ -196,7 +206,7 @@ export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
                 <Input className="h-9 text-right" type="number" value={it.area} onChange={(e) => setItem(i, { area: Number(e.target.value) })} />
                 <Input className="h-9 text-right" type="number" value={it.count} onChange={(e) => setItem(i, { count: Number(e.target.value) })} />
                 <div className="text-right text-sm tabular-nums text-slate-600">{m2(itemArea(it))}</div>
-                <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-500" onClick={() => delItem(i)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                <Button aria-label={t("Nutzung entfernen")} size="icon" variant="ghost" className="h-8 w-8 text-rose-500" onClick={() => delItem(i)}><Trash2 className="w-3.5 h-3.5" /></Button>
               </div>
             ))}
             <Button variant="outline" size="sm" onClick={addItem} className="w-full mt-1"><Plus className="w-3.5 h-3.5 mr-1" /> Nutzung hinzufügen</Button>
@@ -206,12 +216,12 @@ export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Ruler className="w-4 h-4" /> Rahmenwerte</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-3 gap-3">
-            <div><label className="text-xs text-slate-500">Geschossfläche m²</label><Input type="number" value={footprint} onChange={(e) => setFootprint(Number(e.target.value))} /></div>
+            <div><label className="text-xs text-slate-500">Geschossfläche m²</label><Input aria-label={t("Geschossfläche m²")} type="number" value={footprint} onChange={(e) => setFootprint(Number(e.target.value))} /></div>
             <div>
               <label className="text-xs text-slate-500">Grundstück m²{siteAreaAssumed && <span className="text-amber-600"> (Annahme)</span>}</label>
-              <Input type="number" value={siteArea} onChange={(e) => { setSiteArea(Number(e.target.value)); setSiteAreaAssumed(false); }} />
+              <Input aria-label={t("Grundstück m²")} type="number" value={siteArea} onChange={(e) => { setSiteArea(Number(e.target.value)); setSiteAreaAssumed(false); }} />
             </div>
-            <div><label className="text-xs text-slate-500">Effizienz (NUF/BGF)</label><Input type="number" step="0.05" value={efficiency} onChange={(e) => setEfficiency(Number(e.target.value))} /></div>
+            <div><label className="text-xs text-slate-500">Effizienz (NUF/BGF)</label><Input aria-label={t("Effizienz (NUF/BGF)")} type="number" step="0.05" value={efficiency} onChange={(e) => setEfficiency(Number(e.target.value))} /></div>
           </CardContent>
         </Card>
       </div>
@@ -258,6 +268,7 @@ export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
         </Card>
       </div>
       </div>
+      <RaumbuchTabelle items={items} onChange={(i, raumbuch) => setItem(i, { raumbuch })} projektName={project?.name || ""} />
     </div>
   );
 }

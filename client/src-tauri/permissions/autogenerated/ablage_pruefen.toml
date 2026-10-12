@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ablage-pruefen"
+description = "Enables the ablage_pruefen command without any pre-configured scope."
+commands.allow = ["ablage_pruefen"]
+
+[[permission]]
+identifier = "deny-ablage-pruefen"
+description = "Denies the ablage_pruefen command without any pre-configured scope."
+commands.deny = ["ablage_pruefen"]

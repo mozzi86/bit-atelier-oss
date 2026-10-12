@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@core/components/ui/select";
 import { MapPin, ArrowRight, PenTool, Check, X, Undo2 } from "lucide-react";
+import { useI18n } from "@core/lib/i18n";
 
 const PRESETS = [
   { label: "Nürnberg", lat: 49.4521, lng: 11.0767 },
@@ -37,6 +38,7 @@ function pickFootprintPoints(complexData) {
 }
 
 export default function LocationSelector({ complexData, onLocationChange, onNameChange, projekt = null }) {
+  const { t } = useI18n();
   const init = complexData?.location;
   // 72-01 A-10 (Befund N-11): Projektdaten vorbefüllen, damit der Nutzer
   // Name/Standort nicht doppelt tippt. Projekt-Location ist Freitext („Stadt,
@@ -322,18 +324,18 @@ export default function LocationSelector({ complexData, onLocationChange, onName
               {/* 72-01 A-12 (Befund N-20): echte geografische Grenzen — ohne
                   max meldet die Barrierefreiheits-Baum valuemax=0 und der
                   Screenreader liest „Maximum 0". lat ∈ [-90, 90] (Grad). */}
-              <Input type="number" step="any" min={-90} max={90} value={Number.isFinite(lat) ? lat : ""} onChange={(e) => setLat(e.target.value === "" ? NaN : Number(e.target.value))} />
+              <Input aria-label={t("Breite (lat)")} type="number" step="any" min={-90} max={90} value={Number.isFinite(lat) ? lat : ""} onChange={(e) => setLat(e.target.value === "" ? NaN : Number(e.target.value))} />
             </div>
             <div className="space-y-1">
               <Label>Länge (lng)</Label>
               {/* 72-01 A-12: lng ∈ [-180, 180] (Grad). */}
-              <Input type="number" step="any" min={-180} max={180} value={Number.isFinite(lng) ? lng : ""} onChange={(e) => setLng(e.target.value === "" ? NaN : Number(e.target.value))} />
+              <Input aria-label={t("Länge (lng)")} type="number" step="any" min={-180} max={180} value={Number.isFinite(lng) ? lng : ""} onChange={(e) => setLng(e.target.value === "" ? NaN : Number(e.target.value))} />
             </div>
           </div>
           <div className="space-y-1">
             <Label>Kartenstil</Label>
             <Select value={style} onValueChange={setStyle}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("Kartenstil")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="normal">Normal</SelectItem>
                 <SelectItem value="satellite">Satellit</SelectItem>

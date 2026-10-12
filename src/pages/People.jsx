@@ -24,6 +24,7 @@ import { seitenWurzel } from "@core/lib/utils";
 import { useAuth } from "@core/lib/AuthContext";
 import { useI18n } from "@core/lib/i18n";
 import { useTabParam } from "@core/lib/useTabParam";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
 import { useAktionen } from "@core/lib/aktionen";
 import { DATENQUELLE } from "@core/lib/umgebung";
 import { PERSONAL_REITER_ALIAS, PERSONAL_REITER_INFO, STANDARD_PERSONAL_REITER } from "@/lib/people/reiter.js";
@@ -85,7 +86,8 @@ export default function People() {
   const { t } = useI18n();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const zugang = personalZugang({ datenquelle: DATENQUELLE, rolle: user?.role });
+  const zugriff = useZugriff(); // 82-02: personnel access follows the role model
+  const zugang = personalZugang({ datenquelle: DATENQUELLE, rolle: user?.role, zugriff });
   const kontext = React.useMemo(() => ({ datenquelle: DATENQUELLE, personalZugang: zugang }), [zugang]);
   const [tab, setTab] = useTabParam(ERLAUBT, ERLAUBT[0] ?? STANDARD_PERSONAL_REITER, { alias: PERSONAL_REITER_ALIAS });
   const [hinweisZu, setHinweisZu] = React.useState(hinweisGeschlossen);

@@ -20,6 +20,8 @@
 // imports the door constants FROM it (allowed direction) and never the other way.
 
 import { TUERBREITEN, TUER_ANSCHLAG_ABSTAND } from "@designer/lib/tesselierung";
+// 89-07: the ONE door geometry lives with the door component in @core (werkstattBauteile).
+import { tuerLage } from "@core/lib/werkstattBauteile";
 
 export { TUERBREITEN, TUER_ANSCHLAG_ABSTAND };
 
@@ -145,35 +147,8 @@ export function gemeinsameKante(zoneA, zoneB, tol = 0.02) {
  *   aabb:{x0:number,z0:number,x1:number,z1:number}, breite:number}|null} null when the edge does not exist
  */
 export function tuerGeometrie(zone, tuer) {
-  const kante = kantenVon(zone).find((k) => k.i === num(tuer?.wand, -1));
-  if (!kante) return null;
-  const b = Math.max(0.1, num(tuer.breite_m, TUERBREITEN.zimmer));
-  const richtung = { x: (kante.b.x - kante.a.x) / kante.laenge, z: (kante.b.z - kante.a.z) / kante.laenge };
-  // 84-08: `nachAussen` doors (bath, store room) swing out of the zone into the hall.
-  const innen = innenNormale(zone, kante);
-  const normale = tuer.nachAussen ? { x: -innen.x, z: -innen.z } : innen;
-  const u0 = Math.max(0, Math.min(kante.laenge - b, num(tuer.u_m)));
-  const p0 = { x: kante.a.x + richtung.x * u0, z: kante.a.z + richtung.z * u0 };
-  const p1 = { x: p0.x + richtung.x * b, z: p0.z + richtung.z * b };
-  const rechts = tuer.aufschlag === "rechts";
-  const scharnier = rechts ? p1 : p0;
-  const geschlossen = rechts ? p0 : p1;
-  const offen = { x: scharnier.x + normale.x * b, z: scharnier.z + normale.z * b };
-  const a0 = Math.atan2(geschlossen.z - scharnier.z, geschlossen.x - scharnier.x);
-  const a1 = Math.atan2(offen.z - scharnier.z, offen.x - scharnier.x);
-  let delta = a1 - a0;
-  while (delta > Math.PI) delta -= 2 * Math.PI;
-  while (delta < -Math.PI) delta += 2 * Math.PI;
-  const bogen = [];
-  for (let i = 0; i <= 8; i += 1) {
-    const a = a0 + (delta * i) / 8;
-    bogen.push({ x: scharnier.x + Math.cos(a) * b, z: scharnier.z + Math.sin(a) * b });
-  }
-  const xs = [scharnier.x, geschlossen.x, offen.x], zs = [scharnier.z, geschlossen.z, offen.z];
-  return {
-    scharnier, geschlossen, offen, bogen, normale, richtung, breite: b,
-    aabb: { x0: Math.min(...xs), z0: Math.min(...zs), x1: Math.max(...xs), z1: Math.max(...zs) },
-  };
+  // 89-07 (BW-09): same maths as before, now shared with the door component (one door system).
+  return tuerLage(zone, tuer, TUERBREITEN.zimmer);
 }
 
 /**

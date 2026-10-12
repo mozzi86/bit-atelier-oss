@@ -73,7 +73,9 @@ const WT_STATUS = {
 // which cannot parse JSX — read the SAME table. Re-exported here for every
 // existing importer of the component.
 export { WERKSTATT_DEFAULT } from "@designer/lib/werkstattDefaults";
-import { WERKSTATT_DEFAULT, einheitenAnreichern, mixEintragHinzufuegen } from "@designer/lib/werkstattDefaults";
+import { WERKSTATT_DEFAULT, einheitenAnreichern, mixEintragHinzufuegen, zerlegungsArt } from "@designer/lib/werkstattDefaults";
+// 89-02: workshop result as classified BIM components (walls/doors/rooms, stable GUIDs).
+import { werkstattBauteile } from "@core/lib/werkstattBauteile";
 // 86-01: while mounted, the workshop regenerates the zones itself — the footprint follower stays quiet.
 import { useWerkstattAngemeldet } from "@designer/lib/useWerkstattRehydrate";
 
@@ -164,6 +166,13 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
     tuerAufschlaege: layer?.tuerAufschlaege && typeof layer.tuerAufschlaege === "object" ? layer.tuerAufschlaege : {},
     // Migrations-Guard 84-10: level switch per unit, plain object.
     stufeJeWe: layer?.stufeJeWe && typeof layer.stufeJeWe === "object" ? layer.stufeJeWe : {},
+    // Migrations-Guard 75-12: interior-wall offsets, plain object.
+    raumGrenzen: layer?.raumGrenzen && typeof layer.raumGrenzen === "object" ? layer.raumGrenzen : {},
+    // Migrations-Guard 86-04: building form + storeys per bar.
+    zerlegung: zerlegungsArt(layer?.zerlegung),
+    geschosseJeRiegel: layer?.geschosseJeRiegel && typeof layer.geschosseJeRiegel === "object" ? layer.geschosseJeRiegel : {},
+    // Migrations-Guard 75-10: project weights of the variant evaluation.
+    bewertungsGewichte: layer?.bewertungsGewichte && typeof layer.bewertungsGewichte === "object" ? layer.bewertungsGewichte : {},
     // Migrations-Guard 86-05b (schema v2): bar minimum > 0 or the solver default; stored proposal or null.
     riegelMinFlaeche_m2: Number(layer?.riegelMinFlaeche_m2) > 0 ? Number(layer.riegelMinFlaeche_m2) : WERKSTATT_DEFAULT.riegelMinFlaeche_m2,
     gewaehlterVorschlag: layer?.gewaehlterVorschlag && typeof layer.gewaehlterVorschlag === "object" ? layer.gewaehlterVorschlag : null,
@@ -195,13 +204,31 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
       tuerAufschlaege: cfg.tuerAufschlaege,
       // 84-10: R units — switch per unit (beats the mix level) read by the generator.
       stufeJeWe: cfg.stufeJeWe,
+      // 75-12: interior walls moved in the focus (offsets per wall, m).
+      raumGrenzen: cfg.raumGrenzen,
+      // 86-04: perimeter block + own storey count per bar.
+      zerlegung: cfg.zerlegung,
+      geschosseJeRiegel: cfg.geschosseJeRiegel,
+      // 86-07: centre line drawn in the massing studio (building programme).
+      achse: store.achseM ?? null,
       // 75-13: top-storey floor level for the lift duty (OKF ≈ (storeys − 1) · storey height).
       okf_m: (Math.max(1, Math.round(store.storeys || 1)) - 1) * (store.storeyHeight || 3),
       // 86-05b: bar minimum of the applied proposal (default 120 → byte-identical to before).
       riegelMinFlaeche_m2: cfg.riegelMinFlaeche_m2,
     }),
-    [store.footprintM, store.storeys, store.storeyHeight, cfg.typ, cfg.einheiten, cfg.gesperrteGrenzen, cfg.anordnung, cfg.grenzenPositionen, cfg.regeln, cfg.nordwinkel, cfg.tuerAufschlaege, cfg.stufeJeWe, cfg.riegelMinFlaeche_m2]
+    [store.footprintM, store.storeys, store.storeyHeight, cfg.typ, cfg.einheiten, cfg.gesperrteGrenzen, cfg.anordnung, cfg.grenzenPositionen, cfg.regeln, cfg.nordwinkel, cfg.tuerAufschlaege, cfg.stufeJeWe, cfg.raumGrenzen, cfg.zerlegung, cfg.geschosseJeRiegel, store.achseM, cfg.riegelMinFlaeche_m2]
   );
+  // 89-02: workshop components (live from the result, not only after "apply") of the shown storey.
+  const bauteileAlle = useMemo(() => werkstattBauteile(ergebnis.zonen, { storeyHeight: store.storeyHeight }), [ergebnis.zonen, store.storeyHeight]);
+  const bauteileLevel = useMemo(() => {
+    const w = bauteileAlle.waende.filter((x) => x.level === lvl);
+    if (!w.length) return null;
+    return {
+      waende: w.length, aussen: w.filter((x) => x.huelle).length, tragend: w.filter((x) => x.klasse === "tragend").length, leicht: w.filter((x) => x.klasse === "leicht").length,
+      tueren: bauteileAlle.tueren.filter((x) => x.level === lvl).length, raeume: bauteileAlle.raeume.filter((x) => x.level === lvl).length,
+      rohbau: bauteileAlle.rohbau.find((r) => r.level === lvl) || null,
+    };
+  }, [bauteileAlle, lvl]);
   // 84-10 (D-P84-R): level of every unit — the mix entry gives the default, the switch of the
   // unit beats it. `schluesselJeWe` = key in cfg.stufeJeWe (type + position, not the unit number).
   const schluesselJeWe = useMemo(() => stufeSchluessel(ergebnis.weListe), [ergebnis.weListe]);
@@ -736,7 +763,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
               <div className="space-y-1">
                 <div className="text-xs text-slate-500">{t("Erschließung")}</div>
                 <Select value={cfg.typ} onValueChange={(v) => setCfg({ typ: v })}>
-                  <SelectTrigger data-testid="wt-typologie"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Erschließung")} data-testid="wt-typologie"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(ERSCHLIESSUNG).map(([key, e]) => (
                       <SelectItem key={key} value={key}>{e.label}</SelectItem>
@@ -751,6 +778,54 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                   {t("Empfehlung")}: {empfehlung.text}
                   {!empfehlung.typen.includes(cfg.typ) && (
                     <span> · {t("passend")}: {empfehlung.typen.map((k) => ERSCHLIESSUNG[k]?.label || k).join(" / ")}</span>
+                  )}
+                </div>
+                {/* 86-04: building form — automatic decomposition (86-01/86-03) or a perimeter
+                    block around a court; per bar its own storey count (werkstatt_layer). Native
+                    controls (one-click, E2E-stable). */}
+                <div className="mt-2 space-y-1" data-testid="wt-bebauung">
+                  <label className="flex items-center gap-2 text-xs text-slate-500">
+                    {t("Bebauung")}
+                    <select
+                      value={zerlegungsArt(cfg.zerlegung)}
+                      onChange={(e) => setCfg({ zerlegung: zerlegungsArt(e.target.value) })}
+                      className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-700"
+                      data-testid="wt-zerlegung"
+                    >
+                      <option value="auto">{t("automatisch (Riegel/Zeilen)")}</option>
+                      <option value="rand">{t("Randbebauung (Hof)")}</option>
+                      <option value="achse">{t("entlang der Achse (Studio)")}</option>
+                      <option value="skelett">{t("Adern aus dem Skelett (Freiform)")}</option>
+                    </select>
+                  </label>
+                  {zerlegungsArt(cfg.zerlegung) === "achse" && !(Array.isArray(store.achseM) && store.achseM.length >= 2) && (
+                    <div className="text-[11px] text-amber-700" data-testid="wt-achse-fehlt">{t("Keine Achse gezeichnet — im Studio „Achse zeichnen“; bis dahin automatisch.")}</div>
+                  )}
+                  {(ergebnis.form?.riegel || []).length > 1 && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600" data-testid="wt-riegel-geschosse-liste">
+                      <span className="text-slate-500">{t("Geschosse je Haus")}:</span>
+                      {(ergebnis.form?.riegel || []).map((r) => {
+                        const wert = Number(cfg.geschosseJeRiegel?.[r.nr]) >= 1 ? Number(cfg.geschosseJeRiegel[r.nr]) : Math.max(1, Math.round(store.storeys || 1));
+                        return (
+                          <label key={r.nr} className="flex items-center gap-1">
+                            {t("Riegel")} {r.nr}
+                            <input
+                              type="number" min={1} max={30} step={1} value={wert}
+                              onChange={(e) => {
+                                const n = Math.round(Number(e.target.value));
+                                const rest = { ...(cfg.geschosseJeRiegel || {}) };
+                                if (!Number.isFinite(n) || n < 1 || n === Math.max(1, Math.round(store.storeys || 1))) delete rest[r.nr];
+                                else rest[r.nr] = Math.min(30, n);
+                                setCfg({ geschosseJeRiegel: rest });
+                              }}
+                              className="w-12 rounded border border-slate-300 px-1 py-0.5 text-right tabular-nums"
+                              data-testid="wt-riegel-geschosse" data-riegel={r.nr}
+                            />
+                          </label>
+                        );
+                      })}
+                      <span className="text-slate-400">{t("(nur Werkstatt — das Massing-Volumen bleibt einheitlich hoch)")}</span>
+                    </div>
                   )}
                 </div>
                 {/* 86-05b: the applied proposal — or the warning that footprint/algorithm moved on
@@ -848,7 +923,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
               <div className="space-y-1">
                 <div className="text-xs text-slate-500">{t("Geschoss")}</div>
                 <Select value={String(lvl)} onValueChange={(v) => setLevel(Number(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Geschoss")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Array.from({ length: maxLevel + 1 }, (_, i) => (
                       <SelectItem key={i} value={String(i)}>{i === 0 ? t("EG") : `${i}. ${t("OG")}`}</SelectItem>
@@ -926,7 +1001,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                   <div className="space-y-1">
                     <div className="text-xs text-slate-500">{t("Nutzung")}</div>
                     <Select value={sel.nutzung || "wohnen"} onValueChange={(v) => setSel({ nutzung: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={t("Nutzung")}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="wohnen">{t("Wohnen")}</SelectItem>
                         <SelectItem value="gewerbe">{t("Gewerbe/Büro")}</SelectItem>
@@ -973,7 +1048,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                     <div className="space-y-1">
                       <div className="text-blue-800">{t("Schallschutz-Raumart")}</div>
                       <Select value={sel.raumartSchall || "buero"} onValueChange={(v) => setSel({ raumartSchall: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-label={t("Schallschutz-Raumart")}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="buero">{t("Büro")}</SelectItem>
                           <SelectItem value="laut">{t("laut (Technik/Gewerbe)")}</SelectItem>
@@ -1014,7 +1089,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                   <div className="space-y-1">
                     <div className="text-xs text-slate-500">{t("Variante")}</div>
                     <Select value={sel.variante === "gespiegelt" ? "gespiegelt" : "normal"} onValueChange={(v) => setSel({ variante: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={t("Variante")}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="normal">{t("normal")}</SelectItem>
                         <SelectItem value="gespiegelt">{t("gespiegelt")}</SelectItem>
@@ -1028,7 +1103,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                     value={sel.verzahnungsRaum || "—"}
                     onValueChange={(v) => setSel({ verzahnungsRaum: v === "—" ? undefined : v })}
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-label={t("Verzahnungsraum (max. einer je Typ)")}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="—">{t("— kein Zahn —")}</SelectItem>
                       {(sel.raumprogramm || []).map((r, i) => (
@@ -1104,7 +1179,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                           <input type="checkbox" checked={!!r.fensterpflicht}
                             onChange={(e) => setRaum({ fensterpflicht: e.target.checked })} />
                         </label>
-                        <button type="button" className="col-span-1 text-slate-400 hover:text-red-600 disabled:opacity-30"
+                        <button aria-label={t("Raum entfernen")} type="button" className="col-span-1 text-slate-400 hover:text-red-600 disabled:opacity-30"
                           title={t("Raum entfernen")} data-testid={`raum-del-${ri}`}
                           disabled={(sel.raumprogramm || []).length <= 1}
                           onClick={() => setSel({
@@ -1162,6 +1237,8 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                 storeyHeight={store.storeyHeight}
                 aktiv={ansicht === "vorschlaege"}
                 onUebernehmen={(neu) => setLayer(neu)}
+                /* 75-10: evaluation weights (werkstatt_layer.bewertungsGewichte, ONE write path). */
+                onGewichteChange={(g) => setCfg({ bewertungsGewichte: g })}
               />
             </TabsContent>
             <TabsContent value="tiefgarage">
@@ -1233,6 +1310,9 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
               /* 75-13: balcony toggle at the room (type|room key — same setter as the editor row). */
               balkonAktiv={(zone) => cfg.regeln?.balkon?.[balkonKey(typKeyJeWe.get(zone?.we), raumBasis(zone?.name))] === true}
               onBalkonToggle={(zone, an) => setBalkonRaum(typKeyJeWe.get(zone?.we), raumBasis(zone?.name), an)}
+              /* 75-12: interior-wall offsets (layer field, ONE write path — the solver re-reads it). */
+              raumGrenzen={cfg.raumGrenzen}
+              onRaumGrenzenChange={(m) => setCfg({ raumGrenzen: m })}
             />
           ) : (
             <Card>
@@ -1312,6 +1392,14 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                             </g>
                           );
                         })}
+                        {/* 86-06/86-07: veins (corridor centre lines) — line weight after the Murray
+                            width (m → screen via pxJeM), the drawn axis dashed. Display only. */}
+                        {(ergebnis.form?.adern || []).map((a, i) => (
+                          <polyline key={`ader-${i}`} points={a.punkte.map((p) => `${X(p.x)},${Z(p.z)}`).join(" ")} fill="none"
+                            stroke={a.zwang ? "#dc2626" : "#0d9488"} strokeOpacity="0.8" strokeWidth={Math.max(bildPx(1.5), (a.breite_m || 1.2) * pxJeM * 0.5)}
+                            strokeDasharray={a.zwang ? `${bildPx(8)} ${bildPx(4)}` : undefined} strokeLinecap="round" strokeLinejoin="round" pointerEvents="none"
+                            data-testid="wt-ader" data-ordnung={a.ordnung} data-breite={a.breite_m} data-zwang={a.zwang ? "1" : "0"} />
+                        ))}
                         {balkone.map((z, i) => (
                           <polygon key={`bk-${i}`} points={z.points.map((p) => `${X(p.x)},${Z(p.z)}`).join(" ")}
                             fill="url(#wt-balkon-schraffur)" stroke="#0369a1" strokeWidth="0.7" pointerEvents="none"
@@ -1477,6 +1565,18 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                 {(ergebnis.hinweise || []).map((h) => (
                   <div key={h} className="mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="wt-hinweis">{h}</div>
                 ))}
+                {/* 89-02: the result as BIM components of the shown storey (walls/doors/rooms,
+                    classified, stable GUIDs) and the shell growth after D-BW-02 (zones stay clear,
+                    walls lie outside — the living area does not change). */}
+                {bauteileLevel && (
+                  <div className="mt-2 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700" data-testid="wt-bauteile"
+                    data-waende={bauteileLevel.waende} data-tueren={bauteileLevel.tueren} data-raeume={bauteileLevel.raeume} data-rohbau={bauteileLevel.rohbau?.rohbau_m2 ?? ""}>
+                    <span className="font-semibold">{t("Bauteile")}</span> · {bauteileLevel.aussen} {t("Außenwand-Abschnitte (Hülle)")}, {bauteileLevel.tragend} {t("tragende Innen-/Trennwände (KS 24)")}, {bauteileLevel.leicht} {t("leichte Innenwände (KS 11,5)")}, {bauteileLevel.tueren} {t("Türen")}, {bauteileLevel.raeume} {t("Räume")}
+                    {bauteileLevel.rohbau && (
+                      <> · {t("Rohbau")} {bauteileLevel.rohbau.rohbau_m2.toLocaleString("de-DE", { maximumFractionDigits: 0 })} m² {t("bei")} {bauteileLevel.rohbau.licht_m2.toLocaleString("de-DE", { maximumFractionDigits: 0 })} m² {t("lichter Fläche — Wände liegen außen, Wohnfläche unverändert (D-BW-02)")}</>
+                    )}
+                  </div>
+                )}
                 {/* 75-11 Task 3 (MSB-13): rooms without a RULE window while the
                     rule is on — one line per room in the existing hint box,
                     shape like the 75-07 hints (room, reason, suggestion). */}

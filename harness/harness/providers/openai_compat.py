@@ -11,6 +11,7 @@ Profile quirks (providers.yaml `quirks:`):
   extra_body: {…}       → merged into the request (e.g. Qwen enable_thinking: false)
   headers: {…}          → extra HTTP headers
   no_tools: true        → tools are not sent (models without tool calling)
+  timeout_s: 900        → read timeout in seconds (default 300; local models, plan 93-12)
 Without usage in the stream, tokens are ESTIMATED as len(text)/4 and flagged.
 """
 
@@ -102,7 +103,9 @@ class OpenAICompatProvider(LLMProvider):
                                     quirks=self.profile.quirks)
         url = f"{self._base_url}/chat/completions"
         try:
-            async with httpx.AsyncClient(transport=self._transport, timeout=httpx.Timeout(300.0, connect=15.0)) as client:
+            # timeout_s quirk (93-12): local models need minutes for the first token; default 300 s.
+            read_s = float(self.profile.quirks.get("timeout_s") or 300.0)
+            async with httpx.AsyncClient(transport=self._transport, timeout=httpx.Timeout(read_s, connect=15.0)) as client:
                 async with client.stream("POST", url, headers=self._headers(), json=payload) as resp:
                     if resp.status_code >= 400:
                         body = (await resp.aread()).decode("utf-8", "replace")

@@ -7,6 +7,8 @@
 
 // Nutzlast-Kategorien nach EC1 (DIN EN 1991-1-1 Tab. 6.1DE), qk in kN/m².
 // [ASSUMED A4] NA-DE-Defaultwerte, überschreibbar in der Komponente.
+import { OFFEN, konzeptAuswertung } from "@designer/lib/pruefStatus";
+
 export const LOAD_CATEGORIES = {
   A: { label: "A Wohn-/Aufenthaltsräume", qk: 2.0 },
   B: { label: "B Büroflächen", qk: 2.0 },
@@ -99,6 +101,8 @@ export function betonvolumenDecken(dickeCm, bgf) {
 // Plausibilitäts-Checks (Vorbemessung) im Muster von checkCompliance.
 // Sohldruck-Item ist bewusst nur "pass"/"warn" (Hinweis-Charakter), nie "fail" —
 // es ist KEIN zulässiger Nachweis (T-15-03, Haftung).
+// 72-04: missing input (no footprint -> sigma not computable, allowable bearing pressure 0,
+// no storeys) is "offen", not "warn" - nothing is violated, the input is missing.
 export function vorbemessungChecks({ sigma = 0, zulSohldruck = 0, gesamtlastProGeschoss = 0, storeys = 0, footArea = 0 } = {}) {
   // sigma == null ⇒ Gründungsfläche fehlt, σ nicht berechenbar (gruendungslast).
   const sig = sigma == null ? null : Number(sigma) || 0;
@@ -109,29 +113,28 @@ export function vorbemessungChecks({ sigma = 0, zulSohldruck = 0, gesamtlastProG
     {
       key: "sohldruck",
       label: "Sohldruck-Plausibilität",
-      status: sig != null && sig <= zul ? "pass" : "warn",
+      status: sig == null || zul <= 0 ? OFFEN : sig <= zul ? "pass" : "warn",
       detail: sig == null
         ? "σ nicht berechenbar — Grundfläche fehlt (Gebäudemodell pflegen)"
+        : zul <= 0
+        ? "zulässiger Sohldruck fehlt — Baugrund-Richtwert eingeben"
         : `σ ${nf(sig)} / zul. ${nf(zul)} kN/m² (Richtwert, EC7)`,
     },
     {
       key: "footArea",
       label: "Grundfläche aus Gebäudemodell",
-      status: footArea > 0 ? "pass" : "warn",
+      status: footArea > 0 ? "pass" : OFFEN,
       detail: footArea > 0 ? `${nf(footArea)} m² übernommen` : "kein Footprint im Modell gesetzt",
     },
     {
       key: "storeys",
       label: "Geschossanzahl aus Gebäudemodell",
-      status: storeys > 0 ? "pass" : "warn",
+      status: storeys > 0 ? "pass" : OFFEN,
       detail: `${Math.max(0, Math.round(storeys))} Geschosse · Last/Geschoss ${nf(gesamtlastProGeschoss)} kN`,
     },
   ];
 
-  const score = Math.round((items.filter((i) => i.status === "pass").length / Math.max(1, items.length)) * 100);
-  const warns = items.filter((i) => i.status === "warn").length;
-  const verdict = warns > 0 ? "Vorbemessung mit Hinweisen" : "Vorbemessung plausibel";
-  return { items, score, warns, verdict };
+  return konzeptAuswertung(items, { hinweise: "Vorbemessung mit Hinweisen", plausibel: "Vorbemessung plausibel" });
 }
 
 // ---- Erdbeben (vereinfacht, EC8 / DIN EN 1998-1 NA-DE-nah) ----

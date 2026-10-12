@@ -103,10 +103,10 @@ test.describe("75-14 Diele, Türen, Erschließung, Raumqualität", () => {
     expect(await fokus.locator('[data-testid="fk-tuer"] [data-tuer-blatt]').count()).toBe(tuerenSoll);
     expect(await fokus.locator('[data-testid="fk-tuer"] [data-tuer-bogen]').count()).toBe(tuerenSoll);
     expect(await fokus.locator('[data-testid="fk-tuer"] [data-tuer-oeffnung]').count()).toBe(tuerenSoll);
-    // Exactly one entrance door, raw width 0,985 (CITED DIN 18100).
+    // Exactly one entrance door, raw width 1,01 (DIN 18100, D-BW-06).
     const eingang = fokus.locator('[data-testid="fk-tuer"][data-typ="wohnung"]');
     await expect(eingang).toHaveCount(1);
-    expect(await eingang.getAttribute("data-breite")).toBe("0.985");
+    expect(await eingang.getAttribute("data-breite")).toBe("1.01");
     // Hall present: the entrance door belongs to the zone "Diele …" (label may yield to collision).
     expect(await eingang.getAttribute("data-tuer-zone"), "Wohnungstür in der Diele").toMatch(/^Diele/);
     // Quality card in the sidebar with the same counters as the workshop row.

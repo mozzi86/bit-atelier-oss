@@ -9,6 +9,8 @@
 // are replaced by a link to the real IFC export (Komplex-Designer, building model).
 //
 // In: nothing (no project data). Out: UI only.
+// 88-09: exception at the top — ProjektKennzahlen reads and saves figures of the
+// active project (entity Machbarkeit); the sample banner below still applies to the tabs.
 
 import { seitenWurzel } from "@core/lib/utils";
 import React, { useRef, useState } from "react";
@@ -43,6 +45,8 @@ import ProFormaAnalysis from "../components/feasibility/ProFormaAnalysis";
 import EnergyOptimizer from "../components/feasibility/EnergyOptimizer";
 import AIAssistant from "../components/feasibility/AIAssistant";
 import ScenarioComparison from "../components/feasibility/ScenarioComparison";
+// 88-09: project-bound figures (saved), above the sample calculation.
+import ProjektKennzahlen from "../components/feasibility/ProjektKennzahlen";
 
 // KPI tiles: key into the kpis state, German label (i18n key), icon and tint.
 const KPI_KACHELN = [
@@ -178,6 +182,9 @@ export default function RealEstateFeasibility() {
             </div>
           </div>
         </motion.div>
+
+        {/* 88-09: GRZ/GFZ/BMZ, full storeys and residual value of the ACTIVE project (saved). */}
+        <ProjektKennzahlen />
 
         {/* Sample banner: the figures below belong to no project. */}
         <div

@@ -88,7 +88,7 @@ export default function ContactForm({ contact, onSubmit, onCancel }) {
               <div className="space-y-1">
                 <Label>Kategorie</Label>
                 <Select value={formData.category} onValueChange={(v) => handleChange('category', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Kategorie")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CATEGORIES.map(cat => (
                       <SelectItem key={cat} value={cat}>{labelFor(CATEGORY_LABELS, cat)}</SelectItem>

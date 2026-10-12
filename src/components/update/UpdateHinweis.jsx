@@ -7,13 +7,20 @@
 // serverless build has no server. A blocked installation (developer checkout, release without checksum) shows
 // the reason instead of the button.
 //
+// 92-04: the banner says WHAT changes — the first three lines of the release note (the CHANGELOG section,
+// server field `aenderungen`) and "Alle Änderungen" to unfold the rest. A version held in the settings
+// ("Fassung festhalten bis …", server field `festgehalten`) or a check switched off (BIT_KEIN_UPDATECHECK)
+// shows no banner at all.
+//
 // In:  nothing. Out: the banner; data-testids upd-banner (data-phase, data-neueste), upd-installieren,
-//      upd-spaeter, upd-fortschritt (data-prozent), upd-fehler.
+//      upd-spaeter, upd-fortschritt (data-prozent), upd-fehler, upd-aenderungen, upd-alle-aenderungen,
+//      upd-aenderungen-voll.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@core/components/ui/button";
 import { useI18n } from "@core/lib/i18n";
 import { DATENQUELLE } from "@core/lib/umgebung";
-import { Download, RefreshCw, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, RefreshCw, X } from "lucide-react";
+import { ersteZeilen, notizZeilen } from "@/lib/updateNotizen";
 
 const PRUEF_INTERVALL_MS = 6 * 60 * 60 * 1000;
 const SPAETER_KEY = "bit.update.spaeter";
@@ -28,6 +35,7 @@ export default function UpdateHinweis() {
   const [fortschritt, setFortschritt] = useState({ geladen: 0, gesamt: 0 });
   const [fehler, setFehler] = useState(/** @type {string|null} */ (null));
   const [spaeter, setSpaeter] = useState(leseSpaeter);
+  const [alleAenderungen, setAlleAenderungen] = useState(false);
   const timer = useRef(/** @type {any} */ (null));
 
   const pruefen = useCallback(async () => {
@@ -44,21 +52,38 @@ export default function UpdateHinweis() {
     return () => { clearInterval(id); clearTimeout(timer.current); };
   }, [pruefen]);
 
-  if (DATENQUELLE !== "express" || !info?.verfuegbar || (phase === "ruhe" && spaeter === info.neueste)) return null;
+  if (DATENQUELLE !== "express" || !info?.verfuegbar || info.festgehalten || info.deaktiviert || (phase === "ruhe" && spaeter === info.neueste)) return null;
+  const zeilen = notizZeilen(info.aenderungen || "");
+  const vorschau = ersteZeilen(zeilen, 3);
 
-  const warteAufNeustart = async (ziel) => {
+  // 92-05: the apply script checks the new version's health and, if it does not answer, restores the old
+  // version. Once the OLD version answers again after the server was gone, daten/update-ergebnis.json
+  // (field letztesUpdate of /api/update) tells whether this update was rolled back — say so instead of
+  // waiting the full eight minutes.
+  const warteAufNeustart = async (ziel, seit) => {
+    let warWeg = false;
     for (let i = 0; i < 240; i += 1) {
       await new Promise((r) => { timer.current = setTimeout(r, 2000); });
       try {
         const s = await (await fetch("/api/status", { cache: "no-store" })).json();
         if (s?.version === ziel) { window.location.reload(); return; }
-      } catch { /* server is restarting */ }
+        if (warWeg && s?.version === info.aktuell) {
+          const u = await (await fetch("/api/update", { cache: "no-store" })).json();
+          const l = u?.letztesUpdate;
+          if (l && l.nach === ziel && ["zurueckgenommen", "fehlgeschlagen"].includes(l.ergebnis) && Date.parse(l.zeit) >= seit - 60_000) {
+            setPhase("fehler");
+            setFehler(t("Das Update ließ sich nicht starten und wurde zurückgenommen – die bisherige Fassung läuft wieder. Details in daten/update.log."));
+            return;
+          }
+        }
+      } catch { warWeg = true; /* server is restarting */ }
     }
     setPhase("fehler");
     setFehler(t("Die App ist nach dem Update nicht wieder gestartet. Bitte start-windows.cmd bzw. start.sh von Hand starten; Details in daten/update.log."));
   };
 
   const installieren = async () => {
+    const seit = Date.now();
     setFehler(null); setPhase("laedt");
     try {
       const r = await fetch("/api/update/installieren", { method: "POST" });
@@ -70,7 +95,7 @@ export default function UpdateHinweis() {
         if (s.phase === "fehler") throw new Error(s.fehler || t("Update fehlgeschlagen."));
         setPhase(s.phase === "bereit" ? "laedt" : s.phase);
         setFortschritt({ geladen: s.geladen || 0, gesamt: s.gesamt || 0 });
-        if (s.phase === "neustart") { await warteAufNeustart(info.neueste); return; }
+        if (s.phase === "neustart") { await warteAufNeustart(info.neueste, seit); return; }
       }
     } catch (e) {
       setPhase("fehler");
@@ -113,6 +138,32 @@ export default function UpdateHinweis() {
           <button type="button" aria-label={t("Schließen")} className="text-emerald-700 hover:text-emerald-900" onClick={() => { schreibeSpaeter(info.neueste); setSpaeter(info.neueste); }}><X className="h-4 w-4" /></button>
         )}
       </div>
+      {phase === "ruhe" && vorschau.length > 0 && (
+        <div className="mt-1.5 pl-6 text-xs text-emerald-900/90 dark:text-emerald-100/90">
+          {!alleAenderungen && (
+            <ul className="list-disc space-y-0.5 pl-4" data-testid="upd-aenderungen">
+              {vorschau.map((z, i) => <li key={i}>{z.text}</li>)}
+            </ul>
+          )}
+          {alleAenderungen && (
+            <div className="max-h-64 space-y-0.5 overflow-auto pr-2" data-testid="upd-aenderungen-voll">
+              {zeilen.map((z, i) => (z.art === "kopf"
+                ? <p key={i} className="pt-1 font-semibold">{z.text}</p>
+                : <p key={i} className={z.art === "punkt" ? "pl-3 -indent-3 before:mr-1 before:content-['•']" : ""}>{z.text}</p>))}
+              {info.seite && (
+                <p className="pt-1"><a href={info.seite} target="_blank" rel="noopener noreferrer" className="underline">{t("Release-Seite öffnen")}</a></p>
+              )}
+            </div>
+          )}
+          {zeilen.length > vorschau.length && (
+            <button type="button" className="mt-1 inline-flex items-center gap-1 font-medium hover:underline" aria-expanded={alleAenderungen}
+              onClick={() => setAlleAenderungen((v) => !v)} data-testid="upd-alle-aenderungen">
+              {alleAenderungen ? <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" /> : <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />}
+              {alleAenderungen ? t("Weniger anzeigen") : t("Alle Änderungen")}
+            </button>
+          )}
+        </div>
+      )}
       {phase === "laedt" && <div className="mt-1.5 h-1.5 overflow-hidden rounded bg-emerald-100"><div className="h-full bg-emerald-600 transition-all" style={{ width: `${prozent}%` }} /></div>}
       {fehler && <div className="mt-1 text-xs text-rose-700 dark:text-rose-300" data-testid="upd-fehler">{fehler}</div>}
     </div>

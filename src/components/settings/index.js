@@ -21,6 +21,7 @@ import KatalogeBereich, { BEREIT as KATALOGE_BEREIT } from "./KatalogeBereich.js
 import RegelwerkBereich, { BEREIT as REGELWERK_BEREIT } from "./RegelwerkBereich.jsx";
 import PersonalBereich, { BEREIT as PERSONAL_BEREIT } from "./PersonalBereich.jsx";
 import SystemBereich, { BEREIT as SYSTEM_BEREIT } from "./SystemBereich.jsx";
+import RechteBereich, { BEREIT as RECHTE_BEREIT } from "./RechteBereich.jsx";
 
 /**
  * Component and readiness per area key (same keys as EINSTELLUNGS_REITER).
@@ -35,5 +36,7 @@ export const BEREICH_KOMPONENTEN = Object.freeze({
   catalogs: { Komponente: KatalogeBereich, BEREIT: KATALOGE_BEREIT },
   rules: { Komponente: RegelwerkBereich, BEREIT: REGELWERK_BEREIT },
   templates: { Komponente: PersonalBereich, BEREIT: PERSONAL_BEREIT },
+  // 82-01: area "Nutzer & Rechte" registered as a placeholder; 82-02 fills it.
+  access: { Komponente: RechteBereich, BEREIT: RECHTE_BEREIT },
   system: { Komponente: SystemBereich, BEREIT: SYSTEM_BEREIT },
 });

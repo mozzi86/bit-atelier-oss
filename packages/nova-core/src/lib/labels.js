@@ -58,7 +58,36 @@ export const ENERGY_TARGET_LABELS = {
   kfw_40: "KfW 40",
   net_zero: "Netto-Null",
   plus_energy: "Plusenergie",
+  // 73-11: targets of a refurbishment (BEG Wohngebäude Sanierung) [ASSUMED names; conditions change several
+  // times a year and belong in maintained master data, not in code]
+  eh_denkmal: "Effizienzhaus Denkmal",
+  eh_85: "Effizienzhaus 85",
+  eh_70_ee: "Effizienzhaus 70 EE",
+  eh_55_sanierung: "Effizienzhaus 55 (Sanierung)",
+  einzelmassnahmen: "Einzelmaßnahmen (BEG EM)",
 };
+
+/**
+ * 73-11: which energy targets fit which kind of work (bauartVon). A stored value that does not fit stays
+ * visible and selectable (energieZieleFuer adds it) — nothing silently disappears from a project.
+ * @type {Readonly<Record<"neubau"|"bestand", string[]>>}
+ */
+export const ENERGY_TARGETS_JE_BAUART = Object.freeze({
+  neubau: ["passive_house", "kfw_55", "kfw_40", "net_zero", "plus_energy"],
+  bestand: ["eh_denkmal", "eh_85", "eh_70_ee", "eh_55_sanierung", "einzelmassnahmen", "passive_house"],
+});
+
+/**
+ * Energy targets offered for a kind of work, plus the stored one if it does not fit.
+ * @param {"neubau"|"bestand"} bauart
+ * @param {string|null|undefined} gespeichert current project value
+ * @returns {{werte: string[], fremd: string|null}} fremd = stored value outside the list (shown with a hint)
+ */
+export function energieZieleFuer(bauart, gespeichert) {
+  const werte = [...(ENERGY_TARGETS_JE_BAUART[bauart] || ENERGY_TARGETS_JE_BAUART.neubau)];
+  const fremd = gespeichert && !werte.includes(gespeichert) ? gespeichert : null;
+  return { werte: fremd ? [...werte, fremd] : werte, fremd };
+}
 
 /**
  * Fallback-Anzeige: bekannter Key → Label, unbekannter Wert unverändert,

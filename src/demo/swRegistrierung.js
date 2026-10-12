@@ -14,14 +14,20 @@
 //      version is waiting.
 
 import { SERVERLOS } from '@core/lib/umgebung';
+import { inHuelle } from '@/client/huelle.js';
 
 /**
  * @param {() => void} beiUpdate called when a new version is installed and waiting
  * @returns {Promise<ServiceWorkerRegistration|null>}
  */
 export async function registriereSw(beiUpdate) {
-  // Both serverless builds ship a worker: the demo and the client (70-01).
-  if (!SERVERLOS || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return null;
+  // The serverless PWA ships a worker (70-01). The desktop shell does NOT (70-02):
+  // registration fails under http://tauri.localhost (tauri#12214, #13031), the
+  // documented way out (tauri-plugin-localhost) carries a security warning, and
+  // the shell does not need it — its assets are inside the binary, so it runs
+  // offline anyway and updates come with a new installer, not a new worker.
+  // Without a registration the 'new version' strip never shows in the shell.
+  if (!SERVERLOS || inHuelle() || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return null;
 
   try {
     const basis = import.meta.env.BASE_URL || '/';

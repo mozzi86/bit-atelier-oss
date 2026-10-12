@@ -71,6 +71,13 @@ export const ANBIETER = {
    *  be switched off on its own if it ever gets harvested. */
   anfrageEmail: 'zugang@bit-atelier.de',
 
+  // --- Accessibility statement (93-02) ------------------------------------
+  /** Contact for accessibility barriers (name, e-mail or phone), shown on
+   *  /barrierefreiheit. Left blank on purpose until the operator decides who
+   *  answers; it then renders as "— fehlt —". Not a required field: the
+   *  statement points to the feedback dialog meanwhile. */
+  barrierefreiheitKontakt: '',
+
   // --- Numbers that appear in the text and therefore have to be true -----
   /** Deletion period for requests that never become a contract. Note the
    *  tension a lawyer has to resolve: once a request turns into an offer it is

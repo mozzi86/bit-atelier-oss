@@ -253,6 +253,45 @@ und wird nicht gespeichert; im Log steht nur der Text.
   (Download von huggingface.co/rhasspy/piper-voices). UI-Schalter „Antworten vorlesen".
 - Ohne Extra: `/stt` und `/tts` antworten 501 mit dem Installationshinweis, der Kern läuft.
 
+## FreeCAD (Plan 67-04)
+
+`/freecad` baut BIM-Modelle mit **FreeCAD 1.1** und exportiert IFC4 (Skill-Text:
+`skills/freecad/SKILL.md`). FreeCAD bringt sein eigenes Python mit; der Harness startet
+es als Unterprozess (`freecadcmd`, Timeout 120 s). Kein zusätzliches pip-Paket.
+
+- **Pfad:** Umgebungsvariable `BIT_FREECAD` (Programm oder Installationsordner) vor
+  `freecad.cmd` in `config.yaml` vor dem Standard
+  `C:\Program Files\FreeCAD 1.1\bin\freecadcmd.exe`. `harness doctor` zeigt, was gefunden wurde.
+- **Headless:** `/freecad plan` (nur Kennzahlen, ohne FreeCAD), `/freecad massing`
+  (Grundstück + Raumprogramm → Baukörper + Satteldach), `/freecad bauteile` (Wände,
+  Decken, Fenster, Türen, Dach aus einer Beschreibung, Format
+  `skills/freecad/references/beispiel-efh.json`), `/freecad export` (.FCStd → IFC).
+  Ergebnis immer neu: `model/<name>_v<n>.ifc` + `.FCStd`, danach Gegenprobe mit `/ifc liste`.
+
+### Hybrid-Modellieren (KI und du am selben Modell)
+
+1. FreeCAD-GUI öffnen, Modell laden (z. B. das `.FCStd` aus `/freecad massing`).
+2. **Einmal** das Makro starten: Makro → Makros… → Benutzermakro-Ordner auf
+   `harness\skills\freecad\macros` stellen (oder die Datei dorthin kopieren) →
+   `harness_bridge.FCMacro` → **Ausführen**. Im Bericht-Fenster steht
+   „Harness-Bridge läuft auf 127.0.0.1:8766".
+3. Im Harness: `/freecad bridge status` (Werkzeug `freecad_status`).
+4. Jeder KI-Schritt (`freecad_step`) ist **eine benannte FreeCAD-Transaktion**: er
+   steht unter Bearbeiten → Rückgängig mit seinem Namen, **Strg+Z** in FreeCAD (oder
+   `freecad_undo`) nimmt genau diesen Schritt zurück. Ein fehlschlagender Schritt wird
+   verworfen, das Dokument bleibt wie vorher.
+5. Von Hand korrigieren, dann `freecad_reload` — liest den aktuellen Stand zurück;
+   `export: true` schreibt ihn als neues `model/<name>_v<n>.ifc`.
+
+Sicherheit (T-67-12): die Bridge lauscht nur auf 127.0.0.1 und läuft nur, solange du
+das Makro gestartet hast. Im `user`-Modus schickt der Harness **kein freies Python**,
+nur Bauteil-Beschreibungen; freier Code (`code`) nur im `developer`-Modus. Ein Schritt,
+der länger als 30 s braucht, wird harness-seitig abgebrochen (die GUI ist währenddessen
+blockiert — FreeCAD-Dokumente dürfen nur im GUI-Thread angefasst werden).
+
+Nicht Teil von 67-04: iteratives Verfeinern per Sprache mit Rückfragen
+(„mach das Bad größer") — das ist Forschung für **Phase 68**.
+
 ## HTTP / WebSocket
 
 `GET /status`, `GET /projects`, `POST /project/{slug}`, `GET /skills`, `GET /model`,
@@ -264,7 +303,9 @@ der Dienst streamt die Ereignisse der Schleife 1:1: `hello`, `text_delta`, `tool
 
 ## Bekannte Grenzen (Stand 67-02)
 
-- Kein IFC (67-03), kein FreeCAD (67-04), keine Sprache (67-05), kein App-Reiter (67-06).
+- FreeCAD (67-04): Satteldach und Decken nur auf achsparallelen Rechteck-Umrissen;
+  Wandecken sind für rechte Winkel sauber (Windmühlen-Stoß), andere Winkel lassen
+  einen kleinen Keil. Massenmodell-Grundfläche = größtes achsparalleles Rechteck.
 - Die Modell-Listen der Cloud-Profile sind Stand 09/2026 und werden nicht automatisch
   aktualisiert; `doctor` zeigt, was der Endpunkt wirklich meldet. Der Coding-Plan-Pfad
   stammt aus der Hermes-Konfiguration und ist gegen einen echten Coding-Plan-Key nicht

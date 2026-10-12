@@ -63,6 +63,8 @@ const DICT = {
     "Berichte & Dokumente": "Reports & Documents",
     "Machbarkeit": "Feasibility",
     "Komplex-Designer": "Complex Designer",
+    // 88-06: menu title of the page "Werkplanung & Baustelle" (nav titles live here, navigation.test.js).
+    "Werkplanung & Baustelle": "Detailed design & site",
     "Prüf-Suite": "Check Suite",
     "BIM-Viewer & Tickets": "BIM Viewer & Tickets",
     "IFC-Viewer (LV-gekoppelt)": "IFC Viewer (BoQ-linked)",
@@ -72,6 +74,8 @@ const DICT = {
     "KI-Zentrale": "AI Hub",
     "Adressbuch": "Address Book",
     "Constraint-Zeichner": "Constraint Sketcher",
+    // 72-05: the sketcher became a real sketch tool (menu title = h1, navigation.test.js reads this file).
+    "Skizze": "Sketch",
     "Baustellen-Leitstand": "Site Control",
     "Investment": "Investment",
     "PDF & Ablage": "PDF & Filing",
@@ -809,6 +813,28 @@ const DICT = {
     // Weiter mit (src/naechsteSchritte.js)
     "Bericht mit Briefkopf erzeugen": "Create a report with letterhead",
     "Aufbewahrungsfristen einstellen": "Set retention periods",
+    // --- Zeit & Honorar 81-01 (Menü, Weiter mit) ---
+    // The only i18n.jsx change of phase 81 (HANDOFF §5): navigation.test.js reads the
+    // menu texts from this file alone. Everything else of the phase goes into
+    // i18nTeile/zeit-honorar-*.js, honorar-*.js and zeit-*.js.
+    "Zeit & Honorar": "Time & fees",
+    "Zeiterfassung": "Time tracking",
+    "Angebot & Auftrag": "Offers & contracts",
+    "Projektcontrolling": "Project controlling",
+    "Rechnungen in der Buchhaltung": "Invoices in accounting",
+    "Zeiten freigeben": "Approve hours",
+    "Architektenverträge": "Architect's contracts",
+    // --- Fristen, Abwesenheiten, Schriftverkehr 82-01 (Menü, Weiter mit) ---
+    // The only i18n.jsx change of phase 82 (HANDOFF §5): navigation.test.js reads the
+    // menu texts from this file alone; everything else goes into i18nTeile/buero-orga-*.js
+    // and the five lane files.
+    "Fristen & Termine": "Deadlines & appointments",
+    "Abwesenheiten": "Absences",
+    "Schriftverkehr": "Correspondence",
+    "Posteingang prüfen": "Check incoming mail",
+    "Stunden erfassen": "Record hours",
+    "Abwesenheit eintragen": "Enter an absence",
+    "Abwesenheiten & Urlaub": "Absences & leave",
     // Area texts live in i18nTeile/<area>.js (one i18n.jsx change per phase, decision list § 5)
     ...TEILE_EN,
   },

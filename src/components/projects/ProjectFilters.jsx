@@ -2,6 +2,7 @@ import React from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@core/components/ui/select";
 import { Filter } from "lucide-react";
 import { STATUS_LABELS, CLIMATE_ZONE_LABELS, ENERGY_TARGET_LABELS, labelFor } from "./labels";
+import { useI18n } from "@core/lib/i18n";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Alle Status" },
@@ -33,6 +34,7 @@ const ENERGY_TARGET_OPTIONS = [
 ];
 
 export default function ProjectFilters({ filters, onFilterChange }) {
+  const { t } = useI18n();
   const handleFilterChange = (filterType, value) => {
     onFilterChange({
       ...filters,
@@ -51,7 +53,7 @@ export default function ProjectFilters({ filters, onFilterChange }) {
         value={filters.status}
         onValueChange={(value) => handleFilterChange("status", value)}
       >
-        <SelectTrigger className="w-40 border-slate-200 focus:border-emerald-500">
+        <SelectTrigger aria-label={t("Status")} className="w-40 border-slate-200 focus:border-emerald-500">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -67,7 +69,7 @@ export default function ProjectFilters({ filters, onFilterChange }) {
         value={filters.climate_zone}
         onValueChange={(value) => handleFilterChange("climate_zone", value)}
       >
-        <SelectTrigger className="w-44 border-slate-200 focus:border-emerald-500">
+        <SelectTrigger aria-label={t("Klimazone")} className="w-44 border-slate-200 focus:border-emerald-500">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -83,7 +85,7 @@ export default function ProjectFilters({ filters, onFilterChange }) {
         value={filters.energy_target}
         onValueChange={(value) => handleFilterChange("energy_target", value)}
       >
-        <SelectTrigger className="w-44 border-slate-200 focus:border-emerald-500">
+        <SelectTrigger aria-label={t("Energiestandard")} className="w-44 border-slate-200 focus:border-emerald-500">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

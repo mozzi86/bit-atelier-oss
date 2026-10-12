@@ -123,7 +123,7 @@ describe("tesselierung.js — 75-14 Diele + Türen im Zuschnitt (Bild-Wohnung)",
     assert.equal(r2(z.reduce((s, q) => s + q.flaeche_m2, 0)), 93);
   });
 
-  it("Türen: jede Zimmertür in der Wand zum Flurstreifen, Fensterwand getaggt, Aufschlag links, Bad 0,985", () => {
+  it("Türen: jede Zimmertür in der Wand zum Flurstreifen, Fensterwand getaggt, Aufschlag links, Bad 1,01 (D-BW-06)", () => {
     const z = mit();
     for (const q of z.filter((x) => x.fensterpflicht)) {
       assert.equal(q.fensterwand, 2, "Fassade bei z = 12 = Kante 2");
@@ -136,7 +136,7 @@ describe("tesselierung.js — 75-14 Diele + Türen im Zuschnitt (Bild-Wohnung)",
       if (/^Abstellraum/.test(q.name)) { assert.equal(q.tueren[0].wand, 3); continue; }
       assert.equal(q.tueren[0].wand, 2, "Rückzeile: Flurseite = Kante 2");
     }
-    assert.equal(z.find((q) => /^Bad/.test(q.name)).tueren[0].breite_m, 0.985);
+    assert.equal(z.find((q) => /^Bad/.test(q.name)).tueren[0].breite_m, 1.01);
     assert.equal(z.find((q) => /^Bad/.test(q.name)).tueren[0].typ, "bad");
   });
 

@@ -4,7 +4,10 @@
 // `aktion` (fewer cold starts than seven functions).
 //
 // Actions (body JSON):
-//   { aktion: 'invoke', prompt, response_json_schema? }        → llm answer
+//   { aktion: 'invoke', prompt, response_json_schema?, daten?, projekt_id?, kontext? } → llm answer
+//     78-12: daten = [{ quelle, text }] external content (data blocks); projekt_id + kontext = context
+//     recipe — the function builds the context from exactly that project (_shared/llmKontext.js, a byte
+//     copy of packages/nova-core/server/llmKontext.js), reading AS THE CALLER (RLS applies).
 //   { aktion: 'connections.list' }                             → masked list
 //   { aktion: 'connections.create', name?, provider, base_url?, model?, api_key?, active? }
 //   { aktion: 'connections.update', id, …same fields… }        (empty api_key = keep)
@@ -23,8 +26,19 @@
 // server/llm.js — the offline answer must be identical (verification compares
 // the first line). NO node: imports anywhere in this file.
 
-import { nutzerAusRequest, adminClient, type Nutzer } from "../_shared/auth.ts";
+import { nutzerAusRequest, adminClient, nutzerClient, type Nutzer } from "../_shared/auth.ts";
+import { llmAktionErlaubt } from "../_shared/zugriffRegeln.js";
 import { corsHeaders, optionsAntwort, jsonAntwort, fehlerAntwort } from "../_shared/cors.ts";
+import { geschuetzterPrompt, antwortBereinigen } from "../_shared/llmSchutz.js";
+import { mitProjektKontext } from "../_shared/llmKontext.js";
+
+/** Record source shape of llmKontext.js (declared here: the .js module carries it only as JSDoc). */
+interface KontextQuelle {
+  // deno-lint-ignore no-explicit-any
+  projekt: (id: string) => Promise<Record<string, any> | null>;
+  // deno-lint-ignore no-explicit-any
+  liste: (entity: string, projektId: string) => Promise<Array<Record<string, any>>>;
+}
 
 // ---------------------------------------------------------------------------
 // Port of server/llm.js (mock, provider calls) — unchanged semantics
@@ -63,6 +77,8 @@ function buildMockFromSchema(schema: any): any {
 /** The invoke/test parameter shape shared by all provider calls (llm.js). */
 interface InvokeParams {
   prompt?: string;
+  /** 78-12: external content, sent as data blocks behind the safety preamble. */
+  daten?: Array<{ quelle?: string; text?: string }>;
   // deno-lint-ignore no-explicit-any
   response_json_schema?: any;
 }
@@ -272,6 +288,14 @@ async function callOpenAI(params: InvokeParams): Promise<unknown> {
  * at all (must-have #4).
  */
 async function invokeLLM(params: InvokeParams, connection: Verbindung | null): Promise<unknown> {
+  // 78-12: same guards as the local server (_shared/llmSchutz.js is a byte copy of
+  // packages/nova-core/server/llmSchutz.js — unit test llmSchutz-7812 watches the drift).
+  const geschuetzt: InvokeParams = { ...params, prompt: geschuetzterPrompt(params?.prompt ?? "", params?.daten) };
+  delete geschuetzt.daten;
+  return antwortBereinigen(await rufen(geschuetzt, connection));
+}
+
+async function rufen(params: InvokeParams, connection: Verbindung | null): Promise<unknown> {
   if (connection) return callConnection(connection, params);
   if (Deno.env.get("ANTHROPIC_API_KEY")) return callAnthropic(params);
   if (Deno.env.get("OPENAI_API_KEY")) return callOpenAI(params);
@@ -523,8 +547,37 @@ async function bodyLesen(req: Request): Promise<Record<string, unknown>> {
   }
 }
 
+/**
+ * 78-12: record source for the server-built project context. Reads the `records` table with the CALLER's
+ * client (RLS of 0011 applies — an external party only gets released rows) and additionally pins the
+ * caller's org; llmKontext.js filters every row again by project_id.
+ */
+// deno-lint-ignore no-explicit-any
+function cloudKontextQuelle(client: any, orgId: string): KontextQuelle {
+  // deno-lint-ignore no-explicit-any
+  const ausZeile = (z: any) => ({ ...(z?.data || {}), id: z?.id });
+  return {
+    projekt: async (id: string) => {
+      const { data, error } = await client
+        .from("records").select("id, data")
+        .eq("org_id", orgId).eq("entity", "Project").eq("id", id)
+        .maybeSingle();
+      if (error) throw new Error(`Projekt lesen fehlgeschlagen: ${error.message}`);
+      return data ? ausZeile(data) : null;
+    },
+    liste: async (entity: string, projektId: string) => {
+      const { data, error } = await client
+        .from("records").select("id, data")
+        .eq("org_id", orgId).eq("entity", entity).eq("data->>project_id", projektId)
+        .limit(500);
+      if (error) throw new Error(`${entity} lesen fehlgeschlagen: ${error.message}`);
+      return (data || []).map(ausZeile);
+    },
+  };
+}
+
 /** Dispatch on `aktion` — one function, seven actions (fewer cold starts). */
-async function ausführen(nutzer: Nutzer, body: Record<string, unknown>): Promise<unknown> {
+async function ausführen(nutzer: Nutzer, body: Record<string, unknown>, req: Request): Promise<unknown> {
   const aktion = String(body.aktion || "");
   const orgId = nutzer.orgId;
   // org_id in the body must match the membership — checked centrally.
@@ -534,12 +587,31 @@ async function ausführen(nutzer: Nutzer, body: Record<string, unknown>): Promis
     throw err;
   }
 
+  // 74-01 Task 9: connections/test owner only, invoke internal roles only.
+  // Unknown actions fall through to the 400 below.
+  const bekannt = ["invoke", "defaults", "test"].includes(aktion) || aktion.startsWith("connections.");
+  if (bekannt && !llmAktionErlaubt(aktion, nutzer.role)) {
+    const err = new Error("Für diese Aktion fehlt die Berechtigung.") as Error & { status: number };
+    err.status = 403;
+    throw err;
+  }
+
   switch (aktion) {
-    case "invoke":
-      return invokeLLM(
-        { prompt: String(body.prompt ?? ""), response_json_schema: body.response_json_schema },
-        await aktiveVerbindung(orgId),
+    case "invoke": {
+      // 78-12: daten were dropped here before (only prompt + schema were passed on) — now they reach the
+      // guards, and a requested project context is built from exactly one project.
+      const wuenschtKontext = body.kontext != null || body.projekt_id != null;
+      const params = await mitProjektKontext(
+        {
+          prompt: String(body.prompt ?? ""),
+          response_json_schema: body.response_json_schema,
+          daten: Array.isArray(body.daten) ? body.daten : undefined,
+          ...(wuenschtKontext ? { projekt_id: body.projekt_id, kontext: body.kontext } : {}),
+        },
+        wuenschtKontext ? cloudKontextQuelle(nutzerClient(req), orgId) : null,
       );
+      return invokeLLM(params as InvokeParams, await aktiveVerbindung(orgId));
+    }
     case "connections.list":
       return connectionsList(orgId);
     case "connections.create":
@@ -585,7 +657,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
     const body = await bodyLesen(req);
     const nutzer = await nutzerAusRequest(req, { orgId: body.org_id ? String(body.org_id) : null });
-    const ergebnis = await ausführen(nutzer, body);
+    const ergebnis = await ausführen(nutzer, body, req);
     // create answers 201 on Express; keeping 200 here is fine for the client
     // (it only reads the JSON), but parity is cheap:
     const status = String(body.aktion) === "connections.create" ? 201 : 200;

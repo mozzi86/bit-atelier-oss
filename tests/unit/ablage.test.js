@@ -106,3 +106,30 @@ test("pfadText — lesbarer Ablageort, auch für die Wurzel", () => {
   assert.equal(pfadText([]), "Projektwurzel");
   assert.equal(pfadText(undefined), "Projektwurzel");
 });
+
+// --- Phase 81 (81-01): Bytes für versendete Dokumente, Bereich, Prüfsumme -------
+
+test("dokumentAblegen — Honorarangebot mit Bytes landet in 00_Vertrag & Honorar/Angebote (81-01)", async () => {
+  const api = fakeApi();
+  const daten = "data:application/pdf;base64,JVBERi0xLjMK";
+  const r = await dokumentAblegen(
+    { projectId: "p1", name: "HA-2026-001.pdf", typ: "Honorarangebot", daten, bereich: "buero", sha256: "ab12" }, api,
+  );
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.pfad, ["00_Vertrag & Honorar", "Angebote"]);
+  const doc = api.angelegteDokumente[0];
+  assert.equal(doc.data, daten);
+  assert.equal(doc.bereich, "buero");
+  assert.equal(doc.sha256, "ab12");
+});
+
+test("dokumentAblegen — ohne daten kein data-Feld, Bereich Standard 'projekt' (81-01)", async () => {
+  const api = fakeApi();
+  const r = await dokumentAblegen({ projectId: "p1", name: "Plan.pdf", typ: "Plan-PDF" }, api);
+  assert.equal(r.ok, true);
+  const doc = api.angelegteDokumente[0];
+  assert.equal("data" in doc, false);
+  assert.equal("sha256" in doc, false);
+  assert.equal(doc.bereich, "projekt");
+  assert.deepEqual(Object.keys(r).sort(), ["angelegt", "dokument", "ok", "pfad"], "Rückgabeform unverändert");
+});

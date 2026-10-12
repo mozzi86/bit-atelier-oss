@@ -311,7 +311,7 @@ export default function PriceComparison({
               <div className="flex-1">
                 <Label className="text-xs">Bieter</Label>
                 <Select value={contactId} onValueChange={setContactId}>
-                  <SelectTrigger><SelectValue placeholder="Bieter…" /></SelectTrigger>
+                  <SelectTrigger aria-label={t("Bieter")}><SelectValue placeholder="Bieter…" /></SelectTrigger>
                   <SelectContent>
                     {invited.length > 0 && invited.map((c) => <SelectItem key={c.id} value={c.id}>★ {c.company || c.name}</SelectItem>)}
                     {others.map((c) => <SelectItem key={c.id} value={c.id}>{c.company || c.name}</SelectItem>)}
@@ -336,11 +336,11 @@ export default function PriceComparison({
             </div>
             <div>
               <Label className="text-xs">Bemerkung</Label>
-              <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="z.B. Nachlass, Lieferzeit…" />
+              <Input aria-label={t("Bemerkung")} value={note} onChange={(e) => setNote(e.target.value)} placeholder="z.B. Nachlass, Lieferzeit…" />
             </div>
             <div>
               <Label className="text-xs">{t("Angebotssumme laut Bieter (netto, optional)")}</Label>
-              <Input type="number" step="any" value={summeBieter} onChange={(e) => setSummeBieter(e.target.value)} data-testid="pv-summe-bieter" />
+              <Input aria-label={t("Angebotssumme laut Bieter (netto, optional)")} type="number" step="any" value={summeBieter} onChange={(e) => setSummeBieter(e.target.value)} data-testid="pv-summe-bieter" />
               <div className="mt-1 text-[11px] text-slate-400">{t("Leere EP-Felder bleiben leer (kein Preis) — sie werden nicht als 0 gespeichert.")}</div>
             </div>
             <div className="flex justify-end gap-2 pt-2">

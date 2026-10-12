@@ -11,8 +11,10 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@core/components/ui/card";
-import { PencilRuler, ShieldCheck, FileSpreadsheet, ArrowRight } from "lucide-react";
+import { PencilRuler, ShieldCheck, FileSpreadsheet, ArrowRight, ScanLine } from "lucide-react";
 import { createPageUrl } from "@core/utils";
+import { bauartVon } from "@core/lib/bauart";
+import { startSchritte } from "./startpfadRegel";
 
 // The visibility rule lives in startpfadRegel.js (plain .js) so node --test can
 // load it; re-exported here so callers keep one import.
@@ -27,6 +29,15 @@ const SCHRITTE = [
     ziel: `${createPageUrl("ComplexDesigner")}?tab=site`,
     icon: PencilRuler,
     farbe: "text-emerald-600 bg-emerald-50",
+  },
+  {
+    // 73-01: start of an existing-building project — the survey comes before any design.
+    id: "bauaufnahme",
+    titel: "Bauaufnahme laden",
+    text: "Aufmaß- oder Scanmodell (IFC) laden, Bestand und Zustand erfassen.",
+    ziel: createPageUrl("IfcViewer"),
+    icon: ScanLine,
+    farbe: "text-violet-600 bg-violet-50",
   },
   {
     id: "pruefen",
@@ -48,7 +59,7 @@ const SCHRITTE = [
 
 /**
  * @param {object} props
- * @param {{ name?: string }} [props.project] the freshly created project (for the headline)
+ * @param {{ name?: string, build_kind?: string }} [props.project] the freshly created project (headline + kind of work)
  * @returns {JSX.Element} the three cards
  */
 export default function Startpfad({ project }) {
@@ -61,7 +72,7 @@ export default function Startpfad({ project }) {
         Drei Wege durch die Plattform. Jeder lässt sich jederzeit wechseln.
       </p>
       <div className="grid gap-3 md:grid-cols-3">
-        {SCHRITTE.map((s) => {
+        {startSchritte(bauartVon(project).bauart).map((id) => SCHRITTE.find((x) => x.id === id)).map((s) => {
           const Icon = s.icon;
           return (
             <Link key={s.id} to={s.ziel} className="group">

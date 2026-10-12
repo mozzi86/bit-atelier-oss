@@ -79,7 +79,7 @@ export default function ProtokollBuch() {
               </button>
               <span className="flex items-center gap-3">
                 <span className={spaet ? "text-rose-700" : "text-slate-500"}>{offen.length} {t("offen")}{spaet ? ` · ${spaet} ${t("überfällig")}` : ""}</span>
-                <button type="button" className="text-slate-500 hover:text-emerald-700" onClick={() => pdf(p)} title="PDF"><FileDown className="h-4 w-4" /></button>
+                <button aria-label={t("Protokoll als PDF")} type="button" className="text-slate-500 hover:text-emerald-700" onClick={() => pdf(p)} title="PDF"><FileDown className="h-4 w-4" /></button>
               </span>
             </div>
           );
@@ -103,7 +103,7 @@ export default function ProtokollBuch() {
                 <input className={`${feld} flex-1`} value={tn.name} placeholder={t("Name")} onChange={(e) => setTn(i, { name: e.target.value })} data-testid="pb-tn-name" />
                 <input className={`${feld} flex-1`} value={tn.firma} placeholder={t("Firma")} onChange={(e) => setTn(i, { firma: e.target.value })} />
                 <label className="flex items-center gap-1"><input type="checkbox" checked={tn.anwesend !== false} onChange={(e) => setTn(i, { anwesend: e.target.checked })} /> {t("anwesend")}</label>
-                <button type="button" className="text-slate-400 hover:text-rose-600" onClick={() => set({ teilnehmer: entwurf.teilnehmer.filter((_, k) => k !== i) })}><Trash2 className="h-3.5 w-3.5" /></button>
+                <button aria-label={t("Teilnehmer entfernen")} type="button" className="text-slate-400 hover:text-rose-600" onClick={() => set({ teilnehmer: entwurf.teilnehmer.filter((_, k) => k !== i) })}><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
             ))}
             <Button size="sm" variant="outline" onClick={() => set({ teilnehmer: [...entwurf.teilnehmer, { name: "", firma: "", anwesend: true }] })} data-testid="pb-tn-hinzu"><Plus className="mr-1 h-3.5 w-3.5" /> {t("Teilnehmer")}</Button>
@@ -128,7 +128,7 @@ export default function ProtokollBuch() {
                     </select>
                   </>
                 )}
-                <button type="button" className="col-span-12 justify-self-end text-slate-400 hover:text-rose-600 md:col-span-1" onClick={() => set({ punkte: entwurf.punkte.filter((_, k) => k !== i) })}><Trash2 className="h-3.5 w-3.5" /></button>
+                <button aria-label={t("Punkt entfernen")} type="button" className="col-span-12 justify-self-end text-slate-400 hover:text-rose-600 md:col-span-1" onClick={() => set({ punkte: entwurf.punkte.filter((_, k) => k !== i) })}><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
             ))}
             <Button size="sm" variant="outline" onClick={() => set({ punkte: [...entwurf.punkte, { art: "aufgabe", thema: "", text: "", zustaendig: "", frist: "", status: "offen", herkunft: null }] })} data-testid="pb-punkt-hinzu"><Plus className="mr-1 h-3.5 w-3.5" /> {t("Punkt")}</Button>

@@ -20,6 +20,7 @@ import BetragFeld from "./gemeinsam/BetragFeld.jsx";
 import ExportKnopf from "./gemeinsam/ExportKnopf.jsx";
 import StatusMarke from "./gemeinsam/StatusMarke.jsx";
 import RechnungFormular from "./RechnungFormular.jsx";
+import XRechnungKnopf from "./XRechnungKnopf.jsx";
 
 const TH = "h-9 px-2 text-left align-middle text-xs font-medium text-slate-500 dark:text-slate-400";
 const TD = "px-2 py-1.5 align-middle text-sm";
@@ -281,6 +282,8 @@ export default function RechnungenAbschnitt({ bh, projektId }) {
                             <button type="button" className={buttonVariants({ variant: "ghost", size: "sm" })}
                               onClick={() => setFormular({ modus: "lesen", rechnung: r })}>{t("Ansehen")}</button>
                           )}
+                          {/* 93-01: e-invoice for public clients — issued invoices and storno documents only. */}
+                          {!editierbar && <XRechnungKnopf bh={bh} rechnung={r} />}
                         </div>
                       </td>
                     </tr>

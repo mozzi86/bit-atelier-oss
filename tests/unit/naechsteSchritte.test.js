@@ -16,6 +16,12 @@ import { NAECHSTE_SCHRITTE, naechsteSchritteFuer, zielPfad } from "@/naechsteSch
 import { navGroups, navFlach } from "@/navigation.js";
 import { istGueltigerTab } from "@designer/config/designerNavigation.js";
 import { REITER_SCHLUESSEL } from "@/lib/accounting/reiter.js";
+import { ZEIT_REITER_SCHLUESSEL } from "@/lib/zeit/reiter.js";
+import { HONORAR_REITER_SCHLUESSEL } from "@/lib/honorar/reiter.js";
+import { CONTROLLING_REITER_SCHLUESSEL } from "@/lib/controlling/reiter.js";
+import { REITER_SCHLUESSEL as FRISTEN_SCHLUESSEL } from "@/lib/termine/reiter.js";
+import { REITER_SCHLUESSEL as ABWESENHEIT_SCHLUESSEL } from "@/lib/abwesenheit/reiter.js";
+import { REITER_SCHLUESSEL as SCHRIFT_SCHLUESSEL } from "@/lib/schriftverkehr/reiter.js";
 import { EINSTELLUNGS_REITER } from "@/lib/settings/bereiche.js";
 import { PERSONAL_REITER } from "@/lib/people/reiter.js";
 
@@ -60,6 +66,14 @@ const ERLAUBTE_PARAMETER = {
   // 80-01: Büro-Gruppe vervollständigt (E-02) — settings areas and personnel tabs from their registries.
   "/Settings": { tab: (w) => EINSTELLUNGS_REITER.includes(w) },
   "/People": { tab: (w) => PERSONAL_REITER.includes(w) },
+  // 81-01: Zeit & Honorar vor Büro, E-02 — tab keys from the three registries (keys only, no aliases).
+  "/TimeTracking": { tab: (w) => ZEIT_REITER_SCHLUESSEL.includes(w) },
+  "/Fees": { tab: (w) => HONORAR_REITER_SCHLUESSEL.includes(w) },
+  "/Controlling": { tab: (w) => CONTROLLING_REITER_SCHLUESSEL.includes(w) },
+  // 82-01: the three pages of phase 82 — tab keys from their registries (keys only, no aliases).
+  "/Deadlines": { tab: (w) => FRISTEN_SCHLUESSEL.includes(w) },
+  "/Absences": { tab: (w) => ABWESENHEIT_SCHLUESSEL.includes(w) },
+  "/Correspondence": { tab: (w) => SCHRIFT_SCHLUESSEL.includes(w) },
 };
 
 /**
@@ -112,10 +126,29 @@ test("die Prüfung erkennt kaputte Ziele (sonst wäre der Test oben wertlos)", (
   assert.equal(problemeDesZiels("/People?tab=vertraege").length, 1);
 });
 
-test("80-01: Weiter mit für /Settings (1 Schritt) und /People (2 Schritte)", () => {
+test("81-06: /TimeTracking, /Fees, /Controlling — je 1–3 gültige Ziele, nur englische Routen, die Kette ist geschlossen", () => {
+  const seiten = ["/TimeTracking", "/Fees", "/Controlling"];
+  for (const seite of seiten) {
+    const liste = NAECHSTE_SCHRITTE[seite];
+    assert.ok(liste.length >= 1 && liste.length <= 3, seite);
+    for (const s of liste) {
+      assert.deepEqual(problemeDesZiels(s.ziel), [], `${seite} → ${s.ziel}`);
+      assert.doesNotMatch(zielPfad(s.ziel), /Zeiterfassung|Honorar|Auftrag|Projektcontrolling|Buchhaltung|Personal|Einstellungen/, `${seite}: deutsche Route ${s.ziel}`);
+    }
+  }
+  // Closed chain: every page of the phase reaches the other two within two steps.
+  const nachbarn = (/** @type {string} */ seite) => (NAECHSTE_SCHRITTE[seite] || []).map((s) => zielPfad(s.ziel));
+  for (const von of seiten) {
+    const erreichbar = new Set([...nachbarn(von), ...nachbarn(von).flatMap(nachbarn)]);
+    for (const nach of seiten) if (nach !== von) assert.ok(erreichbar.has(nach), `${von} erreicht ${nach} nicht`);
+  }
+});
+
+// 82-01: /People gets a third step to the leave account.
+test("80-01: Weiter mit für /Settings (1 Schritt) und /People (3 Schritte seit 82-01)", () => {
   assert.equal(NAECHSTE_SCHRITTE["/Settings"].length, 1);
-  assert.equal(NAECHSTE_SCHRITTE["/People"].length, 2);
-  assert.deepEqual(NAECHSTE_SCHRITTE["/People"].map((s) => s.ziel), ["/Settings?tab=rules", "/Projects"]);
+  assert.equal(NAECHSTE_SCHRITTE["/People"].length, 3);
+  assert.deepEqual(NAECHSTE_SCHRITTE["/People"].map((s) => s.ziel), ["/Settings?tab=rules", "/Projects", "/Absences?tab=balance"]);
 });
 
 test("?beispiel=1 wird von der Prüf-Suite tatsächlich gelesen", () => {

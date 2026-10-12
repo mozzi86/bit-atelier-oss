@@ -1,212 +1,212 @@
 {
-  "stand": "2026-10-10",
+  "stand": "2026-10-12",
   "faelle": {
     "rechteck_70x16|mittelflur": {
-      "hash": "908c238341696a87f897835eac93e927b5b8e1798d1e6893de08500fcbedfc35",
+      "hash": "156cc657ed56b6a382376d7b09366708f500e748e0ea21c67dd27d1cae7fea81",
       "we": 72,
       "zonen": 476,
       "riegel": 1
     },
     "rechteck_70x16|mfh": {
-      "hash": "d6997321b8bb856fc39ba5c18b0d9998b0f19d34216b83ef98a6e034bb3efd41",
+      "hash": "d93c0f716aaf26716d2a15cfe64ac9e63a9d8393b5a62a5ae6851f0c7b96ef41",
       "we": 64,
       "zonen": 445,
       "riegel": 1
     },
     "rechteck_70x16|laubengang": {
-      "hash": "5f01bd196189e71483662cb0a685de48171fe8b7c59273e111e13e4172369657",
+      "hash": "f77607dfa8d7ed7539d83e90001a81d5b67ba254f9fa30a69b70c426d7fb5290",
       "we": 44,
       "zonen": 292,
       "riegel": 1
     },
     "rechteck_70x16|spaenner": {
-      "hash": "45586f8223e68a4f7ab64d5ea8e7e81ccde8a9a59fa2cc905a191ef994b20e3f",
+      "hash": "da443086966c9906b933a66397f7ea1e208375218cb09bc28de2f737407abd4f",
       "we": 16,
       "zonen": 144,
       "riegel": 1
     },
     "rechteck_70x16|reihenhaus": {
-      "hash": "b016e6d433fb82e71bc10b3efa9b3164ce891696fe8900ea012840ccff203d2c",
+      "hash": "7532e6896445f1389f8bd4e4f8d009c7411b37ce9951c59176d2f6a520b60a08",
       "we": 11,
       "zonen": 220,
       "riegel": 1
     },
     "rechteck_40x16_gedreht_23|mittelflur": {
-      "hash": "7783050a0bfb3355a8cd7ff8d8348848d9ba704e38e8c48d6ceaf71b2aa54ca2",
+      "hash": "e0bc35d992a2600f4b3fbe1fa001757b84e0b70c6fec7f604e8333ac3f778581",
       "we": 40,
       "zonen": 276,
       "riegel": 1
     },
     "rechteck_40x16_gedreht_23|mfh": {
-      "hash": "a892e334bd58b964610eaad0ae6149661cb11ba8c6064aed9e1f3b11f99af6d9",
+      "hash": "f5e4c7f33d438c39b1bb8ad65bc014335cd1e4f41ccdca76da7e754e93ae1d94",
       "we": 40,
       "zonen": 260,
       "riegel": 1
     },
     "rechteck_40x16_gedreht_23|laubengang": {
-      "hash": "da36dd761c4f490d0bdeb491d0ef377ec2f1d86f7971795baf1b97ef93df42be",
+      "hash": "8f96b7e441970da7b24ed23d8af731ea5909adf2a6b94b7625f0e194d240e7f1",
       "we": 24,
       "zonen": 164,
       "riegel": 1
     },
     "rechteck_40x16_gedreht_23|spaenner": {
-      "hash": "b29262521a630bdbdbd24c99b50d7345f0f0c7d4ec50ec2dc90c847893e9e616",
+      "hash": "89fb735adaa0a6bc8e6ebf6d77a016a1799aa7cefb63e69a97b8aef5f3873c9f",
       "we": 16,
       "zonen": 144,
       "riegel": 1
     },
     "rechteck_40x16_gedreht_23|reihenhaus": {
-      "hash": "817885f1f293bdc9c2b730639b3a909208b0db18dc03497a2fde08cb0ab9a287",
+      "hash": "722f7939cb87b6f01eb038351b7088c3da3e7823be2f10b8ef1e5672ebb8ffbe",
       "we": 6,
       "zonen": 120,
       "riegel": 1
     },
     "L|mittelflur": {
-      "hash": "9789a326f3b1177a59a8313ee17bdfb75b6e521f87f8c21fc906005d3e9da51c",
+      "hash": "814ac61329347795a9b9b4ea7a46de3c97922754dab817433fbf8b53ae3ae045",
       "we": 72,
       "zonen": 472,
       "riegel": 2
     },
     "L|mfh": {
-      "hash": "8e947cab5b526bdb375d1979cf076fc2159d11c17b742c6473787b294efb1bcb",
+      "hash": "3c0d5fa30b715ad3f8269e783b2d61a2cf5e0d2f3c982256b7ace873225127ec",
       "we": 77,
-      "zonen": 480,
+      "zonen": 471,
       "riegel": 2
     },
     "L|laubengang": {
-      "hash": "2b0422fb3aece75a03643576ad835e41f930fbed522a4f3a03b43a8822491364",
+      "hash": "d49260f026adde62d727a0f32c8d9dc8ddf0b5c3aff4262ecaf2b42664ce0d16",
       "we": 44,
       "zonen": 276,
       "riegel": 2
     },
     "L|spaenner": {
-      "hash": "321568ad72fe7ab20c80be8364736c9503aeacd7b85571dfb4bbf25ac92f2b2d",
+      "hash": "f6debcdb06379be3e7298b8ba4b27511ec7fb95c1dbf97494a2dea77fe30832c",
       "we": 32,
       "zonen": 284,
       "riegel": 2
     },
     "L|reihenhaus": {
-      "hash": "1b4c97eb3876b0b22f36c86f649a7fd32d4ef8a6abca157762ae72a92c3ea591",
+      "hash": "9c01b68b94a312adf7a0edd0f33489b24b9ca5093d97e4b22dfdab8ab15712e1",
       "we": 12,
       "zonen": 241,
       "riegel": 2
     },
     "L_lang|mittelflur": {
-      "hash": "c7ba3b064a2a7f549dbad285c4a2ead5fad3dd980d916d9ac163a2c1c4ff1454",
+      "hash": "a607109121292cce704958a8627ace8c711525e5ae56f8a1ef78eef1fb57ac14",
       "we": 104,
       "zonen": 656,
       "riegel": 2
     },
     "L_lang|mfh": {
-      "hash": "7b924e3c280f4ce5282a4c89c2abec91168e39d8e808c75a3e3c0e9fc55fdc9d",
+      "hash": "f0d74062b67f2bac2c536eecdcb1307f9f1d0bfba1bc4ca7e79c4ac0157bbc17",
       "we": 93,
       "zonen": 629,
       "riegel": 2
     },
     "L_lang|laubengang": {
-      "hash": "bdde6a3fa0a2f31ced9c9f6550e27c1c055f2e86fb0b369a66a29b9ba37e85ed",
+      "hash": "d471ca700c52ee89a9469650dbac9104f40a45b3597171885618e09e9be2f837",
       "we": 64,
       "zonen": 400,
       "riegel": 2
     },
     "L_lang|spaenner": {
-      "hash": "b0a05b1ee4773a182703966cb63413cc220e4edede0ac964a8cd76a9fa598bcd",
+      "hash": "b463d4eb4bcf15f4b9d72ca9e53b80b0d5804eb29d7e9c25dafacea27b851149",
       "we": 32,
       "zonen": 288,
       "riegel": 2
     },
     "L_lang|reihenhaus": {
-      "hash": "3057fb3565e38f16ce2728cdccf6b086a5c6f4229993b7402abdaff4b3f73d30",
+      "hash": "ce284c7f3ba3b35cd660a4401d0f4d791ff6a5c774f0b1aad58ba01402b8c25c",
       "we": 17,
       "zonen": 341,
       "riegel": 2
     },
     "U|mittelflur": {
-      "hash": "649f1ba1027e4dcead205b317f7e66ab1cb274874c45e1fc0eda2fe03abf7007",
+      "hash": "49abf49d0c2fd8bbffdddad1e357d0ddcf9f378423e63c31a0e8f126f77b829c",
       "we": 112,
       "zonen": 724,
       "riegel": 3
     },
     "U|mfh": {
-      "hash": "6513f40fe281fe80246cbb689b55004284930c5a55c896b84bca9c91e15876dc",
+      "hash": "f774d74b5b26b2dc425a6ab385d2bb8f4d6489677f770002e12424b641c24244",
       "we": 119,
       "zonen": 729,
       "riegel": 3
     },
     "U|laubengang": {
-      "hash": "ab1c56d3a2b63474463ac861deda8b5763cd4fe898d47eb4f8a9b313452a26e2",
+      "hash": "068e00b31d5d297d1903ed0cc64b162b451c29b68afb1b40516834431e772721",
       "we": 68,
       "zonen": 432,
       "riegel": 3
     },
     "U|spaenner": {
-      "hash": "88982e84989943f2acb6781b21ebcb6763f39c95f9b18965d063205a5a03dcac",
+      "hash": "c92ff79b7b6cdb9f15525af8aa1abe1cd8074773892afc405f1b57266698af8e",
       "we": 48,
       "zonen": 424,
       "riegel": 3
     },
     "U|reihenhaus": {
-      "hash": "a3b2d1c8fcc2f49c5b4b1cc451b4b3626ec52cf54e4cfd8fac0546587dfd3212",
+      "hash": "000ebd1c33aaf3b4c70ed42abf721d7f548c60d1ddfae3934bfae636cc9c15a9",
       "we": 18,
       "zonen": 362,
       "riegel": 3
     },
     "fuenfeck|mittelflur": {
-      "hash": "a368c9fb638fd84306f2ed956cf9a6fae4c8bf5001ba4e3249b37d3fe062e060",
+      "hash": "b68429db86bf74deca33e2d4768a584395e3ad529d9a9172ec791b8741e14f01",
       "we": 80,
       "zonen": 512,
       "riegel": 4
     },
     "fuenfeck|mfh": {
-      "hash": "ffd97ce61216c80c40aa8ed5b403fc71d08213984c81755d2b95b2748c8282df",
+      "hash": "b7fe3267aee23759e54bde4fa7188ad3c37f3c2198b8283f39f44db75056a5f5",
       "we": 69,
       "zonen": 441,
       "riegel": 4
     },
     "fuenfeck|laubengang": {
-      "hash": "5ac2821188d6091694b86814a7e6963bb29bb48e9486b9ae347473d7e796775e",
+      "hash": "9228a85c948b88e5d354866ad776a870636f587c1ca843a7b88ef3461fbdaa97",
       "we": 52,
       "zonen": 316,
       "riegel": 4
     },
     "fuenfeck|spaenner": {
-      "hash": "db03f9962a57ca4e264b3708af21665b9bcb9b8b2f3e1ab3c81a2b13d2a11759",
+      "hash": "7344ab8f340cc89f63f9d5991b78f51013aabc5f589b7b874b1820826207815b",
       "we": 64,
       "zonen": 424,
       "riegel": 4
     },
     "fuenfeck|reihenhaus": {
-      "hash": "52168c52092b0245f1650e1c30be2d23b92b7a3318ebcf55db80848642b6abce",
+      "hash": "30e966a8fe7cc71b579af02025f67453e46f97a185b133cc8895c8dd6e110d8e",
       "we": 13,
       "zonen": 261,
       "riegel": 4
     },
     "trapez|mittelflur": {
-      "hash": "2a3a4bbdb25f78c75a3e921457ddd6b42d8448a907711f74e6e5c16329e436c6",
+      "hash": "e91b438d2b99a1fc7345e56de1b3d94bea536b350af2be704e326afd402b7878",
       "we": 48,
       "zonen": 316,
       "riegel": 1
     },
     "trapez|mfh": {
-      "hash": "584a18fdb561aae52523c3714d2d1d8a6b516b7efd68240ad2e39c9d1f4c7c84",
+      "hash": "7fc2647a74dbbdeb4d76080dc7ebc570a46df13b39e295b7216eb1a175970447",
       "we": 43,
       "zonen": 295,
       "riegel": 1
     },
     "trapez|laubengang": {
-      "hash": "1f67ba9b11b9f9cacefa4b38113da5b14720ecbd404bd4e1a597fb2531dc7d36",
+      "hash": "952d399240b69e01e5ea28cd02116afb901b19ffac4b47e4d27317f60cbc584d",
       "we": 32,
       "zonen": 196,
       "riegel": 1
     },
     "trapez|spaenner": {
-      "hash": "cbd9b3e75bcdff733d8c618953a0f62dae48d08048e15e9240d38ce7159199bc",
+      "hash": "dfcce83b95725ac3f4892dc2302af05334998f84d3d9de298488f429085ab733",
       "we": 16,
       "zonen": 143,
       "riegel": 1
     },
     "trapez|reihenhaus": {
-      "hash": "3f0f4463448771b21284a3ddc181af61c6d2fc2efacff2bc70c90bd99cbf6028",
+      "hash": "c3c731ec4c786c56644fc32a95b62660e4e8d30ee6dc0cecbc7f939479d97939",
       "we": 8,
       "zonen": 160,
       "riegel": 1

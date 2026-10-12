@@ -6,11 +6,15 @@
 // Label-Werte bleiben lesbar (normalisiereProjekt mappt sie beim Laden).
 import { datenPfad } from './datenPfad.js';
 import { createDb } from '../packages/nova-core/server/db.js';
-import { projects, contacts } from '../packages/nova-core/server/seed-data.js';
+import { projects, contacts, bimSnapshots } from '../packages/nova-core/server/seed-data.js';
 import { normalisiereProjekt } from '../packages/nova-core/src/lib/labels.js';
 import { demoDatensaetze } from './demo-data.js';
 // Phase 79: accounting sample data relative to today (import-free, no alias hook needed).
 import { beispielDatensaetze } from '../src/lib/accounting/beispielDaten.js';
+// Phase 81: time, fees and controlling on top of the accounting sample (relative imports only).
+import { beispielDatensaetzeZeitHonorar } from '../src/lib/zeitHonorar/beispielDaten.js';
+// Phase 82: deadlines, correspondence and users on top of 79/81 (relative imports only).
+import { beispielDatensaetzeBueroOrga } from '../src/lib/bueroOrga/beispielDaten.js';
 
 // 83-03: same data folder as the server (BIT_DATA_DIR, default server/).
 const db = createDb(datenPfad('db.json'));
@@ -126,6 +130,23 @@ const jetzt = new Date();
 const heuteIso = `${jetzt.getFullYear()}-${String(jetzt.getMonth() + 1).padStart(2, '0')}-${String(jetzt.getDate()).padStart(2, '0')}`;
 const buchhaltung = beispielDatensaetze(heuteIso);
 
+// Phase 81 (81-01): bookings, offers, fee amendment and the 81 fields of the proj-1
+// contract, relative to the same day. Express keeps personnel data in its own file
+// (server/personal.json, phase 80) which this script does not seed — so the sample
+// books as the virtual owner "inhaber" (E-17), and the cost rates (personnel storage
+// class) are not written here.
+const zeitHonorar = beispielDatensaetzeZeitHonorar(heuteIso, { buchhaltung, personal: null });
+buchhaltung.Honorarvertrag = buchhaltung.Honorarvertrag.map((v) => ({ ...v, ...(zeitHonorar.honorarvertragPatch[v.id] || {}) }));
+buchhaltung.HoaiPlan = buchhaltung.HoaiPlan.map((h) => (zeitHonorar.hoaiPlanVerlauf[h.project_id] ? { ...h, verlauf: zeitHonorar.hoaiPlanVerlauf[h.project_id] } : h));
+
+// Phase 82 (82-01): users, terms, acceptances, mail register and a letter, relative
+// to the same day. Absences are personnel data (server/personal.json, not seeded
+// here) and the project assignments live on the 80 records — both are left out for
+// Express; without personnel records the sole-owner path applies (E-17).
+const bueroOrga = beispielDatensaetzeBueroOrga(heuteIso, { personal: null, kontakte: contacts });
+const kontakteMitAnschrift = contacts.map((c) => (bueroOrga.kontaktAnschriften[c.id] && !c.address ? { ...c, ...bueroOrga.kontaktAnschriften[c.id] } : c));
+const bueroOrgaMarker = { id: 'set-buero-orga', key: bueroOrga.marker.key, value: bueroOrga.marker.value, created_date: jetzt.toISOString(), updated_date: jetzt.toISOString() };
+
 db._reset({
   SiteUnit: siteUnits,
   ScheduleTask: scheduleTasks,
@@ -139,7 +160,7 @@ db._reset({
   PriceReference: demoDaten.PriceReference,
   Document: [],
   Project: seedProjekte,
-  Contact: contacts,
+  Contact: kontakteMitAnschrift,
   ChangeOrder: changeOrders,
   LandListing: landListings,
   EnergyScenario: energyScenarios,
@@ -147,9 +168,24 @@ db._reset({
   Issue: issues,
   BuildingComplex: [],
   BIMModel: [],
+  // 73-06: survey model state of the refurbishment showcase.
+  BimSnapshot: bimSnapshots,
   InvestmentBid: [],
   ProjectContract: [],
   ...buchhaltung,
+  // 82-01: marker of the phase-82 sample next to the 79 Setting rows.
+  Setting: [...(buchhaltung.Setting || []), bueroOrgaMarker],
+  Zeitbuchung: zeitHonorar.Zeitbuchung,
+  Arbeitszeit: zeitHonorar.Arbeitszeit,
+  Honorarangebot: zeitHonorar.Honorarangebot,
+  Honorarnachtrag: zeitHonorar.Honorarnachtrag,
+  Nutzer: bueroOrga.Nutzer,
+  Termin: bueroOrga.Termin,
+  Terminquittung: bueroOrga.Terminquittung,
+  Abnahme: bueroOrga.Abnahme,
+  Postbucheintrag: bueroOrga.Postbucheintrag,
+  Schreiben: bueroOrga.Schreiben,
+  Briefvorlage: bueroOrga.Briefvorlage,
 });
 
 const echteProjekte = projects.map((p) => p.id);

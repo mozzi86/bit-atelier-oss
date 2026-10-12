@@ -154,7 +154,7 @@ describe("acoustics.js — schallChecks() Invarianten", () => {
     for (const v of varianten) {
       const c = schallChecks(v);
       for (const i of c.items) {
-        assert.ok(["pass", "warn"].includes(i.status), `unerwarteter Status "${i.status}" (${i.key})`);
+        assert.ok(["pass", "warn", "offen"].includes(i.status), `unerwarteter Status "${i.status}" (${i.key})`);
       }
     }
   });
@@ -196,10 +196,10 @@ describe("acoustics.js — schallChecks() Invarianten", () => {
     assert.equal(schallChecks({ ...BASIS, dbA: 75 }).items.length, 5);
   });
 
-  it("ME-04: fehlende Ist-Werte sind kein stiller pass (Default 0 ⇒ warn)", () => {
+  it("ME-04 / 72-04: fehlende Ist-Werte sind kein stiller pass (Default 0 ⇒ offen)", () => {
     const c = schallChecks({ dbA: 68, raumart: "wohnen" });
     for (const key of ["aussen", "trennwand", "trenndecke"]) {
-      assert.equal(c.items.find((i) => i.key === key).status, "warn", `${key} sollte warn sein`);
+      assert.equal(c.items.find((i) => i.key === key).status, "offen", `${key} sollte offen sein`);
     }
   });
 
@@ -209,8 +209,8 @@ describe("acoustics.js — schallChecks() Invarianten", () => {
       const passes = c.items.filter((i) => i.status === "pass").length;
       assert.equal(c.score, Math.round((passes / c.items.length) * 100));
       assert.ok(c.score >= 0 && c.score <= 100, `Score ${c.score}`);
-      assert.equal(c.warns, c.items.length - passes);
-      assert.equal(c.verdict, c.warns > 0 ? "Konzept mit Hinweisen" : "Konzept plausibel");
+      assert.equal(c.warns + c.offen, c.items.length - passes); // 72-04: not met = warn + offen
+      assert.equal(c.verdict, c.warns > 0 && c.offen > 0 ? "Konzept mit Hinweisen — Angaben fehlen" : c.warns > 0 ? "Konzept mit Hinweisen" : c.offen > 0 ? "Konzept unvollständig — Angaben fehlen" : "Konzept plausibel"); // 72-04
     }
   });
 

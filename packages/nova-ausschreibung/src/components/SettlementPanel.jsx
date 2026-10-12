@@ -232,7 +232,7 @@ export default function SettlementPanel({ tenders, positions, bids, measurements
             <div>
               <Label className="text-xs">Position</Label>
               <Select value={form.position_id} onValueChange={(v) => setForm((f) => ({ ...f, position_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Position…" /></SelectTrigger>
+                <SelectTrigger aria-label={t("Position")}><SelectValue placeholder="Position…" /></SelectTrigger>
                 <SelectContent>
                   {allAwardedPositions.map((p) => <SelectItem key={p.id} value={p.id}>{p.oz} · {p.title}</SelectItem>)}
                 </SelectContent>
@@ -240,11 +240,11 @@ export default function SettlementPanel({ tenders, positions, bids, measurements
             </div>
             <div>
               <Label className="text-xs">Aufgemessene Menge</Label>
-              <Input type="number" step="any" value={form.quantity} onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))} />
+              <Input aria-label={t("Aufgemessene Menge")} type="number" step="any" value={form.quantity} onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))} />
             </div>
             <div>
               <Label className="text-xs">Bemerkung</Label>
-              <Input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="z.B. Teilaufmaß, geprüft" />
+              <Input aria-label={t("Bemerkung")} value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="z.B. Teilaufmaß, geprüft" />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Abbrechen</Button>

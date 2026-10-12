@@ -10,6 +10,7 @@
 //      errors as inline plain text (no upload attempt on an invalid file).
 
 import React from "react";
+import { inhaltLaden } from "@core/lib/speicherOrt";
 import { fmtBytes } from "@core/lib/pdf";
 import { buttonVariants } from "@core/components/ui/button";
 import { useI18n } from "@core/lib/i18n";
@@ -20,18 +21,21 @@ import DateiKnopf from "./gemeinsam/DateiKnopf.jsx";
  * Opens a receipt's data URL in a new tab (Reports.jsx openDoc pattern):
  * an <iframe> for a PDF, an <img> for an image; XML has no useful preview,
  * so it only offers a download link.
- * @param {{mime: string, data: string, name: string}} beleg
+ * @param {{mime: string, data: string|null, data_blob?: string|null, name: string}} beleg
  * @param {(k: string) => string} t
  */
-function vorschauOeffnen(beleg, t) {
-  const fenster = window.open();
+async function vorschauOeffnen(beleg, t) {
+  const fenster = window.open(); // synchronously (popup blocker); content follows once loaded
   if (!fenster) return;
+  // Storage rule: a large receipt lives in the object store (data_blob), a small one in the record.
+  const data = await inhaltLaden(beleg.data, beleg.data_blob).catch(() => null);
+  if (!data) { fenster.document.write(t("Beleg nicht gefunden.")); return; }
   if (beleg.mime === "application/pdf") {
-    fenster.document.write(`<iframe src="${beleg.data}" style="border:0;width:100%;height:100%" title="${beleg.name}"></iframe>`);
+    fenster.document.write(`<iframe src="${data}" style="border:0;width:100%;height:100%" title="${beleg.name}"></iframe>`);
   } else if (beleg.mime.startsWith("image/")) {
-    fenster.document.write(`<img src="${beleg.data}" style="max-width:100%" alt="${beleg.name}">`);
+    fenster.document.write(`<img src="${data}" style="max-width:100%" alt="${beleg.name}">`);
   } else {
-    fenster.document.write(`<a href="${beleg.data}" download="${beleg.name}">${t("Herunterladen")}: ${beleg.name}</a>`);
+    fenster.document.write(`<a href="${data}" download="${beleg.name}">${t("Herunterladen")}: ${beleg.name}</a>`);
   }
 }
 

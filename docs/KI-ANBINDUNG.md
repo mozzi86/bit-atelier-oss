@@ -139,6 +139,10 @@ Werkzeugliste, und ein Aufruf wird abgelehnt. Gelöscht wird über MCP nie. Antw
 50.000 Zeichen werden gekürzt (bei Listen: weniger Datensätze, mit Hinweis). API-Schlüssel
 (`LlmConnection`) und Personaldaten sind über diesen Weg gesperrt.
 
+**Am einfachsten aus der App (seit 92-07):** Einstellungen → **KI-Verbindungen** → „Mit einem
+KI-Assistenten verbinden“ zeigt beide Einträge unten fertig ausgefüllt — mit dem echten Pfad dieser
+Installation und dem Node.js, mit dem die App läuft — samt Kopierknopf und Schalter für das Schreibrecht.
+
 **Claude Code** (im App-Ordner ausführen; ein absoluter Pfad ist robuster):
 
 ```bash
@@ -221,7 +225,9 @@ Basis `http://127.0.0.1:3001/api`, JSON, **ohne Anmeldung**. Quelle: `server/ind
   Authentifizierung** — wer den Port erreicht, kann alle Projektdaten lesen und ändern.
   **Port 3001 nie freigeben**, nicht per Router weiterleiten, nicht per Tunnel veröffentlichen.
   `API_HOST` (Bindung an eine andere Adresse) ist nur für bewusste Ausnahmen da; der Server
-  warnt dann beim Start.
+  warnt dann beim Start. Andere Geräte brauchen seit 93-03 trotzdem den Büro-Modus und eine
+  Kopplung (siehe `SECURITY.md`); der MCP-Server auf diesem Rechner (Loopback) ist davon nicht
+  betroffen.
 - **Browser-Schutz:** Die API erlaubt Cross-Origin-Anfragen nur von den eigenen Adressen
   (`:5173`, `:4173`, `:3001`; weitere über `API_ORIGINS`). Der Harness prüft dasselbe für HTTP
   und WebSocket (`HARNESS_ALLOWED_ORIGINS`).

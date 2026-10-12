@@ -39,10 +39,22 @@ class Runtime:
 
     @classmethod
     def from_config(cls, cfg: HarnessConfig, *, skills_dir: Path = SKILLS_DIR) -> "Runtime":
-        providers = ProviderRegistry.load(cfg.providers_file)
-        profile = providers.get(cfg.provider)
-        model = cfg.model or profile.default_model or (profile.models[0] if profile.models else "")
-        rt = cls(cfg, providers, cfg.provider, model, skills_dir=skills_dir)
+        providers = ProviderRegistry.load(cfg.providers_file, nur_lokal=cfg.nur_lokal)
+        provider_name = cfg.provider
+        # 93-12: BIT-Atelier hands over its local connection. It becomes the start provider when
+        # "Nur lokale KI" is on, or when config.yaml names nothing real (mock) — a deliberately
+        # configured cloud profile stays the start provider otherwise; app-lokal is then one /model away.
+        if cfg.app_lokal_base_url:
+            from harness.lokal import APP_LOKAL, app_lokal_profile
+            providers.replace(app_lokal_profile(cfg.app_lokal_base_url, cfg.app_lokal_modell or "", cfg.app_lokal_art))
+            if cfg.nur_lokal or cfg.provider == "mock":
+                provider_name = APP_LOKAL
+        profile = providers.get(provider_name)
+        if provider_name != cfg.provider:
+            model = profile.default_model or ""
+        else:
+            model = cfg.model or profile.default_model or (profile.models[0] if profile.models else "")
+        rt = cls(cfg, providers, provider_name, model, skills_dir=skills_dir)
         rt.reload_skills()
         if cfg.project:
             try:
@@ -104,6 +116,7 @@ class Runtime:
     def set_model(self, provider_name: str | None, model: str | None) -> None:
         if provider_name:
             self.providers.get(provider_name)  # raises with the list of known names
+            self.providers.check_local(provider_name)  # 93-12: "Nur lokale KI"
             self.provider_name = provider_name
         prof = self.profile
         if model:
@@ -131,7 +144,10 @@ class Runtime:
             project_dir=self.project.dir if self.project else None,
             repo_root=self.config.repo_root if self.config.mode == "developer" else None,
             skills_dir=self.skills_dir,
-            extra={"allowlist": self.config.shell_allowlist, "timeout_s": self.config.shell_timeout_s},
+            extra={"allowlist": self.config.shell_allowlist, "timeout_s": self.config.shell_timeout_s,
+                   "freecad_cmd": self.config.freecad_cmd, "freecad_port": self.config.freecad_bridge_port,
+                   "freecad_timeout_s": self.config.freecad_timeout_s,
+                   "ifc_georef": self.config.ifc_georef},
         )
 
     def system_prompt(self) -> str:
@@ -156,4 +172,5 @@ class Runtime:
         d = session.status(self.profile, self.config.display_name)
         d["offene_aufgaben"] = len(self.project.open_tasks()) if self.project else 0
         d["skills"] = len(skills_index(self.skills, self.config.mode))
+        d["nur_lokal"] = self.config.nur_lokal  # 93-12: the app shows a badge
         return d

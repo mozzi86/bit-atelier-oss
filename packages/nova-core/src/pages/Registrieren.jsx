@@ -1,12 +1,18 @@
 // Registration page /registrieren (Plan 83-02): open registration with manual
-// approval. Route in App.jsx RECHTSWEGE, i.e. OUTSIDE the auth gate, in every
-// build.
+// approval. Listed in @core/lib/oeffentlicheWege.js, i.e. OUTSIDE the auth gate, in
+// every build.
 //
 // Cloud build: a form (name, office, e-mail, phone, role, message). "Zugang
 // anfragen" opens the visitor's mail program with a prepared mail to
 // ANBIETER.anfrageEmail — nothing is sent by the app itself. Afterwards a
 // confirmation explains the waiting time: accounts are approved by hand
 // (scripts/zugang-freischalten.mjs), the invitation arrives by e-mail.
+// 57-06 Task 3: mailto gives the browser no success signal - on an office PC
+// without a mail program nothing visible happens. The confirmation therefore
+// shows the complete request text with a copy button and the address as
+// selectable text, and the form keeps its values ("Angaben ändern"). The
+// procurement scope sentence and the B2B sentence (AngebotsUmfang) stand
+// above the form, visible without a click.
 // Local / express build: there is no account at all — the page says so and
 // links into the app.
 //
@@ -17,7 +23,8 @@ import { Link } from 'react-router-dom';
 import { DATENQUELLE } from '@core/lib/umgebung';
 import { useI18n } from '@core/lib/i18n';
 import { ANBIETER } from '@core/lib/anbieter';
-import { REGISTRIERUNG_ROLLEN, pruefeRegistrierung, registrierungMailto } from '@core/lib/registrierung';
+import { REGISTRIERUNG_ROLLEN, pruefeRegistrierung, registrierungMailto, registrierungText } from '@core/lib/registrierung';
+import { AngebotsUmfang } from '@core/lib/rechtstexte';
 
 const feldKlasse =
   'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500';
@@ -69,6 +76,7 @@ export function Registrieren() {
   const [angaben, setAngaben] = useState(LEER);
   const [fehler, setFehler] = useState(/** @type {string[]} */ ([]));
   const [mailHref, setMailHref] = useState('');
+  const [kopiert, setKopiert] = useState(/** @type {'' | 'ok' | 'fehler'} */ (''));
 
   // Outside the cloud there is no account to request: the local build keeps
   // everything on the device, the express build is the operator's own server.
@@ -86,6 +94,19 @@ export function Registrieren() {
   }
 
   if (mailHref) {
+    const { betreff, text } = registrierungText(angaben);
+    const kopieren = async () => {
+      try {
+        await navigator.clipboard.writeText(`${betreff}
+
+${text}`);
+        setKopiert('ok');
+      } catch {
+        // Clipboard needs a secure context and permission; the text stays
+        // selectable in the box either way.
+        setKopiert('fehler');
+      }
+    };
     return (
       <Rahmen untertitel={t('Registrieren')}>
         <div role="status" data-testid="registrieren-bestaetigung" className="space-y-3 text-sm text-slate-700">
@@ -98,8 +119,32 @@ export function Registrieren() {
             {t('Ihr E-Mail-Programm hat sich nicht geöffnet?')}{' '}
             <a href={mailHref} className="font-medium text-emerald-700 underline hover:text-emerald-900">{t('E-Mail erneut öffnen')}</a>
             {' · '}
-            <span className="font-mono">{ANBIETER.anfrageEmail}</span>
+            {t('oder den Text unten kopieren und selbst senden an')}{' '}
+            <span className="select-all font-mono" data-testid="registrieren-empfaenger">{ANBIETER.anfrageEmail}</span>
           </p>
+          <div>
+            <label htmlFor="reg-wortlaut" className={labelKlasse}>{t('Ihre Anfrage im Wortlaut')}</label>
+            <textarea
+              id="reg-wortlaut"
+              readOnly
+              rows={9}
+              value={`${betreff}
+
+${text}`}
+              className={`${feldKlasse} font-mono text-xs`}
+              data-testid="registrieren-wortlaut"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" onClick={kopieren} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+              {t('Text kopieren')}
+            </button>
+            <button type="button" onClick={() => { setMailHref(''); setKopiert(''); }} className="text-xs font-medium text-emerald-700 underline hover:text-emerald-900">
+              {t('Angaben ändern')}
+            </button>
+            {kopiert === 'ok' && <span className="text-xs text-emerald-700">{t('Kopiert.')}</span>}
+            {kopiert === 'fehler' && <span className="text-xs text-rose-700">{t('Kopieren nicht möglich — bitte den Text markieren und kopieren.')}</span>}
+          </div>
           <p>
             <Link to="/anmeldung" className="font-medium text-emerald-700 underline hover:text-emerald-900">{t('Zur Anmeldung')}</Link>
           </p>
@@ -125,9 +170,11 @@ export function Registrieren() {
 
   return (
     <Rahmen untertitel={t('Registrieren')}>
-      <p className="mb-4 text-sm text-slate-600">
+      <p className="mb-3 text-sm text-slate-600">
         {t('Konten für den Cloud-Betrieb werden von Hand freigeschaltet. Ihre Anfrage geht als E-Mail aus Ihrem eigenen E-Mail-Programm an uns.')}
       </p>
+      {/* Legal scope text, German only like every text in rechtstexte.jsx. */}
+      <div className="mb-4"><AngebotsUmfang /></div>
       <form onSubmit={absenden} className="space-y-3" noValidate data-testid="registrieren-formular">
         <div>
           <label htmlFor="reg-name" className={labelKlasse}>{t('Name')}</label>

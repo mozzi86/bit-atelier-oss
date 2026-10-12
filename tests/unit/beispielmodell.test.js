@@ -9,6 +9,11 @@
 // that with the app's own import (extractFromModel / mapToClassifiedElements) and
 // with a plain text pass over the STEP file (referential integrity, determinism).
 //
+// Plan 69-19 (D-HR-03) grew the sample to three storeys, 523 elements and 24 graded
+// findings (the hall of 65-03 stays first with its GlobalIds). The engine half now
+// pins the per-storey counts of BEISPIEL_ERWARTET.jeGeschoss; the hall-specific
+// quantity checks below restrict themselves to the hall (HALLE names).
+//
 // The IDS half cannot run here: parseIdsXml needs a DOMParser and Node has none
 // (adding a dependency for it would need a decision). It is verified in the
 // browser instead — tmp-e2e/tmp-verify-beispiel.mjs.
@@ -26,6 +31,8 @@ import { filterQuantity, filterTreffer } from '@ava/lib/avaFilters.js';
 import {
   BEISPIEL_ERWARTET,
   BAUTEILE,
+  BEFUNDE,
+  HALLE,
   KOEDER,
   RAEUME,
   erzeugeIfc,
@@ -38,8 +45,14 @@ const REPO = path.resolve(import.meta.dirname, '../..');
 const IFC = path.join(REPO, 'public/beispiel/musterprojekt.ifc');
 const README = path.join(REPO, 'public/beispiel/README.md');
 
-/** Size ceiling of the sample model after 69-32 (plan: stays small), bytes. */
-const MAX_BYTES = 50 * 1024;
+/** Size ceiling of the sample model (69-19, D-HR-03: "< 2 MB"), bytes. */
+const MAX_BYTES = 2 * 1024 * 1024;
+
+/** Pair cap of the check suite (ModelCheck passes maxPairs 500 000; the engine default is 20 000). */
+const LAUF = { maxPairs: 500_000 };
+
+/** Names of the hall elements (65-03/69-32) — the hall-specific checks use only these. */
+const HALLEN_NAMEN = new Set(HALLE.map((b) => b.name));
 
 /**
  * Opens the stored sample model with web-ifc under Node (pattern from
@@ -127,17 +140,25 @@ describe('Beispielmodell — Datei und Determinismus', () => {
 
 describe('Beispielmodell — was die Prüf-Engine tatsächlich findet', () => {
   let elemente;
+  let lauf;
+  /** @type {Map<number, {name: string, storey: string}>} */
+  let nachId;
 
   before(async () => {
     const { meta, trisJeId } = await ladeBeispiel();
     const typJeId = new Map((meta.elements || []).map((e) => [e.expressId, e.ifcType]));
+    nachId = new Map((meta.elements || []).map((e) => [e.expressId, e]));
 
     elemente = [...trisJeId.entries()].map(([expressId, tris]) => ({
       expressId,
       ifcType: typJeId.get(expressId) || 'IFCBUILDINGELEMENTPROXY',
       tris: new Float32Array(tris),
     }));
+    lauf = clashPairs(elemente, LAUF);
   });
+
+  /** Storey of a finding: element A, else element B. */
+  const geschossVon = (c) => nachId.get(c.aId)?.storey || nachId.get(c.bId)?.storey;
 
   it('jedes Bauteil trägt Geometrie', () => {
     assert.equal(
@@ -148,37 +169,60 @@ describe('Beispielmodell — was die Prüf-Engine tatsächlich findet', () => {
     assert.equal(BAUTEILE.length, BEISPIEL_ERWARTET.bauteile);
   });
 
-  it('genau eine harte Kollision — der Kanal im Unterzug', () => {
-    const { clashes } = clashPairs(elemente);
-    const hart = clashes.filter((c) => c.kind === 'hard');
+  it('mit der Paargrenze der Prüf-Suite wird kein Paar übersprungen', () => {
+    assert.equal(lauf.uebersprungen, 0);
+  });
+
+  it('die harten Kollisionen: zwölf, je Geschoss wie dokumentiert — darunter der Kanal im Unterzug der Halle', () => {
+    const hart = lauf.clashes.filter((c) => c.kind === 'hard');
     assert.equal(
       hart.length,
       BEISPIEL_ERWARTET.hart,
       `harte Kollisionen: ${hart.length}, erwartet ${BEISPIEL_ERWARTET.hart} — ` +
-        JSON.stringify(clashes.map((c) => ({ art: c.art, a: c.aTyp, b: c.bTyp }))),
+        JSON.stringify(hart.map((c) => `${nachId.get(c.aId)?.name} × ${nachId.get(c.bId)?.name}`)),
     );
-    const typen = [hart[0].aType, hart[0].bType].map((t) => String(t).toUpperCase()).sort();
-    assert.deepEqual(typen, ['IFCBEAM', 'IFCDUCTSEGMENT']);
+    for (const [geschoss, soll] of Object.entries(BEISPIEL_ERWARTET.jeGeschoss)) {
+      assert.equal(hart.filter((c) => geschossVon(c) === geschoss).length, soll.hart, `harte Kollisionen ${geschoss}`);
+    }
+    const halle = hart.find((c) => [c.aId, c.bId].some((id) => nachId.get(id)?.name === 'Lueftungskanal Zuluft'));
+    assert.ok(halle, 'der Kanal der Halle kollidiert nicht mehr');
+    assert.deepEqual([halle.aType, halle.bType].map((t) => String(t).toUpperCase()).sort(), ['IFCBEAM', 'IFCDUCTSEGMENT']);
   });
 
-  it('genau eine Doppelmodellierung — die Ostwand', () => {
-    const { clashes } = clashPairs(elemente);
-    const dupl = clashes.filter((c) => c.kind === 'duplicate');
+  it('die Doppelmodellierungen: sechs, je Geschoss wie dokumentiert — darunter die Ostwand der Halle', () => {
+    const dupl = lauf.clashes.filter((c) => c.kind === 'duplicate');
     assert.equal(dupl.length, BEISPIEL_ERWARTET.duplikate);
-    assert.equal(String(dupl[0].aType).toUpperCase(), 'IFCWALL');
+    for (const [geschoss, soll] of Object.entries(BEISPIEL_ERWARTET.jeGeschoss)) {
+      assert.equal(dupl.filter((c) => geschossVon(c) === geschoss).length, soll.duplikate, `Doppelungen ${geschoss}`);
+    }
+    assert.ok(dupl.some((c) => nachId.get(c.aId)?.name === 'Aussenwand Ost' || nachId.get(c.bId)?.name === 'Aussenwand Ost'));
   });
 
   it('sonst nichts — kein Bauteil kollidiert versehentlich', () => {
-    const { clashes } = clashPairs(elemente);
     assert.equal(
-      clashes.length,
+      lauf.clashes.length,
       BEISPIEL_ERWARTET.hart + BEISPIEL_ERWARTET.duplikate,
-      'Zusatzbefunde: ' + JSON.stringify(clashes.map((c) => `${c.kind} ${c.aType}/${c.bType}`)),
+      'Zusatzbefunde: ' + JSON.stringify(lauf.clashes.map((c) => `${c.kind} ${nachId.get(c.aId)?.name}/${nachId.get(c.bId)?.name}`)),
     );
   });
 
+  it('die dokumentierte Befundliste stimmt mit den Erwartungszahlen überein', () => {
+    assert.equal(BEFUNDE.length, BEISPIEL_ERWARTET.befunde);
+    const summe = { hart: 0, duplikat: 0, ids: 0 };
+    for (const f of BEFUNDE) summe[f.art] += 1;
+    assert.deepEqual([summe.hart, summe.duplikat, summe.ids],
+      [BEISPIEL_ERWARTET.hart, BEISPIEL_ERWARTET.duplikate, BEISPIEL_ERWARTET.idsFehler]);
+    for (const [geschoss, soll] of Object.entries(BEISPIEL_ERWARTET.jeGeschoss)) {
+      const hier = BEFUNDE.filter((f) => f.geschoss === geschoss);
+      assert.deepEqual(
+        [hier.filter((f) => f.art === 'hart').length, hier.filter((f) => f.art === 'duplikat').length, hier.filter((f) => f.art === 'ids').length],
+        [soll.hart, soll.duplikate, soll.idsFehler], geschoss,
+      );
+    }
+  });
+
   it('der Lauf ist deterministisch — zweimal dieselbe Ausgabe', () => {
-    assert.equal(JSON.stringify(clashPairs(elemente)), JSON.stringify(clashPairs(elemente)));
+    assert.equal(JSON.stringify(clashPairs(elemente, LAUF)), JSON.stringify(lauf));
   });
 });
 
@@ -221,7 +265,7 @@ describe('Beispielmodell 69-32 — Datei: deterministisch, klein, referenzintegr
     assert.equal(a, text);
   });
 
-  it('IFC4, kleiner als 50 kB, rein ASCII, nur LF', () => {
+  it('IFC4, kleiner als 2 MB, rein ASCII, nur LF', () => {
     assert.match(text, /FILE_SCHEMA\(\('IFC4'\)\);/);
     const bytes = Buffer.byteLength(text, 'utf8');
     assert.ok(bytes < MAX_BYTES, `Modell zu groß: ${bytes} B (Grenze ${MAX_BYTES} B)`);
@@ -336,7 +380,7 @@ describe('Beispielmodell 69-32 — was der App-Import daraus liest', () => {
     bauteile = meta.elements.filter((e) => e.ifcType !== 'IfcSpace');
   });
 
-  it('Bauteile bleiben bei 9, Räume sind keine Bauteile und tragen keine Geometrie', () => {
+  it('Bauteile und Räume wie erwartet, Räume sind keine Bauteile und tragen keine Geometrie', () => {
     assert.equal(bauteile.length, BEISPIEL_ERWARTET.bauteile);
     assert.equal(raeume.length, BEISPIEL_ERWARTET.raeume);
     assert.equal(RAEUME.length, BEISPIEL_ERWARTET.raeume);
@@ -381,9 +425,10 @@ describe('Beispielmodell 69-32 — was der App-Import daraus liest', () => {
   });
 
   it('die Raumfläche folgt den Wänden: Plattenfläche minus Wandgrundflächen', () => {
-    const raum = raeume[0];
-    const platte = bauteile.find((b) => b.ifcType === 'IfcSlab');
-    const waende = bauteile.filter((b) => b.ifcType === 'IfcWall' && !/Doppelung/.test(b.name));
+    // The hall (69-19: the office block has its own rooms, checked by their boxes in the generator).
+    const raum = raeume.find((r) => r.name === 'Halle');
+    const platte = bauteile.find((b) => b.ifcType === 'IfcSlab' && HALLEN_NAMEN.has(b.name));
+    const waende = bauteile.filter((b) => b.ifcType === 'IfcWall' && HALLEN_NAMEN.has(b.name) && !/Doppelung/.test(b.name));
     assert.equal(waende.length, 4);
     // wall footprint = volume / height, both from the mesh of the wall
     const grundflaeche = waende.reduce(
@@ -419,10 +464,13 @@ describe('Beispielmodell 69-32 — was der App-Import daraus liest', () => {
 
   it('alle übrigen Bauteile sind vollständig: Material und DIN-276-Klassifikation', () => {
     const koeder = new Set(KOEDER.map((k) => k.name));
+    // 69-19: the building construction carries 3xx; services (4xx) and furniture (6xx)
+    // carry their own group, which the app import files under its default.
+    const bau = new Set(['IfcWall', 'IfcSlab', 'IfcBeam', 'IfcDoor', 'IfcWindow']);
     for (const e of bauteile.filter((b) => !koeder.has(b.name))) {
       assert.ok(e.material, `${e.name}: Material fehlt`);
       assert.equal(e.classifications.length, 1, `${e.name}: Klassifikation fehlt`);
-      assert.match(e.classifications[0], /^3\d\d /, `${e.name}: keine DIN-276-Kostengruppe 3xx`);
+      assert.match(e.classifications[0], bau.has(e.ifcType) ? /^3\d\d / : /^[46]\d\d /, `${e.name}: falsche DIN-276-Gruppe`);
     }
     // umlauts survive the STEP escape (\X2\…\X0\) on the way through web-ifc
     const wand = bauteile.find((b) => b.name === 'Aussenwand Sued');
@@ -431,8 +479,10 @@ describe('Beispielmodell 69-32 — was der App-Import daraus liest', () => {
 
   it('die Zuordnung der App: Außenwände sind Rohbau und Kostengruppe 331', () => {
     const klassifiziert = mapToClassifiedElements(meta);
-    const waende = klassifiziert.filter((e) => e.ifc_klasse === 'IfcWall');
-    assert.equal(waende.length, 5);
+    const istAussen = (e) => meta.elements.find((x) => x.id === e.id)?.psets?.Pset_WallCommon?.IsExternal === true;
+    const waende = klassifiziert.filter((e) => e.ifc_klasse === 'IfcWall' && istAussen(e));
+    // hall 5 + office 16 per storey (12 facade segments + 4 gable segments) × 3
+    assert.equal(waende.length, 5 + 16 * 3);
     for (const w of waende) {
       assert.equal(w.kind, 'wall-hull', `${w.id}: IsExternal fehlt, der Import liest eine Innenwand`);
       assert.equal(w.gewerk, 'Rohbau');
@@ -443,8 +493,9 @@ describe('Beispielmodell 69-32 — was der App-Import daraus liest', () => {
     assert.equal(kg('Unterzug Achse B'), '351');
   });
 
-  it('die AVA-Filter rechnen auf dem Modell: Kostengruppe 331, Material, Lücken', () => {
-    const klassifiziert = mapToClassifiedElements(meta);
+  it('die AVA-Filter rechnen auf dem Modell: Kostengruppe 331, Material, Lücken (Halle)', () => {
+    const hallenIds = new Set(meta.elements.filter((x) => HALLEN_NAMEN.has(x.name) || x.name === 'Halle').map((x) => x.id));
+    const klassifiziert = mapToClassifiedElements(meta).filter((e) => hallenIds.has(e.id));
     // KG 331: five walls, the duplicate counts — "in der Menge doppelt" (README).
     // 8.64 + 8.64 + 3 x 5.4144 = 33.5232 m³ → rounded to 2 decimals by the engine.
     assert.deepEqual(
@@ -469,16 +520,25 @@ describe('Beispielmodell 69-32 — was der App-Import daraus liest', () => {
     );
   });
 
-  it('die Erwartungswerte des Beispiels bleiben (Kollisionen, Duplikate, IDS, Geschoss)', () => {
+  it('die AVA-Filter rechnen auf dem ganzen Modell: Kostengruppe 331 = Generator-Quader', () => {
+    const klassifiziert = mapToClassifiedElements(meta);
+    const soll = BAUTEILE.filter((b) => b.kg === '331');
+    const vol = soll.reduce((s, b) => s + (b.max[0] - b.min[0]) * (b.max[1] - b.min[1]) * (b.max[2] - b.min[2]), 0);
+    const ist = filterQuantity(klassifiziert, { was: { kg: ['331'] } }, 'volume');
+    assert.equal(ist.treffer, soll.length);
+    assert.ok(Math.abs(ist.menge - vol) < 0.02, `KG 331: ${ist.menge} m³ ≠ ${vol.toFixed(2)} m³`);
+  });
+
+  it('die Erwartungswerte des Beispiels bleiben (Kollisionen, Duplikate, IDS, Geschosse)', () => {
     assert.deepEqual(
       [BEISPIEL_ERWARTET.hart, BEISPIEL_ERWARTET.duplikate, BEISPIEL_ERWARTET.idsFehler, BEISPIEL_ERWARTET.geschosse],
-      [1, 1, 1, 1],
+      [12, 6, 6, 3],
     );
-    // the one wall without FireRating is still the northern one
-    const nord = bauteile.find((b) => b.name === 'Aussenwand Nord');
-    assert.equal(nord.psets.Pset_WallCommon.FireRating, undefined);
-    for (const w of bauteile.filter((b) => b.ifcType === 'IfcWall' && b.name !== 'Aussenwand Nord')) {
-      assert.ok(w.psets.Pset_WallCommon.FireRating, `${w.name}: FireRating fehlt`);
-    }
+    // exactly the documented walls lack the FireRating the IDS demands — the hall's
+    // northern wall is still one of them (stand-in for the IDS run, no DOMParser here)
+    const ohne = bauteile.filter((b) => b.ifcType === 'IfcWall' && !b.psets?.Pset_WallCommon?.FireRating).map((b) => b.name).sort();
+    const doku = BEFUNDE.filter((f) => f.art === 'ids').map((f) => f.wo.replace(' (Halle)', '')).sort();
+    assert.deepEqual(ohne, doku);
+    assert.ok(ohne.includes('Aussenwand Nord'));
   });
 });

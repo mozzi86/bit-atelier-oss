@@ -8,7 +8,9 @@ import { Textarea } from "@core/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@core/components/ui/select";
 import { X, Save } from "lucide-react";
 import { TYPE_LABELS, STATUS_LABELS, CLIMATE_ZONE_LABELS, ENERGY_TARGET_LABELS, labelFor } from "./labels";
-import { klimazoneAusStandort } from "@core/lib/labels";
+import { klimazoneAusStandort, energieZieleFuer } from "@core/lib/labels";
+import { bauartVon } from "@core/lib/bauart";
+import { useI18n } from "@core/lib/i18n";
 
 const PROJECT_TYPES = [
   "residential", "commercial", "institutional", 
@@ -24,31 +26,39 @@ const STATUS_OPTIONS = [
   "concept", "design_development", "technical_design", "construction", "completed"
 ];
 
-const ENERGY_TARGETS = [
-  "passive_house", "kfw_55", "kfw_40", "net_zero", "plus_energy"
-];
+
+/** Empty form; spread UNDER an edited project (73-01). */
+const FORM_DEFAULTS = {
+  name: "",
+  type: "",
+  location: "",
+  climate_zone: "",
+  status: "concept",
+  hoai_phase: 1,
+  energy_target: "",
+  building_area: "",
+  estimated_cost: "",
+  completion_date: "",
+  sustainability_rating: "",
+  notes: "",
+  build_kind: "neubau",
+  scan_3d_url: "",
+  as_built_url: "",
+  existing_building_notes: ""
+};
 
 export default function ProjectForm({ project, onSubmit, onCancel }) {
-  const [formData, setFormData] = useState(project || {
-    name: "",
-    type: "",
-    location: "",
-    climate_zone: "",
-    status: "concept",
-    hoai_phase: 1,
-    energy_target: "",
-    building_area: "",
-    estimated_cost: "",
-    completion_date: "",
-    sustainability_rating: "",
-    notes: "",
-    build_kind: "neubau",
-    scan_3d_url: "",
-    as_built_url: "",
-    existing_building_notes: ""
+  const { t } = useI18n();
+  // 73-01: defaults UNDER the edited project — a legacy project without build_kind (or without the three
+  // existing-building fields) used to leave the select empty and switch those inputs from uncontrolled to
+  // controlled on the first keystroke.
+  // A field stored as null (not just missing) also falls back to its default.
+  const [formData, setFormData] = useState(() => {
+    const out = { ...FORM_DEFAULTS, ...(project || {}) };
+    for (const [k, v] of Object.entries(FORM_DEFAULTS)) if (out[k] == null) out[k] = v;
+    return out;
   });
-
-  const isSanierung = formData.build_kind === "sanierung";
+  const isSanierung = bauartVon(formData).bauart === "bestand";
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -86,7 +96,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
           <CardTitle className="text-xl font-bold text-slate-800">
             {project ? 'Projekt bearbeiten' : 'Neues Projekt'}
           </CardTitle>
-          <Button variant="ghost" size="icon" onClick={onCancel}>
+          <Button aria-label={t("Formular schließen")} variant="ghost" size="icon" onClick={onCancel}>
             <X className="w-4 h-4" />
           </Button>
         </CardHeader>
@@ -115,7 +125,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   onValueChange={(value) => handleChange('type', value)}
                   required
                 >
-                  <SelectTrigger className="border-slate-200 focus:border-emerald-500">
+                  <SelectTrigger aria-label={t("Projekttyp")} className="border-slate-200 focus:border-emerald-500">
                     <SelectValue placeholder="Projekttyp auswählen" />
                   </SelectTrigger>
                   <SelectContent>
@@ -148,7 +158,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   value={formData.climate_zone} 
                   onValueChange={(value) => handleChange('climate_zone', value)}
                 >
-                  <SelectTrigger className="border-slate-200 focus:border-emerald-500">
+                  <SelectTrigger aria-label={t("Klimazone")} className="border-slate-200 focus:border-emerald-500">
                     <SelectValue placeholder="automatisch (DE/AT/CH: gemäßigt)" />
                   </SelectTrigger>
                   <SelectContent>
@@ -171,7 +181,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                     value={formData.build_kind}
                     onValueChange={(value) => handleChange('build_kind', value)}
                   >
-                    <SelectTrigger className="border-slate-200 focus:border-emerald-500">
+                    <SelectTrigger aria-label={t("Vorhabentyp")} className="border-slate-200 focus:border-emerald-500">
                       <SelectValue placeholder="Neubau oder Sanierung" />
                     </SelectTrigger>
                     <SelectContent>
@@ -229,7 +239,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   value={formData.status} 
                   onValueChange={(value) => handleChange('status', value)}
                 >
-                  <SelectTrigger className="border-slate-200 focus:border-emerald-500">
+                  <SelectTrigger aria-label={t("Status")} className="border-slate-200 focus:border-emerald-500">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -248,7 +258,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   value={formData.hoai_phase?.toString()} 
                   onValueChange={(value) => handleChange('hoai_phase', parseInt(value))}
                 >
-                  <SelectTrigger className="border-slate-200 focus:border-emerald-500">
+                  <SelectTrigger id="hoai_phase" className="border-slate-200 focus:border-emerald-500">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -267,13 +277,15 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   value={formData.energy_target} 
                   onValueChange={(value) => handleChange('energy_target', value)}
                 >
-                  <SelectTrigger className="border-slate-200 focus:border-emerald-500">
+                  <SelectTrigger aria-label={t("Energiestandard")} className="border-slate-200 focus:border-emerald-500">
                     <SelectValue placeholder="Energiestandard auswählen" />
                   </SelectTrigger>
                   <SelectContent>
-                    {ENERGY_TARGETS.map(target => (
+                    {/* 73-11: targets follow the kind of work; a stored foreign value stays selectable. */}
+                    {energieZieleFuer(bauartVon(formData).bauart, formData.energy_target).werte.map(target => (
                       <SelectItem key={target} value={target}>
                         {labelFor(ENERGY_TARGET_LABELS, target)}
+                        {target === energieZieleFuer(bauartVon(formData).bauart, formData.energy_target).fremd ? " (passt nicht zur Bauart)" : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>

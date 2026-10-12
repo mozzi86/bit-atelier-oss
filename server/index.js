@@ -8,6 +8,10 @@
 //   App mode (`npm start` = `--app`, or NODE_ENV=production / BIT_APP=1): this
 //     process also serves the built client from dist/ — app and API on ONE port.
 // Data files live in the folder from datenPfad.js (BIT_DATA_DIR, default server/).
+//
+// Plan 93-03 (office mode): the server binds 127.0.0.1 as before. Switched on in Settings › System & Info,
+// it binds the private LAN addresses of this computer as well (bueroRouter.js lanServer); every request that
+// is not loopback then passes bueroWaechter: private source address + paired device token + allow-list.
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
@@ -15,7 +19,18 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { datenOrdner, datenPfad } from './datenPfad.js';
 import { updateRouter } from './updateRouter.js';
+import { updateCheckAus } from './selbstUpdate.js';
+import { systemRouter } from './systemRouter.js';
+import { dateiOeffnenRouter } from './dateiOeffnenRouter.js';
+import { programmRouter } from './programmRouter.js';
+import { sicherungsDienst } from './sicherung.js';
 import { appAusliefern, istAppModus } from './appAuslieferung.js';
+import { createBuero } from './bueroModus.js';
+import { hostWaechter } from './hostWaechter.js';
+import { bueroRouter, bueroWaechter, lanServer, HINWEIS_HEADER } from './bueroRouter.js';
+import { kiLokalRouter, harnessUmgebung } from './kiLokalRouter.js';
+import { harnessManager } from './harnessProzess.js';
+import { kiEinstellungenLesen } from '../packages/nova-core/server/llmLokal.js';
 import { createDb } from '../packages/nova-core/server/db.js';
 import { createBlobStore } from '../packages/nova-core/server/blobs.js';
 import { seedCatalogs } from '../packages/nova-core/server/catalog-seed.js';
@@ -44,10 +59,20 @@ const ERLAUBTE_ORIGINS = [
   `http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`,
   ...String(process.env.API_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean),
 ];
+// 93-03: the office mode — state in buero.json of the data folder, LAN listeners on the same app and port.
+// The gate runs FIRST: loopback passes unchanged, everything else needs office mode + a paired device.
+const buero = createBuero({ datei: datenPfad('buero.json') });
+const lan = lanServer({ app, port: PORT });
+const anfrageEntfernt = (req) => req.bitZugang?.lokal === false;
+// DNS rebinding: only localhost / IP literals / BIT_ERLAUBTE_HOSTS reach any route (hostWaechter.js).
+app.use(hostWaechter());
+app.use(bueroWaechter(buero));
 app.use(cors({
   // No Origin header at all (curl, same-origin fetch, Electron/Tauri file://) is allowed —
   // those are not the browser-driven cross-site case this guard is about.
-  origin: (origin, cb) => cb(null, !origin || ERLAUBTE_ORIGINS.includes(origin)),
+  // 93-03: the LAN origins of the office mode only while their listeners run.
+  origin: (origin, cb) => cb(null, !origin || ERLAUBTE_ORIGINS.includes(origin) || lan.origins().includes(origin)),
+  exposedHeaders: [HINWEIS_HEADER],
 }));
 app.use(express.json({ limit: '10mb' }));
 
@@ -80,11 +105,24 @@ if (neuGeseedet.length > 0) {
   );
 }
 
+// 83-03 run mode, needed by the office-mode status (the app shell is only on this port in app mode).
+const APP_MODUS = istAppModus();
+// 93-03: before authRouter — it answers /auth/me for paired devices ("Gerät: <Name>").
+app.use('/api', bueroRouter(buero, { port: PORT, appModus: APP_MODUS, origins: ERLAUBTE_ORIGINS, lan }));
 app.use('/api', authRouter());
 app.use('/api', entitiesRouter(db));
-app.use('/api', personalRouter(personalDb, personalBlobs, { lokalGebunden }));
+app.use('/api', personalRouter(personalDb, personalBlobs, { lokalGebunden, anfrageEntfernt }));
 app.use('/api', blobsRouter(blobs));
-app.use('/api', llmRouter(db));
+// 93-12: the Python harness as a child process (loopback only) — created here so "Nur lokale KI" can
+// restart it with the new environment. Never started without the user's switch or click.
+const harness = harnessManager({ harnessDir: path.join(__dirname, '..', 'harness') });
+app.use('/api', llmRouter(db, {
+  onEinstellungen: (neu, alt) => {
+    if (neu.nur_lokal !== alt.nur_lokal && harness.status().zustand === 'laeuft') {
+      harness.neustart(harnessUmgebung(db, ERLAUBTE_ORIGINS)).catch((e) => console.error('[harness]', e?.message || e));
+    }
+  },
+}));
 // 76-01: TypeSafe-Urteile (Wahrscheinlichkeiten, kein Mock)
 app.use('/api', typesafeRouter());
 app.use('/api', pricesRouter());
@@ -93,13 +131,38 @@ app.use('/api', geoRouter());
 // --- Status (83-03): what the MCP server's bit_status and scripts ask first ---
 // Name and version from package.json, the run mode — no paths, no data.
 const PAKET = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
-const APP_MODUS = istAppModus();
 app.get('/api/status', (_req, res) => {
   res.json({ name: PAKET.name, version: PAKET.version, modus: APP_MODUS ? 'app' : 'api', node: process.versions.node });
 });
 
 // --- Self-update (92-01): check the latest release, install it from inside the app ---
-app.use('/api', updateRouter({ root: path.join(__dirname, '..'), port: PORT, appModus: APP_MODUS, version: PAKET.version }));
+// 92-04: BIT_KEIN_UPDATECHECK=1 switches the check off entirely (no request to GitHub).
+app.use('/api', updateRouter({ root: path.join(__dirname, '..'), port: PORT, appModus: APP_MODUS, version: PAKET.version, deaktiviert: updateCheckAus() }));
+
+// --- Automatic local backup (93-06): data entries only, flushed + read in one tick, retention 7 daily + 4 weekly;
+// also trims the self-updater's .update/sicherung-* copies. BIT_SICHERUNG_AUS=1 switches it off. ---
+const sicherung = sicherungsDienst({ datenOrdner: datenOrdner(), appOrdner: path.join(__dirname, '..'), dbs: [db, personalDb], version: PAKET.version });
+
+// --- Data folder + AI-assistant (MCP) entry + backup status for Settings (92-07, 93-06): loopback only, POST with
+// Origin check; refused for paired LAN devices of the office mode (93-03) ---
+app.use('/api', systemRouter({ root: path.join(__dirname, '..'), port: PORT, lokalGebunden, origins: ERLAUBTE_ORIGINS, anfrageEntfernt, sicherung }));
+
+// --- Local AI + harness (93-12): detection, catalog, hardware, pull, benchmark, harness process ---
+app.use('/api', kiLokalRouter({ db, root: path.join(__dirname, '..'), lokalGebunden, origins: ERLAUBTE_ORIGINS, port: PORT, harness }));
+// --- Double-click on a .bitproj file (93-10): launcher → staged import → preview in the app; save back ---
+app.use('/api', dateiOeffnenRouter({ db, lokalGebunden, port: PORT, origins: ERLAUBTE_ORIGINS, anfrageEntfernt }));
+
+// --- "Programm beenden" (93-11): the hidden server has no console to press Ctrl+C in ---
+app.use('/api', programmRouter({
+  lokalGebunden, port: PORT, origins: ERLAUBTE_ORIGINS, anfrageEntfernt,
+  beenden: () => {
+    console.log('[server] Stopped via Settings > System & Info > "Programm beenden".');
+    // Write pending debounced changes of both databases before the process ends (db.js also flushes on exit).
+    db.flush();
+    personalDb.flush();
+    process.exit(0);
+  },
+}));
 
 // --- Telemetry source configuration (prepares MQTT/WebRTC integration) ------
 // App-only — bleibt als einzige Inline-Route in der Kompositionswurzel.
@@ -227,7 +290,8 @@ if (APP_MODUS) {
 
 // Bind to the loopback interface explicitly. Without a host Express listens on every
 // interface, so the office data were reachable from any other device on the same WLAN.
-// API_HOST allows an explicit opt-out for a deliberate LAN setup.
+// API_HOST moves the binding; since 93-03 a request from another device still needs the
+// office mode and a paired device (bueroWaechter) — API_HOST no longer opens the API.
 const HOST = process.env.API_HOST || '127.0.0.1';
 const server = app.listen(PORT, HOST, () => {
   if (APP_MODUS) {
@@ -236,11 +300,33 @@ const server = app.listen(PORT, HOST, () => {
     console.log(`BIT-Atelier local API running on http://${HOST}:${PORT}`);
   }
   console.log(`Data folder: ${datenOrdner()}`);
-  console.log('The API has no login: it is reachable from this computer only. Never forward or expose this port.');
+  console.log('The API has no login on this computer. Other devices need the office mode and a pairing. Never forward or expose this port.');
   if (!lokalGebunden) {
-    console.warn(`[warning] API_HOST=${HOST} — the API WITHOUT login is reachable from other devices in this network.`);
+    console.warn(`[warning] API_HOST=${HOST} — bound beyond loopback; other devices still need office mode + pairing.`);
+  }
+  // 93-03: office mode stays on across restarts until switched off in the settings — say so loudly.
+  if (buero.istAktiv()) {
+    lan.starten().then(({ adressen, fehler }) => {
+      console.warn(`[buero] Office mode is ON — paired devices in this network may use the app: ${adressen.map((a) => `http://${a}:${PORT}`).join(', ') || '(no address bound)'}`);
+      for (const f of fehler) console.warn(`[buero] ${f}`);
+    });
+  }
+  // 93-12: "mit BIT-Atelier starten" (default off) — only on loopback and only when set up.
+  if (lokalGebunden && kiEinstellungenLesen(db).harness_autostart && harness.status().eingerichtet) {
+    harness.start(harnessUmgebung(db, ERLAUBTE_ORIGINS))
+      .then((s) => console.log(`[harness] ${s.zustand === 'laeuft' ? 'running on' : s.zustand} ${s.url}`))
+      .catch((e) => console.error('[harness]', e?.message || e));
   }
 });
+// 93-12: never leave the harness child behind — kill its process tree when this server ends.
+process.on('exit', () => harness.beenden());
+// Same pattern as db.js: act, then re-raise when nobody else handles the signal (default termination).
+for (const signal of /** @type {const} */ (['SIGINT', 'SIGTERM', 'SIGHUP'])) {
+  process.once(signal, () => {
+    harness.beenden();
+    if (process.listenerCount(signal) === 0) process.kill(process.pid, signal);
+  });
+}
 server.on('error', (err) => {
   // EADDRINUSE is the common case (a second start, or the dev stack still running).
   const grund = err.code === 'EADDRINUSE'

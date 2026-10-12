@@ -37,11 +37,20 @@ const DEMO = SERVERLOS;
 // `import.meta.env.X` throws there because import.meta.env is undefined.
 const API_BASE = import.meta.env?.VITE_API_BASE_URL || '/api';
 
+/**
+ * Window event fired when the server says a write replaced a newer version of the record (93-03, office mode
+ * with several devices: response header X-Bit-Hinweis). detail = { pfad }. The app shows a plain-text note.
+ */
+export const ZWISCHENZEITLICH_GEAENDERT = 'bit:zwischenzeitlich-geaendert';
+
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
+  if (res.headers?.get?.('X-Bit-Hinweis') === 'zwischenzeitlich-geaendert' && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(ZWISCHENZEITLICH_GEAENDERT, { detail: { pfad: path } }));
+  }
   if (!res.ok) {
     const err = /** @type {Error & {status?: number, data?: any}} */ (new Error(`Request failed: ${res.status}`));
     err.status = res.status;
@@ -243,23 +252,34 @@ const personal = new Proxy(
 // Blobs (57-02): ONE data layer for the big payloads — the AVA import's
 // putBlob goes through here (projectImport.js) instead of its own fetch to
 // /blobs/:id. Supabase-Zweig: privater Bucket, Pfad <org>/<id>.json (57-01).
-// Serverless branch (review correction #3): demoDb has NO blob path — a
-// plain-text error instead of a second storage path.
+// Serverless branch (review correction #3): the browser's IndexedDB has NO
+// blob path — a plain-text error instead of a second storage path. The desktop
+// client's file storage has one (70-03), reached through demoDb.blobSpeicher().
 const BLOB_DEMO_FEHLT = 'Blobs sind in der lokalen Fassung nicht verfügbar (kein Blob-Speicher im Browser).';
+/**
+ * Blob store of the serverless path: the desktop client's file storage has one
+ * (70-03, one file per blob in the storage folder); the browser PWA has none.
+ * @returns {Promise<{put: Function, get: Function, delete: Function}>}
+ */
+async function serverlosBlobs() {
+  const speicher = (await import('./demoDb.js')).blobSpeicher();
+  if (!speicher) throw new Error(BLOB_DEMO_FEHLT);
+  return speicher;
+}
 const blobs = {
   async put(id, json) {
     if (DATENQUELLE === 'supabase') return (await ladeSupabaseDb()).blobsSupabase.put(id, json);
-    if (DEMO) throw new Error(BLOB_DEMO_FEHLT);
+    if (DEMO) return (await serverlosBlobs()).put(id, json);
     return request(`/blobs/${id}`, { method: 'PUT', body: JSON.stringify(json) });
   },
   async get(id) {
     if (DATENQUELLE === 'supabase') return (await ladeSupabaseDb()).blobsSupabase.get(id);
-    if (DEMO) throw new Error(BLOB_DEMO_FEHLT);
+    if (DEMO) return (await serverlosBlobs()).get(id);
     return request(`/blobs/${id}`);
   },
   async delete(id) {
     if (DATENQUELLE === 'supabase') return (await ladeSupabaseDb()).blobsSupabase.delete(id);
-    if (DEMO) throw new Error(BLOB_DEMO_FEHLT);
+    if (DEMO) return (await serverlosBlobs()).delete(id);
     return request(`/blobs/${id}`, { method: 'DELETE' });
   },
 };

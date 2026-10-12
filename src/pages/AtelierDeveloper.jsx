@@ -1,5 +1,7 @@
 import { seitenWurzel } from "@core/lib/utils";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { projekteNachZugriff } from "@core/lib/rechte.js";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
 import { Project } from "@/entities/Project";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Button } from "@core/components/ui/button";
@@ -23,6 +25,8 @@ import { Link } from "react-router-dom";
 import { createPageUrl } from "@core/utils";
 import { STATUS_LABELS, labelFor } from "../components/projects/labels";
 import { useI18n } from "@core/lib/i18n";
+import { bitApi } from "@core/api/bitApi";
+import { screeningZaehlung, KEIN_GEG_NACHWEIS } from "@core/lib/energieScreening";
 
 // Opens the create form on /Projects (Projects.jsx reads ?neu=1).
 const NEUES_PROJEKT = `${createPageUrl("Projects")}?neu=1`;
@@ -30,7 +34,10 @@ const NEUES_PROJEKT = `${createPageUrl("Projects")}?neu=1`;
 export default function AtelierDeveloper() {
   // 72-08 (N-02): the h1 is the menu title (src/navigation.js), same key.
   const { t } = useI18n();
-  const [projects, setProjects] = useState([]);
+  // 82-02: the role's project view (same filter as ProjectContext) — applied on render, so "Ansicht als" needs no reload.
+  const zugriff = useZugriff();
+  const [rohProjekte, setProjects] = useState([]);
+  const projects = useMemo(() => projekteNachZugriff(rohProjekte, zugriff), [rohProjekte, zugriff]);
   const [isLoading, setIsLoading] = useState(true);
   const [kpis, setKpis] = useState({
     total_projects: 0,
@@ -38,7 +45,8 @@ export default function AtelierDeveloper() {
     avg_efficiency: 0,
     avg_energy_savings: 0,
     total_value: 0,
-    compliant_projects: 0
+    // Energy screening (guide value) — counted from stored EnergyScenario records, never a GEG proof.
+    screening: { eingehalten: 0, mitErgebnis: 0 }
   });
 
   const [recentActivity, setRecentActivity] = useState([
@@ -52,7 +60,7 @@ export default function AtelierDeveloper() {
     {
       id: 2,
       type: "energy",
-      message: "Bürohochhaus Berlin – GEG-Konformität erreicht",
+      message: "Bürohochhaus Berlin – Energie-Screening: Richtwert eingehalten",
       timestamp: "vor 4 Stunden",
       status: "success"
     },
@@ -77,6 +85,9 @@ export default function AtelierDeveloper() {
       // the list below shows the first five by updated_date.
       const projectsData = await Project.list('-updated_date');
       setProjects(projectsData);
+      // Liability (12.10.2026): this KPI was a GEG conformity rate = a flat 89 % of all projects. Now it counts the
+      // projects whose newest energy screening stays below the reference guide value (energieScreening.js).
+      const szenarien = await bitApi.entities.EnergyScenario.list().catch(() => []);
       
       // Calculate KPIs (mock data for now)
       setKpis({
@@ -85,7 +96,7 @@ export default function AtelierDeveloper() {
         avg_efficiency: 82.4,
         avg_energy_savings: 23.1,
         total_value: 45600000,
-        compliant_projects: Math.floor(projectsData.length * 0.89)
+        screening: screeningZaehlung(projectsData, szenarien)
       });
     } catch (error) {
       console.error("Error loading dashboard data:", error);
@@ -195,12 +206,13 @@ export default function AtelierDeveloper() {
               <div className="inline-flex p-2.5 rounded-xl bg-emerald-50 mb-2">
                 <CheckCircle className="w-6 h-6 text-emerald-600" />
               </div>
-              <h3 className="text-2xl font-bold text-slate-800 mb-1">
-                {kpis.total_projects
-                  ? `${Math.round((kpis.compliant_projects / kpis.total_projects) * 100).toLocaleString("de-DE")} %`
+              <h3 className="text-2xl font-bold text-slate-800 mb-1" data-energie-screening-kpi>
+                {kpis.screening.mitErgebnis
+                  ? `${kpis.screening.eingehalten} / ${kpis.screening.mitErgebnis}`
                   : "—"}
               </h3>
-              <p className="text-xs text-slate-500">GEG-konform</p>
+              <p className="text-xs text-slate-500">{t("Energie-Screening: Richtwert eingehalten")}</p>
+              <p className="text-[10px] text-slate-400">{t(KEIN_GEG_NACHWEIS)}</p>
             </CardContent>
           </Card>
         </div>

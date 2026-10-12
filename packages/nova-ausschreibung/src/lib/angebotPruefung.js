@@ -71,7 +71,7 @@ function epVon(bid, positionId) {
 /**
  * Recomputed total of a bid with the LV quantities, euro; `vollstaendig` = every position has a price.
  * @param {any} bid
- * @param {Array<{id: string, quantity?: number|null}>} positionen
+ * @param {Array<{id: string, quantity?: number|null, kennz?: string|null}>} positionen
  * @returns {{summe: number, vollstaendig: boolean, ohnePreis: number}}
  */
 export function bidSumme(bid, positionen) {
@@ -79,6 +79,8 @@ export function bidSumme(bid, positionen) {
   for (const p of positionen) {
     const ep = epVon(bid, p.id);
     if (ep === null) { ohnePreis += 1; continue; }
+    // 73-08: a contingency item is priced but not part of the offer sum (VOB).
+    if (/bedarf|eventual|withouttotal/i.test(String(p?.kennz || ""))) continue;
     summe += (zahl(p.quantity) ?? 0) * ep;
   }
   return { summe: r2(summe), vollstaendig: ohnePreis === 0, ohnePreis };

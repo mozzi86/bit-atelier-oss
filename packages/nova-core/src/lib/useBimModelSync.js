@@ -56,6 +56,22 @@ let letztesSyncProjekt = null;
 // Serialisierung aller Schreibvorgänge — nie zwei Requests gleichzeitig.
 let chain = Promise.resolve();
 
+// 89-07 (BW-09): listeners of saved patches. Readers that hold a copy of the record
+// (usePlanModel) did not see element changes of BitBimStudio in the same session — the
+// cache was patched, but nobody re-read it. Now every successful save notifies them.
+/** @type {Set<(projectId: string, patch: Record<string, any>) => void>} */
+const aenderungsHoerer = new Set();
+
+/**
+ * Subscribe to saved BimModel patches (after the write succeeded, in save order).
+ * @param {(projectId: string, patch: Record<string, any>) => void} fn called with the project and the written fields
+ * @returns {() => void} unsubscribe
+ */
+export function aufBimModelAenderung(fn) {
+  aenderungsHoerer.add(fn);
+  return () => { aenderungsHoerer.delete(fn); };
+}
+
 /** Datensatz des Projekts laden (geteilter Request; Ergebnis wird gecacht). */
 export function loadBimModel(projectId) {
   if (!projectId) return Promise.resolve(null);
@@ -105,6 +121,9 @@ export function saveBimModel(projectId, patch) {
       const vorher = record.load;
       record.load = (async () => ({ ...((await vorher.catch(() => null)) || {}), ...data }))();
     }
+    for (const fn of aenderungsHoerer) {
+      try { fn(projectId, data); } catch { /* a reader's error must not fail the write */ }
+    }
     return ergebnis;
   };
   const result = chain.then(run, run);
@@ -127,6 +146,8 @@ export function useBimModelSync(projectId, opts = {}) {
   const bp = useBuildingProgram();
   const loadingRef = useRef(false);
   const lastLoaded = useRef("");
+  // 86-07: did the loaded/last saved record carry a drawn axis (so clearing it writes null)?
+  const hatteAchse = useRef(false);
   // 87-02: the project whose record was LOADED successfully. Until then the store only
   // holds defaults — and the write-back below must never push those to the server
   // (a transient load failure used to be followed, 1,5 s later, by a save of 4 storeys
@@ -153,6 +174,9 @@ export function useBimModelSync(projectId, opts = {}) {
         if (cancelled) return;
         const patch = {
           footprintM: m?.footprintM || null,
+          footprintQuelle: m?.footprintQuelle || null,
+          // 86-07: drawn centre line (polyline in footprint-centred metres) or null.
+          achseM: Array.isArray(m?.achseM) && m.achseM.length >= 2 ? m.achseM : null,
           storeys: m?.storeys || 4,
           storeyHeight: m?.storeyHeight || 3,
           unit: m?.unit || "m",
@@ -164,7 +188,8 @@ export function useBimModelSync(projectId, opts = {}) {
             behalten: behaltenRef.current,
           }),
         };
-        lastLoaded.current = JSON.stringify([patch.footprintM, patch.storeys, patch.storeyHeight, patch.unit]);
+        lastLoaded.current = JSON.stringify([patch.footprintM, patch.storeys, patch.storeyHeight, patch.unit, patch.footprintQuelle, patch.achseM]);
+        hatteAchse.current = patch.achseM !== null;
         geladenRef.current = projectId;
         buildingProgram.set({ ...patch, syncFehler: null });
         letztesSyncProjekt = projectId;
@@ -184,7 +209,8 @@ export function useBimModelSync(projectId, opts = {}) {
   useEffect(() => {
     // 87-02: never before a successful load of THIS project (see geladenRef).
     if (!projectId || loadingRef.current || geladenRef.current !== projectId) return;
-    const sig = JSON.stringify([bp.footprintM, bp.storeys, bp.storeyHeight, bp.unit]);
+    const achse = Array.isArray(bp.achseM) && bp.achseM.length >= 2 ? bp.achseM : null;
+    const sig = JSON.stringify([bp.footprintM, bp.storeys, bp.storeyHeight, bp.unit, bp.footprintQuelle, achse]);
     if (sig === lastLoaded.current) return;
     let abgebrochen = false;
     const t = setTimeout(async () => {
@@ -192,7 +218,13 @@ export function useBimModelSync(projectId, opts = {}) {
       // waiting silently for the next change.
       for (let versuch = 1; versuch <= 3 && !abgebrochen; versuch += 1) {
         try {
-          await saveBimModel(projectId, { footprintM: bp.footprintM, storeys: bp.storeys, storeyHeight: bp.storeyHeight, unit: bp.unit });
+          // 86-07: the axis is written only when there is one or there was one (clearing it) —
+          // records of projects that never drew an axis stay as they were.
+          await saveBimModel(projectId, {
+            footprintM: bp.footprintM, footprintQuelle: bp.footprintQuelle ?? null, storeys: bp.storeys, storeyHeight: bp.storeyHeight, unit: bp.unit,
+            ...(achse || hatteAchse.current ? { achseM: achse } : {}),
+          });
+          hatteAchse.current = achse !== null;
           lastLoaded.current = sig;
           if (buildingProgram.get().syncFehler === "speichern") buildingProgram.set({ syncFehler: null });
           return;
@@ -207,5 +239,15 @@ export function useBimModelSync(projectId, opts = {}) {
       }
     }, 1500);
     return () => { abgebrochen = true; clearTimeout(t); };
-  }, [projectId, bp.footprintM, bp.storeys, bp.storeyHeight, bp.unit]);
+  }, [projectId, bp.footprintM, bp.footprintQuelle, bp.storeys, bp.storeyHeight, bp.unit, bp.achseM]);
+}
+
+/**
+ * 73-05: does the shared program store currently hold this project? Writers outside the designer (IFC
+ * viewer) update the store only then — otherwise the next designer load reads the record anyway.
+ * @param {string|null|undefined} projectId
+ * @returns {boolean}
+ */
+export function storeGehoertZu(projectId) {
+  return Boolean(projectId) && letztesSyncProjekt === projectId;
 }

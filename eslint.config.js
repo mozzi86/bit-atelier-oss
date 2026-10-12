@@ -20,7 +20,7 @@ export default [
   // importScripts, darf nicht transformiert werden) — daher vom Linting ausgenommen.
   {
     ignores: [
-      "dist/**", "dist-demo/**", "dist-lokal/**", "node_modules/**", "build.log", "lint.log", "typecheck.log",
+      "dist/**", "dist-demo/**", "dist-lokal/**", "dist-lokal-client/**", "client/src-tauri/target/**", "client/src-tauri/gen/**", "node_modules/**", "build.log", "lint.log", "typecheck.log",
       ".claude/**", ".planning/**", "public/mapbox-gl-rtl-text.js",
       // Phase 33 / W7: `parity/artifacts/` sind ERZEUGTE Artefakte (u. a. das
       // vollständig gebaute Kundenpaket aus Gate G20 mit eigenem node_modules

@@ -29,6 +29,10 @@ const ALLOWLIST_MUSTER = [
   /^src\/pages\/People\.jsx$/,
   /^src\/components\/settings\/PersonalBereich\.jsx$/,
   /^packages\/nova-core\/src\/api\/(bitApi|demoIdb|personalEntitaeten|personalDb|personalDatei)\.js$/,
+  // 70-03: storage layer of the desktop client — mounts the file storage for the
+  // personal class too (HR files then live in <Ablageort>/personal/, like the
+  // Node build's personal.json in its data folder). Storage only, no AI/telemetry path.
+  /^src\/client\/ablage\.js$/,
   /^packages\/nova-core\/server\/(routes|personalRouter)\.js$/,
   /^server\/index\.js$/,
   /^scripts\/supabase-import\.mjs$/,

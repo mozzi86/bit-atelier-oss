@@ -23,6 +23,12 @@
 //
 // Import-Grenze: wohnMoebel importiert moebel/accessibility/massstab/proportion — moebel.js
 // importiert NIE wohnMoebel.js (Zyklusverbot aus dem Plan).
+//
+// 89-07 (BW-09, one door system): the workshop's zone door IS the door component (@core
+// werkstattTueren, stable GUID). Furniture reads its swing (bauteilTuerAufschlag) in the checks,
+// the movement-area count and the auto-furnishing; the focus offers no catalogue doors in
+// workshop units any more (fokusKatalog ohneTueren). Every new option defaults to empty — without
+// them each function is byte-identical to before.
 
 import {
   moebelById, itemRect, itemAusdehnung, kollidiert, imRaum, punktImPolygon,
@@ -413,6 +419,57 @@ export function rechteckTrifftAufschlag(rect, aufschlag) {
   return Math.hypot(px - s.x, py - s.y) < aufschlag.radius;
 }
 
+// ---- Bauteil-Türen (89-07, ein Türsystem) ---------------------------------------------------
+
+/** Warning texts of the component-door checks — fixed German keys, the focus passes them to t(). */
+export const BAUTEIL_TUER_TEXTE = Object.freeze({
+  moebel: "Türaufschlag einer Raumtür (Bauteil) trifft dieses Möbel.",
+  bewegung: "Türaufschlag einer Raumtür (Bauteil) schneidet die Bewegungsfläche dieses Möbels.",
+  doppelt: "Möbeltür doppelt: die Türen dieser Wohnung sind Bauteile der Werkstatt — bitte löschen.",
+});
+
+/**
+ * Swing of a door COMPONENT (@core werkstattTueren = the zone door) in the furniture frame
+ * (x = plan x, y = plan z, metres), shaped like tuerAufschlag so rechteckTrifftAufschlag and every
+ * swing check read it unchanged. `mitte` is a point well inside the swing (0.35 × the two leaf
+ * vectors from the hinge, |·| ≈ 0.49 r < r) — it tells which room the leaf swings into.
+ * @param {{guid?:string, a:{x:number,z:number}, b:{x:number,z:number}, aufschlag?:string, breite_m:number, schwenk?:{scharnier:{x:number,z:number}, offen:{x:number,z:number}}}} tuer
+ * @returns {null|{guid:string, scharnier:{x:number,y:number}, geschlossen:{x:number,y:number}, offen:{x:number,y:number}, aabb:{x:number,y:number,w:number,h:number}, radius:number, mitte:{x:number,y:number}}}
+ */
+export function bauteilTuerAufschlag(tuer) {
+  const sw = tuer?.schwenk;
+  if (!sw?.scharnier || !sw?.offen || !tuer?.a || !tuer?.b) return null;
+  const r = Number(tuer.breite_m) || 0;
+  if (!(r > 0)) return null;
+  const scharnier = { x: sw.scharnier.x, y: sw.scharnier.z };
+  // Closed leaf end = the leaf-line end that is NOT the hinge.
+  const g = tuer.aufschlag === "rechts" ? tuer.a : tuer.b;
+  const geschlossen = { x: g.x, y: g.z };
+  const offen = { x: sw.offen.x, y: sw.offen.z };
+  const xs = [scharnier.x, geschlossen.x, offen.x], ys = [scharnier.y, geschlossen.y, offen.y];
+  const mitte = {
+    x: scharnier.x + 0.35 * ((geschlossen.x - scharnier.x) + (offen.x - scharnier.x)),
+    y: scharnier.y + 0.35 * ((geschlossen.y - scharnier.y) + (offen.y - scharnier.y)),
+  };
+  return {
+    guid: String(tuer.guid || ""), scharnier, geschlossen, offen, radius: r, mitte,
+    aabb: { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) },
+  };
+}
+
+/**
+ * Component-door swings that open INTO a zone (swing point `mitte` inside the polygon) — a room
+ * door swings into its room, a bath door (nachAussen) into the hall, the entrance door into the hall.
+ * @param {{points:Array<{x:number,z:number}>}} zone
+ * @param {Array<object>} tueren door components (@core werkstattTueren)
+ * @returns {Array<NonNullable<ReturnType<typeof bauteilTuerAufschlag>>>}
+ */
+export function bauteilTuerenFuerZone(zone, tueren) {
+  const pts = zone?.points;
+  if (!Array.isArray(pts) || pts.length < 3) return [];
+  return (tueren || []).map(bauteilTuerAufschlag).filter((a) => a && punktImPolygon(a.mitte.x, a.mitte.y, pts));
+}
+
 // ---- Fenster ----------------------------------------------------------------------------------
 
 /**
@@ -555,12 +612,16 @@ const STUFEN_LABEL = { standard: "Standard", B: "B", R: "R" };
  * @param {Array<object>} items zone items (metres)
  * @param {Array<{x:number,z:number}>} polygon zone points
  * @param {string} [stufe] "standard" | "B" | "R"
- * @param {{fenster?:Array<{a:{x:number,z:number},b:{x:number,z:number}}>}} [opt]
- * @returns {Array<{status:"warn", itemId:string, art:string, text:string}>}
+ * 89-07: `tueren` = component-door swings into this room (bauteilTuerenFuerZone) → warnings
+ * "bauteil_tuer_moebel" (body in the swing) / "bauteil_tuer_bewegung" (movement area cut, Blatt 07
+ * :193); `mitBauteilTueren` = the unit's doors are components → every catalogue door item is
+ * flagged "tuer_doppelt" (the second door system, kept until the user deletes it — never silently).
+ * @param {{fenster?:Array<{a:{x:number,z:number},b:{x:number,z:number}}>, tueren?:Array<object>, mitBauteilTueren?:boolean}} [opt]
+ * @returns {Array<{status:"warn", itemId:string, art:string, text:string, tuerGuid?:string}>}
  */
-export function wohnMoebelChecks(items, polygon, stufe = STUFE_DEFAULT, { fenster = [] } = {}) {
+export function wohnMoebelChecks(items, polygon, stufe = STUFE_DEFAULT, { fenster = [], tueren = [], mitBauteilTueren = false } = {}) {
   const liste = (items || []).filter((it) => it && moebelById(it.typ)); // T-75-09-02: skip junk
-  /** @type {Array<{status:"warn", itemId:string, art:string, text:string}>} */
+  /** @type {Array<{status:"warn", itemId:string, art:string, text:string, tuerGuid?:string}>} */
   const warnungen = [];
   const stufenText = STUFEN_LABEL[stufe] || STUFEN_LABEL.standard;
   const bands = new Map(liste.map((it) => [it.id, bewegungsflaechen(it, stufe)]));
@@ -636,6 +697,27 @@ export function wohnMoebelChecks(items, polygon, stufe = STUFE_DEFAULT, { fenste
       }
     }
   }
+  // 89-07: swings of the door COMPONENTS (the zone doors) — the furniture reads them.
+  for (const a of tueren || []) {
+    if (!a) continue;
+    for (const it of liste) {
+      if (moebelById(it.typ).tuer) continue; // a catalogue door gets "tuer_doppelt" below
+      if (rechteckTrifftAufschlag(itemRect(it), a)) {
+        warnungen.push({ status: "warn", itemId: it.id, art: "bauteil_tuer_moebel", tuerGuid: a.guid, text: BAUTEIL_TUER_TEXTE.moebel });
+      }
+      for (const b of bands.get(it.id) || []) {
+        if (rechteckTrifftAufschlag(b, a)) {
+          warnungen.push({ status: "warn", itemId: it.id, art: "bauteil_tuer_bewegung", tuerGuid: a.guid, text: BAUTEIL_TUER_TEXTE.bewegung });
+          break;
+        }
+      }
+    }
+  }
+  if (mitBauteilTueren) {
+    for (const it of liste) {
+      if (moebelById(it.typ).tuer) warnungen.push({ status: "warn", itemId: it.id, art: "tuer_doppelt", text: BAUTEIL_TUER_TEXTE.doppelt });
+    }
+  }
   return warnungen;
 }
 
@@ -644,7 +726,8 @@ export function wohnMoebelChecks(items, polygon, stufe = STUFE_DEFAULT, { fenste
  * „Bewegungsflächen-Nachweis DIN 18040-2"): how many areas exist, how many are free
  * of conflicts, and the conflicts themselves. A band conflicts when a non-exempt
  * foreign body overlaps it, it reaches over a wall, or a door swing cuts it.
- * @param {Array<{zone:{name?:string,points:Array<{x:number,z:number}>}, items:Array<object>, fenster?:Array}>} raeume
+ * @param {Array<{zone:{name?:string,points:Array<{x:number,z:number}>}, items:Array<object>, fenster?:Array, tueren?:Array<object>}>} raeume
+ *   tueren (89-07): component-door swings into the room (bauteilTuerenFuerZone)
  * @param {string} [stufe] "standard" | "B" | "R"
  * @returns {{anzahl:number, frei:number, konflikte:Array<{raum:string,itemId:string,text:string}>}}
  */
@@ -687,6 +770,10 @@ export function bewegungsNachweis(raeume, stufe = STUFE_DEFAULT) {
           if (a && rechteckTrifftAufschlag(b, a)) {
             merken(`Türaufschlag von ${moebelById(other.typ)?.name || other.typ} schneidet die Bewegungsfläche vor ${name}.`);
           }
+        }
+        // 89-07: swing of a door component (raum.tueren, bauteilTuerenFuerZone) cutting the band.
+        for (const a of raum?.tueren || []) {
+          if (a && rechteckTrifftAufschlag(b, a)) merken(BAUTEIL_TUER_TEXTE.bewegung);
         }
       }
     }
@@ -754,14 +841,20 @@ const TISCH_MAX_KANDIDATEN = 4000;
  * @param {object} kandidat
  * @param {Array<object>} items existing items
  * @param {Array<{x:number,z:number}>} polygon
- * @param {{stufe?:string, fenster?:Array}} [opt]
+ * @param {{stufe?:string, fenster?:Array, tueren?:Array<object>}} [opt] tueren (89-07) = component-door swings
  * @returns {boolean}
  */
-function gueltig(kandidat, items, polygon, { stufe = STUFE_DEFAULT, fenster = [] } = {}) {
+function gueltig(kandidat, items, polygon, { stufe = STUFE_DEFAULT, fenster = [], tueren = [] } = {}) {
   if (sperrGrund(items, kandidat, polygon, { fenster }) !== null) return false;
   const eigene = bewegungsflaechen(kandidat, stufe);
   for (const b of eigene) {
     if (!rectInPolygon(b, polygon)) return false;
+  }
+  // 89-07: component-door swings — neither the body nor an own movement area may lie in a swing.
+  for (const a of tueren || []) {
+    if (!a) continue;
+    if (rechteckTrifftAufschlag(itemRect(kandidat), a)) return false;
+    if (eigene.some((b) => rechteckTrifftAufschlag(b, a))) return false;
   }
   const neuBefreit = hatRegel(kandidat, "in_bewegungsflaeche_ok");
   const bodyNeu = itemRect(kandidat);
@@ -871,18 +964,19 @@ function wandKandidat(wand, rot, entlang, bb, masse, pos) {
  * @param {{points:Array<{x:number,z:number}>, name?:string, level?:number}} zone
  * @param {Array<object>} items existing items of the zone
  * @param {string} typId catalogue id (WOHN_GRUPPE or MOEBEL_KATALOG)
- * @param {{stufe?:string, fenster?:Array, idPrefix?:string, nr?:number|string, bezug?:string|null}} [opt]
- *   idPrefix+nr build the item id (`${idPrefix}${nr}`); bezug = wall id to place opposite of
+ * @param {{stufe?:string, fenster?:Array, idPrefix?:string, nr?:number|string, bezug?:string|null, tueren?:Array<object>}} [opt]
+ *   idPrefix+nr build the item id (`${idPrefix}${nr}`); bezug = wall id to place opposite of;
+ *   tueren (89-07) = component-door swings into the room — body and movement areas stay out of them
  * @returns {object|null} placed item {id, typ, x, y, rot} or null (no valid spot)
  */
-export function platziereTyp(zone, items, typId, { stufe = STUFE_DEFAULT, fenster = [], idPrefix = "", nr = 1, bezug = null } = {}) {
+export function platziereTyp(zone, items, typId, { stufe = STUFE_DEFAULT, fenster = [], idPrefix = "", nr = 1, bezug = null, tueren = [] } = {}) {
   const typ = moebelById(typId);
   const polygon = zone?.points;
   if (!typ || !polygon || polygon.length < 3 || typ.tuer) return null;
   const bb = bboxAusPolygon(polygon);
   if (!bb) return null;
   const id = `${idPrefix}${nr}`;
-  const opt = { stufe, fenster };
+  const opt = { stufe, fenster, tueren };
   const basis = { id, typ: typId, rot: 0 };
   const versuch = (x, y, rot) => {
     const k = { ...basis, x, y, rot };
@@ -1034,10 +1128,11 @@ const slug = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0
  * Ids: `auto-<slug(zoneKey)>-<n>` — globally unique because MoeblierungsPlan uses
  * `it-${id}` as React key across ALL rooms.
  * @param {{points:Array<{x:number,z:number}>, name?:string, level?:number, art?:string}} zone
- * @param {{personen?:number, stufe?:string, vorhandene?:Array<object>, fenster?:Array}} [opt]
+ * @param {{personen?:number, stufe?:string, vorhandene?:Array<object>, fenster?:Array, tueren?:Array<object>}} [opt]
+ *   tueren (89-07): component-door swings into the room — nothing is placed into them
  * @returns {{items:Array<object>, hinweise:string[]}} items in m; hinweise in German
  */
-export function autoMoeblierung(zone, { personen = 2, stufe = STUFE_DEFAULT, vorhandene = [], fenster = [] } = {}) {
+export function autoMoeblierung(zone, { personen = 2, stufe = STUFE_DEFAULT, vorhandene = [], fenster = [], tueren = [] } = {}) {
   if ((vorhandene || []).length > 0) {
     return { items: [], hinweise: ["belegt — vorhandene Möbel werden nie überschrieben."] };
   }
@@ -1062,7 +1157,7 @@ export function autoMoeblierung(zone, { personen = 2, stufe = STUFE_DEFAULT, vor
   // are fine — uniqueness is what MoeblierungsPlan's React keys need).
   const setze = (typId, opt = {}) => {
     nr += 1;
-    const it = platziereTyp(zone, items, typId, { stufe, fenster, idPrefix: basis, nr, ...opt });
+    const it = platziereTyp(zone, items, typId, { stufe, fenster, tueren, idPrefix: basis, nr, ...opt });
     if (it) items.push(it);
     return it;
   };
@@ -1128,10 +1223,14 @@ function wandFuerRot(rot) {
  * Catalogue groups for the focus furniture panel: the living group PLUS an “Eigene”
  * group when the project has custom types (same pattern as katalogMitEigenen, but the
  * office catalogue stays out of the apartment focus).
+ * 89-07: `ohneTueren` drops the catalogue doors — in workshop units the doors are components
+ * (zone doors with GUID), a second catalogue door would be the second door system.
  * @param {Array<object>|null|undefined} eigene custom types (complexData.moebel_eigene)
+ * @param {{ohneTueren?: boolean}} [opt]
  * @returns {Array<{gruppe:string, typen:Array<object>}>}
  */
-export function fokusKatalog(eigene) {
+export function fokusKatalog(eigene, { ohneTueren = false } = {}) {
   const liste = eigene || [];
-  return liste.length ? [WOHN_GRUPPE, { gruppe: EIGENE_GRUPPE, typen: liste }] : [WOHN_GRUPPE];
+  const wohn = ohneTueren ? { ...WOHN_GRUPPE, typen: WOHN_GRUPPE.typen.filter((t) => !t.tuer) } : WOHN_GRUPPE;
+  return liste.length ? [wohn, { gruppe: EIGENE_GRUPPE, typen: liste }] : [wohn];
 }

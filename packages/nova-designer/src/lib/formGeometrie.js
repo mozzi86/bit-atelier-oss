@@ -9,7 +9,8 @@
 // In:  polygons as [{x, z}] in metres (simple, any orientation, may be concave).
 // Out: area/orientation helpers, point-in-polygon, frames (world ↔ local), candidate main
 //      directions, cross-sections, strip intervals, largest inscribed rectangle, half-plane
-//      clipping (Sutherland–Hodgman) for the remainder pieces.
+//      clipping (Sutherland–Hodgman) and, since 86-02, the multi-part cut into simple pieces
+//      (schneideHalbebeneTeile, ohneKonvex, inKonvex) for the remainder pieces.
 
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const EPS = 1e-9;
@@ -342,20 +343,143 @@ export function schneideHalbebene(pts, nx, nz, c) {
   return out.length >= 3 ? out : [];
 }
 
+/** Drop consecutive duplicate points (and a closing duplicate), m. @param {Array<{x:number,z:number}>} pts */
+function ohneDoppelte(pts) {
+  const out = [];
+  for (const p of pts) {
+    const q = out[out.length - 1];
+    if (!q || Math.abs(q.x - p.x) > 1e-9 || Math.abs(q.z - p.z) > 1e-9) out.push(p);
+  }
+  while (out.length > 1 && Math.abs(out[0].x - out[out.length - 1].x) <= 1e-9 && Math.abs(out[0].z - out[out.length - 1].z) <= 1e-9) out.pop();
+  return out;
+}
+
 /**
- * The polygon minus an axis-parallel rectangle, as up to four pieces (left, right, below,
- * above the rectangle; below/above only within the rectangle's x-range) — the remainder the
- * rectangle solver leaves empty. Pieces under 0,01 m² are dropped.
+ * 86-02 multi-part half-plane cut: the part of a SIMPLE polygon with n·p ≤ c as a list of
+ * SIMPLE polygons (no zero-width bridges). Why: Sutherland–Hodgman (schneideHalbebene) keeps a
+ * concave subject in one ring and joins separate pieces by bridges along the cut line — fine
+ * for an area, wrong for anything that walks the outline (adding a remainder to a room).
+ * Method (86-RESEARCH §4, "Mehrteil-Variante"): walk the outline, cut it into inside chains
+ * (entry point … exit point), sort all entry/exit points along the cut line and connect them
+ * in pairs (0–1, 2–3, …) — for a simple polygon each such pair is a segment of the line inside
+ * the polygon, so the chains close into separate rings. Vertices ON the line count as inside.
+ * @param {Array<{x:number, z:number}>} pts simple polygon, m
+ * @param {number} nx half-plane normal x
+ * @param {number} nz half-plane normal z
+ * @param {number} c offset (m)
+ * @returns {Array<Array<{x:number, z:number}>>} pieces, each with ≥ 3 points (area may be tiny)
+ */
+export function schneideHalbebeneTeile(pts, nx, nz, c) {
+  const p = (Array.isArray(pts) ? pts : []).map((q) => ({ x: num(q.x), z: num(q.z) }));
+  const n = p.length;
+  if (n < 3) return [];
+  const wert = p.map((q) => nx * q.x + nz * q.z - c);
+  const innen = wert.map((v) => v <= EPS);
+  if (innen.every(Boolean)) return [p];
+  if (!innen.some(Boolean)) return [];
+  const start = innen.findIndex((x) => !x); // begin outside → every chain is complete
+  /** @type {Array<{punkte: Array<{x:number,z:number}>, ein: {x:number,z:number}, aus: {x:number,z:number}}>} */
+  const ketten = [];
+  /** @type {any} */
+  let akt = null;
+  for (let k = 0; k < n; k += 1) {
+    const i = (start + k) % n, j = (i + 1) % n;
+    const a = p[i], b = p[j];
+    if (innen[i] && akt) akt.punkte.push(a);
+    if (innen[i] !== innen[j]) {
+      const t = wert[i] / (wert[i] - wert[j]);
+      const s = { x: a.x + t * (b.x - a.x), z: a.z + t * (b.z - a.z) };
+      if (!innen[i]) { akt = { punkte: [s], ein: s, aus: s }; ketten.push(akt); }
+      else if (akt) { akt.punkte.push(s); akt.aus = s; akt = null; }
+    }
+  }
+  // One inside chain: the Sutherland–Hodgman ring IS the simple piece (same start point as
+  // before 86-02 — remainder pieces of earlier plans stay byte-identical).
+  if (ketten.length === 1) {
+    const sh = schneideHalbebene(p, nx, nz, c);
+    return sh.length >= 3 ? [sh] : [];
+  }
+  // Sort entry/exit points along the line (direction d = (−nz, nx)) and pair them.
+  const dx = -nz, dz = nx;
+  const marken = [];
+  ketten.forEach((kette, i) => {
+    marken.push({ s: kette.ein.x * dx + kette.ein.z * dz, kette: i, art: "ein" });
+    marken.push({ s: kette.aus.x * dx + kette.aus.z * dz, kette: i, art: "aus" });
+  });
+  marken.sort((u, v) => u.s - v.s || (u.art === v.art ? 0 : u.art === "aus" ? -1 : 1));
+  /** exit of chain i → the chain whose entry it connects to along the line */
+  const weiter = new Map();
+  for (let i = 0; i + 1 < marken.length; i += 2) {
+    const u = marken[i], v = marken[i + 1];
+    if (u.art === "aus" && v.art === "ein") weiter.set(u.kette, v.kette);
+    else if (u.art === "ein" && v.art === "aus") weiter.set(v.kette, u.kette);
+    else return [ohneDoppelte(schneideHalbebene(p, nx, nz, c))].filter((t) => t.length >= 3); // degenerate: one ring
+  }
+  const benutzt = new Set();
+  const teile = [];
+  for (let i = 0; i < ketten.length; i += 1) {
+    if (benutzt.has(i)) continue;
+    const ring = [];
+    let k = i;
+    for (let guard = 0; guard <= ketten.length && !benutzt.has(k); guard += 1) {
+      benutzt.add(k);
+      ring.push(...ketten[k].punkte);
+      const nk = weiter.get(k);
+      if (nk === undefined) break;
+      k = nk;
+    }
+    const sauber = ohneDoppelte(ring);
+    if (sauber.length >= 3) teile.push(sauber);
+  }
+  return teile;
+}
+
+/**
+ * 86-02: a polygon minus a CONVEX region given as half-planes (n·p ≤ c each), as disjoint
+ * simple pieces: piece i = inside half-planes 0…i−1 and outside half-plane i. Pieces under
+ * `minFlaeche` m² are dropped.
+ * @param {Array<{x:number, z:number}>} pts simple polygon, m
+ * @param {Array<{nx:number, nz:number, c:number}>} halbebenen the convex region
+ * @param {number} [minFlaeche] m² (default 0,01)
+ * @returns {Array<Array<{x:number, z:number}>>}
+ */
+export function ohneKonvex(pts, halbebenen, minFlaeche = 0.01) {
+  const out = [];
+  let innen = [pts];
+  for (const h of halbebenen) {
+    for (const t of innen) out.push(...schneideHalbebeneTeile(t, -h.nx, -h.nz, -h.c));
+    innen = innen.flatMap((t) => schneideHalbebeneTeile(t, h.nx, h.nz, h.c));
+    if (!innen.length) break;
+  }
+  return out.filter((t) => t.length >= 3 && flaeche(t) > minFlaeche);
+}
+
+/**
+ * 86-02: a polygon cut to a CONVEX region given as half-planes, as simple pieces (m).
+ * @param {Array<{x:number, z:number}>} pts simple polygon, m
+ * @param {Array<{nx:number, nz:number, c:number}>} halbebenen
+ * @returns {Array<Array<{x:number, z:number}>>}
+ */
+export function inKonvex(pts, halbebenen) {
+  let teile = [pts];
+  for (const h of halbebenen) teile = teile.flatMap((t) => schneideHalbebeneTeile(t, h.nx, h.nz, h.c));
+  return teile;
+}
+
+/**
+ * The polygon minus an axis-parallel rectangle, as pieces left, right, below and above the
+ * rectangle (below/above only within its x-range) — the remainder the rectangle solver leaves
+ * empty. 86-02: cut with the multi-part cut, so a concave footprint yields separate simple
+ * pieces instead of one ring with zero-width bridges. Pieces under 0,01 m² are dropped.
  * @param {Array<{x:number, z:number}>} pts
  * @param {{x0:number, x1:number, z0:number, z1:number}} r
  * @returns {Array<Array<{x:number, z:number}>>}
  */
 export function restOhneRechteck(pts, r) {
-  const teile = [
-    schneideHalbebene(pts, 1, 0, r.x0),                                       // x ≤ x0
-    schneideHalbebene(pts, -1, 0, -r.x1),                                     // x ≥ x1
-    schneideHalbebene(schneideHalbebene(schneideHalbebene(pts, -1, 0, -r.x0), 1, 0, r.x1), 0, 1, r.z0), // x0..x1, z ≤ z0
-    schneideHalbebene(schneideHalbebene(schneideHalbebene(pts, -1, 0, -r.x0), 1, 0, r.x1), 0, -1, -r.z1), // x0..x1, z ≥ z1
-  ];
-  return teile.filter((t) => t.length >= 3 && flaeche(t) > 0.01);
+  return ohneKonvex(pts, [
+    { nx: -1, nz: 0, c: -r.x0 }, // region x ≥ x0 → piece x ≤ x0 (left)
+    { nx: 1, nz: 0, c: r.x1 },   // region x ≤ x1 → piece x ≥ x1 (right)
+    { nx: 0, nz: -1, c: -r.z0 }, // region z ≥ z0 → piece z ≤ z0 within x0..x1 (below)
+    { nx: 0, nz: 1, c: r.z1 },   // region z ≤ z1 → piece z ≥ z1 within x0..x1 (above)
+  ]);
 }

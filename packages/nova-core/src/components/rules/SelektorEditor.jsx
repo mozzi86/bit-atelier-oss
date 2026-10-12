@@ -8,6 +8,7 @@ import {
 import { AlertTriangle, Asterisk, Info } from "lucide-react";
 import { validatePattern, MAX_PATTERN_LENGTH } from "@core/lib/rules/patternMatch";
 import { statusKey, statusNorm } from "@core/lib/rules/elementIndex";
+import { useI18n } from "@core/lib/i18n";
 
 // SelektorEditor — EINE Oberfläche für ALLE VIER Achsen des Selektor-Schemas.
 //
@@ -97,7 +98,7 @@ function MusterFeld({ titel, hinweis, wert, onChange }) {
       {hinweis && <p className="text-[10px] text-slate-400">{hinweis}</p>}
       <div className="flex gap-2">
         <Select value={op} onValueChange={(v) => setzen({ op: v })}>
-          <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={titel} className="h-8 w-28"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="glob">Glob</SelectItem>
             <SelectItem value="regex">Regex</SelectItem>
@@ -136,6 +137,7 @@ export default function SelektorEditor({
   kataloge = {},
   elemente = [],
 }) {
+  const { t } = useI18n();
   const sel = selektor || {};
   const was = sel.was || {};
   const zustand = sel.zustand || {};
@@ -289,7 +291,7 @@ export default function SelektorEditor({
             <div className="space-y-1">
               <Label className="text-[10px] text-slate-500">Größe (mengenbasis)</Label>
               <Select value={b.key || ""} onValueChange={(v) => setBereich(i, { key: v })}>
-                <SelectTrigger className="h-8 w-48 text-xs"><SelectValue placeholder="wählen" /></SelectTrigger>
+                <SelectTrigger aria-label={t("Größe (mengenbasis)")} className="h-8 w-48 text-xs"><SelectValue placeholder="wählen" /></SelectTrigger>
                 <SelectContent className="max-h-64">
                   {mengenbasisOptionen.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
                 </SelectContent>
@@ -297,14 +299,14 @@ export default function SelektorEditor({
             </div>
             <div className="space-y-1">
               <Label className="text-[10px] text-slate-500">min</Label>
-              <Input
+              <Input aria-label={t("min")}
                 type="number" className="h-8 w-24 text-xs" value={b.min ?? ""}
                 onChange={(e) => setBereich(i, { min: zahl(e.target.value) })}
               />
             </div>
             <div className="space-y-1">
               <Label className="text-[10px] text-slate-500">max</Label>
-              <Input
+              <Input aria-label={t("max")}
                 type="number" className="h-8 w-24 text-xs" value={b.max ?? ""}
                 onChange={(e) => setBereich(i, { max: zahl(e.target.value) })}
               />

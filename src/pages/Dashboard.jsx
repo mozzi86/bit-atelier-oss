@@ -1,5 +1,7 @@
 import { seitenWurzel } from "@core/lib/utils";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { projekteNachZugriff } from "@core/lib/rechte.js";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
 import { bitApi } from "@core/api/bitApi";
 import { Card, CardContent } from "@core/components/ui/card";
 import { Button } from "@core/components/ui/button";
@@ -34,6 +36,8 @@ import { personalZugang } from "@/lib/people/zugang.js";
 // Personal-Chunk nur lädt, wenn personalZugang === 'erlaubt' unten wirklich
 // rendert — ein Mitglied ohne Zugang bekommt kein Byte Personal-Code.
 const PersonalZaehlkarte = React.lazy(() => import("@/components/people/PersonalZaehlkarte.jsx"));
+// 82-06: "Meine Woche" — own chunk (registry, adapter, rules), loaded with the overview.
+const MeineWoche = React.lazy(() => import("@/components/dashboard/MeineWoche.jsx"));
 
 /** Fills {key} placeholders after translation, so the dictionary key keeps them. */
 const fuellen = (text, werte) => text.replace(/\{(\w+)\}/g, (_, k) => String(werte[k] ?? ""));
@@ -148,7 +152,10 @@ export default function Dashboard() {
   // 80-10 Task 7: nur die Zugangsfrage — die Zählkarte selbst entscheidet, ob
   // sie wirklich etwas zeigt (Setting, fällige Fristen).
   const zugang = personalZugang({ datenquelle: DATENQUELLE, rolle: user?.role });
-  const [projects, setProjects] = useState([]);
+  // 82-02: the role's project view (same filter as ProjectContext) — applied on render, so "Ansicht als" needs no reload.
+  const zugriff = useZugriff();
+  const [rohProjekte, setProjects] = useState([]);
+  const projects = useMemo(() => projekteNachZugriff(rohProjekte, zugriff), [rohProjekte, zugriff]);
   const [isLoading, setIsLoading] = useState(true);
   const [ladeFehler, setLadeFehler] = useState("");
   const [versuch, setVersuch] = useState(0);
@@ -210,6 +217,10 @@ export default function Dashboard() {
         {/* 72-09 (LINKING-13): the active project and its next step come first,
             the portfolio below. */}
         <AktivesProjekt />
+
+        <React.Suspense fallback={null}>
+          <MeineWoche />
+        </React.Suspense>
 
         {/* KPI strip (real numbers) */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">

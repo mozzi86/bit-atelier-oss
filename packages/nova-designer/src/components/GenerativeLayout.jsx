@@ -10,6 +10,7 @@ import { InvokeLLM } from "@core/integrations/Core";
 import { useProject } from "@core/lib/ProjectContext";
 import { computeMix, checkCompliance, unitInfo } from "@designer/lib/compliance";
 import { useBuildingProgram, rectFootprint, programMetrics } from "@core/lib/useBuildingProgram";
+import { useI18n } from "@core/lib/i18n";
 
 const m2 = (n) => `${Math.round(n).toLocaleString("de-DE")} m²`;
 
@@ -54,7 +55,8 @@ const SITE_AREA_FALLBACK = 3500;
 
 /** @param {{siteArea?: number|null, complexData?: any}} props `complexData` is accepted but unused — the layout reads the store (B-87-09) */
 export default function GenerativeLayout({ siteArea: siteAreaProp = null }) {
-  const { projectId, project } = useProject();
+  const { t } = useI18n();
+  const { projectId } = useProject();
   const store = useBuildingProgram(); // gemeinsame Quelle: Footprint + Geschosse
   const metrics = programMetrics(store);
   const [recId, setRecId] = useState(null);
@@ -112,11 +114,17 @@ export default function GenerativeLayout({ siteArea: siteAreaProp = null }) {
         wohneinheiten: v.units, ø_wohnung_m2: Math.round(v.avg), dichte_we_ha: Math.round(v.density),
         compliance_score: v.check.score, geprueft: `${v.check.checked}/${v.check.total}`, konform: v.check.verdict,
       }));
+      // 78-12: project master data comes from the server (recipe "projektStamm", exactly this project);
+      // the variants are computed here and are not stored records, so they stay in the prompt.
       const prompt =
         `Du bist Städtebau-/Wohnungsbau-Experte (BauNVO, GRZ/GFZ, Wohnungsmix). ` +
-        `Bewerte die folgenden automatisch erzeugten Entwurfsvarianten für „${project?.name || "das Projekt"}" ` +
+        `Bewerte die folgenden automatisch erzeugten Entwurfsvarianten für ` +
+        `${projectId ? "das unten beschriebene Projekt" : "das Projekt"} ` +
         `und gib eine klare Empfehlung. Antworte auf Deutsch.\n\nVarianten:\n${JSON.stringify(summary, null, 2)}`;
-      const res = await InvokeLLM({ prompt, response_json_schema: VARIANT_SCHEMA, add_context_from_internet: false });
+      const res = await InvokeLLM({
+        prompt, response_json_schema: VARIANT_SCHEMA, add_context_from_internet: false,
+        ...(projectId ? { projekt_id: projectId, kontext: "projektStamm" } : {}),
+      });
       const obj = typeof res === "string" ? JSON.parse(res) : res;
       const byKey = {};
       (obj.assessments || []).forEach((a) => { byKey[a.key] = a.comment; });
@@ -172,12 +180,12 @@ export default function GenerativeLayout({ siteArea: siteAreaProp = null }) {
         <CardContent className="p-4 flex flex-wrap items-end gap-3">
           <div>
             <label className="text-xs text-slate-500 block mb-1">Grundstück m²{siteAreaAssumed && <span className="text-amber-600"> (Annahme)</span>}</label>
-            <Input className="w-28" type="number" value={siteArea} onChange={(e) => { setSiteArea(Number(e.target.value)); setSiteAreaAssumed(false); }} />
+            <Input aria-label={t("Grundstück m²")} className="w-28" type="number" value={siteArea} onChange={(e) => { setSiteArea(Number(e.target.value)); setSiteAreaAssumed(false); }} />
           </div>
-          <div><label className="text-xs text-slate-500 block mb-1">Wohn-NUF m²</label><Input className="w-28" type="number" value={residentialNUF} onChange={(e) => setResidentialNUF(Number(e.target.value))} /></div>
-          <div><label className="text-xs text-slate-500 block mb-1">GFZ-Grenze</label><Input className="w-24" type="number" step="0.1" value={gfzLimit} onChange={(e) => setGfzLimit(Number(e.target.value))} /></div>
-          <div><label className="text-xs text-slate-500 block mb-1">GRZ-Grenze</label><Input className="w-24" type="number" step="0.05" placeholder="—" value={grzLimit ?? ""} onChange={(e) => setGrzLimit(e.target.value === "" ? null : Number(e.target.value))} /></div>
-          <div><label className="text-xs text-slate-500 block mb-1">Max. Gesch.</label><Input className="w-24" type="number" value={maxFloors} onChange={(e) => setMaxFloors(Number(e.target.value))} /></div>
+          <div><label className="text-xs text-slate-500 block mb-1">Wohn-NUF m²</label><Input aria-label={t("Wohn-NUF m²")} className="w-28" type="number" value={residentialNUF} onChange={(e) => setResidentialNUF(Number(e.target.value))} /></div>
+          <div><label className="text-xs text-slate-500 block mb-1">GFZ-Grenze</label><Input aria-label={t("GFZ-Grenze")} className="w-24" type="number" step="0.1" value={gfzLimit} onChange={(e) => setGfzLimit(Number(e.target.value))} /></div>
+          <div><label className="text-xs text-slate-500 block mb-1">GRZ-Grenze</label><Input aria-label={t("GRZ-Grenze")} className="w-24" type="number" step="0.05" placeholder="—" value={grzLimit ?? ""} onChange={(e) => setGrzLimit(e.target.value === "" ? null : Number(e.target.value))} /></div>
+          <div><label className="text-xs text-slate-500 block mb-1">Max. Gesch.</label><Input aria-label={t("Max. Gesch.")} className="w-24" type="number" value={maxFloors} onChange={(e) => setMaxFloors(Number(e.target.value))} /></div>
           <Button onClick={generate} disabled={loading || !projectId} className="bg-gradient-to-r from-emerald-600 to-teal-600 ml-auto">
             {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wand2 className="w-4 h-4 mr-2" />}
             {loading ? "KI bewertet…" : "Varianten generieren & bewerten"}

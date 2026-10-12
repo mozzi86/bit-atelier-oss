@@ -144,9 +144,13 @@ test("llmAuftrag: der Prompt ERLAUBT „unbekannt“ ausdrücklich", () => {
   assert.match(a.prompt, /"kg2018": null/);
   assert.match(a.prompt, /geratene Kostengruppe ist schädlicher/);
   assert.match(a.prompt, /DREISTELLIG/);
-  assert.match(a.prompt, /Trockenbau/);
   assert.match(a.prompt, /341 Tragende Innenwände/);
-  assert.match(a.prompt, /1\. Wandfliesen 20x20/);
+  // 78-12: tender texts and trade travel as data blocks, never inside the instruction.
+  assert.equal(a.daten.length, 1);
+  assert.equal(a.daten[0].quelle, "LV-Kurztexte");
+  assert.match(a.daten[0].text, /Trockenbau/);
+  assert.match(a.daten[0].text, /1\. Wandfliesen 20x20/);
+  assert.doesNotMatch(a.prompt, /Wandfliesen|Trockenbau/);
   // Das Schema erlaubt null und verlangt eine Konfidenz.
   const item = a.response_json_schema.properties.vorschlaege.items;
   assert.deepEqual(item.properties.kg2018.type, ["string", "null"]);

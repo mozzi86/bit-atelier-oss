@@ -16,6 +16,12 @@ server/blobs/
 server/personal.json
 server/personal.json.*
 server/personal-blobs/
+# Plan 93-06: automatic local backups of a source checkout (no BIT_DATA_DIR) land in server/sicherungen/.
+server/sicherungen/
+
+# Plan 93-03: office-mode state (paired devices, token hashes) — per installation, never in the repo.
+server/buero.json
+server/buero.json.*
 
 # Plan 83-03: data folder of the downloadable release (start-windows.cmd /
 # start.sh set BIT_DATA_DIR=<app>/daten) — the user's projects, never in the repo.
@@ -101,6 +107,10 @@ parity/artifacts/guardprobe*/
 .claude/worktrees/
 dist-demo
 dist-lokal
+# 70-02: build of the lokal mode for the Tauri shell (base /) and the Rust build output.
+dist-lokal-client
+client/src-tauri/target/
+client/src-tauri/gen/
 __uat-lokal/
 server/db.json.vor-jb-import
 
@@ -120,3 +130,12 @@ supabase/.temp/
 
 # Cloud build size report (scripts/build-cloud.mjs, kept out of dist/)
 build-cloud-groessen.md
+
+# 82-01: demo/side builds of headless proofs inside the planning folders
+.planning/phases/*/tmp-e2e/dist-*/
+
+# Plan 93-10: launcher secret, linked source file and pre-import copies of the local API
+# (dev runs write them into server/, the release into daten/ which is ignored above).
+server/.oeffnen-schluessel
+server/dateiquelle.json
+server/vor-import/

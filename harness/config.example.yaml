@@ -58,4 +58,21 @@ tts:
   enabled: false        # Piper, local; voice file under harness/voices/<name>.onnx
   voice: de_DE-thorsten-medium
 
+# FreeCAD BIM (67-04, /freecad). FreeCAD brings its own Python — scripts run
+# with freecadcmd, never with the harness venv. Lookup order for the binary:
+#   1. environment variable BIT_FREECAD (path to freecadcmd or to the install folder)
+#   2. freecad.cmd below
+#   3. default: Windows C:\Program Files\FreeCAD 1.1\bin\freecadcmd.exe,
+#      macOS /Applications/FreeCAD.app/Contents/MacOS/FreeCADCmd, else freecadcmd on PATH
+freecad:
+  cmd: null
+  bridge_port: 8766     # GUI bridge macro (harness_bridge.FCMacro), 127.0.0.1 only
+  timeout_s: 120        # headless run; one bridge step times out after 30 s
+
+# IFC delivery export (71-05, /ifc schreibe abgabe=true). Project-specific values
+# belong in projects/<slug>/georef.yaml (same keys), which wins over this block.
+# drehung_grad: angle from grid east to the project x axis, counter-clockwise.
+ifc:
+  georef: null          # {ostwert: m, nordwert: m, hoehe: m, drehung_grad: °, crs: "EPSG:…"}
+
 logs_dir: logs
