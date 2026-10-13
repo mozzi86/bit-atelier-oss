@@ -46,9 +46,17 @@ export const NAECHSTE_SCHRITTE = Object.freeze({
   "/RealEstateFeasibility": [
     { text: "Neues Projekt anlegen", ziel: "/Projects?neu=1" },
   ],
-  // 88-06: from the plan list to cost control and change orders (site phase).
+  // 88-06: from the plan list to cost control and change orders; NAV-PLAN 2026-10-13:
+  // and on to the site page (station 8).
   "/Werkplanung": [
     { text: "Kostenkontrolle", ziel: "/AVA?tab=control" },
+    { text: "Nachträge entscheiden", ziel: "/Finance" },
+    { text: "Bautagebuch führen", ziel: "/Baustelle?tab=bautagebuch" },
+  ],
+  // NAV-PLAN 2026-10-13: the site page (LP 8) — minutes, deadlines, change orders.
+  "/Baustelle": [
+    { text: "Protokolle", ziel: "/Reports" },
+    { text: "Fristen & Termine", ziel: "/Deadlines?tab=agenda" },
     { text: "Nachträge entscheiden", ziel: "/Finance" },
   ],
   "/ComplexDesigner": [

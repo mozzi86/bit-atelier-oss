@@ -9,9 +9,9 @@
 // Data is deterministic: the same private, freshly seeded API server at a fixed instant as
 // the visual baseline (visuell/privatServer.js) answers the browser's /api requests.
 //
-// DEPENDENCY: needs the devDependency @axe-core/playwright. It is NOT installed in this
-// branch — the user's go for a new dependency has to come from the user directly. Until
-// then every test skips with that reason. After installing (exact version, lockfile):
+// DEPENDENCY: the devDependency @axe-core/playwright (exact version in package.json since
+// 93-02; the user's go came on 2026-10-13). Without it every test skips with that reason.
+// Record or lower the baseline deliberately:
 //   AXE_BASIS_SCHREIBEN=1 PORT=5196 API_PORT=3026 API_ORIGINS=http://localhost:5196 npx playwright test tests/e2e/axe-93-02.spec.js
 // records the baseline once; afterwards the plain run is the gate (nightly via npm run test:e2e).
 
@@ -30,7 +30,7 @@ const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 /** Module pages (menu of src/navigation.js) plus the accessibility statement itself. */
 const SEITEN = [
   "/Dashboard", "/Projects", "/Reports", "/Deadlines", "/RealEstateFeasibility", "/ComplexDesigner",
-  "/Werkplanung", "/ModelCheck", "/BimViewer", "/ModelVersions", "/AVA", "/Finance", "/AIDashboard",
+  "/Werkplanung", "/Baustelle", "/ModelCheck", "/BimViewer", "/ModelVersions", "/AVA", "/Finance", "/AIDashboard",
   "/TimeTracking", "/Fees", "/Controlling", "/Accounting", "/People", "/Absences", "/AddressBook",
   "/Correspondence", "/Settings", "/BitAegis", "/barrierefreiheit",
 ];

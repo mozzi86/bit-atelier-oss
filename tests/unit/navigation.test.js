@@ -35,14 +35,24 @@ function routenAusApp() {
   }));
 }
 
-/** @returns {Set<string>} every key of DICT.en in i18n.jsx */
+const I18N_TEILE = new URL("../../packages/nova-core/src/lib/i18nTeile/", import.meta.url);
+
+/**
+ * Every key of DICT.en: the block in i18n.jsx plus the part dictionaries in i18nTeile/
+ * (79-01 mechanism; i18nAbdeckung.test.js forbids a key in both places, so a group label
+ * that a part file already translates must not be repeated in i18n.jsx).
+ * @returns {Set<string>}
+ */
 function englischeSchluessel() {
   const quelle = fs.readFileSync(I18N, "utf8");
   const start = quelle.indexOf("en: {");
   const ende = quelle.indexOf("\n};", start);
   assert.ok(start >= 0 && ende > start, "DICT.en nicht gefunden in i18n.jsx");
-  const block = quelle.slice(start, ende);
-  return new Set([...block.matchAll(/^\s*"((?:[^"\\]|\\.)*)"\s*:/gm)].map((m) => m[1]));
+  const texte = [quelle.slice(start, ende)];
+  for (const name of fs.readdirSync(I18N_TEILE)) {
+    if (name.endsWith(".js") && name !== "index.js") texte.push(fs.readFileSync(new URL(name, I18N_TEILE), "utf8"));
+  }
+  return new Set(texte.flatMap((t) => [...t.matchAll(/^\s*"((?:[^"\\]|\\.)*)"\s*:/gm)].map((m) => m[1])));
 }
 
 const LABOR = navGroups.find((g) => g.collapsible);
@@ -116,7 +126,8 @@ test("projektfrei und umfang nur an existierenden Routen und mit gültigem Wert"
   // 75-16: "breite" marks drawing pages (one width rule in the shell).
   // 70-06: "netz" marks modules that need the internet (sidebar hint while offline).
   // 82-01: "modul" — the rights module of every entry (@core/lib/rechte.js MODULE).
-  const erlaubt = new Set(["title", "url", "icon", "labor", "projektfrei", "umfang", "zugang", "breite", "netz", "modul"]);
+  // NAV-PLAN 2026-10-13: "phase" / "querschnitt" — workflow station of the entry (checked below).
+  const erlaubt = new Set(["title", "url", "icon", "labor", "projektfrei", "umfang", "zugang", "breite", "netz", "modul", "phase", "querschnitt"]);
   for (const g of navGroups) {
     for (const e of g.items) {
       for (const feld of Object.keys(e)) assert.ok(erlaubt.has(feld), `${e.title}: unbekanntes Feld ${feld}`);
@@ -154,52 +165,88 @@ test("projektfrei und umfang nur an existierenden Routen und mit gültigem Wert"
   assert.deepEqual(portfolio, ["/AIDashboard", "/Absences", "/Accounting", "/AtelierDeveloper", "/Controlling", "/Correspondence", "/Dashboard", "/Deadlines", "/InvestmentPlatform", "/TimeTracking"]);
 });
 
+test("jeder Eintrag außerhalb des Labors hat genau eine Station: phase 0–10 oder querschnitt", () => {
+  // NAV-PLAN 2026-10-13: the field the sidebar order, WeiterMit and the palette will read.
+  for (const g of navGroups) {
+    for (const e of g.items) {
+      const hatPhase = "phase" in e;
+      const hatQuer = "querschnitt" in e;
+      if (g.collapsible) {
+        assert.ok(!hatPhase && !hatQuer, `${e.title}: Labor-Einträge tragen keine Station`);
+        continue;
+      }
+      assert.ok(hatPhase !== hatQuer, `${e.title}: genau eines von phase/querschnitt`);
+      if (hatPhase) assert.ok(Number.isInteger(e.phase) && e.phase >= 0 && e.phase <= 10, `${e.title}: phase ${e.phase} außerhalb 0–10`);
+      if (hatQuer) assert.equal(e.querschnitt, true, `${e.title}: querschnitt muss true sein`);
+    }
+  }
+});
+
+test("Gruppen stehen in Ablauf-Reihenfolge: Übersicht, Stationen aufsteigend, Labor zuletzt", () => {
+  // NAV-PLAN 2026-10-13: a group's station is the highest phase of its entries (Büro holds
+  // 0 and 10 and closes the list); groups without a phase (Übersicht, Querschnitt) are free.
+  assert.equal(navGroups[0].label, "Übersicht");
+  assert.equal(navGroups[navGroups.length - 1].label, "Labor");
+  const stationen = navGroups
+    .filter((g) => !g.collapsible && g.items.some((e) => "phase" in e))
+    .map((g) => ({ label: g.label, max: Math.max(...g.items.filter((e) => "phase" in e).map((e) => e.phase)) }));
+  for (let i = 1; i < stationen.length; i++) {
+    assert.ok(stationen[i].max >= stationen[i - 1].max, `${stationen[i].label} (Station ${stationen[i].max}) steht vor ${stationen[i - 1].label} (Station ${stationen[i - 1].max})`);
+  }
+  for (const g of navGroups.filter((x) => !x.collapsible)) {
+    const quer = g.items.filter((e) => e.querschnitt).length;
+    assert.ok(quer === 0 || quer === g.items.length, `${g.label}: Querschnitt und Stationen nicht mischen`);
+  }
+});
+
 test("verbindliche Namenstabelle: Gruppen, Reihenfolge und Titel je Route", () => {
   // Lane B sets its h1 from this table; a rename here must be deliberate.
   const tabelle = navGroups.map((g) => [g.label, g.items.map((e) => [e.url, e.title])]);
+  // NAV-PLAN 2026-10-13: groups follow the office workflow (stations 0–10); the former
+  // tool groups (Planung, Modell & Prüfung, Ausschreibung & Kosten, KI & Analyse,
+  // Zeit & Honorar) are dissolved. URLs and titles of the pages are unchanged.
   assert.deepEqual(tabelle, [
     ["Übersicht", [
       ["/Dashboard", "Projektübersicht"],
       ["/Projects", "Projekte"],
-      ["/Reports", "Berichte & Dokumente"],
-      // 82-01 (E-02): deadlines and appointments in "Übersicht".
       ["/Deadlines", "Fristen & Termine"],
     ]],
-    ["Planung", [
+    ["Akquise & Auftrag", [
       ["/RealEstateFeasibility", "Machbarkeit"],
-      ["/ComplexDesigner", "Komplex-Designer"],
-      // 88-06: page "Werkplanung & Baustelle" (plan list; openings, sampling, H&S follow).
-      ["/Werkplanung", "Werkplanung & Baustelle"],
+      ["/Fees", "Angebot & Auftrag"],
     ]],
-    ["Modell & Prüfung", [
+    ["Entwurf & Genehmigung", [
+      ["/ComplexDesigner", "Komplex-Designer"],
       ["/ModelCheck", "Prüf-Suite"],
       ["/BimViewer", "BIM-Viewer & Tickets"],
       ["/IfcViewer", "IFC-Viewer (LV-gekoppelt)"],
       ["/ModelVersions", "Projektstände"],
     ]],
-    ["Ausschreibung & Kosten", [
+    // Variant A of the plan: the former "Werkplanung & Baustelle" is two pages.
+    ["Ausführungsplanung", [
+      ["/Werkplanung", "Werkplanung"],
+    ]],
+    ["Ausschreibung & Vergabe", [
       ["/AVA", "AVA (Ausschreibung)"],
       ["/Finance", "Finanzen & Nachträge"],
     ]],
-    ["KI & Analyse", [
+    ["Bauüberwachung", [
+      ["/Baustelle", "Baustelle"],
+      ["/Reports", "Berichte & Dokumente"],
+    ]],
+    // Cross-cutting modules, used in every station.
+    ["Zeit & Schriftverkehr", [
+      ["/TimeTracking", "Zeiterfassung"],
+      ["/Controlling", "Projektcontrolling"],
+      ["/Correspondence", "Schriftverkehr"],
       ["/AIDashboard", "KI-Zentrale"],
     ]],
-    // 81-01: Zeit & Honorar vor Büro, E-02 — 8 groups, "Büro" unchanged.
-    ["Zeit & Honorar", [
-      ["/TimeTracking", "Zeiterfassung"],
-      ["/Fees", "Angebot & Auftrag"],
-      ["/Controlling", "Projektcontrolling"],
-    ]],
-    // E-02 (79-01): the former master-data group, renamed to "Büro" in place.
-    // 80-01: Büro-Gruppe vervollständigt (E-02) — Personal and Einstellungen inserted,
-    // Adressbuch moved behind Personal (order [ASSUMED], D-P80-02); still 7 groups.
+    // Station 0 (setup) and 10 (office year cycle); order inside unchanged since 82-01.
     ["Büro", [
       ["/Accounting", "Buchhaltung"],
       ["/People", "Personal"],
-      // 82-01 (E-02): Abwesenheiten after Personal, Schriftverkehr after Adressbuch.
       ["/Absences", "Abwesenheiten"],
       ["/AddressBook", "Adressbuch"],
-      ["/Correspondence", "Schriftverkehr"],
       ["/Settings", "Einstellungen"],
     ]],
     ["Labor", [
@@ -213,11 +260,11 @@ test("verbindliche Namenstabelle: Gruppen, Reihenfolge und Titel je Route", () =
   ]);
   assert.equal(LABOR?.label, "Labor", "genau die Labor-Gruppe ist zuklappbar");
   assert.equal(navGroups.filter((g) => g.collapsible).length, 1);
-  assert.equal(navGroups.length, 8, "81-01 legt genau die Gruppe „Zeit & Honorar“ an (E-02)");
+  assert.equal(navGroups.length, 9, "NAV-PLAN 2026-10-13: Übersicht, sechs Stationsgruppen, Büro, Labor");
   // The moved address book entry keeps its 79 fields.
   const adressbuch = navFlach.find((e) => e.url === "/AddressBook");
-  // 82-01: plus the rights module.
-  assert.deepEqual(Object.keys(adressbuch).sort(), ["gruppe", "icon", "modul", "projektfrei", "title", "url"]);
+  // 82-01: plus the rights module. NAV-PLAN 2026-10-13: plus the workflow station.
+  assert.deepEqual(Object.keys(adressbuch).sort(), ["gruppe", "icon", "modul", "phase", "projektfrei", "title", "url"]);
 });
 
 test("navSichtbar: der Personal-Eintrag nur mit Personal-Zugang, alle anderen immer (80-01, DS-12)", () => {

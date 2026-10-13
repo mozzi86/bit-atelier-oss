@@ -22,7 +22,8 @@ export const FOKUS = Object.freeze([
   Object.freeze({ key: "alle", label: "Alle Module", urls: Object.freeze([]) }),
   Object.freeze({ key: "entwurf", label: "Entwurf", urls: Object.freeze(["/Dashboard", "/RealEstateFeasibility", "/ComplexDesigner", "/ModelCheck", "/BimViewer"]) }),
   Object.freeze({ key: "ausschreibung", label: "Ausschreibung & Vergabe", urls: Object.freeze(["/Dashboard", "/AVA", "/Finance", "/Reports", "/Deadlines"]) }),
-  Object.freeze({ key: "bauleitung", label: "Bauleitung", urls: Object.freeze(["/Dashboard", "/Werkplanung", "/BimViewer", "/Reports", "/Deadlines"]) }),
+  // NAV-PLAN 2026-10-13: the site diary moved to /Baustelle; the plan list stays one click away.
+  Object.freeze({ key: "bauleitung", label: "Bauleitung", urls: Object.freeze(["/Dashboard", "/Baustelle", "/Werkplanung", "/BimViewer", "/Reports", "/Deadlines"]) }),
   Object.freeze({ key: "buero", label: "Büro", urls: Object.freeze(["/Dashboard", "/Deadlines", "/TimeTracking", "/Accounting", "/Correspondence", "/Absences"]) }),
 ]);
 

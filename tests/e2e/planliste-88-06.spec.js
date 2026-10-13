@@ -35,7 +35,8 @@ test("88-06 Planliste: anlegen, freigeben, PDF, neuer Index", async ({ page, req
     page.on("console", (m) => { if ((m.type() === "error" || m.type() === "warning") && !ERLAUBT_OFFLINE.test(m.text())) warnungen.push(m.text()); });
     page.on("pageerror", (e) => warnungen.push(`pageerror ${e}`));
     await page.goto(`/Werkplanung?projekt=${encodeURIComponent("Review Testhaus")}`);
-    await expect(page.getByRole("heading", { level: 1, name: "Werkplanung & Baustelle" })).toBeVisible({ timeout: 30000 });
+    // NAV-PLAN 2026-10-13: the page is "Werkplanung" (the site diary lives on /Baustelle).
+    await expect(page.getByRole("heading", { level: 1, name: "Werkplanung" })).toBeVisible({ timeout: 30000 });
 
     await page.getByTestId("pl-neu").click();
     await page.getByTestId("pl-form-projekt_kurz").fill("E2E");

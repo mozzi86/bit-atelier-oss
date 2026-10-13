@@ -12,7 +12,7 @@
       "svg-img-alt": 5
     },
     "/Projects": {
-      "color-contrast": 4,
+      "color-contrast": 1,
       "nested-interactive": 5
     },
     "/Reports": {
@@ -29,7 +29,10 @@
       "color-contrast": 6
     },
     "/Werkplanung": {
-      "color-contrast": 6
+      "color-contrast": 5
+    },
+    "/Baustelle": {
+      "color-contrast": 1
     },
     "/ModelCheck": {
       "color-contrast": 2

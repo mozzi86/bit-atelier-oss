@@ -54,3 +54,8 @@ jobs:
 
       - name: tsc-Baseline (Fehlerzahl darf nicht steigen)
         run: node scripts/tsc-baseline.mjs --je-datei
+
+      # 2026-10-13: hardcoded colour classes may only go down (token migration). Lowering
+      # the baseline is a deliberate commit: node scripts/farb-baseline.mjs --schreiben.
+      - name: Farb-Baseline (feste Farbklassen dürfen nicht steigen)
+        run: node scripts/farb-baseline.mjs

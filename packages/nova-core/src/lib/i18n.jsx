@@ -22,6 +22,13 @@ const DICT = {
     "Stammdaten": "Master Data",
     "Modell & Prüfung": "Model & Checking",
     "Labor": "Lab",
+    // NAV-PLAN 2026-10-13: sidebar groups in office workflow order (stations 0–10).
+    // "Ausführungsplanung" and "Ausschreibung & Vergabe" already live in i18nTeile/
+    // (honorar-angebote.js, projektakte-fokus.js).
+    "Akquise & Auftrag": "Acquisition & contract",
+    "Entwurf & Genehmigung": "Design & permit",
+    "Bauüberwachung": "Site supervision",
+    "Zeit & Schriftverkehr": "Time & correspondence",
     // Fehlergrenze je Route (70-07)
     "Dieses Modul konnte nicht geladen werden.": "This module could not be loaded.",
     "Dieses Modul ist ausgestiegen.": "This module has stopped.",
@@ -64,7 +71,10 @@ const DICT = {
     "Machbarkeit": "Feasibility",
     "Komplex-Designer": "Complex Designer",
     // 88-06: menu title of the page "Werkplanung & Baustelle" (nav titles live here, navigation.test.js).
-    "Werkplanung & Baustelle": "Detailed design & site",
+    // NAV-PLAN 2026-10-13: the page is split into "Werkplanung" (LP 5) and "Baustelle" (LP 8).
+    "Werkplanung": "Detailed design",
+    "Baustelle": "Site",
+    "Bautagebuch führen": "Keep the site diary",
     "Prüf-Suite": "Check Suite",
     "BIM-Viewer & Tickets": "BIM Viewer & Tickets",
     "IFC-Viewer (LV-gekoppelt)": "IFC Viewer (BoQ-linked)",

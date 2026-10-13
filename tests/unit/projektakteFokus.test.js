@@ -48,7 +48,8 @@ test("Arbeitsfokus: URL, unbekannter Wert, Einträge in Fokus-Reihenfolge und na
   assert.equal(fokusAusUrl("?x=1"), null);
   assert.equal(fokusGueltig("buero"), "buero");
   assert.equal(fokusEintraege(navGroups, "alle"), null);
-  assert.deepEqual(fokusEintraege(navGroups, "bauleitung")?.map((i) => i.url), ["/Dashboard", "/Werkplanung", "/BimViewer", "/Reports", "/Deadlines"]);
+  // NAV-PLAN 2026-10-13: site diary on /Baustelle, plan list on /Werkplanung.
+  assert.deepEqual(fokusEintraege(navGroups, "bauleitung")?.map((i) => i.url), ["/Dashboard", "/Baustelle", "/Werkplanung", "/BimViewer", "/Reports", "/Deadlines"]);
   const zugriff = baueZugriff({ nutzer: { id: "u", rolle: "mitarbeiter" }, zuordnungen: [] });
   const sichtbar = navGroups.map((g) => ({ ...g, items: g.items.filter((i) => navSichtbar(i, { zugriff })) }));
   const buero = fokusEintraege(sichtbar, "buero")?.map((i) => i.url) || [];

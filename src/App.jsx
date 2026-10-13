@@ -57,6 +57,8 @@ const AVA = React.lazy(() => import('@ava/pages/AVA'));
 const Reports = React.lazy(() => import('./pages/Reports'));
 // Phase 88: detailed design & site (plan list, openings, sampling, H&S).
 const Werkplanung = React.lazy(() => import('./pages/Werkplanung'));
+// NAV-PLAN 2026-10-13: site diary page split off Werkplanung (station 8).
+const Baustelle = React.lazy(() => import('./pages/Baustelle'));
 const ModelVersions = React.lazy(() => import('@ifc/pages/ModelVersions'));
 const ModelCheck = React.lazy(() => import('@ifc/pages/ModelCheck'));
 const IfcViewer = React.lazy(() => import('@ifc/pages/IfcViewer'));
@@ -167,6 +169,7 @@ const HauptApp = () => {
     <Route path="/AVA" element={<AVA />} />
     <Route path="/Reports" element={<Reports />} />
     <Route path="/Werkplanung" element={<Werkplanung />} />
+    <Route path="/Baustelle" element={<Baustelle />} />
     <Route path="/ModelVersions" element={<ModelVersions />} />
     <Route path="/ModelCheck" element={<ModelCheck />} />
     <Route path="/IfcViewer" element={<IfcViewer />} />

@@ -24,6 +24,7 @@ import { REITER_SCHLUESSEL as ABWESENHEIT_SCHLUESSEL } from "@/lib/abwesenheit/r
 import { REITER_SCHLUESSEL as SCHRIFT_SCHLUESSEL } from "@/lib/schriftverkehr/reiter.js";
 import { EINSTELLUNGS_REITER } from "@/lib/settings/bereiche.js";
 import { PERSONAL_REITER } from "@/lib/people/reiter.js";
+import { reiterVon } from "@/lib/werkplanung/reiter.js";
 
 const APP = new URL("../../src/App.jsx", import.meta.url);
 const AVA = new URL("../../packages/nova-ausschreibung/src/pages/AVA.jsx", import.meta.url);
@@ -74,6 +75,10 @@ const ERLAUBTE_PARAMETER = {
   "/Deadlines": { tab: (w) => FRISTEN_SCHLUESSEL.includes(w) },
   "/Absences": { tab: (w) => ABWESENHEIT_SCHLUESSEL.includes(w) },
   "/Correspondence": { tab: (w) => SCHRIFT_SCHLUESSEL.includes(w) },
+  // NAV-PLAN 2026-10-13: the two pages of the former "Werkplanung & Baustelle" — tab keys
+  // per page from src/lib/werkplanung/reiter.js (a tab of the other page redirects).
+  "/Werkplanung": { tab: (w) => reiterVon("werkplanung").includes(w) },
+  "/Baustelle": { tab: (w) => reiterVon("baustelle").includes(w) },
 };
 
 /**

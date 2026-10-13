@@ -10,6 +10,13 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.4.0] - 2026-10-13
+
+### Geändert
+
+- **Seitenleiste nach dem Büro-Ablauf:** Die Module stehen jetzt in der Reihenfolge, in der ein Projekt durchs Büro läuft — Übersicht · Akquise & Auftrag · Entwurf & Genehmigung · Ausführungsplanung · Ausschreibung & Vergabe · Bauüberwachung, danach die Querschnitts-Gruppen Zeit & Schriftverkehr, Büro und Labor. Jedes Modul ist einer Leistungsphase (0–10) oder dem Querschnitt zugeordnet.
+- **Werkplanung und Baustelle getrennt:** „Werkplanung & Baustelle“ ist in zwei Seiten geteilt — **Werkplanung** (Planliste, Durchbrüche, Bemusterung, SiGe, Genehmigungen) unter Ausführungsplanung und **Baustelle** (Bautagebuch) unter Bauüberwachung. Alte Links mit `?tab=` führen automatisch auf die richtige Seite.
+
 ## [1.3.0] - 2026-10-13
 
 ### Neu
