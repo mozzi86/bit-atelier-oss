@@ -60,7 +60,7 @@ const SCHRITTE = [
 /**
  * @param {object} props
  * @param {{ name?: string, build_kind?: string }} [props.project] the freshly created project (headline + kind of work)
- * @returns {JSX.Element} the three cards
+ * @returns {import("react").JSX.Element} the three cards
  */
 export default function Startpfad({ project }) {
   return (

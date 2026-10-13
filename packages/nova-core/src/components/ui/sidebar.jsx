@@ -87,9 +87,9 @@ export const Sidebar = React.forwardRef(
     }, [isMobile, openMobile, setOpenMobile, triggerRef]);
 
     if (isMobile) {
-      // React 18 does not know "inert": passed as a string attribute, through
-      // a spread typed as a plain object because the React 18 types lack it.
-      const inert = /** @type {object} */ (openMobile ? {} : { inert: "" });
+      // React 19 knows "inert" as a boolean attribute (React 18 needed the string ""; React 19
+      // reads "" as false and warns, which would leave the closed drawer focusable again).
+      const inert = openMobile ? {} : { inert: true };
       return (
         <>
           {openMobile && (

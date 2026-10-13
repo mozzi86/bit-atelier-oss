@@ -34,7 +34,7 @@ function kuerzelAnzeige(kuerzel) {
 /**
  * Shortcut help overlay: actions of the CURRENT view with their chords.
  * @param {{offen: boolean, onSchliessen: () => void}} props
- * @returns {JSX.Element|null} the overlay, or null when closed
+ * @returns {import("react").JSX.Element|null} the overlay, or null when closed
  */
 export default function KuerzelHilfe({ offen, onSchliessen }) {
   const location = useLocation();

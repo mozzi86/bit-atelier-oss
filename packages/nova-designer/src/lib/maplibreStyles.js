@@ -165,3 +165,27 @@ export function osmBuildingsToGeoJson(rawBuildings) {
   }
   return { type: "FeatureCollection", features };
 }
+
+const VERGLEICHE = new Set(["<", "<=", ">", ">="]);
+
+/**
+ * Makes numeric comparisons in a style filter null-safe. Remote styles (OpenFreeMap Liberty:
+ * highway shields, `["<=", ["get", "ref_length"], 6]`) compare properties that many features do
+ * not have; maplibre-gl 6 then logs "Expected value to be of type number, but found null" per
+ * layer and falls back to false. Wrapping each comparison of a `["get", key]` in
+ * `["case", <is number>, <comparison>, false]` gives exactly that result without the warning.
+ * Pure; returns the same reference when nothing changed.
+ * @param {any} filter maplibre expression (array) or anything else
+ * @returns {any}
+ */
+export function nullSichererFilter(filter) {
+  if (!Array.isArray(filter)) return filter;
+  const kinder = filter.map((x, i) => (i === 0 ? x : nullSichererFilter(x)));
+  const geaendert = kinder.some((x, i) => x !== filter[i]);
+  const knoten = geaendert ? kinder : filter;
+  if (VERGLEICHE.has(knoten[0]) && knoten.length === 3) {
+    const get = [knoten[1], knoten[2]].find((x) => Array.isArray(x) && x[0] === "get" && typeof x[1] === "string");
+    if (get) return ["case", ["==", ["typeof", get], "number"], knoten, false];
+  }
+  return knoten;
+}

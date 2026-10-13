@@ -52,6 +52,7 @@ export const EN = {
   "Wind {kmh} km/h an Kran/Gerüst/Dach: Betrieb prüfen": "Wind {kmh} km/h at crane/scaffold/roof: check operation",
   // Letter type and placeholders (correspondence, 82-05)
   "Behinderungsanzeige": "Hindrance notice",
+  "Behinderung an Bauherrn melden": "Report hindrance to client",
   "Zeitraum der Behinderung": "Period of the hindrance",
   "Anzahl der Behinderungstage": "Number of hindrance days",
   "Behinderung laut Bautagebuch": "Hindrance according to the site diary",

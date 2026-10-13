@@ -10,6 +10,22 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.3.0] - 2026-10-13
+
+### Neu
+
+- **Behinderung an den Bauherrn melden:** zweite Vorlage im Bautagebuch neben der Behinderungsanzeige nach VOB/B — die Bauleitung informiert den Bauherrn mit Zeitraum und Bautagebuch-Auszug (Richtwert, vor Versand prüfen).
+
+### Geändert
+
+- **Technik auf aktuellem Stand:** React 19, Kartenbibliothek MapLibre 6, three.js r186, pdf.js 6.4, web-ifc 0.0.78 und kleinere Bibliotheken aktualisiert. Arabische und hebräische Kartenbeschriftungen kommen ohne Zusatzmodul aus.
+- Die erste Ladung der App ist durch React 19 rund 36 KB (gzip) größer.
+
+### Behoben
+
+- PDF-Studio: Beim schnellen Wechsel zwischen zwei Dokumenten konnte „PDF konnte nicht geladen werden“ erscheinen; das Dokument wird jetzt sauber freigegeben.
+- Karte: keine Warnungen mehr in der Konsole durch fehlende Straßennummern im Kartenstil.
+
 ## [1.2.0] - 2026-10-12
 
 ### Neu

@@ -11,25 +11,20 @@
 // getSource(id).setData() ein. Phase 46 (Hochwasser-Karte) baut hierauf auf.
 
 import React, { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
-import maplibregl from "maplibre-gl";
+// maplibre-gl 6 is ESM-only without a default export (namespace import) and needs its
+// worker URL set once when bundled; Vite's ?worker&url yields a self-contained worker.
+import * as maplibregl from "maplibre-gl";
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { resolveStyle, OSM_RASTER_FALLBACK } from "@designer/lib/maplibreStyles";
+import { resolveStyle, OSM_RASTER_FALLBACK, nullSichererFilter } from "@designer/lib/maplibreStyles";
 
-// RTL-Text-Plugin (Arabisch/Hebräisch): ohne dieses Plugin rendert MapLibre
-// RTL-Beschriftungen rückwärts und mit unverbundenen Buchstaben (Nutzer-Befund
-// Kairo, 2026-08-11). Die Datei liegt als ROHE Kopie unter public/ (Quelle:
-// @mapbox/mapbox-gl-rtl-text@0.3.0, BSD-2-Clause, kein CDN — Keyfrei-Konvention);
-// ein Vite-?url-Import scheitert, weil der Map-Worker sie per importScripts lädt
-// und der Dev-Server sie dann als ES-Modul transformiert. lazy = lädt erst,
-// wenn wirklich RTL-Text auf der Karte auftaucht.
-try {
-  if (maplibregl.getRTLTextPluginStatus?.() === "unavailable") {
-    // BASE_URL statt "/": im Demo-Build liegt die App unter /demo/ (GitHub Pages).
-    maplibregl.setRTLTextPlugin(`${import.meta.env.BASE_URL}mapbox-gl-rtl-text.js`, true);
-  }
-} catch {
-  /* schon gesetzt (HMR/Doppel-Import) — unkritisch */
-}
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
+
+// Arabic/Hebrew labels: since maplibre-gl 6.9 shaping is built in; the former RTL text
+// plugin (public/mapbox-gl-rtl-text.js, user finding Cairo 2026-08-11) is deprecated and gone.
+
+/** Custom map event after the base layers; maplibre 6.3 types event names, so it is cast. */
+const LAYERS_READY = /** @type {any} */ ("bit:layers-ready");
 
 const clampLat = (v) => Math.min(90, Math.max(-90, v));
 const clampLng = (v) => Math.min(180, Math.max(-180, v));
@@ -37,8 +32,8 @@ const clampLng = (v) => Math.min(180, Math.max(-180, v));
 /** Callback ausführen, sobald die Basis-Layer stehen; liefert Cleanup. */
 export function whenLayersReady(map, fn) {
   if (map.getSource("footprint")) fn();
-  else map.once("bit:layers-ready", fn);
-  return () => map.off("bit:layers-ready", fn);
+  else map.once(LAYERS_READY, fn);
+  return () => map.off(LAYERS_READY, fn);
 }
 
 /**
@@ -118,10 +113,21 @@ const MapLibreMap = forwardRef(function MapLibreMap(
     // Sprite-Bilder, die einzelne Tiles/Features anfordern und die nicht alle
     // erreichbar sind. Ein leeres 1×1-Transparentbild registrieren statt des
     // Warnrückschlags: die Karte bleibt voll nutzbar, die Konsole leer.
-    map.on("styleimagemissing", (e) => {
-      if (map.hasImage(e.id)) return;
+    // Remote styles compare properties many features lack (see nullSichererFilter); patch the
+    // filters once the style JSON is in, before tiles are evaluated, so the console stays clean.
+    map.on("style.load", () => {
+      for (const layer of map.getStyle()?.layers || []) {
+        const alt = /** @type {any} */ (layer).filter;
+        const neu = nullSichererFilter(alt);
+        if (neu !== alt) map.setFilter(layer.id, neu);
+      }
+    });
+
+    // maplibre 6: styleimagemissing only notifies; images are supplied by the resolver.
+    map.setMissingStyleImageResolver((id) => {
+      if (map.hasImage(id)) return;
       try {
-        map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) });
+        map.addImage(id, { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) });
       } catch {
         /* Bild schon von anderer Stelle registriert — unkritisch */
       }
@@ -180,7 +186,7 @@ const MapLibreMap = forwardRef(function MapLibreMap(
           },
         });
       }
-      map.fire("bit:layers-ready");
+      map.fire(LAYERS_READY);
       onLayersReadyRef.current?.(map);
     });
 

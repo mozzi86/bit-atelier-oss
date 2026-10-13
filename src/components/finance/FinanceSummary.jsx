@@ -34,7 +34,7 @@ const StatCard = ({ title, value, icon: Icon, color }) => (
  * @param {{ changeOrders: Array<{status?: string, cost_impact?: number|null}>, isLoading: boolean }} props
  *   changeOrders: change orders already filtered to the page's scope; cost_impact in euro
  *   (null = not quantified yet, counts as 0 €); isLoading: show skeletons instead of numbers.
- * @returns {JSX.Element}
+ * @returns {import("react").JSX.Element}
  */
 export default function FinanceSummary({ changeOrders, isLoading }) {
   const { t } = useI18n();

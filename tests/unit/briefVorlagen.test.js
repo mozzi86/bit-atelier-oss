@@ -9,9 +9,9 @@ import { istWinAnsi } from "@core/lib/brief/winAnsi.js";
 /** Text with balanced placeholders only (projektneutral.test.js scans all sources for real names). */
 const PLATZHALTER_ERLAUBT = /^[^{}]*(\{\{[^{}]+\}\}[^{}]*)*$/;
 
-test("alleVorlagen: drei 81-Bauer unverändert plus sechs Briefarten (82, 88-02 Behinderungsanzeige)", () => {
+test("alleVorlagen: drei 81-Bauer unverändert plus sieben Briefarten (82, 88-02 Behinderungsanzeige, N-9 Büro-Fassung an den Bauherrn)", () => {
   const keys = alleVorlagen().map((v) => v.key);
-  assert.deepEqual(keys, ["honorarangebot", "auftragsbestaetigung", "honorarnachtrag", "brief", "antwort", "anschreiben_honorarangebot", "protokoll", "behinderungsanzeige", "mahnung"]);
+  assert.deepEqual(keys, ["honorarangebot", "auftragsbestaetigung", "honorarnachtrag", "brief", "antwort", "anschreiben_honorarangebot", "protokoll", "behinderungsanzeige", "behinderung_bauherr", "mahnung"]);
   for (const v of alleVorlagen().filter((x) => x.quelle === "81")) {
     assert.equal(v.version, HONORAR_BRIEFE[/** @type {keyof typeof HONORAR_BRIEFE} */ (v.key)].version);
     assert.equal(typeof /** @type {any} */ (v).bauen, "function");

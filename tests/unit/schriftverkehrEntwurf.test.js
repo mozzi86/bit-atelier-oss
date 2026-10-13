@@ -88,4 +88,13 @@ test("88-02: Behinderungsanzeige aus dem Bautagebuch — Zeitraum, Bautagebuch-T
   const leer = neuerEntwurf(vorlage("behinderungsanzeige"), { typ: "bautagebuch", id: "bt-9" }, await ladeBezugDaten(api, { typ: "bautagebuch", id: "bt-9" }, seite));
   assert.deepEqual(leer.hinweise, ["Bezug nicht gefunden"]);
   assert.ok(fehlendIn(leer.entwurf).includes("behinderung.zeitraum"));
+  // N-9: the office version to the client uses the same diary data, without the statutory VOB/B wording.
+  const bauherr = neuerEntwurf(vorlage("behinderung_bauherr"), { typ: "bautagebuch", id: "bt-1" }, daten);
+  assert.deepEqual(bauherr.hinweise, []);
+  assert.match(bauherr.entwurf.betreff, /^Mitteilung über eine Behinderung der Bauausführung – /);
+  assert.match(bauherr.entwurf.text, /als Bauleitung teilen wir Ihnen mit/);
+  assert.match(bauherr.entwurf.text, /11\.11\.2026: Niederschlag 12 mm, Kran ausgefallen/);
+  assert.doesNotMatch(bauherr.entwurf.text, /hiermit zeigen wir gemäß/);
+  assert.deepEqual(fehlendIn(bauherr.entwurf), []);
+  assert.deepEqual(leseDeepLink(new URLSearchParams("neu=behinderung_bauherr&bezug=bautagebuch:bt-1"), KEYS)?.vorlageKey, "behinderung_bauherr");
 });

@@ -91,7 +91,7 @@ const STATUS_FARBE = {
  *   projectId: aktuelles Projekt (null → Layer bleibt flüchtig im State,
  *   keine Tickets)
  *   autor: Absender der Antworten (Briefkopf-Office, Default 'BIT-Atelier')
- * @returns {JSX.Element}
+ * @returns {import("react").JSX.Element}
  */
 export default function BcfIssues({ projectId, autor = "BIT-Atelier" }) {
   const { t } = useI18n();

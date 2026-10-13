@@ -48,7 +48,7 @@ const STAND_STIL = {
  * @param {'modell'|'richtwert'|'offen'|'gemessen'} [props.standOverride] overrides the registry
  *   default once a caller knows the real state (follow-up work)
  * @param {string|null} [props.herkunft] 73-02: provenance line of measured data (source, storeys, date)
- * @returns {JSX.Element|null} the header bar, or null without a registry entry
+ * @returns {import("react").JSX.Element|null} the header bar, or null without a registry entry
  */
 export default function PanelHeader({ reiter, bereichTitel, standOverride, herkunft = null }) {
   if (!reiter) return null;

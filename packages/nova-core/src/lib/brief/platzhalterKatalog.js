@@ -106,6 +106,7 @@ export const KATALOG = Object.freeze({
   anschreiben_honorarangebot: Object.freeze([...ALLGEMEIN, "angebot"]),
   protokoll: Object.freeze([...ALLGEMEIN, "protokoll"]),
   behinderungsanzeige: Object.freeze([...ALLGEMEIN, "behinderung"]),
+  behinderung_bauherr: Object.freeze([...ALLGEMEIN, "behinderung"]),
   mahnung: Object.freeze([...ALLGEMEIN, "rechnung", "mahnung"]),
   honorarangebot: Object.freeze([...ALLGEMEIN, "angebot"]),
   auftragsbestaetigung: Object.freeze([...ALLGEMEIN, "vertrag", "angebot"]),

@@ -24,6 +24,17 @@ import { inhaltAblegen, inhaltLaden, blobIdNeu } from "@core/lib/speicherOrt";
 import { fmtDate } from "@core/lib/projectModel";
 import { useI18n } from "@core/lib/i18n";
 
+/**
+ * Releases a pdf.js document. Since pdfjs-dist 6 PDFDocumentProxy has no destroy(); the loading
+ * task owns the worker resources (same rule as schliessePdfjs in pdfTools.js, not imported here so
+ * pdf-lib stays out of this chunk). The old pdfDoc.destroy() threw on a quick document switch and
+ * showed "PDF konnte nicht geladen werden". Errors while releasing are harmless and swallowed.
+ * @param {any} doc PDFDocumentProxy
+ */
+function pdfFreigeben(doc) {
+  try { doc?.loadingTask?.destroy?.(); } catch { /* noop */ }
+}
+
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 const COLORS = ["#e11d48", "#2563eb", "#16a34a", "#f59e0b", "#0f172a"];
@@ -182,7 +193,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
         const bytes = dataUrlToBytes(await inhaltLaden(selectedDoc.data, selectedDoc.data_blob));
         if (cancelled) return;
         pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
-        if (cancelled) { /** @type {any} */ (pdfDoc).destroy(); return; }
+        if (cancelled) { pdfFreigeben(pdfDoc); return; }
 
         // Ebenen-Konfiguration
         let layerList = [];
@@ -195,7 +206,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
             return { id, name: g?.name || String(id), visible: g?.visible !== false };
           });
         } catch { ocgRef.current = null; }
-        if (cancelled) { /** @type {any} */ (pdfDoc).destroy(); return; }
+        if (cancelled) { pdfFreigeben(pdfDoc); return; }
 
         setLayers(layerList);
         setPdf(pdfDoc);
@@ -210,7 +221,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
     return () => {
       cancelled = true;
       try { renderTaskRef.current?.cancel(); } catch { /* noop */ }
-      if (pdfDoc) { try { /** @type {any} */ (pdfDoc).destroy(); } catch { /* noop */ } }
+      if (pdfDoc) pdfFreigeben(pdfDoc);
     };
   }, [selectedDoc]);
 

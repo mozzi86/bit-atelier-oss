@@ -84,7 +84,7 @@ const fuellen = (text, platz, wert) => text.replace(`{{${platz}}}`, () => String
  * @param {{projectId?: string|null, elemente?: any[],
  *   onSpecs?: (specs: object[]) => void, onErneutPruefen?: () => void,
  *   pruefungMoeglich?: boolean, semantikFehlt?: boolean}} props
- * @returns {JSX.Element}
+ * @returns {import("react").JSX.Element}
  */
 export default function IdsEditor({
   projectId, elemente = [], onSpecs, onErneutPruefen,

@@ -173,6 +173,11 @@ export default function BautagebuchListe({ projectId, projekt = null }) {
                               <Link data-testid="btb-behinderung" to={schreibenLink({ neu: "behinderungsanzeige", bezug: { typ: "bautagebuch", id: e.id } })}>{t("Behinderungsanzeige schreiben")}</Link>
                             </Button>
                           )}
+                          {darfBrief && schlecht && (
+                            <Button size="sm" variant="outline" asChild>
+                              <Link data-testid="btb-behinderung-bauherr" to={schreibenLink({ neu: "behinderung_bauherr", bezug: { typ: "bautagebuch", id: e.id } })}>{t("Behinderung an Bauherrn melden")}</Link>
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

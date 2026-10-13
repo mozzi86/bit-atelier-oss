@@ -201,6 +201,17 @@ export const BRIEFARTEN = Object.freeze({
     text: "Sehr geehrte Damen und Herren,\n\nhiermit zeigen wir gemäß § 6 Abs. 1 VOB/B an, dass die Ausführung der Arbeiten am Bauvorhaben „{{projekt.name}}“ im Zeitraum {{behinderung.zeitraum}} an {{behinderung.tage}} Tagen behindert war.\n\nGrundlage sind die Einträge im Bautagebuch:\n{{behinderung.text}}\n\nDie Auswirkungen auf die Ausführungsfristen (§ 6 Abs. 2 und 4 VOB/B) legen wir gesondert dar. Wir bitten um Bestätigung des Eingangs.\n\nMit freundlichen Grüßen",
     anlagen: ["Auszug Bautagebuch"], pflichtPlatzhalter: ["projekt.name", "behinderung.zeitraum", "behinderung.text"],
   }),
+  // N-9 (user decision 13.10.2026: "both"): the office version — the site management
+  // informs the client of a hindrance it documented in the site diary (e.g. a trade
+  // delayed by weather). Unlike the VOB/B notice above it is not the contractor's
+  // statutory notice; it reports and announces the effect on the schedule.
+  // [ASSUMED] wording → richtwert, check before sending.
+  behinderung_bauherr: Object.freeze({
+    key: "behinderung_bauherr", art: "behinderung_bauherr", version: 1, quelle: "82", richtwert: true,
+    betreff: "Mitteilung über eine Behinderung der Bauausführung – {{projekt.name}}",
+    text: "Sehr geehrte Damen und Herren,\n\nals Bauleitung teilen wir Ihnen mit, dass die Ausführung der Arbeiten am Bauvorhaben „{{projekt.name}}“ im Zeitraum {{behinderung.zeitraum}} an {{behinderung.tage}} Tagen behindert war.\n\nGrundlage sind die Einträge im Bautagebuch:\n{{behinderung.text}}\n\nWir prüfen die Auswirkungen auf den Terminplan und informieren Sie über eine mögliche Verschiebung von Fertigstellungsterminen. Behinderungsanzeigen der ausführenden Firmen nach § 6 Abs. 1 VOB/B leiten wir Ihnen gesondert weiter.\n\nMit freundlichen Grüßen",
+    anlagen: ["Auszug Bautagebuch"], pflichtPlatzhalter: ["projekt.name", "behinderung.zeitraum", "behinderung.text"],
+  }),
   mahnung: Object.freeze({
     key: "mahnung", art: "mahnung", version: 1, quelle: "79", richtwert: true, textAus79: true,
     betreff: "Rechnung {{rechnung.nummer}} – Mahnstufe {{mahnung.stufe}}",

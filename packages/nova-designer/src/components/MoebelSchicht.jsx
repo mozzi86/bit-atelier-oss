@@ -52,7 +52,7 @@ const TUER_OEFFNUNG_FILL = "#f8fafc";
  * @param {number} p.SCALE SVG units per metre
  * @param {((n:number)=>number)|null} [p.px] screen px → SVG units (optional; without it fixed numbers)
  * @param {boolean} [p.sel] selected — leaf turns selection blue
- * @returns {JSX.Element|null} null for non-door types
+ * @returns {import("react").JSX.Element|null} null for non-door types
  */
 export function TuerSymbol({ item, X, Z, SCALE, px = null, sel = false }) {
   const typ = moebelById(item?.typ);

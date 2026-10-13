@@ -70,6 +70,15 @@ test("88-02 Bautagebuch: Schlechtwetter-Hinweis, ein Eintrag je Tag, Behinderung
     expect(await text.inputValue()).not.toContain("[[fehlt");
     await expect(page.getByTestId("schreiben-projekt")).toHaveValue(projekt.id);
 
+    // N-9: office version to the client from the same diary entry, without the statutory wording
+    await page.goto(`/Werkplanung?projekt=${encodeURIComponent("Review Testhaus")}&tab=bautagebuch`);
+    await page.locator(`[data-testid=btb-zeile][data-datum="${TAG}"]`).getByTestId("btb-behinderung-bauherr").click();
+    await expect(page).toHaveURL(/\/Correspondence/);
+    await expect(betreff).toHaveValue(/Mitteilung über eine Behinderung der Bauausführung/, { timeout: 30000 });
+    await expect(text).toHaveValue(/E2E Kran ausgefallen/);
+    await expect(text).toHaveValue(/als Bauleitung teilen wir Ihnen mit/);
+    expect(await text.inputValue()).not.toContain("[[fehlt");
+
     // English, phone width
     await page.goto(`/Werkplanung?projekt=${encodeURIComponent("Review Testhaus")}&tab=bautagebuch`);
     await page.getByRole("button", { name: "English" }).click();

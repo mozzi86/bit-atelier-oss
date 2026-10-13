@@ -26,7 +26,7 @@ import { weiterMitFuer } from "@/lib/zugriffFilter.js";
  * @param {string} props.pathname router pathname without query, e.g. "/AVA"
  * @param {boolean} [props.labor] true on a Labor route: adds the Labor notice
  *   and a link back to the project overview (also when the table has no steps)
- * @returns {JSX.Element|null} the bar, or null when there is nothing to offer
+ * @returns {import("react").JSX.Element|null} the bar, or null when there is nothing to offer
  */
 export default function WeiterMit({ pathname, labor = false }) {
   const { t } = useI18n();

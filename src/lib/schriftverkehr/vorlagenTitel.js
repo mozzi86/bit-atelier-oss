@@ -11,6 +11,7 @@ export const VORLAGEN_TITEL = Object.freeze({
   anschreiben_honorarangebot: "Anschreiben zum Honorarangebot",
   protokoll: "Protokoll mit Verteiler",
   behinderungsanzeige: "Behinderungsanzeige",
+  behinderung_bauherr: "Behinderung an Bauherrn melden",
   mahnung: "Mahnung",
   honorarangebot: "Honorarangebot",
   auftragsbestaetigung: "Auftragsbestätigung",

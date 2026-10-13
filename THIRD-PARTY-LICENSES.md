@@ -6,18 +6,9 @@ der Plattform an den Browser ausgeliefert werden. Permissiv lizenzierte Abhängi
 (MIT/ISC/BSD/Apache-2.0) sind über `package.json` und npm nachvollziehbar und hier nicht
 einzeln gelistet. Lizenzangaben laut `node_modules/<paket>/package.json` (Stand 06.10.2026).
 
-## @mapbox/mapbox-gl-rtl-text — BSD-2-Clause
-
-- **Version:** 0.3.x (npm) · Kopie der `dist/mapbox-gl-rtl-text.js` liegt unter
-  `public/mapbox-gl-rtl-text.js` (Map-Worker lädt sie per importScripts —
-  ein Vite-Modulimport würde sie im Dev-Server transformieren).
-- **Was:** RTL-Text-Shaping (Arabisch/Hebräisch, ICU-Bidi) für MapLibre-Karten.
-- **Lizenz:** BSD-2-Clause (permissiv) — Hinweis genügt.
-  Quelle: https://github.com/mapbox/mapbox-gl-rtl-text
-
 ## @salusoft89/planegcs — LGPL-2.0-or-later
 
-- **Version:** 1.2.0 (gepinnt)
+- **Version:** 1.3.0
 - **Was:** 2D-Geometric-Constraint-Solver aus FreeCAD (PlaneGCS,
   © 2011 Konstantinos Poulios u. a.) als WebAssembly-Build mit
   TypeScript-Wrapper von Salusoft89 (Miroslav Šerý).

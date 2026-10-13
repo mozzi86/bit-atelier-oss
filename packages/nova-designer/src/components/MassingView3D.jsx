@@ -229,7 +229,7 @@ export default function MassingView3D({
     renderer.setSize(W, H);
     renderer.setClearColor(0xf8fafc, 1); // heller Hintergrund
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap; // PCFSoftShadowMap is deprecated for WebGLRenderer since r182
     mount.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
     scene.add(new THREE.AmbientLight(0xffffff, 0.65));

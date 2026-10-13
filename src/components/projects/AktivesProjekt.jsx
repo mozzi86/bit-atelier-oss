@@ -49,7 +49,7 @@ const istOffenesTicket = (i) => i.status !== "resolved" && i.status !== "closed"
 
 /**
  * Overview block for the active project.
- * @returns {JSX.Element|null} the block, or null while no project is active
+ * @returns {import("react").JSX.Element|null} the block, or null while no project is active
  */
 export default function AktivesProjekt() {
   const { t } = useI18n();
@@ -151,7 +151,7 @@ export default function AktivesProjekt() {
  * @param {(key: string) => string} props.t translate function from useI18n
  * @param {number} props.offeneTickets count (pieces) of tickets not resolved/closed
  * @param {number} props.offeneNachtraege count (pieces) of undecided change orders (pending, in_progress)
- * @returns {JSX.Element} the two cards
+ * @returns {import("react").JSX.Element} the two cards
  */
 function WeiterImProjekt({ t, offeneTickets, offeneNachtraege }) {
   const ticketText = offeneTickets === 1 ? t("1 offenes Ticket") : fuellen(t("{n} offene Tickets"), { n: offeneTickets });

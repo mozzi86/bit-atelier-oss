@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import { TERRAIN_SOURCE, footprintToGeoJson, osmBuildingsToGeoJson } from "@designer/lib/maplibreStyles";
 import { draftToGeoJson } from "@designer/lib/mapDraw";
 import { buildSiteParcel } from "@designer/lib/siteParcel";
@@ -104,8 +104,8 @@ export default function LocationSelector({ complexData, onLocationChange, onName
       map.getSource("footprint")?.setData(fc);
     };
     if (map.getSource("footprint")) update();
-    else map.once("bit:layers-ready", update);
-    return () => map.off("bit:layers-ready", update);
+    else map.once(/** @type {any} */ ("bit:layers-ready"), update);
+    return () => map.off(/** @type {any} */ ("bit:layers-ready"), update);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complexData, style]);
 
@@ -150,8 +150,8 @@ export default function LocationSelector({ complexData, onLocationChange, onName
       map.getSource("parcel-draft").setData(fc);
     };
     if (map.getSource("footprint")) update();
-    else map.once("bit:layers-ready", update);
-    return () => map.off("bit:layers-ready", update);
+    else map.once(/** @type {any} */ ("bit:layers-ready"), update);
+    return () => map.off(/** @type {any} */ ("bit:layers-ready"), update);
   }, [parcelRing, drawing, style]);
 
   // Review-Fix 36-02: der [lng,lat]-Ring ist geografisch am Zeichenort
@@ -220,8 +220,8 @@ export default function LocationSelector({ complexData, onLocationChange, onName
       }
     };
     if (map.getSource("osm-bld")) update();
-    else map.once("bit:layers-ready", update);
-    return () => map.off("bit:layers-ready", update);
+    else map.once(/** @type {any} */ ("bit:layers-ready"), update);
+    return () => map.off(/** @type {any} */ ("bit:layers-ready"), update);
      
   }, [rawBuildings, show3d, style]);
 

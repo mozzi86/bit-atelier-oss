@@ -80,7 +80,7 @@ function dickenFarbe(d, dmin, dmax) {
  * Drainage sub-tab — like TgaNetzEditor it reads project/plan/panel cache itself.
  * @param {{ complexData?: any }} [props] complexData from ComplexDesigner (site_parcel for the
  *   Lageplan parcel outline; without it LageplanPlan sizes the plan from the footprint + margin).
- * @returns {JSX.Element}
+ * @returns {import("react").JSX.Element}
  */
 export default function EntwaesserungPlanner({ complexData = null } = {}) {
   const { t } = useI18n();

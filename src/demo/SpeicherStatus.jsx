@@ -83,7 +83,7 @@ function vorWieLange(zeit, t) {
  *   renders between <header> and <main>; the warning strip and the backup
  *   nudge are portalled into it (nothing is shown there while it is null, i.e. before the
  *   first commit of Layout).
- * @returns {JSX.Element}
+ * @returns {import("react").JSX.Element}
  */
 export default function SpeicherStatus({ hinweisZiel = null }) {
   const { t } = useI18n();

@@ -54,7 +54,7 @@ export function springeZumInhalt(ereignis) {
 /**
  * Title, focus, announcement and skip-link handling on route changes.
  * Renders only the (visually hidden) live region.
- * @returns {JSX.Element}
+ * @returns {import("react").JSX.Element}
  */
 export default function Seitenwechsel() {
   // pathname, not search: a ?tab switch inside a page is not a page change and

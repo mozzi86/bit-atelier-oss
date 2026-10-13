@@ -10,7 +10,7 @@
 #
 # Deliberately NOT a full Content-Security-Policy yet: the runtime origins are
 # not measured. Five map tile hosts (maplibreStyles.js:17,25,39,50,62), three
-# edge functions, mapbox-gl-rtl-text.js and the language model endpoints would
+# edge functions and the language model endpoints would
 # all need to be in script-src/connect-src/img-src, and a script-src that is
 # one entry short breaks the app silently rather than loudly. That measurement
 # is its own pass (57-06 G-13).
