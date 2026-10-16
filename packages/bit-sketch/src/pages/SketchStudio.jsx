@@ -343,12 +343,9 @@ export default function SketchStudio({ initialJson, onPersist }) {
     <div className="p-6 max-w-[1500px] mx-auto">
       <div className="flex items-baseline justify-between mb-4">
         <div>
-          {/* h1 = menu name (N-02 name table: no "BIT" prefix); "Labor" as a
-              separate tag, like the Labor group it sits in. */}
-          <h1 className="text-2xl font-bold">
-            {t("Skizze")}{" "}
-            <span className="text-sm font-normal text-slate-400">({t("Labor")})</span>
-          </h1>
+          {/* h1 = menu name (N-02 name table: no "BIT" prefix). 94-07: no "Labor" tag any
+              more — the sketch moved to "Entwurf & Genehmigung". */}
+          <h1 className="text-2xl font-bold">{t("Skizze")}</h1>
           <p className="text-sm text-slate-500">
             {modus === "freihand"
               ? t("Freihand mit Stift: Druck steuert die Strichstärke, Radierer entfernt ganze Striche (auch die Radiertaste des Stifts).")

@@ -159,7 +159,12 @@ export const NAECHSTE_SCHRITTE = Object.freeze({
     { text: "Architektenverträge", ziel: "/Fees?tab=contracts" },
   ],
   // Labor routes: optional. The bar adds the Labor notice and the way back to
-  // the overview on every Labor page, with or without steps.
+  // the overview on every Labor page, with or without steps. 94-07: SiteControl,
+  // SketchStudio, BitAegis and KiTool left the lab — their entries are now required.
+  "/KiTool": [
+    { text: "KI-Verbindungen einstellen", ziel: "/Settings?tab=ai" },
+    { text: "KI-Zentrale", ziel: "/AIDashboard" },
+  ],
   "/SiteControl": [
     { text: "Tickets", ziel: "/BimViewer" },
     { text: "Nachträge", ziel: "/Finance" },

@@ -190,7 +190,7 @@ export default function Finance() {
               {t("Neuer Nachtrag")}
             </Button>
             <Link to="/SiteControl" className="px-1 text-sm text-slate-500 underline-offset-4 hover:text-slate-700 hover:underline">
-              {t("Baustellen-Leitstand (Labor)")}
+              {t("Baustellen-Leitstand")}
             </Link>
           </div>
         </div>

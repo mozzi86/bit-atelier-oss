@@ -81,6 +81,23 @@ export function systemRouter({ root, port, lokalGebunden, origins = [], anfrageE
     }
   });
 
+  // 94-08 "Problem melden": the last lines of update.log and server.log for the issue text. Loopback
+  // only (they name folders of this machine); the client cleans them (src/lib/problemMelden.js)
+  // and shows everything before the user decides to open GitHub.
+  r.get('/system/protokoll', nurLokal, (_req, res) => {
+    const ordner = datenOrdnerFn();
+    const ende = (name, n) => {
+      try {
+        const text = fs.readFileSync(path.join(ordner, name), 'utf-8');
+        return text.split(/\r?\n/).filter(Boolean).slice(-n).map((z) => `[${name}] ${z.slice(0, 400)}`);
+      } catch {
+        return [];
+      }
+    };
+    res.set('Cache-Control', 'no-store');
+    res.json({ zeilen: [...ende('update.log', 15), ...ende('server.log', 25)] });
+  });
+
   // 93-06: the status names an absolute folder (account name) → loopback only, like the data folder.
   r.get('/system/sicherung', nurLokal, (_req, res) => {
     if (!sicherung) return res.status(404).json({ error: 'Automatische Sicherung nicht verfügbar.' });

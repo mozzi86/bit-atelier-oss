@@ -91,3 +91,48 @@ jobs:
           gh release create "$GITHUB_REF_NAME" BIT-Atelier.zip BIT-Atelier.zip.sha256 BIT-Atelier-Installer.cmd install.sh \
             --title "BIT-Atelier $GITHUB_REF_NAME" \
             --notes-file notes.md
+
+  # 94-09 (register 171, user decision 16.10.2026): the Tauri desktop client (serverless "lokal"
+  # build in its own window, client/) is built on Windows and attached to the SAME release as
+  # BIT-Atelier-Desktop-Setup.exe (+ .sha256). Runs after the main job so a failed desktop
+  # build never blocks the zip; the release notes only mention the desktop app once it exists.
+  # Rust and the MSVC tools are preinstalled on windows-latest — no extra action needed.
+  # Unsigned: Windows SmartScreen asks once ("More info" → "Run anyway").
+  desktop:
+    needs: release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Rust toolchain
+        shell: pwsh
+        run: |
+          rustup default stable
+          rustc --version
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Build the desktop installer
+        run: npm run client:build
+
+      - name: Attach to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $exe = Get-ChildItem client/src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1
+          if (-not $exe) { throw "No NSIS installer found under client/src-tauri/target/release/bundle/nsis" }
+          Copy-Item $exe.FullName BIT-Atelier-Desktop-Setup.exe
+          $hash = (Get-FileHash BIT-Atelier-Desktop-Setup.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  BIT-Atelier-Desktop-Setup.exe" | Out-File -Encoding ascii BIT-Atelier-Desktop-Setup.exe.sha256
+          gh release upload "$env:GITHUB_REF_NAME" BIT-Atelier-Desktop-Setup.exe BIT-Atelier-Desktop-Setup.exe.sha256 --clobber
+          $notes = gh release view "$env:GITHUB_REF_NAME" --json body --jq .body
+          $zeile = "- **Desktop app (Windows, preview):** ``BIT-Atelier-Desktop-Setup.exe`` — the app in its own window without Node.js, data in a folder you choose; unsigned (SmartScreen: More info → Run anyway). SHA-256: ``$hash``"
+          ($notes + "`n" + $zeile) | Out-File -Encoding utf8 notes-desktop.md
+          gh release edit "$env:GITHUB_REF_NAME" --notes-file notes-desktop.md

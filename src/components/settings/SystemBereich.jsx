@@ -23,6 +23,7 @@ import { appInstallieren, beiInstallAenderung, browserHinweis, installStatus } f
 import UpdateEinstellungen from "@/components/update/UpdateEinstellungen.jsx";
 import BueroModusKarte from "./BueroModusKarte.jsx";
 import ProgrammBeenden from "./ProgrammBeenden.jsx";
+import ProblemMelden from "./ProblemMelden.jsx";
 
 /** Ready since 80-01. */
 export const BEREIT = true;
@@ -158,6 +159,8 @@ export default function SystemBereich({ kontext }) {
       <BueroModusKarte />
       {/* 93-11: the hidden server keeps running after the last window — "Programm beenden" (local express build only). */}
       <ProgrammBeenden />
+      {/* 94-08: "Problem melden" — prepares a GitHub issue with diagnostics, the user submits it. */}
+      <ProblemMelden />
       <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]">
         {zeilen.map((z) => (
           <React.Fragment key={z.name}>

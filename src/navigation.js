@@ -129,6 +129,8 @@ export const navGroups = [
     label: 'Entwurf & Genehmigung',
     items: [
       { title: 'Komplex-Designer', url: seite('ComplexDesigner'), modul: 'planung', icon: PencilRuler, breite: 'voll', netz: 'teilweise', phase: 3 },
+      // 94-07: the sketch tool (72-05: freehand with pen pressure, FreeCAD constraint mode) is a design tool.
+      { title: 'Skizze', url: seite('SketchStudio'), modul: 'planung', icon: PenTool, projektfrei: true, phase: 3 },
       { title: 'Prüf-Suite', url: seite('ModelCheck'), modul: 'modell', icon: ShieldCheck, projektfrei: true, breite: 'voll', phase: 3 },
       { title: 'BIM-Viewer & Tickets', url: seite('BimViewer'), modul: 'modell', icon: Box, breite: 'voll', phase: 4 },
       { title: 'IFC-Viewer (LV-gekoppelt)', url: seite('IfcViewer'), modul: 'modell', icon: Boxes, projektfrei: true, phase: 4 },
@@ -157,6 +159,8 @@ export const navGroups = [
     items: [
       // NAV-PLAN 2026-10-13: site diary (88-02) on its own route, same tab components.
       { title: 'Baustelle', url: seite('Baustelle'), modul: 'planung', icon: HardHat, phase: 8 },
+      // 94-07: the site control room sits next to the site diary.
+      { title: 'Baustellen-Leitstand', url: seite('SiteControl'), modul: 'planung', icon: Radio, breite: 'voll', netz: 'teilweise', phase: 8 },
       // phase 8 [ASSUMED]: minutes and documents peak on site; planning minutes exist too.
       { title: 'Berichte & Dokumente', url: seite('Reports'), modul: 'berichte', icon: FileText, phase: 8 },
     ],
@@ -185,26 +189,23 @@ export const navGroups = [
       { title: 'Abwesenheiten', url: seite('Absences'), modul: 'abwesenheiten', icon: TreePalm, projektfrei: true, umfang: 'portfolio', phase: 0 },
       { title: 'Adressbuch', url: seite('AddressBook'), modul: 'adressbuch', icon: Users, projektfrei: true, phase: 0 },
       // Phase 80: the one place of all app settings (KRITIK-05).
+      // 94-07: office tools out of the lab — PDF tools/filing (module berichte) and the
+      // local AI harness (module ki, Phase 67-06).
+      { title: 'PDF & Ablage', url: seite('BitAegis'), modul: 'berichte', icon: Cloud, projektfrei: true, phase: 0 },
+      { title: 'KI Tool', url: seite('KiTool'), modul: 'ki', icon: Wrench, phase: 0 },
       { title: 'Einstellungen', url: seite('Settings'), modul: 'einstellungen', icon: Settings, projektfrei: true, phase: 0 },
     ],
   },
   {
     // 72-01 A-13 (Befunde N-08, N-18, N-19): modules that show a vision or need
     // an extra service live in "Labor" — at the bottom, collapsed by default
-    // (Layout.jsx). Their routes stay reachable.
+    // (Layout.jsx). Their routes stay reachable. 94-07 (user decision 16.10.2026):
+    // Skizze, Baustellen-Leitstand, PDF & Ablage and KI Tool left the lab.
     label: 'Labor',
     collapsible: true,
     items: [
-      // 72-05 (decision 12.10.2026, variant a): a real sketch tool — freehand with pen
-      // pressure, widths, eraser — with the FreeCAD constraint drawing as a mode. Still in
-      // "Labor" until the overlay over site plan / IFC section is done.
-      { title: 'Skizze', url: seite('SketchStudio'), modul: 'labor', icon: PenTool, projektfrei: true },
-      { title: 'Baustellen-Leitstand', url: seite('SiteControl'), modul: 'labor', icon: Radio, breite: 'voll', netz: 'teilweise' },
       { title: 'Investment', url: seite('InvestmentPlatform'), modul: 'labor', icon: Coins, umfang: 'portfolio' },
-      { title: 'PDF & Ablage', url: seite('BitAegis'), modul: 'labor', icon: Cloud, projektfrei: true },
       { title: 'Portfolio (Projektentwicklung)', url: seite('AtelierDeveloper'), modul: 'labor', icon: Briefcase, umfang: 'portfolio' },
-      // Phase 67-06: the Atelier AI Harness (local Python service) inside the app.
-      { title: 'KI Tool', url: seite('KiTool'), modul: 'labor', icon: Wrench },
     ],
   },
 ];

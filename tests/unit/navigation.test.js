@@ -217,6 +217,7 @@ test("verbindliche Namenstabelle: Gruppen, Reihenfolge und Titel je Route", () =
     ]],
     ["Entwurf & Genehmigung", [
       ["/ComplexDesigner", "Komplex-Designer"],
+      ["/SketchStudio", "Skizze"],
       ["/ModelCheck", "Prüf-Suite"],
       ["/BimViewer", "BIM-Viewer & Tickets"],
       ["/IfcViewer", "IFC-Viewer (LV-gekoppelt)"],
@@ -232,6 +233,7 @@ test("verbindliche Namenstabelle: Gruppen, Reihenfolge und Titel je Route", () =
     ]],
     ["Bauüberwachung", [
       ["/Baustelle", "Baustelle"],
+      ["/SiteControl", "Baustellen-Leitstand"],
       ["/Reports", "Berichte & Dokumente"],
     ]],
     // Cross-cutting modules, used in every station.
@@ -247,15 +249,14 @@ test("verbindliche Namenstabelle: Gruppen, Reihenfolge und Titel je Route", () =
       ["/People", "Personal"],
       ["/Absences", "Abwesenheiten"],
       ["/AddressBook", "Adressbuch"],
+      ["/BitAegis", "PDF & Ablage"],
+      ["/KiTool", "KI Tool"],
       ["/Settings", "Einstellungen"],
     ]],
+    // 94-07 (user decision 16.10.2026): only the vision modules stay in the lab.
     ["Labor", [
-      ["/SketchStudio", "Skizze"],
-      ["/SiteControl", "Baustellen-Leitstand"],
       ["/InvestmentPlatform", "Investment"],
-      ["/BitAegis", "PDF & Ablage"],
       ["/AtelierDeveloper", "Portfolio (Projektentwicklung)"],
-      ["/KiTool", "KI Tool"],
     ]],
   ]);
   assert.equal(LABOR?.label, "Labor", "genau die Labor-Gruppe ist zuklappbar");

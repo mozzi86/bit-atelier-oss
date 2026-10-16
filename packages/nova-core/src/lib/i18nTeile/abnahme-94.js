@@ -24,6 +24,8 @@ export const EN = {
   "Bauherr aus dem Adressbuch": "Client from the address book",
   "— frei eingeben —": "— enter freely —",
   "Adressbuch ist leer": "Address book is empty",
+  // 94-07: next steps of the KI Tool (left the lab)
+  "KI-Verbindungen einstellen": "Set up AI connections",
   // 94-04 (B-ABN-07): invoice rows compute from the stand
   "Eine Zeile steht auf 0,00 € — Stand oder Betrag prüfen.": "One row is at €0.00 — check the stand or the amount.",
   "{n} Zeilen stehen auf 0,00 € — Stand oder Betrag prüfen.": "{n} rows are at €0.00 — check the stand or the amount.",
@@ -34,4 +36,14 @@ export const EN = {
   // 96-01: personnel data encrypted at rest — where the key lives
   "Personaldaten sind verschlüsselt. Ihr Schlüssel liegt außerhalb des Datenordners:": "Personnel data are encrypted. Their key lives outside the data folder:",
   "— getrennt sichern; ohne ihn sind die Personaldaten einer Sicherung nicht lesbar.": "— back it up separately; without it the personnel data of a backup cannot be read.",
+  // 94-08: "Problem melden"
+  "Problem melden": "Report a problem",
+  "Bereitet eine Meldung für GitHub vor: Version, Seite, Browser und die letzten Protokollzeilen — ohne Projektdaten. Sie sehen den ganzen Text und schicken ihn selbst ab.": "Prepares a report for GitHub: version, page, browser and the last log lines — no project data. You see the full text and submit it yourself.",
+  "Meldung vorbereiten": "Prepare report",
+  "Was ist passiert?": "What happened?",
+  "Protokollzeilen anhängen": "Attach log lines",
+  "Protokoll nicht lesbar:": "Log not readable:",
+  "Diese Meldung geht an GitHub": "This report goes to GitHub",
+  "Auf GitHub öffnen": "Open on GitHub",
+  "Für GitHub brauchen Sie ein kostenloses Konto. Ohne Konto: Feedback per E-Mail im Fuß der App.": "GitHub needs a free account. Without one: send feedback by e-mail from the app footer.",
 };

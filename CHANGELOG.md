@@ -10,6 +10,17 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.5.1] - 2026-10-16
+
+### Neu
+
+- **Desktop-App für Windows (Vorschau):** `BIT-Atelier-Desktop-Setup.exe` startet BIT-Atelier in einem eigenen Fenster, ohne Node.js; die Daten liegen in einem Ordner, den Sie beim ersten Start wählen. Der Installer ist nicht signiert — Windows SmartScreen fragt einmal („Weitere Informationen“ → „Trotzdem ausführen“). Der bisherige Installer und das ZIP bleiben der empfohlene Weg.
+- **Problem melden:** Einstellungen › System & Info bereitet eine Meldung für GitHub vor — Version, Seite, Browser und die letzten Protokollzeilen, ohne Projektdaten und bereinigt um Benutzerordner und E-Mail-Adressen. Sie sehen den ganzen Text und schicken ihn selbst ab.
+
+### Geändert
+
+- **Seitenleiste:** Skizze steht jetzt unter Entwurf & Genehmigung, der Baustellen-Leitstand unter Bauüberwachung, PDF & Ablage und das KI Tool unter Büro. Im Labor bleiben Investment und Portfolio.
+
 ## [1.5.0] - 2026-10-16
 
 ### Wichtig vor dem Update
