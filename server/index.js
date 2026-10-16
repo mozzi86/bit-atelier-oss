@@ -12,6 +12,7 @@
 // Plan 93-03 (office mode): the server binds 127.0.0.1 as before. Switched on in Settings › System & Info,
 // it binds the private LAN addresses of this computer as well (bueroRouter.js lanServer); every request that
 // is not loopback then passes bueroWaechter: private source address + paired device token + allow-list.
+import crypto from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
@@ -27,12 +28,14 @@ import { sicherungsDienst } from './sicherung.js';
 import { appAusliefern, istAppModus } from './appAuslieferung.js';
 import { createBuero } from './bueroModus.js';
 import { hostWaechter } from './hostWaechter.js';
+import { ERNEUERN_KOPF, sitzungsRouter, sitzungsSchutz, sitzungsToken } from './sitzungsSchutz.js';
 import { bueroRouter, bueroWaechter, lanServer, HINWEIS_HEADER } from './bueroRouter.js';
 import { kiLokalRouter, harnessUmgebung } from './kiLokalRouter.js';
 import { harnessManager } from './harnessProzess.js';
 import { kiEinstellungenLesen } from '../packages/nova-core/server/llmLokal.js';
 import { createDb } from '../packages/nova-core/server/db.js';
 import { createBlobStore } from '../packages/nova-core/server/blobs.js';
+import { ladeSchluessel, standardSchluesselPfad, verschluesselteDatenVorhanden, verschluesselungsCodec } from '../packages/nova-core/server/ruheVerschluesselung.js';
 import { seedCatalogs } from '../packages/nova-core/server/catalog-seed.js';
 import { authRouter, entitiesRouter, llmRouter, blobsRouter } from '../packages/nova-core/server/routes.js';
 import { personalRouter } from '../packages/nova-core/server/personalRouter.js';
@@ -72,9 +75,14 @@ app.use(cors({
   // those are not the browser-driven cross-site case this guard is about.
   // 93-03: the LAN origins of the office mode only while their listeners run.
   origin: (origin, cb) => cb(null, !origin || ERLAUBTE_ORIGINS.includes(origin) || lan.origins().includes(origin)),
-  exposedHeaders: [HINWEIS_HEADER],
+  exposedHeaders: [HINWEIS_HEADER, ERNEUERN_KOPF],
 }));
 app.use(express.json({ limit: '10mb' }));
+// 96-04: browser writes need X-Bit-Session (a token of this server run) — a form POST
+// of a foreign web page is executed despite CORS otherwise. Tools without a browser pass.
+const SITZUNG = sitzungsToken();
+app.use('/api', sitzungsRouter({ token: SITZUNG }));
+app.use('/api', sitzungsSchutz({ token: SITZUNG }));
 
 // DB-Factory: Daten bleiben physisch in server/db.json (Pitfall 1 — keine Migration),
 // außer BIT_DATA_DIR zeigt auf einen eigenen Datenordner (83-03, Release-Start).
@@ -87,8 +95,35 @@ export const blobs = createBlobStore(datenPfad('blobs'));
 // Personal-Speicherklasse (Plan 80-02, D-P80-A #4): eigene Datei, eigene
 // Blobs — NIE db.json/blobs/, damit ein Büro seine HR-Daten unabhängig vom
 // Projektbestand sichern/verschlüsseln/aus OneDrive ausschließen kann.
-const personalDb = createDb(datenPfad('personal.json'));
-const personalBlobs = createBlobStore(datenPfad('personal-blobs'));
+// 96-01: personnel data encrypted at rest (AES-256-GCM). The key lives OUTSIDE the
+// data folder (ruheVerschluesselung.js); it is only created when no encrypted
+// personnel file exists yet — otherwise a missing key locks the store instead of
+// starting empty over the ciphertext.
+const PERSONAL_SCHLUESSEL = standardSchluesselPfad();
+const personalCodec = (() => {
+  try {
+    const vorhanden = verschluesselteDatenVorhanden(datenPfad('personal.json'), datenPfad('personal-blobs'));
+    const key = ladeSchluessel(PERSONAL_SCHLUESSEL, { erzeugen: !vorhanden });
+    if (!key) {
+      console.error(`[personal] Verschlüsselte Personaldaten, aber kein Schlüssel unter ${PERSONAL_SCHLUESSEL} — Personalbereich gesperrt (BIT_PERSONAL_SCHLUESSEL setzt einen anderen Ort).`);
+      return verschluesselungsCodec(crypto.randomBytes(32)); // decrypts nothing → store locks, writes nothing
+    }
+    return verschluesselungsCodec(key);
+  } catch (e) {
+    console.error(`[personal] Schlüssel nicht nutzbar: ${e?.message || e} — Personalbereich gesperrt.`);
+    return verschluesselungsCodec(crypto.randomBytes(32));
+  }
+})();
+const personalDb = createDb(datenPfad('personal.json'), { codec: personalCodec });
+const personalBlobs = createBlobStore(datenPfad('personal-blobs'), { codec: personalCodec });
+if (!personalDb.gesperrt()) {
+  try {
+    const n = personalBlobs.migriere();
+    if (n) console.log(`[personal] ${n} Personal-Datei(en) verschlüsselt (96-01).`);
+  } catch (e) {
+    console.error(`[personal] Verschlüsseln der Personal-Dateien fehlgeschlagen: ${e?.message || e}`);
+  }
+}
 // Dieselbe Quelle wie HOST weiter unten (API_HOST) — hier vorab ausgewertet,
 // weil personalRouter() die Loopback-Sperre schon beim Mounten braucht;
 // die HOST-Zeile bleibt bewusst unverschoben (Kompositionswurzel-Reihenfolge).
@@ -145,7 +180,7 @@ const sicherung = sicherungsDienst({ datenOrdner: datenOrdner(), appOrdner: path
 
 // --- Data folder + AI-assistant (MCP) entry + backup status for Settings (92-07, 93-06): loopback only, POST with
 // Origin check; refused for paired LAN devices of the office mode (93-03) ---
-app.use('/api', systemRouter({ root: path.join(__dirname, '..'), port: PORT, lokalGebunden, origins: ERLAUBTE_ORIGINS, anfrageEntfernt, sicherung }));
+app.use('/api', systemRouter({ personalSchluessel: PERSONAL_SCHLUESSEL, root: path.join(__dirname, '..'), port: PORT, lokalGebunden, origins: ERLAUBTE_ORIGINS, anfrageEntfernt, sicherung }));
 
 // --- Local AI + harness (93-12): detection, catalog, hardware, pull, benchmark, harness process ---
 app.use('/api', kiLokalRouter({ db, root: path.join(__dirname, '..'), lokalGebunden, origins: ERLAUBTE_ORIGINS, port: PORT, harness }));

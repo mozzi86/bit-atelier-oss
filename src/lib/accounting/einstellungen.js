@@ -88,9 +88,10 @@ export const GESETZ = deepFreeze({
   FEIERTAGE_BUND: [z(SEIT_JEHER, [
     "neujahr", "karfreitag", "ostermontag", "tag_der_arbeit", "christi_himmelfahrt",
     "pfingstmontag", "tag_der_deutschen_einheit", "weihnachtstag_1", "weihnachtstag_2",
-  ], "Feiertagsgesetze der Länder (in allen Ländern gleich); Ostern nach Gauß", {
-    annahme: true, grund: "nur bundeseinheitliche Feiertage; Landesfeiertage (z. B. 15.08. in Teilen Bayerns) fehlen — Länderwahl folgt",
-  })],
+  // 96: only the FALLBACK — in the app the office calendar (Regelwerk "kalender": state and the
+  // switchable Bavarian days) moves tax due dates (steuertermine.steuerFaellig); this list applies
+  // where no calendar is known (pure library calls, tests).
+  ], "Feiertagsgesetze der Länder (in allen Ländern gleich); Ostern nach Gauß")],
   UST: {
     // Rates in percent.
     saetze: [z("2007-01-01", { regel: 19, ermaessigt: 7, nullsatz: 0 }, "§ 12 Abs. 1–3 UStG")],

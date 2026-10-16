@@ -51,6 +51,8 @@ import { EN as PROJEKTAKTE_FOKUS } from "./projektakte-fokus.js";
 import { EN as KI_LOKAL } from "./ki-lokal.js";
 // Plan 72-03: accessible names of fields and icon buttons (aria-label).
 import { EN as A11Y_NAMEN } from "./a11y-namen.js";
+// Plan 96-02: VOB/B § 2 Abs. 3 rating against the contracted quantity (AVA).
+import { EN as VOB_MENGEN_96 } from "./vob-mengen-96.js";
 import { EN as PDF_PLANKOPF } from "./pdf-plankopf.js";
 import { EN as REGENWASSER } from "./regenwasser.js";
 import { EN as AVA_ANGEBOTIMPORT } from "./ava-angebotimport.js";
@@ -142,6 +144,9 @@ import { EN as AUTO_SICHERUNG } from "./auto-sicherung.js";
 import { EN as DATEI_OEFFNEN } from "./datei-oeffnen.js";
 // Plan 93-11: app window mode ("Programm beenden").
 import { EN as APP_MODUS } from "./app-modus.js";
+// Phase 94: acceptance findings stations 0–2.
+import { EN as ABNAHME_94 } from "./abnahme-94.js";
+import { EN as KOSTENDRIFT_96 } from "./kostendrift-96.js";
 
 export const TEILE_EN = Object.freeze({
   ...BUCHHALTUNG_FUNDAMENT,
@@ -237,4 +242,7 @@ export const TEILE_EN = Object.freeze({
   ...DATEI_OEFFNEN,
   ...APP_MODUS,
   ...A11Y_NAMEN,
+  ...ABNAHME_94,
+  ...VOB_MENGEN_96,
+  ...KOSTENDRIFT_96,
 });

@@ -50,6 +50,8 @@ const GERAET_ERLAUBT = Object.freeze([
   [LESEND, /^\/api\/status$/],
   [LESEND, /^\/api\/telemetry\/config$/],
   [LESEND, /^\/api\/buero\/ich$/],
+  // 96-04: the session token — without it a paired device could read but never write.
+  [LESEND, /^\/api\/sitzung$/],
   [new Set(['POST']), /^\/api\/buero\/abmelden$/],
 ]);
 /** HR data: only with PERSONAL_LAN=1 (D-P80-05), and then only for paired devices. */

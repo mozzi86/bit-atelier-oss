@@ -188,7 +188,8 @@ test("Antwort, Festschreiben, Versand, Postbuch-Frist, Büro-Brief mit Umschrift
       await mahnZeile.getByTestId("mahnung-schriftverkehr").click();
       await expect(page).toHaveURL(/\/Correspondence/);
       await expect(editor).toBeVisible({ timeout: 20000 });
-      await expect(editor.getByTestId("schreiben-text")).toHaveValue(new RegExp(nummer));
+      // The dunning text is built once the books have loaded — slow in a long serial run.
+      await expect(editor.getByTestId("schreiben-text")).toHaveValue(new RegExp(nummer), { timeout: 20000 });
       await expect(editor.getByTestId("fehlt-marke")).toHaveCount(0);
       await expect(editor.getByTestId("richtwert-hinweis")).toBeVisible();
       await page.keyboard.press("Escape");

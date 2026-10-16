@@ -29,3 +29,8 @@ public/pruefregeln/*.json text eol=lf
 # stripping it to LF on add (found while writing tests/unit/buchhaltung-datev.test.js:
 # the staged blob had 0 CR bytes although the working file had the real CRLF pairs).
 tests/unit/fixtures/buchhaltung/datev/EXTF_Buchungsstapel_golden.csv -text
+
+# 94-05: Playwright visual baselines (88 PNG, ~20 MB) are test data, not part of the
+# download. The release workflow builds BIT-Atelier.zip with `git archive`, which
+# honours export-ignore — without it the v1.4.0 zip grew from 17 to 33 MB.
+tests/e2e/*-snapshots/** export-ignore

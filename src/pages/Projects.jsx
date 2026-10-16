@@ -140,8 +140,12 @@ export default function Projects() {
       // neu laden → Toast mit nächstem Schritt (Standort im Designer).
       const created = await bitApi.entities.Project.create(projectData);
       if (created?.id) {
+        // 94-01 (B-ABN-06): reload FIRST, then activate. ProjectContext's 82-02
+        // effect replaces an active id that is not in the loaded list with the
+        // first visible project — activating before the list knew the new
+        // project switched straight back to the old one.
+        await reloadProjects?.();
         setProjectId(created.id);
-        reloadProjects?.();
         // 72-02: gemerkt, gesetzt wird der Parameter unten in EINEM Schreib-
         // vorgang zusammen mit dem Entfernen von ?neu=1 — zwei getrennte
         // setSearchParams auf demselben Render überschrieben sich gegenseitig.
@@ -158,10 +162,18 @@ export default function Projects() {
     // ?neu=1 aus der URL entfernen, sonst öffnet der Parameter-Effekt das
     // Formular nach jedem Schließen wieder. Im selben Schritt ?start=<id>
     // setzen, wenn gerade ein Projekt angelegt wurde (72-02).
+    // 94-01 (B-ABN-06): start from the LIVE query string, not the router's
+    // `searchParams`. ProjectContext writes ?projekt= via history.replaceState,
+    // which the router never sees — its copy still held the old ?projekt=,
+    // writing it back made the context's reload pick the old project again.
     if (searchParams.get("neu") || neuerStart) {
-      searchParams.delete("neu");
-      if (neuerStart) searchParams.set("start", neuerStart);
-      setSearchParams(searchParams, { replace: true });
+      const naechste = new URLSearchParams(window.location.search);
+      naechste.delete("neu");
+      if (neuerStart) {
+        naechste.set("start", neuerStart);
+        naechste.set("projekt", neuerStart);
+      }
+      setSearchParams(naechste, { replace: true });
     }
     loadProjects();
   };

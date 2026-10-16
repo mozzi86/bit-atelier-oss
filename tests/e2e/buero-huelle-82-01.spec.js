@@ -32,10 +32,12 @@ test("Menü, h1, Routen-Aliase, Reiter, Weiter mit, Einstellungen mit „Nutzer 
   const zeilen = (await nav.innerText()).split(/\r?\n/).map((z) => z.trim().toLowerCase()).filter(Boolean);
   const pos = (titel) => zeilen.indexOf(titel.toLowerCase());
   // "Büro" group in this order (group labels are CSS-uppercased; compare case-insensitively).
-  const buero = ["Buchhaltung", "Personal", "Abwesenheiten", "Adressbuch", "Schriftverkehr", "Einstellungen"].map(pos).filter((i) => i >= 0);
+  // Since 1.4.0 "Schriftverkehr" sits in "Zeit & Schriftverkehr" (navigation by workflow stations).
+  const buero = ["Buchhaltung", "Personal", "Abwesenheiten", "Adressbuch", "Einstellungen"].map(pos).filter((i) => i >= 0);
   assert82(buero.length >= 5, "Büro-Einträge sichtbar");
   for (let i = 1; i < buero.length; i++) assert82(buero[i] > buero[i - 1], "Reihenfolge in „Büro“");
-  assert82(pos("Fristen & Termine") > pos("Berichte & Dokumente") && pos("Fristen & Termine") < pos("planung"), "„Fristen & Termine“ in „Übersicht“");
+  // Since 1.4.0: "Übersicht" = Projektübersicht, Projekte, Fristen & Termine; next group "Akquise & Auftrag".
+  assert82(pos("Fristen & Termine") > pos("Projekte") && pos("Fristen & Termine") < pos("Akquise & Auftrag"), "„Fristen & Termine“ in „Übersicht“");
 
   await expect(page.locator("h1")).toHaveText(/Fristen & Termine/);
   await expect(page.getByTestId("fristen-ehrlichkeit")).toContainText("Erinnerungen erscheinen nur bei geöffneter App");

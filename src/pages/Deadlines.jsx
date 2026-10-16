@@ -79,7 +79,7 @@ export default function Deadlines() {
 
   const kontext = useMemo(() => ({
     von: /** @type {string} */ (plusTage(heute, -365)), bis: /** @type {string} */ (plusTage(heute, Math.max(agendaTage, 400))), heute, regelWert,
-    feiertage: feiertagListe, projectId: projektfilter === "aktiv" ? ctx.projectId : null, zugriff,
+    feiertage: feiertagListe, kalender: einst, projectId: projektfilter === "aktiv" ? ctx.projectId : null, zugriff,
     datenquelle: DATENQUELLE, freigabe: BUERO_CLOUD_FREIGABE, rolle: user?.role ?? null,
   }), [heute, agendaTage, regelWert, feiertagListe, projektfilter, ctx.projectId, zugriff, user?.role]);
   const status = useMemo(() => quellenStatus(kontext), [kontext]);
@@ -171,7 +171,7 @@ export default function Deadlines() {
             </ModulFehlergrenze>
           </TabsContent>
         </Tabs>
-        {dialog && <TerminDialog termin={dialog.termin} projekte={projekte} heute={heute} onClose={() => setDialog(null)} onSpeichern={speichereTermin} onLoeschen={loescheTermin} />}
+        {dialog && <TerminDialog termin={dialog.termin} projekte={projekte} heute={heute} projektVorwahl={ctx.projectId} onClose={() => setDialog(null)} onSpeichern={speichereTermin} onLoeschen={loescheTermin} />}
       </div>
     </div>
   );

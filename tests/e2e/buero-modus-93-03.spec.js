@@ -71,12 +71,21 @@ test.describe("93-03 Büro-Modus — echter Server im Büro-Netz", () => {
   test("Kopplung, Rechte, Widerruf, Drossel, Ausschalten", async ({ browser, playwright }) => {
     const hostUrl = `http://127.0.0.1:${port}`;
     const lanUrl = `http://${ip}:${port}`;
-    const host = await playwright.request.newContext({ baseURL: hostUrl, extraHTTPHeaders: { Origin: hostUrl } });
+    // 96-04: a browser-like client (Origin) writes with the session token, like the app's fetch wrapper.
+    const tokenKontext = await playwright.request.newContext({ baseURL: hostUrl });
+    const { token } = await (await tokenKontext.get("/api/sitzung")).json();
+    await tokenKontext.dispose();
+    const host = await playwright.request.newContext({ baseURL: hostUrl, extraHTTPHeaders: { Origin: hostUrl, "X-Bit-Session": token } });
     const geraet = await browser.newContext({ baseURL: lanUrl });
     let seite = await geraet.newPage();
     /** fetch inside the device page (real browser: cookie jar, Origin header) */
     const holen = (pfad, init = {}) => seite.evaluate(async ([p, i]) => {
       try {
+        // 96-04: writes carry the session header, as the app's fetch wrapper adds it on a paired device.
+        if (i?.method && i.method !== "GET") {
+          const s = await fetch("/api/sitzung").then((x) => (x.ok ? x.json() : {})).catch(() => ({}));
+          if (s.token) i = { ...i, headers: { ...(i.headers || {}), "X-Bit-Session": s.token } };
+        }
         const r = await fetch(p, i);
         return { status: r.status, hinweis: r.headers.get("X-Bit-Hinweis"), json: await r.json().catch(() => null) };
       } catch (e) { return { status: 0, fehler: String(e) }; }

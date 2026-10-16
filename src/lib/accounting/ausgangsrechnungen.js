@@ -343,3 +343,28 @@ function statusLabelSchluessel(status) {
     default: return status;
   }
 }
+
+/**
+ * Net amount per work stage for the rows of the invoice form (94-04, B-ABN-07):
+ * "Stand (%)" used to change nothing — the amount stayed at the first proposal
+ * (or 0,00 € on an added row) and had to be worked out by hand. The rows'
+ * stands form ONE stand map and go through abschlagsVorlage(), the same engine
+ * as "Abschlag vorschlagen", so a row amount is the stage's Leistungsstand
+ * minus what was already issued for the contract (credited in LP order).
+ * Fee-amendment rows (nachtrag_id) are not stages and are ignored here.
+ * @param {Record<string, any>|null} vertrag Honorarvertrag; null → no computation
+ * @param {ReadonlyArray<{lp?: number|null, stand?: number, nachtrag_id?: string}>} zeilen rows of the form
+ * @param {ReadonlyArray<Record<string, any>>} rechnungen stored invoices (any status)
+ * @returns {Record<number, number>|null} Euro per LP number (missing LP → 0); null without contract
+ */
+export function lpZeilenNetto(vertrag, zeilen, rechnungen) {
+  if (!vertrag) return null;
+  /** @type {Record<number, number>} */
+  const stand = {};
+  for (const z of zeilen || []) {
+    if (z?.nachtrag_id || !(Number(z?.lp) >= 1)) continue;
+    stand[Number(z.lp)] = Math.min(100, Math.max(0, Number(z.stand) || 0));
+  }
+  const { lp_pos } = abschlagsVorlage(vertrag, stand, rechnungen || []);
+  return Object.fromEntries(lp_pos.map((p) => [p.lp, p.netto]));
+}

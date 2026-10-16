@@ -17,6 +17,8 @@ import { tag, tageImMonat } from "@core/lib/kalender/datum.js";
 import { useI18n } from "@core/lib/i18n";
 import { buchungszeilen, exportiere, KONTENRAHMEN, pruefe, sperrgrundText } from "@/lib/accounting/datevExtf.js";
 import { dateiAnbieten } from "@/lib/accounting/tabellenExport.js";
+import { useBriefkopf } from "@core/lib/useBriefkopf.js";
+import { bueroNameAus } from "@/lib/accounting/bueroName.js";
 
 const FELD = "h-9 rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900";
 const LABEL = "text-sm font-medium text-slate-700 dark:text-slate-200";
@@ -59,6 +61,8 @@ export default function DatevExportAbschnitt({ bh, von, bis }) {
   const { t } = useI18n();
   const [modus, setModus] = React.useState(/** @type {"jahr"|"quartal"|"monat"} */ ("jahr"));
   const [teilNr, setTeilNr] = React.useState(1);
+  // 94-02: "exported by" = the one office name (letterhead first).
+  const { briefkopf } = useBriefkopf();
   const [berater, setBerater] = React.useState(bh.einst.datev?.berater || "");
   const [mandant, setMandant] = React.useState(bh.einst.datev?.mandant || "");
   const [wjBeginn, setWjBeginn] = React.useState(bh.einst.datev?.wj_beginn || "01-01");
@@ -90,7 +94,7 @@ export default function DatevExportAbschnitt({ bh, von, bis }) {
       await einstellungenUebernehmen();
       const { bytes, dateiname, warnungen, personenkontenNeu } = exportiere({
         daten: bh.daten, einst: einstAktuell, saetze: bh.saetze, von: vonEff, bis: bisEff,
-        exportiertVon: bh.einst.buero?.name || "", zeitstempel: zeitstempelJetzt(),
+        exportiertVon: bueroNameAus(briefkopf, bh.einst), zeitstempel: zeitstempelJetzt(),
       });
       if (Object.keys(personenkontenNeu).length) {
         await bh.einstellungSpeichern({ datev: { ...einstAktuell.datev, personenkonten: { ...(bh.einst.datev?.personenkonten || {}), ...personenkontenNeu } } });

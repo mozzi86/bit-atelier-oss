@@ -5,7 +5,10 @@
 // contract is a draft or has no phase-81 status (one editor per value, D-P81-34),
 // otherwise read-only as the breakdown with the hint to record changes as a fee
 // amendment — the contract data dialog (stages, dates, liability, order
-// confirmation) and the contract account with the instalment invoice.
+// confirmation) and the contract account with the instalment invoice. Since
+// 96-03 a yellow notice reports when the LV drifted more than 1 % from the
+// frozen anrechenbare Kosten; "Als Honorarnachtrag übernehmen" opens the
+// fee-amendment dialog prefilled with the fee difference (§ 10 HOAI).
 //
 // In:  props zh, wert, alleProjekte. Out: the tab; loads 79's books once (for
 //      the embedded forms and the insurance prefill).
@@ -26,6 +29,10 @@ import HonorarvertragFormular from "@/components/accounting/HonorarvertragFormul
 import AufstellungTabelle from "./AufstellungTabelle.jsx";
 import VertragZusatz from "./VertragZusatz.jsx";
 import Vertragskonto from "./Vertragskonto.jsx";
+import KostenDriftHinweis from "./KostenDriftHinweis.jsx";
+import NachtragDialog from "./NachtragDialog.jsx";
+import { datumText } from "@core/lib/kalender/datum.js";
+import { driftBezug, nachtragAusKostenDrift } from "@/lib/honorar/honorarNachtrag.js";
 
 /**
  * @param {{zh: import("@/components/zeitHonorar/useZeitHonorar.js").ZeitHonorar, wert: (id: string) => any, alleProjekte: boolean}} props
@@ -37,6 +44,8 @@ export default function VertragReiter({ zh, wert, alleProjekte }) {
   const { briefkopf } = useBriefkopf();
   const [gewaehlt, setGewaehlt] = React.useState(/** @type {string|null} */ (null));
   const [dialog, setDialog] = React.useState(/** @type {'zusatz'|'grundlagen'|null} */ (null));
+  // 96-03: prefilled draft fee amendment from an LV cost drift (saved only through the dialog).
+  const [nachtragEntwurf, setNachtragEntwurf] = React.useState(/** @type {Record<string, any>|null} */ (null));
   const projektNamen = React.useMemo(() => new Map(zh.projekte.map((p) => [p.id, p.name])), [zh.projekte]);
   const vertraege = (zh.daten.Honorarvertrag || []).filter((v) => alleProjekte || !zh.projectId || v.project_id === zh.projectId);
   const vertrag = vertraege.find((v) => v.id === gewaehlt) || vertraege[0] || null;
@@ -105,6 +114,18 @@ export default function VertragReiter({ zh, wert, alleProjekte }) {
             </div>
           </div>
           {!grundlagenBearbeitbar && <p className="text-xs text-slate-600 dark:text-slate-300">{t("Änderungen an einem beauftragten Vertrag als Honorarnachtrag erfassen.")}</p>}
+          {/* 96-03: frozen LV costs drifted > 1 % — a commissioned contract takes it as a fee amendment
+              (§ 10 HOAI, by agreement); a draft re-freezes through its own form. Never a silent change. */}
+          <KostenDriftHinweis
+            vertrag={driftBezug(vertrag, zh.daten.Honorarnachtrag || [])}
+            projektId={vertrag.project_id}
+            hinweis={grundlagenBearbeitbar ? t("Vertrag im Entwurf: über „Honorar-Grundlagen bearbeiten“ neu aus dem LV übernehmen.") : undefined}
+            aktionText={grundlagenBearbeitbar ? undefined : t("Als Honorarnachtrag übernehmen")}
+            onAktion={grundlagenBearbeitbar ? undefined : (drift) => setNachtragEntwurf(nachtragAusKostenDrift(vertrag, drift, zh.daten.Honorarnachtrag || [], {
+              heuteIso: zh.heute,
+              titel: t("Anrechenbare Kosten fortgeschrieben (LV-Stand {datum})").replace("{datum}", datumText(zh.heute, lang === "en" ? "en" : "de")),
+            }))}
+          />
           <AufstellungTabelle a={aufstellung(vertrag)} kompakt />
           <Vertragskonto zh={zh} bh={bh} vertrag={vertrag} />
         </div>
@@ -115,6 +136,9 @@ export default function VertragReiter({ zh, wert, alleProjekte }) {
       )}
       {dialog === "grundlagen" && vertrag && (
         <HonorarvertragFormular bh={bh} modus="bearbeiten" vertrag={vertrag} onClose={async () => { setDialog(null); await zh.neuLaden(); }} />
+      )}
+      {nachtragEntwurf && vertrag && (
+        <NachtragDialog zh={zh} wert={wert} vertrag={vertrag} nachtrag={nachtragEntwurf} onClose={() => setNachtragEntwurf(null)} />
       )}
     </div>
   );

@@ -79,16 +79,13 @@ export function ProjectProvider({ children }) {
     const erlaubt = projekteNachZugriff(Array.isArray(data) ? data : [], zugriffRef.current);
     setFehler(null);
     const urlId = readUrlProjectParam();
-    setProjectIdState((cur) => {
-      // Deep link (id, then exact name) > valid current/stored id > first by
-      // name — returning visitors keep their project. Archived projects are
-      // not candidates (81-06), so a stored archived id falls back.
-      const next = waehleStartProjekt(sichtbareProjekte(erlaubt, null), { urlWert: urlId, gespeichert: cur });
-      try { if (next) localStorage.setItem(LS_KEY, next); } catch { /* ignore */ }
-      // URL-Param korrigieren (z. B. Name -> Id oder ungueltige Id).
-      if (urlId && urlId !== next) writeUrlProjectParam(next);
-      return next;
-    });
+    // Deep link (id, then exact name) > valid current/stored id > first by
+    // name — returning visitors keep their project. Archived projects are
+    // not candidates (81-06), so a stored archived id falls back.
+    // 94-01 (B-ABN-06): the updater stays pure. React runs it lazily on the
+    // next render — after a setProjectId() queued meanwhile — so writing
+    // storage/URL in here put the OLD id back. The effect below persists.
+    setProjectIdState((cur) => waehleStartProjekt(sichtbareProjekte(erlaubt, null), { urlWert: urlId, gespeichert: cur }));
     setLoading(false);
     return data;
   }, []);
@@ -123,6 +120,15 @@ export function ProjectProvider({ children }) {
       setLoading(false);
     }
   }, [loadProjects]);
+
+  // 94-01: persist the id that actually won. Storage always; the URL only when
+  // it carries ?projekt= (corrects a name or an invalid id to the chosen id).
+  useEffect(() => {
+    if (!projectId) return;
+    try { localStorage.setItem(LS_KEY, projectId); } catch { /* ignore */ }
+    const urlId = readUrlProjectParam();
+    if (urlId && urlId !== projectId) writeUrlProjectParam(projectId);
+  }, [projectId]);
 
   // 82-02: the view changed and the active project is outside it → first visible project.
   useEffect(() => {

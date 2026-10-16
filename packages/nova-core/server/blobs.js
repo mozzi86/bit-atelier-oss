@@ -13,13 +13,21 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { KLARTEXT_CODEC, istVerschluesselt } from './ruheVerschluesselung.js';
 
 // Exported for reuse (57-03): scripts/supabase-import.mjs validates blob ids
 // against the SAME whitelist before uploading to Supabase Storage. One truth —
 // never redefine this pattern elsewhere.
 export const ID_MUSTER = /^[A-Za-z0-9_-]+$/;
 
-export function createBlobStore(dir) {
+/**
+ * @param {string} dir directory of the store
+ * @param {{codec?: {encode: (t: string) => string, decode: (t: string) => string, aktiv: boolean}}} [optionen]
+ *   codec (96-01): at-rest encoding; default plain JSON. With an active codec,
+ *   get() THROWS on a file it cannot decrypt (wrong/missing key) instead of
+ *   answering "not there".
+ */
+export function createBlobStore(dir, { codec = KLARTEXT_CODEC } = {}) {
   if (!dir) throw new Error('createBlobStore: Verzeichnis fehlt');
   const ROOT = path.resolve(dir);
   fs.mkdirSync(ROOT, { recursive: true });
@@ -44,7 +52,7 @@ export function createBlobStore(dir) {
       const p = pfad(id);
       const text = JSON.stringify(json);
       const tmp = `${p}.tmp`;
-      fs.writeFileSync(tmp, text, 'utf-8');
+      fs.writeFileSync(tmp, codec.encode(text), 'utf-8');
       fs.renameSync(tmp, p);
       return Buffer.byteLength(text, 'utf8');
     },
@@ -52,11 +60,38 @@ export function createBlobStore(dir) {
     /** JSON lesen; nicht vorhanden ⇒ null (kein Wurf). */
     get(id) {
       const p = pfad(id);
+      let text;
       try {
-        return JSON.parse(fs.readFileSync(p, 'utf-8'));
+        text = fs.readFileSync(p, 'utf-8');
       } catch {
         return null;
       }
+      // decode() throws on a wrong key — that must surface, not look like "missing".
+      const klar = codec.decode(text);
+      try {
+        return JSON.parse(klar);
+      } catch {
+        return null;
+      }
+    },
+
+    /**
+     * 96-01: re-writes every plain blob with the active codec (no-op without one).
+     * @returns {number} number of files migrated
+     */
+    migriere() {
+      if (!codec.aktiv) return 0;
+      let n = 0;
+      for (const id of this.list()) {
+        const p = pfad(id);
+        const text = fs.readFileSync(p, 'utf-8');
+        if (istVerschluesselt(text)) continue;
+        const tmp = `${p}.tmp`;
+        fs.writeFileSync(tmp, codec.encode(text), 'utf-8');
+        fs.renameSync(tmp, p);
+        n += 1;
+      }
+      return n;
     },
 
     has(id) {

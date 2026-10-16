@@ -3,22 +3,55 @@
 //
 // Phase 31: Factory statt __dirname-Singleton — die Kompositionswurzel übergibt
 // den Pfad (Monorepo: server/db.json; Shells: eigenes server/db.json).
+//
+// 96-01: optional `codec` ({encode, decode, aktiv}, ruheVerschluesselung.js) —
+// the personnel store passes an AES-256-GCM codec, every other store keeps the
+// plain default. A file the codec cannot decrypt (key missing or wrong) makes
+// the store `gesperrt`: it serves nothing and NEVER writes, so the ciphertext
+// on disk is not replaced by an empty database. Plain files from before
+// encryption are read and re-written encrypted once (migration, incl. .bak).
 import fs from 'fs';
+import { KLARTEXT_CODEC, istVerschluesselt } from './ruheVerschluesselung.js';
 
-export function createDb(dbPath) {
+/**
+ * @param {string} dbPath JSON file of the store
+ * @param {{codec?: {encode: (t: string) => string, decode: (t: string) => string, aktiv: boolean}}} [optionen]
+ *   codec: at-rest encoding (default: plain JSON)
+ */
+export function createDb(dbPath, { codec = KLARTEXT_CODEC } = {}) {
   const DB_PATH = dbPath;
   const BAK_PATH = dbPath + '.bak';
+  /** @type {string|null} 96-01: why the store refuses to work (undecryptable file), or null */
+  let gesperrt = null;
+  /** 96-01: a plain (pre-encryption) file was loaded while a codec is active → migrate. */
+  let klartextGeladen = false;
+
+  /** @param {string} pfad @returns {any} parsed content; throws on missing/corrupt/undecryptable */
+  function lies(pfad) {
+    const text = fs.readFileSync(pfad, 'utf-8');
+    const json = JSON.parse(codec.decode(text));
+    if (codec.aktiv && !istVerschluesselt(text)) klartextGeladen = true;
+    return json;
+  }
 
   function readRaw() {
     // Hauptdatei lesen; bei korruptem JSON auf das letzte Backup zurückfallen.
+    let fehler = null;
     try {
-      return JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
-    } catch {
+      return lies(DB_PATH);
+    } catch (e) {
+      fehler = e;
       try {
-        const fromBak = JSON.parse(fs.readFileSync(BAK_PATH, 'utf-8'));
+        const fromBak = lies(BAK_PATH);
         console.warn('[db] db.json unlesbar — Backup db.json.bak geladen');
         return fromBak;
-      } catch {
+      } catch (e2) {
+        // 96-01: a decryption failure is not "no data" — lock instead of starting empty.
+        const entschluesselung = [fehler, e2].find((x) => /Entschlüsseln|beschädigt/.test(String(x?.message)));
+        if (entschluesselung) {
+          gesperrt = `${DB_PATH}: ${entschluesselung.message}`;
+          console.error(`[db] GESPERRT — ${gesperrt} Es wird nichts geschrieben.`);
+        }
         return {};
       }
     }
@@ -43,12 +76,16 @@ export function createDb(dbPath) {
       persistTimer = null;
     }
     persistPending = false;
+    if (gesperrt) {
+      console.error(`[db] Schreiben verweigert (gesperrt): ${gesperrt}`);
+      return;
+    }
     try {
       try {
         if (fs.existsSync(DB_PATH)) fs.copyFileSync(DB_PATH, BAK_PATH);
       } catch { /* Backup best-effort */ }
       const tmp = DB_PATH + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify(cache, null, 2), 'utf-8');
+      fs.writeFileSync(tmp, codec.encode(JSON.stringify(cache, null, 2)), 'utf-8');
       fs.renameSync(tmp, DB_PATH);
     } catch (e) {
       console.error('[db] Persist fehlgeschlagen (Daten bleiben im Speicher):', e?.message || e);
@@ -80,6 +117,20 @@ export function createDb(dbPath) {
         if (persistPending) persistNow();
         if (process.listenerCount(signal) === 0) process.kill(process.pid, signal);
       });
+    }
+  }
+
+  // 96-01 migration: a plain file under an active codec is re-written encrypted at
+  // once, and a plain .bak is replaced by a copy of the encrypted file (otherwise
+  // the previous state would stay readable next to it).
+  if (codec.aktiv && !gesperrt) {
+    if (klartextGeladen && fs.existsSync(DB_PATH)) persistNow();
+    try {
+      if (fs.existsSync(BAK_PATH) && fs.existsSync(DB_PATH) && !istVerschluesselt(fs.readFileSync(BAK_PATH, 'utf-8'))) {
+        fs.copyFileSync(DB_PATH, BAK_PATH);
+      }
+    } catch (e) {
+      console.error('[db] Backup konnte nicht verschlüsselt werden:', e?.message || e);
     }
   }
 
@@ -241,6 +292,11 @@ export function createDb(dbPath) {
 
     _raw() {
       return cache;
+    },
+
+    /** 96-01: reason the store is locked (undecryptable file), or null. @returns {string|null} */
+    gesperrt() {
+      return gesperrt;
     },
   };
 }

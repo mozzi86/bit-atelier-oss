@@ -39,7 +39,7 @@ import { QUELLE as genehmigung } from "./quellen/genehmigung.js";
 /**
  * Context every source gets.
  * @typedef {{
- *   von: string, bis: string, heute: string, regelWert?: (id: string) => any, feiertage?: any[],
+ *   von: string, bis: string, heute: string, regelWert?: (id: string) => any, feiertage?: any[], kalender?: {bundesland?: string, mariae_himmelfahrt?: boolean, augsburger_friedensfest?: boolean}|null,
  *   projectId?: string|null, zugriff?: any, datenquelle?: string, rolle?: string|null, freigabe?: boolean,
  * }} QuellenKontext dates 'YYYY-MM-DD'; datenquelle/rolle: data path and server role (personnel adapter, cloud lock)
  */

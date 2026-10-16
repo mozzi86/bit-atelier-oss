@@ -25,6 +25,7 @@
 import { buildIndex } from '@core/lib/rules/ruleEngine.js';
 import { validiereReferenzen } from '@core/lib/rules/catalogs.js';
 import { positionsMenge, sollWaechter, SOLL_TOLERANZ } from './mengenregeln.js';
+import { vobMengenBewertung, hatVertragsmenge } from './vobMengen.js';
 
 /** Ab dieser Mengendifferenz gilt eine Position als geändert (2 Nachkommastellen). */
 export const SCHWELLE = 0.005;
@@ -43,8 +44,10 @@ const r2 = (n) => Math.round(n * 100) / 100;
  * Ein Recompute über viele Positionen → EIN `RegelLauf`-Datensatz.
  *
  * @param {Array<{id?: any, oz?: any, trade?: any, quantity?: any, menge_final?: any,
- *          regeln?: Array<any>, soll?: any, gb?: any, unit_price?: any}>} positionen
+ *          regeln?: Array<any>, soll?: any, gb?: any, unit_price?: any, vertragsmenge?: any}>} positionen
  *        Positionen MIT ihren Regeln. `quantity`/`menge_final` ist die ALTE Menge.
+ *        `vertragsmenge` (96-02, frozen at award) adds the VOB/B rating
+ *        `vob_mengen` to the row of that position — rows without it stay as before.
  * @param {Array<any>|{alle?: Array<any>, kandidaten?: Function}|null} elemente
  *        Bauteilstand oder buildIndex()-Ergebnis
  * @param {{snapshot_id?: string|null, kataloge?: object|null, anlass?: string,
@@ -137,6 +140,17 @@ export function laufErzeugen(positionen = [], elemente = null, opts = {}) {
       // Geldwert der Änderung — die Arbeitsliste sortiert danach, nicht nach OZ.
       geldwert: p?.unit_price != null && diff != null ? r2(Number(p.unit_price) * diff) : null,
     };
+    // 96-02: VOB/B § 2 Abs. 3 rating of the NEW quantity against the contracted
+    // quantity. Only positions with a frozen `vertragsmenge` get the key, so
+    // the rows of positions without a contract stay exactly as before.
+    // Information of type `warn` (see vobMengen.js): never blocks the run.
+    if (hatVertragsmenge(p)) {
+      /** @type {any} */ (eintrag).vob_mengen = vobMengenBewertung({
+        vertragsmenge: p?.vertragsmenge,
+        istmenge: neu,
+        einheitspreis: p?.unit_price,
+      });
+    }
     positionenErgebnis.push(eintrag);
 
     if (veraendert) {

@@ -12,6 +12,13 @@
 // In:  props zh (page loader), wert (rule reader), projektVorwahl, vorschlag
 //      (fields handed over by the fee calculator), onClose. Out: a FormModal;
 //      "Entwurf anlegen" writes one Honorarangebot through the storage layer.
+//
+// 94-03 (B-ABN-04/05): step 1 offers the address book (clients first) — the
+// choice fills name, address and bauherr_contact_id, free text stays the
+// fallback. A missing project can be created right there ("Neues Projekt"),
+// and "Weiter" checks the project in step 1 instead of failing at the end.
+// The calculator's hand-over is forgotten once an offer is created
+// (vorschlagMerker.js).
 
 import React from "react";
 import { toast } from "sonner";
@@ -23,6 +30,10 @@ import { formatEuro } from "@/lib/accounting/geld.js";
 import { neuesAngebot } from "@/lib/honorar/angebot.js";
 import { aufstellung, honorarzoneAusPunkten, PUNKTE_LEISTUNGSBILDER } from "@/lib/honorar/aufstellung.js";
 import LeistungsbildFelder from "./LeistungsbildFelder.jsx";
+import { bitApi } from "@core/api/bitApi";
+import { useProject } from "@core/lib/ProjectContext";
+import { bauherrAusKontakt, kontaktText, sortiereKontakte } from "@/lib/honorar/bauherrKontakt.js";
+import { vergissVorschlag } from "@/lib/honorar/vorschlagMerker.js";
 
 const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";
 const LABEL = "text-sm font-medium text-slate-700 dark:text-slate-200";
@@ -48,20 +59,59 @@ export default function AngebotAssistent({ zh, wert, projektVorwahl = null, vors
   const info = leistungsbildInfo(entwurf.leistungsbild);
   const a = aufstellung(entwurf);
   const aendere = (/** @type {Record<string, any>} */ patch) => setEntwurf((e) => ({ ...e, ...patch }));
+  const { reloadProjects } = useProject();
+  const [kontakte, setKontakte] = React.useState(/** @type {any[]} */ ([]));
+  const [neuesProjekt, setNeuesProjekt] = React.useState(/** @type {string|null} */ (null));
+  const [projektFehler, setProjektFehler] = React.useState(false);
+
+  React.useEffect(() => {
+    let aktiv = true;
+    /** @type {any} */ (bitApi).entities.Contact.list()
+      .then((/** @type {any[]} */ liste) => { if (aktiv) setKontakte(sortiereKontakte(Array.isArray(liste) ? liste : [])); })
+      .catch((/** @type {any} */ err) => console.error(`Adressbuch konnte nicht geladen werden: ${err?.message || err}`));
+    return () => { aktiv = false; };
+  }, []);
+
+  const kontaktWaehlen = (/** @type {string} */ id) => {
+    const k = kontakte.find((x) => x.id === id);
+    aendere(k ? bauherrAusKontakt(k) : { bauherr_contact_id: null });
+  };
+
+  const projektAnlegen = async () => {
+    const name = String(neuesProjekt || "").trim();
+    if (!name) return;
+    try {
+      const p = await /** @type {any} */ (bitApi).entities.Project.create({ name, status: "concept", hoai_phase: 1, build_kind: "neubau", client: entwurf.bauherr_name || "" });
+      await reloadProjects?.();
+      setEntwurf((e) => ({ ...e, project_id: p.id }));
+      setNeuesProjekt(null);
+      setProjektFehler(false);
+      toast.success(t("Projekt angelegt"));
+    } catch (err) {
+      toast.error(`${t("Speichern fehlgeschlagen")}: ${/** @type {any} */ (err)?.message || String(err)}`);
+    }
+  };
+
+  const weiter = () => {
+    if (schritt === 0 && !entwurf.project_id) { setProjektFehler(true); return; }
+    setSchritt((s) => s + 1);
+  };
 
   const projektWaehlen = (/** @type {string} */ id) => {
     const p = projektFuer(id);
     const frisch = neu(p);
+    setProjektFehler(false);
     // Keep what was typed in later steps; take over number, client and payment term of the new project.
     setEntwurf((e) => ({ ...e, project_id: frisch.project_id, bauherr_name: e.bauherr_name || frisch.bauherr_name, zahlungsziel_tage: frisch.zahlungsziel_tage }));
   };
 
   const anlegen = async () => {
-    if (!entwurf.project_id) { toast.error(t("Bitte ein Projekt wählen.")); setSchritt(0); return; }
+    if (!entwurf.project_id) { toast.error(t("Bitte ein Projekt wählen.")); setProjektFehler(true); setSchritt(0); return; }
     setSpeichert(true);
     try {
       const gespeichert = await zh.speichere("Honorarangebot", entwurf);
       toast.success(t("Honorarangebot {nr} angelegt").replace("{nr}", gespeichert?.nummer || entwurf.nummer));
+      vergissVorschlag();
       onClose();
     } catch (err) {
       toast.error(`${t("Speichern fehlgeschlagen")}: ${/** @type {any} */ (err)?.message || String(err)}`);
@@ -91,9 +141,32 @@ export default function AngebotAssistent({ zh, wert, projektVorwahl = null, vors
           <div className="space-y-3">
             <div className="space-y-1">
               <label htmlFor="as-projekt" className={LABEL}>{t("Projekt")}</label>
-              <select id="as-projekt" className={FELD} value={entwurf.project_id || ""} onChange={(e) => projektWaehlen(e.target.value)}>
-                <option value="">{t("Projekt wählen …")}</option>
-                {zh.projekte.map((p) => <option key={p.id} value={p.id}>{p.name || p.id}</option>)}
+              <div className="flex gap-2">
+                <select id="as-projekt" className={FELD} value={entwurf.project_id || ""} onChange={(e) => projektWaehlen(e.target.value)}
+                  aria-invalid={projektFehler || undefined} aria-describedby={projektFehler ? "as-projekt-fehler" : undefined}>
+                  <option value="">{t("Projekt wählen …")}</option>
+                  {zh.projekte.map((p) => <option key={p.id} value={p.id}>{p.name || p.id}</option>)}
+                </select>
+                {neuesProjekt === null && (
+                  <button type="button" className={buttonVariants({ variant: "outline" })} onClick={() => setNeuesProjekt("")} data-testid="as-neues-projekt">{t("Neues Projekt")}</button>
+                )}
+              </div>
+              {projektFehler && <p id="as-projekt-fehler" role="alert" className="text-sm text-red-700 dark:text-red-300">{t("Bitte ein Projekt wählen oder neu anlegen.")}</p>}
+              {neuesProjekt !== null && (
+                <div className="flex gap-2">
+                  <label htmlFor="as-projekt-name" className="sr-only">{t("Name des neuen Projekts")}</label>
+                  <input id="as-projekt-name" className={FELD} value={neuesProjekt} placeholder={t("Name des neuen Projekts")} onChange={(e) => setNeuesProjekt(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); projektAnlegen(); } }} />
+                  <button type="button" className={buttonVariants({ variant: "default" })} disabled={!neuesProjekt.trim()} onClick={projektAnlegen} data-testid="as-projekt-anlegen">{t("Anlegen")}</button>
+                  <button type="button" className={buttonVariants({ variant: "ghost" })} onClick={() => setNeuesProjekt(null)}>{t("Abbrechen")}</button>
+                </div>
+              )}
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="as-kontakt" className={LABEL}>{t("Bauherr aus dem Adressbuch")}</label>
+              <select id="as-kontakt" className={FELD} value={entwurf.bauherr_contact_id || ""} onChange={(e) => kontaktWaehlen(e.target.value)}>
+                <option value="">{kontakte.length ? t("— frei eingeben —") : t("Adressbuch ist leer")}</option>
+                {kontakte.map((k) => <option key={k.id} value={k.id}>{kontaktText(k)}</option>)}
               </select>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -194,7 +267,7 @@ export default function AngebotAssistent({ zh, wert, projektVorwahl = null, vors
           <div className="flex gap-2">
             <button type="button" className={buttonVariants({ variant: "outline" })} onClick={onClose}>{t("Abbrechen")}</button>
             {schritt < SCHRITTE.length - 1
-              ? <button type="button" className={buttonVariants({ variant: "default" })} onClick={() => setSchritt((s) => s + 1)}>{t("Weiter")}</button>
+              ? <button type="button" className={buttonVariants({ variant: "default" })} onClick={weiter}>{t("Weiter")}</button>
               : <button type="button" className={buttonVariants({ variant: "default" })} disabled={speichert} onClick={anlegen}>{t("Entwurf anlegen")}</button>}
           </div>
         </div>

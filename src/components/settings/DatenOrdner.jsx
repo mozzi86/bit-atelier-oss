@@ -16,7 +16,7 @@ import { DATENQUELLE } from "@core/lib/umgebung";
  */
 export default function DatenOrdner() {
   const { t } = useI18n();
-  const [info, setInfo] = React.useState(/** @type {{ordner: string, dateien: {db: string, personal: string}}|null} */ (null));
+  const [info, setInfo] = React.useState(/** @type {{ordner: string, dateien: {db: string, personal: string}, personalSchluessel?: string|null}|null} */ (null));
   const [fehler, setFehler] = React.useState(/** @type {string|null} */ (null));
   const [status, setStatus] = React.useState("");
 
@@ -62,6 +62,13 @@ export default function DatenOrdner() {
       <p className="text-xs text-slate-600 dark:text-slate-300">
         {t("Hier liegen alle Projekte dieser Installation. Nehmen Sie den Ordner in Ihre Datensicherung auf – Ordner unter AppData erfasst eine Büro-Sicherung oft nicht.")}
       </p>
+      {info?.personalSchluessel && (
+        <p className="text-xs text-slate-600 dark:text-slate-300" data-testid="personal-schluessel">
+          {t("Personaldaten sind verschlüsselt. Ihr Schlüssel liegt außerhalb des Datenordners:")}{" "}
+          <code className="break-all rounded bg-slate-100 px-1 dark:bg-slate-900">{info.personalSchluessel}</code>{" "}
+          {t("— getrennt sichern; ohne ihn sind die Personaldaten einer Sicherung nicht lesbar.")}
+        </p>
+      )}
       <p role="status" className="text-xs text-emerald-700 dark:text-emerald-400" data-testid="daten-ordner-status">{status}</p>
       {fehler && <p role="alert" className="text-xs text-rose-700 dark:text-rose-300" data-testid="daten-ordner-fehler">{t("Datenordner nicht abrufbar:")} {fehler}</p>}
     </div>

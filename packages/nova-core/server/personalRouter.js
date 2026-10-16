@@ -56,6 +56,17 @@ export function personalRouter(db, blobs, { lokalGebunden, anfrageEntfernt = () 
   r.use('/personal', sperre);
   r.use('/personal-dateien', sperre);
 
+  // 96-01: the store is encrypted at rest. If its key is missing or wrong the db
+  // is locked (db.gesperrt()) — answer with the reason instead of an empty list
+  // that would look like "no employees" and invite re-entering everything.
+  const verschluesselt = (req, res, next) => {
+    const grund = typeof db.gesperrt === 'function' ? db.gesperrt() : null;
+    if (grund) return res.status(503).json({ error: `Personaldaten gesperrt: ${grund}` });
+    next();
+  };
+  r.use('/personal', verschluesselt);
+  r.use('/personal-dateien', verschluesselt);
+
   /** @param {import('express').Response} res @param {string} entity */
   function pruefeEntitaet(res, entity) {
     if (istPersonalEntitaet(entity)) return true;
@@ -104,7 +115,9 @@ export function personalRouter(db, blobs, { lokalGebunden, anfrageEntfernt = () 
     try {
       daten = blobs.get(req.params.id);
     } catch (err) {
-      return res.status(400).json({ error: err.message });
+      // 96-01: an id error is the caller's (400), a decryption error is ours (500).
+      const entschluesselung = /Entschlüsseln|beschädigt/.test(String(err?.message));
+      return res.status(entschluesselung ? 500 : 400).json({ error: err.message });
     }
     if (daten == null) return res.status(404).json({ error: 'Datei nicht vorhanden' });
     res.json(daten);

@@ -14,6 +14,12 @@
 // In:  props bh (page loader object), onClose. Out: a FormModal; saving patches
 //      Setting{key:"buchhaltung"}.value.buero through bh.einstellungSpeichern
 //      (einstellungSpeichern merges the patch — nothing else in `value` is touched).
+//
+// 94-02 (B-ABN-02): the office NAME is no longer edited here. It comes from the
+// letterhead (Einstellungen › Büro & Briefkopf) and is shown read-only with a
+// link; buero.name is written back unchanged (legacy fallback, bueroName.js).
+// When only that old field holds a real name, one click moves it into the
+// letterhead.
 
 import React from "react";
 import { toast } from "sonner";
@@ -22,6 +28,8 @@ import FormModal from "@core/components/common/FormModal";
 import { buttonVariants } from "@core/components/ui/button";
 import { useI18n } from "@core/lib/i18n";
 import { personenPruefen, rechtsformWirkung } from "@/lib/accounting/rechtsform.js";
+import { useBriefkopf } from "@core/lib/useBriefkopf.js";
+import { bueroNameAus, nurAlterBueroName } from "@/lib/accounting/bueroName.js";
 
 const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900";
 const LABEL = "text-sm font-medium text-slate-700 dark:text-slate-200";
@@ -74,12 +82,22 @@ export default function EinstellungenDialog({ bh, onClose }) {
   const { t } = useI18n();
   const e = bh.einst;
   const [form, setForm] = React.useState(() => ({
-    buero_name: e.buero?.name || "",
     steuernr: e.buero?.steuernr || "",
     ust_idnr: e.buero?.ust_idnr || "",
     iban: e.buero?.iban || "",
   }));
   const [speichert, setSpeichert] = React.useState(false);
+  const { briefkopf, speichern: briefkopfSpeichern } = useBriefkopf();
+  const name = bueroNameAus(briefkopf, e);
+  const altName = nurAlterBueroName(briefkopf, e);
+  const nameUebernehmen = async () => {
+    try {
+      await briefkopfSpeichern({ ...briefkopf, office: String(e.buero?.name || "").trim() });
+      toast.success(t("Büroname in den Briefkopf übernommen"));
+    } catch (err) {
+      toast.error(`${t("Speichern fehlgeschlagen")}: ${/** @type {any} */ (err)?.message || String(err)}`);
+    }
+  };
 
   const setze = (/** @type {string} */ feld, /** @type {any} */ wert) => setForm((f) => ({ ...f, [feld]: wert }));
   // Read-only now (D-P80-25): the switch itself lives in Einstellungen › Regelwerke.
@@ -94,7 +112,7 @@ export default function EinstellungenDialog({ bh, onClose }) {
       // A PATCH (einstellungSpeichern merges into the stored value) — the rates
       // and the legal form are untouched, they are written in Regelwerke.
       await bh.einstellungSpeichern({
-        buero: { name: form.buero_name.trim(), steuernr: form.steuernr.trim(), ust_idnr: form.ust_idnr.trim(), iban: form.iban.replace(/\s+/g, "").toUpperCase() },
+        buero: { name: String(e.buero?.name || ""), steuernr: form.steuernr.trim(), ust_idnr: form.ust_idnr.trim(), iban: form.iban.replace(/\s+/g, "").toUpperCase() },
       });
       toast.success(t("Einstellungen gespeichert"));
       onClose();
@@ -130,8 +148,21 @@ export default function EinstellungenDialog({ bh, onClose }) {
 
         <section className="space-y-3" aria-labelledby="bh-buero-titel">
           <h3 id="bh-buero-titel" className="font-semibold text-slate-800 dark:text-slate-100">{t("Büro")}</h3>
+          <div className="space-y-1" data-testid="bh-buero-name">
+            <p className={LABEL}>{t("Büroname")}</p>
+            <p className="text-sm text-slate-800 dark:text-slate-100">{name || t("noch nicht eingetragen")}</p>
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              {t("Kommt aus dem Briefkopf — eine Quelle für Rechnungen, XRechnung, Mahnungen und Berichte.")}{" "}
+              <Link to="/Settings?tab=office" className="underline">{t("Im Briefkopf ändern")}</Link>
+            </p>
+            {altName && (
+              <button type="button" className={buttonVariants({ variant: "outline", size: "sm" })} onClick={nameUebernehmen} data-testid="bh-name-uebernehmen">
+                {t("In den Briefkopf übernehmen")}
+              </button>
+            )}
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            {[["bh-buero-name", t("Büroname"), "buero_name"], ["bh-steuernr", t("Steuernummer"), "steuernr"],
+            {[["bh-steuernr", t("Steuernummer"), "steuernr"],
               ["bh-ust-idnr", t("USt-IdNr."), "ust_idnr"], ["bh-iban", t("IBAN"), "iban"]].map(([id, text, feld]) => (
               <div key={id} className="space-y-1">
                 <label htmlFor={id} className={LABEL}>{text}</label>

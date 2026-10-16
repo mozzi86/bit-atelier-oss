@@ -28,11 +28,12 @@
 // Schematron) — an open external step, see 93-01-SUMMARY.
 //
 // In:  an Ausgangsrechnung record (datenmodell.js, Euro), the effective accounting
-//      settings (einst.buero: name, steuernr, ust_idnr, iban), the letterhead
+//      settings (einst.buero: steuernr, ust_idnr, iban; name only as fallback, 94-02), the letterhead
 //      ({office, address, contact} free text, @core/lib/briefkopf.js) and — for a
 //      storno — the cancelled original. Out: plain data, XML text; no I/O.
 
 import { euroZuCent } from "./geld.js";
+import { bueroNameAus } from "./bueroName.js";
 
 /** CustomizationID (BT-24) of XRechnung 3.0 (BR-DE-21). */
 export const XRECHNUNG_KENNUNG = "urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0";
@@ -64,7 +65,7 @@ export const BEFREIUNG_KLEINUNTERNEHMER = "Kein Ausweis von Umsatzsteuer, da Kle
 export const MELDUNGEN = Object.freeze({
   "BR-02": "Rechnungsnummer fehlt (BT-1) — nur gestellte Rechnungen haben eine Nummer.",
   "BR-03": "Rechnungsdatum fehlt (BT-2).",
-  "BR-06": "Name des Büros fehlt (BT-27) — Buchhaltung › Einstellungen oder Briefkopf.",
+  "BR-06": "Name des Büros fehlt (BT-27) — Einstellungen › Büro & Briefkopf.",
   "BR-07": "Name des Rechnungsempfängers fehlt (BT-44).",
   "BR-16": "Die Rechnung hat keine Position (BG-25).",
   "BR-27": "Ein Einzelpreis ist negativ (BT-146).",
@@ -260,7 +261,8 @@ export function xrechnungModell(rechnung, { einst, briefkopf = null, original = 
   const leitweg = String(rechnung.leitweg_id || empf.leitweg_id || "").trim();
   const kaeuferAnschrift = anschriftTeile(empf.anschrift, empf.name || "");
   const buero = einst?.buero || {};
-  const verkaeuferName = String(buero.name || briefkopf?.office || "").trim();
+  // 94-02: one office name — the letterhead, the old accounting field only as fallback.
+  const verkaeuferName = bueroNameAus(briefkopf, einst);
   const verkaeuferAnschrift = anschriftTeile(briefkopf?.address, verkaeuferName);
   const kontakt = kontaktTeile(briefkopf?.contact);
 

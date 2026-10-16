@@ -8,7 +8,9 @@
 // honorarvertrag_id, project_id, nr, titel, grund, lph|null, berechnung
 // {art 'pauschal'|'stunden'|'wiederholung', betrag_euro?, stunden?, satz_eur_h?,
 // rolle?, wiederholung_prozent?}, betrag_euro, erbracht_prozent 0..100, status
-// (NACHTRAG_STATUS), datum, beauftragt_am, textform_am.
+// (NACHTRAG_STATUS), datum, beauftragt_am, textform_am; since 96-03 optionally
+// kosten_drift {bezug_am, bezug, aktuell, aktuell_am} (an LV cost drift turned
+// into this amendment, cents per KG — see driftBezug/nachtragAusKostenDrift).
 //
 // Amounts in cents inside, Euro outside. Incidental costs on commissioned fee
 // amendments (D-P81-14 [ASSUMED]: § 14 HOAI applies to the whole fee, so the
@@ -143,4 +145,67 @@ export function nachtragPositionen(nachtraege, rechnungen) {
       return { lp: null, nachtrag_id: n.id, bezeichnung: `Honorarnachtrag ${n.nr} – ${n.titel || ""}`.trim(), stand: Number(n.erbracht_prozent) || 0, netto: (soll - bisher) / 100 };
     })
     .filter((p) => p.netto > 0);
+}
+
+/**
+ * 96-03: the reference the LV drift of a contract is measured against. That is
+ * the contract's frozen snapshot (`kosten_eingefroren`) — unless a drift was
+ * already turned into a fee amendment: then the newest non-rejected amendment
+ * with `kosten_drift` is the reference, so a handled drift is not reported
+ * again (a further change beyond the threshold is). The contract itself is
+ * never changed — issued instalment invoices stay as they are (GoBD).
+ * @param {Record<string, any>} vertrag Honorarvertrag
+ * @param {ReadonlyArray<Record<string, any>>} nachtraege all amendments
+ * @returns {Record<string, any>} the contract, or a copy carrying the amendment's
+ *   reference as snapshot fields (`kosten_eingefroren_am` 'YYYY-MM-DD',
+ *   `kosten_eingefroren` integer cents per KG)
+ */
+export function driftBezug(vertrag, nachtraege) {
+  if (!vertrag?.kosten_eingefroren) return vertrag;
+  const letzter = (nachtraege || [])
+    .filter((n) => n?.honorarvertrag_id === vertrag.id && n.status !== "abgelehnt" && n.kosten_drift?.aktuell)
+    .sort((a, b) => (Number(b.nr) || 0) - (Number(a.nr) || 0))[0];
+  if (!letzter) return vertrag;
+  return { ...vertrag, kosten_eingefroren_am: letzter.kosten_drift.aktuell_am ?? letzter.datum ?? null, kosten_eingefroren: { ...letzter.kosten_drift.aktuell } };
+}
+
+/**
+ * 96-03: a draft fee amendment for an LV drift of the anrechenbare Kosten —
+ * § 10 Abs. 1 HOAI: a changed scope that changes the anrechenbare Kosten
+ * adjusts the fee by agreement (in text form). The flat amount is the fee
+ * difference in Euro (Grundhonorar + Umbauzuschlag, net, WITHOUT incidental
+ * costs — beauftragteNachtraegeCent adds those on commissioned amendments)
+ * between the contract computed with the reference costs and with the current
+ * LV costs; 0 € when the fee does not depend on the costs (flat fee, table
+ * missing, outside the table). Only a draft: nothing is saved here, and the
+ * contract and its invoices stay untouched. A negative amount (LV got cheaper)
+ * is kept as the honest proposal; the user decides in the dialog.
+ * @param {Record<string, any>} vertrag Honorarvertrag
+ * @param {NonNullable<ReturnType<typeof import("@core/lib/hoai/kostenDrift.js").kostenDrift>>} drift
+ *   kostenDrift(driftBezug(vertrag, …), lvPositionen)
+ * @param {ReadonlyArray<Record<string, any>>} vorhandene all amendments (for the number)
+ * @param {{heuteIso: string, titel: string}} kontext heuteIso 'YYYY-MM-DD'; titel: translated title
+ * @param {{weitere?: ReadonlyArray<any>}} [optionen] injectable test tables
+ * @returns {Record<string, any>} draft amendment without id, with `kosten_drift`
+ *   {bezug_am, bezug, aktuell, aktuell_am} (integer cents per KG) — the next drift reference
+ */
+export function nachtragAusKostenDrift(vertrag, drift, vorhandene, { heuteIso, titel }, optionen = {}) {
+  const k = drift.jeKg;
+  /** @param {"eingefrorenCent"|"aktuellCent"} feld @returns {{kg300_euro: number, kg400_euro: number, sonstige_euro: number}} */
+  const kosten = (feld) => ({ kg300_euro: k.kg300[feld] / 100, kg400_euro: k.kg400[feld] / 100, sonstige_euro: k.sonstige[feld] / 100 });
+  const alt = honorarVertrag({ ...vertrag, ...kosten("eingefrorenCent") }, optionen);
+  const neu = honorarVertrag({ ...vertrag, ...kosten("aktuellCent") }, optionen);
+  /** @param {ReturnType<typeof honorarVertrag>} h @returns {number} cents */
+  const ohneNebenkosten = (h) => cent(h.grund) + cent(h.umbau);
+  const betrag = alt.quelle === "tafel" && neu.quelle === "tafel" ? (ohneNebenkosten(neu) - ohneNebenkosten(alt)) / 100 : 0;
+  /** @param {"eingefrorenCent"|"aktuellCent"} feld @returns {{kg300_cent: number, kg400_cent: number, sonstige_cent: number}} */
+  const centJeKg = (feld) => ({ kg300_cent: k.kg300[feld], kg400_cent: k.kg400[feld], sonstige_cent: k.sonstige[feld] });
+  return {
+    ...neuerNachtrag(vertrag, vorhandene, { heuteIso }),
+    titel,
+    grund: "leistungsaenderung",
+    berechnung: { art: "pauschal", betrag_euro: betrag },
+    betrag_euro: betrag,
+    kosten_drift: { bezug_am: drift.eingefrorenAm, bezug: centJeKg("eingefrorenCent"), aktuell: centJeKg("aktuellCent"), aktuell_am: heuteIso },
+  };
 }

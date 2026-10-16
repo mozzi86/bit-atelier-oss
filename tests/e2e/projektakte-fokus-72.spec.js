@@ -31,7 +31,7 @@ test("72-07/72-20 Arbeitsfokus, Zuletzt-Liste, Projektakte", async ({ page, requ
     // 1. focus from the link
     await page.goto("/Dashboard?rolle=bauleitung");
     await expect(page.getByTestId("fokus-wahl")).toHaveValue("bauleitung", { timeout: 20000 });
-    expect(await fokusHrefs(page)).toEqual(["/Dashboard", "/Werkplanung", "/BimViewer", "/Reports", "/Deadlines"]);
+    expect(await fokusHrefs(page)).toEqual(["/Dashboard", "/Baustelle", "/Werkplanung", "/BimViewer", "/Reports", "/Deadlines"]);
     await expect(page.getByTestId("alle-module")).not.toHaveAttribute("open", "");
     await page.goto("/Dashboard");
     await expect(page.getByTestId("fokus-wahl")).toHaveValue("bauleitung", { timeout: 20000 });

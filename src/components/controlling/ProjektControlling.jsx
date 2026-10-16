@@ -69,7 +69,7 @@ export default function ProjektControlling({ reihe, projekte, projektId, onProje
           )}
           {c.pauschalAnteilig && <p className="text-xs text-slate-600 dark:text-slate-300">{t("Pauschale anteilig nach LPH-Prozent")}</p>}
           {c.ohneLeistungsstand === "nur_objektplanung" && <p className="text-xs text-slate-600 dark:text-slate-300">{t("Leistungsstand nur für die Objektplanung")} — {t("die Ampel bleibt grau.")}</p>}
-          {c.ohneLeistungsstand === "kein_plan" && <p className="text-xs text-slate-600 dark:text-slate-300">{t("Noch kein Leistungsstand erfasst — im Designer-Reiter „Planer“ eintragen.")}</p>}
+          {c.ohneLeistungsstand === "kein_plan" && <p className="text-xs text-slate-600 dark:text-slate-300">{t("Noch kein Leistungsstand erfasst — im Architektenvertrag (Angebot & Auftrag) oder im Designer-Reiter „Planer“ eintragen.")}</p>}
           {c.ohneKostensatzMinuten > 0 && (
             <p className="text-sm text-amber-800 dark:text-amber-200" data-testid="controlling-ohne-satz">
               {fuellen(t("{stunden} ohne Kostensatz"), { stunden: stundenText(c.ohneKostensatzMinuten, lang) })}

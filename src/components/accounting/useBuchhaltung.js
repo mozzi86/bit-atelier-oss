@@ -17,6 +17,9 @@ import { DATENQUELLE } from "@core/lib/umgebung";
 import { BUCHHALTUNG_ENTITAETEN } from "@/lib/accounting/datenmodell.js";
 import { saetzeZum, wirksameEinstellungen } from "@/lib/accounting/einstellungen.js";
 import * as speicher from "@/lib/accounting/speicher.js";
+import { useRegelWerte } from "@core/lib/useRegelWerte";
+import { REGELWERKE } from "@/lib/settings/regelwerke.js";
+import { kalenderEinstellung } from "@/lib/abwesenheit/kalenderRegeln.js";
 
 /**
  * Everything a tab of /Accounting receives as prop `bh`.
@@ -94,7 +97,12 @@ export function useBuchhaltung(optionen = {}) {
     return () => { aktiv = false; };
   }, [heute, verfuegbar, api, neuLaden, projekteLaden]);
 
-  const einst = useMemo(() => wirksameEinstellungen(zustand.settingWert), [zustand.settingWert]);
+  // 96: tax due dates move by the office calendar (state holidays, § 108 Abs. 3 AO) — the same
+  // Regelwerk "kalender" as deadlines and absences; einst.kalender reaches steuerFaellig().
+  const { wert: regelWert } = useRegelWerte(REGELWERKE);
+  const kalender = kalenderEinstellung(regelWert);
+  const einst = useMemo(() => ({ ...wirksameEinstellungen(zustand.settingWert), kalender }),
+    [zustand.settingWert, kalender.bundesland, kalender.mariae_himmelfahrt, kalender.augsburger_friedensfest]); // eslint-disable-line react-hooks/exhaustive-deps
   const saetze = useMemo(() => saetzeZum(heute), [heute]);
 
   const speichere = useCallback(async (entitaet, obj) => {

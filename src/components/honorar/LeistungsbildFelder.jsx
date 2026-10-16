@@ -14,7 +14,9 @@
 // In:  props wert (flat 79 fields), onChange(patch), idPraefix, optional projekt
 //      (enables "aus LV übernehmen"), optional teile (which groups to show — the
 //      wizard shows them step by step). Out: the fields; reads LV positions of the
-//      project on request.
+//      project on request. Since 96-03 "aus LV übernehmen" freezes the costs
+//      (kosten_eingefroren_am + cents snapshot) and a yellow notice reports a
+//      later LV drift over 1 % (KostenDriftHinweis) — no live link.
 
 import React from "react";
 import { toast } from "sonner";
@@ -23,7 +25,10 @@ import { useI18n } from "@core/lib/i18n";
 import { buttonVariants } from "@core/components/ui/button";
 import { alleLeistungsbilder, leistungsbildInfo, tafelStatus } from "@core/lib/hoai/leistungsbilder.js";
 import { kostenAusLv, lphFuerLeistungsbild } from "@core/lib/hoai/honorar.js";
+import { KOSTEN_SNAPSHOT_LEER, kostenEinfrieren } from "@core/lib/hoai/kostenDrift.js";
+import { datumText, heuteLokal } from "@core/lib/kalender/datum.js";
 import BetragFeld from "@/components/accounting/gemeinsam/BetragFeld.jsx";
+import KostenDriftHinweis from "./KostenDriftHinweis.jsx";
 import LphTabelle from "./LphTabelle.jsx";
 import MvbAusBestand from "./MvbAusBestand.jsx";
 
@@ -66,7 +71,7 @@ export const ALLE_TEILE = Object.freeze(["leistungsbild", "kosten", "zone", "pos
  */
 export default function LeistungsbildFelder({ wert, onChange, idPraefix, projekt = null, teile = ALLE_TEILE }) {
   const zeige = (/** @type {string} */ teil) => teile.includes(teil);
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const alle = React.useMemo(() => alleLeistungsbilder(), []);
   const info = leistungsbildInfo(wert.leistungsbild);
   const fehlt = tafelStatus(wert.leistungsbild) !== "amtlich";
@@ -84,8 +89,13 @@ export default function LeistungsbildFelder({ wert, onChange, idPraefix, projekt
     try {
       const positionen = await /** @type {any} */ (bitApi).entities.LVPosition.filter({ project_id: projekt.id });
       const { kg300_euro, kg400_euro } = kostenAusLv(Array.isArray(positionen) ? positionen : []);
-      onChange({ kg300_euro, kg400_euro, sonstige_euro: 0, anrechenbare_quelle: Array.isArray(positionen) && positionen.length ? "lv" : "manuell" });
-      if (!Array.isArray(positionen) || !positionen.length) toast(t("Dieses Projekt hat noch keine LV-Positionen — 0 € übernommen."));
+      if (Array.isArray(positionen) && positionen.length) {
+        // 96-03: taking over = freezing (snapshot in cents + day); the LV drift is reported, never copied live.
+        onChange(kostenEinfrieren({ kg300_euro, kg400_euro, sonstige_euro: 0 }, heuteLokal()));
+      } else {
+        onChange({ kg300_euro, kg400_euro, sonstige_euro: 0, anrechenbare_quelle: "manuell", ...KOSTEN_SNAPSHOT_LEER });
+        toast(t("Dieses Projekt hat noch keine LV-Positionen — 0 € übernommen."));
+      }
     } catch (fehler) {
       toast.error(/** @type {any} */ (fehler)?.message || String(fehler));
     }
@@ -113,15 +123,18 @@ export default function LeistungsbildFelder({ wert, onChange, idPraefix, projekt
           {!zeige("kosten") ? null : p33 ? (
             <div className="space-y-2">
               <div className="grid gap-3 sm:grid-cols-3">
-                <BetragFeld id={`${idPraefix}-kg300`} label={t("KG 300 (€)")} wert={zuCent(wert.kg300_euro)} onChange={(c) => onChange({ kg300_euro: zuEuro(c), anrechenbare_quelle: "manuell" })} />
-                <BetragFeld id={`${idPraefix}-kg400`} label={t("KG 400 (€)")} wert={zuCent(wert.kg400_euro)} onChange={(c) => onChange({ kg400_euro: zuEuro(c), anrechenbare_quelle: "manuell" })} />
+                {/* 96-03: a value typed in by hand no longer describes an LV stand — the snapshot goes. */}
+                <BetragFeld id={`${idPraefix}-kg300`} label={t("KG 300 (€)")} wert={zuCent(wert.kg300_euro)} onChange={(c) => onChange({ kg300_euro: zuEuro(c), anrechenbare_quelle: "manuell", ...KOSTEN_SNAPSHOT_LEER })} />
+                <BetragFeld id={`${idPraefix}-kg400`} label={t("KG 400 (€)")} wert={zuCent(wert.kg400_euro)} onChange={(c) => onChange({ kg400_euro: zuEuro(c), anrechenbare_quelle: "manuell", ...KOSTEN_SNAPSHOT_LEER })} />
                 <BetragFeld id={`${idPraefix}-sonstige`} label={t("Sonstige anrechenbare Kosten (€)")} wert={zuCent(wert.sonstige_euro)} onChange={(c) => onChange({ sonstige_euro: zuEuro(c) })} />
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
                 <span>{t("Anrechenbare Kosten nach § 33 HOAI: KG 400 voll bis 25 % der übrigen, darüber zur Hälfte.")}</span>
                 {wert.anrechenbare_quelle === "lv" && <span className="rounded bg-emerald-100 px-1.5 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100">{t("aus dem LV")}</span>}
+                {wert.kosten_eingefroren_am && <span data-testid="kosten-eingefroren-am">{t("eingefroren am {datum}").replace("{datum}", datumText(wert.kosten_eingefroren_am, lang === "en" ? "en" : "de"))}</span>}
                 {projekt && <button type="button" className={buttonVariants({ variant: "outline", size: "sm" })} onClick={ausLv}>{t("aus LV übernehmen")}</button>}
               </div>
+              {projekt && <KostenDriftHinweis vertrag={wert} projektId={projekt.id} hinweis={t("Mit „aus LV übernehmen“ den neuen Stand einfrieren.")} />}
             </div>
           ) : (
             <BetragFeld id={`${idPraefix}-bezugswert`} label={info?.einheit === "ha" ? t("Fläche (ha)") : t("Anrechenbare Kosten (€)")}

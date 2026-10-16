@@ -34,6 +34,7 @@ import HonorarRechner from "@/components/honorar/HonorarRechner.jsx";
 import AngebotAnnehmen from "@/components/honorar/AngebotAnnehmen.jsx";
 import VertragReiter from "@/components/honorar/VertragReiter.jsx";
 import NachtragReiter from "@/components/honorar/NachtragReiter.jsx";
+import { liesVorschlag, merkeVorschlag } from "@/lib/honorar/vorschlagMerker.js";
 
 const Tabs = TabsPrimitive.Root;
 const TabsList = TabsPrimitive.List;
@@ -60,7 +61,10 @@ export default function Fees() {
   // ?neu=1 opens the wizard once and is then removed from the URL (a reload must not reopen it).
   React.useEffect(() => {
     if (params.get("neu") !== "1" || !zh.verfuegbar || zh.laedt) return;
-    setAssistent({ projekt: params.get("projekt"), vorschlag: /** @type {any} */ (location.state)?.vorschlag ?? null });
+    // 94-03 (B-ABN-05): the calculator's hand-over is remembered for later openings until an offer is created.
+    const vorschlag = /** @type {any} */ (location.state)?.vorschlag ?? null;
+    if (vorschlag) merkeVorschlag(vorschlag);
+    setAssistent({ projekt: params.get("projekt"), vorschlag: vorschlag ?? liesVorschlag() });
     setParams((p) => { const n = new URLSearchParams(p); n.delete("neu"); n.delete("projekt"); return n; }, { replace: true });
   }, [params, setParams, location.state, zh.verfuegbar, zh.laedt]);
 
@@ -108,7 +112,7 @@ export default function Fees() {
               <fieldset disabled={nurLesen} className="contents">
               <TabsContent value="offers" className={TAB_INHALT}>
                 <ModulFehlergrenze key={tab} pfad={"/Fees?tab=" + tab}>
-                  <AngebotListe zh={zh} alleProjekte={alleProjekte} onNeu={() => setAssistent({ projekt: zh.projectId, vorschlag: null })}
+                  <AngebotListe zh={zh} alleProjekte={alleProjekte} onNeu={() => setAssistent({ projekt: zh.projectId, vorschlag: liesVorschlag() })}
                     aktionen={(a) => <AngebotAnnehmen zh={zh} wert={wert} angebot={a} />} />
                 </ModulFehlergrenze>
               </TabsContent>

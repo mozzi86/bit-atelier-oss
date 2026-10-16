@@ -56,8 +56,9 @@ export default function ContactForm({ contact, onSubmit, onCancel }) {
                 <Input id="name" value={formData.name} onChange={(e) => handleChange('name', e.target.value)} required />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="email">E-Mail *</Label>
-                <Input id="email" type="email" value={formData.email} onChange={(e) => handleChange('email', e.target.value)} required />
+                {/* 94-04 (B-ABN-03): optional — a client or authority without a known address must be recordable. */}
+                <Label htmlFor="email">E-Mail</Label>
+                <Input id="email" type="email" value={formData.email || ""} onChange={(e) => handleChange('email', e.target.value)} />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="company">Firma</Label>

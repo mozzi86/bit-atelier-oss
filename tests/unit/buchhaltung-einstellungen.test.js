@@ -271,7 +271,6 @@ test("veralteteWerte meldet den Basiszins ab dem angekündigten Wechsel", () => 
 
 test("ANNAHMEN als Snapshot — eine neue Annahme muss bewusst hier eingetragen werden", () => {
   assert.deepEqual(ANNAHMEN.map((a) => `${a.pfad}@${a.ab}`), [
-    "GESETZ.FEIERTAGE_BUND@2000-01-01",
     "GESETZ.UST.ist_grenze@2024-01-01",
     "GESETZ.GEWST.freibetrag@2000-01-01",
     "GESETZ.BUCHFUEHRUNG.grenzen_141_ao@2024-01-01",

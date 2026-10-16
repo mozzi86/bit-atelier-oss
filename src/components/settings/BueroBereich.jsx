@@ -11,6 +11,7 @@ import React from "react";
 import { FileSignature } from "lucide-react";
 import { useI18n } from "@core/lib/i18n";
 import BriefkopfFormular from "@core/components/settings/BriefkopfFormular.jsx";
+import SteuerBankFormular from "./SteuerBankFormular.jsx";
 
 /** Ready since 80-03. */
 export const BEREIT = true;
@@ -29,6 +30,8 @@ export default function BueroBereich() {
         {t("Büroname, Adresse und Kontakt im Kopf aller Berichte")}
       </p>
       <BriefkopfFormular />
+      {/* 94-02 (B-ABN-01): tax number, VAT ID and IBAN next to the name — same record as the accounting dialog. */}
+      <SteuerBankFormular />
       {/* Reserved for phase 79's default payment term (buchhaltung.zahlungsziel_tage):
           it lives in "Einstellungen › Regelwerke" (80-07), not here — a second copy
           of the same value would drift (CLAUDE.md: keine zweite Quelle). */}

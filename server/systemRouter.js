@@ -51,14 +51,14 @@ export function ordnerOeffnen(ordner, plattform = process.platform) {
  * @param {{root: string, port: number|string, lokalGebunden: boolean, origins?: string[],
  *   anfrageEntfernt?: (req: any) => boolean,
  *   datenOrdnerFn?: () => string, oeffnen?: (ordner: string) => Promise<void>, execPath?: string,
- *   sicherung?: {status: () => object, jetztSichern: () => object}|null}} o
+ *   sicherung?: {status: () => object, jetztSichern: () => object}|null, personalSchluessel?: string|null}} o
  *   root = app folder (absolute); port = this server's port; lokalGebunden = API bound to loopback only;
  *   origins = further allowed Origins for the POST (e.g. the Vite dev server); anfrageEntfernt = the request
  *   comes from another device (93-03 office mode), default never; sicherung = the backup service of
- *   server/sicherung.js (93-06)
+ *   server/sicherung.js (93-06); personalSchluessel = path of the personnel key file (96-01)
  * @returns {import('express').Router}
  */
-export function systemRouter({ root, port, lokalGebunden, origins = [], anfrageEntfernt = () => false, datenOrdnerFn = () => datenOrdner(), oeffnen = ordnerOeffnen, execPath = process.execPath, sicherung = null }) {
+export function systemRouter({ root, port, lokalGebunden, origins = [], anfrageEntfernt = () => false, datenOrdnerFn = () => datenOrdner(), oeffnen = ordnerOeffnen, execPath = process.execPath, sicherung = null, personalSchluessel = null }) {
   const r = Router();
   const erlaubteOrigins = new Set([`http://localhost:${port}`, `http://127.0.0.1:${port}`, ...origins]);
   const nurLokal = (req, res, next) => (lokalGebunden && !anfrageEntfernt(req) ? next()
@@ -66,7 +66,8 @@ export function systemRouter({ root, port, lokalGebunden, origins = [], anfrageE
 
   r.get('/system/datenordner', nurLokal, (_req, res) => {
     const ordner = datenOrdnerFn();
-    res.json({ ordner, dateien: { db: path.join(ordner, 'db.json'), personal: path.join(ordner, 'personal.json') } });
+    // 96-01: where the personnel key lives (outside the data folder) — it must be backed up separately.
+    res.json({ ordner, dateien: { db: path.join(ordner, 'db.json'), personal: path.join(ordner, 'personal.json') }, personalSchluessel });
   });
 
   r.post('/system/datenordner/oeffnen', nurLokal, async (req, res) => {

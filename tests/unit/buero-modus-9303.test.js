@@ -141,6 +141,9 @@ describe("allow-list, token and origin helpers", () => {
   it("lets a device reach project data, never system/update/llm/admin/personal", () => {
     assert.equal(geraetDarf("GET", "/api/entities/Project"), true);
     assert.equal(geraetDarf("PUT", "/api/entities/Project/abc"), true);
+    // 96-04: a paired device fetches the session token (read only).
+    assert.equal(geraetDarf("GET", "/api/sitzung"), true);
+    assert.equal(geraetDarf("POST", "/api/sitzung"), false);
     assert.equal(geraetDarf("POST", "/api/entities/Project/bulk"), true);
     assert.equal(geraetDarf("GET", "/api/catalogs"), true);
     assert.equal(geraetDarf("PUT", "/api/blobs/abc"), true);

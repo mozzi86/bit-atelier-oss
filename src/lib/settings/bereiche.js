@@ -26,7 +26,7 @@ import { darf } from "@core/lib/rechte.js";
  * @type {Array<{key: string, titel: string, beschreibung: string, stichworte: string, alias: string[]}>}
  */
 const EINSTELLUNGS_BEREICHE = [
-  { key: "office", titel: "Büro & Briefkopf", beschreibung: "Büroname, Adresse und Kontakt im Kopf aller Berichte", stichworte: "Büroname, Briefkopf, Adresse, Kontakt, Untertitel, Logo", alias: ["buero", "briefkopf"] },
+  { key: "office", titel: "Büro & Briefkopf", beschreibung: "Büroname, Adresse und Kontakt im Kopf aller Berichte", stichworte: "Büroname, Briefkopf, Adresse, Kontakt, Untertitel, Logo, Steuernummer, Steuer, USt-IdNr, IdNr, Umsatzsteuer-Identifikationsnummer, IBAN, Bank, Bankverbindung", alias: ["buero", "briefkopf"] },
   { key: "display", titel: "Darstellung & Sprache", beschreibung: "Hell, dunkel oder wie das System; Deutsch oder Englisch", stichworte: "Theme, Dunkelmodus, Hell, Sprache, Englisch, Deutsch", alias: ["darstellung", "theme", "sprache"] },
   { key: "data", titel: "Daten & Sicherung", beschreibung: "Projektdatei sichern und laden, Schnappschüsse und Zurücksetzen", stichworte: "Sicherung, Backup, Projektdatei, bitproj, Import, Export, Schnappschuss, Zurücksetzen", alias: ["daten", "sicherung"] },
   { key: "privacy", titel: "Datenschutz & Browserdaten", beschreibung: "Was dieser Browser speichert und welche Einwilligungen gelten", stichworte: "Cookies, Browserdaten, Einwilligung, Nutzungsprotokoll, Widerruf", alias: ["datenschutz", "cookies"] },

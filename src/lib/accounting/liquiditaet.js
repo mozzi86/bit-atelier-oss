@@ -194,7 +194,7 @@ export function ereignisse({ daten, einst, saetze, jahr, heute, zusatzAbfluesse 
   const arten = bueroSteuerarten(einst);
   for (const art of /** @type {Array<"est"|"kst"|"gewst">} */ (["est", "kst", "gewst"])) {
     if (!arten.includes(art)) continue;
-    for (const termin of vorauszahlungsTermine(jahr, art, saetze)) {
+    for (const termin of vorauszahlungsTermine(jahr, art, saetze, einst?.kalender ?? null)) {
       const zeitraum = quartalsZeitraum(jahr, /** @type {number} */ (termin.quartal));
       const gezahlt = steuerzahlungFuerQuartal(steuerzahlungen, art, zeitraum);
       if (gezahlt) {
@@ -370,7 +370,7 @@ export function steuerzahltage(kontext) {
 
   for (const art of /** @type {Array<"est"|"kst"|"gewst">} */ (["est", "kst", "gewst"])) {
     if (!arten.includes(art)) continue;
-    for (const termin of vorauszahlungsTermine(jahr, art, saetze)) {
+    for (const termin of vorauszahlungsTermine(jahr, art, saetze, einst?.kalender ?? null)) {
       const zeitraum = quartalsZeitraum(jahr, /** @type {number} */ (termin.quartal));
       const gezahlt = steuerzahlungFuerQuartal(steuerzahlungen, art, zeitraum);
       const geplant = alsBetrag(einst?.vorauszahlungen?.[jahr]?.[art]?.[/** @type {number} */ (termin.quartal) - 1]);

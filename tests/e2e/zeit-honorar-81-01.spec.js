@@ -1,5 +1,6 @@
 // Phase 81 (81-01): the shell of time, fees and controlling against the Express dev
-// stack — menu group "Zeit & Honorar" right before "Büro" (E-02), h1 = menu name,
+// stack — since 1.4.0 (navigation by workflow stations) time tracking and controlling
+// sit in "Zeit & Schriftverkehr" right before "Büro", offers in "Akquise & Auftrag"; h1 = menu name,
 // German route aliases keep ?tab (E-01), tab aliases are normalised without a
 // history entry, the rule book "Zeit, Honorar & Controlling" in Einstellungen ›
 // Regelwerke (E-16), English menu texts, 375 px without horizontal scroll, console
@@ -20,7 +21,7 @@ function konsoleSammeln(page) {
   return meldungen;
 }
 
-test("Menügruppe „Zeit & Honorar“ vor „Büro“, Seiten mit h1 = Menüname, Routen-Aliase", async ({ page }) => {
+test("Menügruppe „Zeit & Schriftverkehr“ vor „Büro“, Seiten mit h1 = Menüname, Routen-Aliase", async ({ page }) => {
   test.setTimeout(120000);
   await nurLocalhost(page);
   const konsole = konsoleSammeln(page);
@@ -29,10 +30,10 @@ test("Menügruppe „Zeit & Honorar“ vor „Büro“, Seiten mit h1 = Menünam
   const nav = page.getByRole("navigation", { name: "Hauptnavigation" });
   // innerText follows CSS: the group labels are `uppercase` — compare whole lines, case-insensitive.
   const zeilen = (await nav.innerText()).split(/\r?\n/).map((z) => z.trim().toLowerCase());
-  const zeit = zeilen.indexOf("zeit & honorar");
+  const zeit = zeilen.indexOf("zeit & schriftverkehr");
   // lastIndexOf: since 72-20 the focus select at the top of the sidebar also offers an option "Büro".
   const buero = zeilen.lastIndexOf("büro");
-  expect(zeit, "Gruppe Zeit & Honorar sichtbar").toBeGreaterThan(-1);
+  expect(zeit, "Gruppe Zeit & Schriftverkehr sichtbar").toBeGreaterThan(-1);
   expect(zeit).toBeLessThan(buero);
   for (const titel of ["Zeiterfassung", "Angebot & Auftrag", "Projektcontrolling"]) await expect(nav.getByRole("link", { name: titel })).toBeVisible();
 
@@ -86,7 +87,7 @@ test("Englisch: Menü und h1; 375 px ohne horizontales Scrollen; dunkles Thema",
   await page.addInitScript(() => { try { localStorage.setItem("lang", "en"); } catch { /* storage blocked */ } });
   await page.goto("/Fees");
   const nav = page.getByRole("navigation");
-  for (const titel of ["Time & fees", "Time tracking", "Offers & contracts", "Project controlling"]) await expect(nav.getByText(titel, { exact: true }).first()).toBeVisible();
+  for (const titel of ["Time & correspondence", "Acquisition & contract", "Time tracking", "Offers & contracts", "Project controlling"]) await expect(nav.getByText(titel, { exact: true }).first()).toBeVisible();
   await expect(page.locator("h1")).toHaveText(/Offers & contracts/);
 
   await page.addInitScript(() => { try { localStorage.setItem("lang", "de"); localStorage.setItem("nc-theme", "dark"); } catch { /* storage blocked */ } });

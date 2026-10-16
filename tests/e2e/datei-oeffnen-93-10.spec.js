@@ -52,6 +52,11 @@ test.describe("93-10 Doppelklick auf .bitproj", () => {
     fs.mkdirSync(ORDNER, { recursive: true });
     // The dev server keeps the DB in memory and writes db.json with a short delay — wait for it to answer first.
     await expect.poll(async () => (await page.request.get(`${BASIS}/api/status`)).ok(), { timeout: 60000 }).toBe(true);
+    // Leftovers of an aborted earlier run (the restore in `finally` never ran): the test project and its copies.
+    for (const p of await (await page.request.get(`${BASIS}/api/entities/Project`)).json()) {
+      if (p.id === PROJEKT.id || String(p.name || "").startsWith(PROJEKT.name)) await page.request.delete(`${BASIS}/api/entities/Project/${p.id}`);
+    }
+    await page.waitForTimeout(400); // db.json is written with a 120 ms debounce — read it after the delete landed
     const basis = JSON.parse(fs.readFileSync(path.join(WURZEL, "server", "db.json"), "utf8"));
     const projekte = async () => (await (await page.request.get(`${BASIS}/api/entities/Project`)).json()).map((p) => p.name);
 
@@ -122,7 +127,9 @@ test.describe("93-10 Doppelklick auf .bitproj", () => {
       // Back to the starting state through the same route, then drop the link and the test files.
       const zurueck = bitproj(basis, "Ausgangsstand.bitproj");
       const token = starter(zurueck).split("=")[1];
-      const r = await page.request.post(`${BASIS}/api/datei/import/${token}/uebernehmen`, { headers: { Origin: BASIS }, data: { modus: "ersetzen" } });
+      // 96-04: a browser-like write (Origin) carries the session token, as the app's fetch wrapper does.
+      const sitzung = (await (await page.request.get(`${BASIS}/api/sitzung`)).json()).token;
+      const r = await page.request.post(`${BASIS}/api/datei/import/${token}/uebernehmen`, { headers: { Origin: BASIS, "X-Bit-Session": sitzung }, data: { modus: "ersetzen" } });
       expect(r.ok(), await r.text()).toBe(true);
       fs.rmSync(path.join(WURZEL, "server", "dateiquelle.json"), { force: true });
       fs.rmSync(ORDNER, { recursive: true, force: true });

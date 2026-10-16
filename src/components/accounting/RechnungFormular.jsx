@@ -14,7 +14,7 @@ import { useI18n } from "@core/lib/i18n";
 import { leistungsbildInfo } from "@core/lib/hoai/leistungsbilder.js";
 import { toast } from "sonner";
 import {
-  doppelteRechnung, empfaengerAus, neueRechnung, rechnungBetraege, stelleRechnung,
+  doppelteRechnung, empfaengerAus, lpZeilenNetto, neueRechnung, rechnungBetraege, stelleRechnung,
 } from "@/lib/accounting/ausgangsrechnungen.js";
 import { bauherrSchluessel, zahlungszielTage } from "@/lib/accounting/grundlagen.js";
 import { formatEuro } from "@/lib/accounting/geld.js";
@@ -84,6 +84,16 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
     if (vertrag?.bauherr_art === "verbraucher") setVerzugshinweis(true);
   }, [vertrag]);
 
+  // 94-04 (B-ABN-07): changing LP or "Stand (%)" of a stage row recomputes its amount
+  // through the Abschlag engine (lpZeilenNetto); a typed amount still wins until the
+  // next stand change. Without a fee contract nothing is computed (manual amounts).
+  const zeileAendern = (/** @type {number} */ i, /** @type {Record<string, any>} */ patch) => setLpPos((liste) => {
+    const neu = liste.map((p, j) => (j === i ? { ...p, ...patch } : p));
+    const karte = ("stand" in patch || "lp" in patch) && !neu[i].nachtrag_id ? lpZeilenNetto(vertrag, neu, bh.daten.Ausgangsrechnung || []) : null;
+    if (karte) neu[i] = { ...neu[i], netto: karte[Number(neu[i].lp)] ?? 0 };
+    return neu;
+  });
+  const nullZeilen = lpPos.filter((p) => !(Number(p.netto) > 0)).length;
   const nettoGesamt = lpPos.reduce((n, p) => n + (Number(p.netto) || 0), 0);
   const betraege = rechnungBetraege(nettoGesamt, ustSatz);
   const schluessel = bauherrSchluessel(vertrag, projekt);
@@ -221,16 +231,16 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
               <label className="flex flex-col gap-1 text-xs">
                 {t("LP")}
                 <input type="number" min={1} max={9} value={pos.lp} className={`${FELD} w-16`}
-                  onChange={(e) => setLpPos((liste) => liste.map((p, j) => (j === i ? { ...p, lp: Number(e.target.value) } : p)))} />
+                  onChange={(e) => zeileAendern(i, { lp: Number(e.target.value) })} />
               </label>
               )}
               <label className="flex flex-col gap-1 text-xs">
                 {t("Stand (%)")}
                 <input type="number" min={0} max={100} value={pos.stand} className={`${FELD} w-20`}
-                  onChange={(e) => setLpPos((liste) => liste.map((p, j) => (j === i ? { ...p, stand: Number(e.target.value) } : p)))} />
+                  onChange={(e) => zeileAendern(i, { stand: Number(e.target.value) })} />
               </label>
               <BetragFeld label={t("Netto")} wert={Math.round((pos.netto || 0) * 100)}
-                onChange={(cent) => setLpPos((liste) => liste.map((p, j) => (j === i ? { ...p, netto: (cent || 0) / 100 } : p)))} />
+                onChange={(cent) => zeileAendern(i, { netto: (cent || 0) / 100 })} />
               {lpPos.length > 1 && (
                 <button type="button" className={buttonVariants({ variant: "ghost", size: "sm" })}
                   onClick={() => setLpPos((liste) => liste.filter((_, j) => j !== i))}>{t("Zeile entfernen")}</button>
@@ -238,12 +248,21 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
             </div>
           ))}
           <button type="button" className={buttonVariants({ variant: "outline", size: "sm" })}
-            onClick={() => setLpPos((liste) => [...liste, { lp: 1, stand: 0, netto: 0 }])}>{t("Leistungsphase hinzufügen")}</button>
+            onClick={() => setLpPos((liste) => {
+              // 94-04: the next stage after the highest one listed (LP 1 used to be added every time).
+              const hoechste = Math.max(0, ...liste.map((p) => Number(p.lp) || 0));
+              return [...liste, { lp: Math.min(9, hoechste + 1), stand: 0, netto: 0 }];
+            })}>{t("Leistungsphase hinzufügen")}</button>
         </fieldset>
 
         <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm tabular-nums dark:bg-slate-800">
           {t("Netto")} {formatEuro(Math.round(betraege.netto * 100))} · {t("USt")} {formatEuro(Math.round(betraege.ust * 100))} · {t("Brutto")} {formatEuro(Math.round(betraege.brutto * 100))}
         </div>
+        {nullZeilen > 0 && (
+          <p role="status" data-testid="rf-null-zeile" className="text-sm text-amber-800 dark:text-amber-200">
+            {nullZeilen === 1 ? t("Eine Zeile steht auf 0,00 € — Stand oder Betrag prüfen.") : t("{n} Zeilen stehen auf 0,00 € — Stand oder Betrag prüfen.").replace("{n}", String(nullZeilen))}
+          </p>
+        )}
         {!rechnung && vorlage?.stand_quelle && (
           <p className="text-xs text-slate-500 dark:text-slate-400">
             {t("Abschlagsvorschlag aus dem Leistungsstand")} ({t(standQuelleLabel(vorlage.stand_quelle))})

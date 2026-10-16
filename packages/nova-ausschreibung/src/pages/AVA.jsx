@@ -40,6 +40,7 @@ import ReferenzpreisPoolPanel from "@ava/components/ReferenzpreisPoolPanel";
 import { ordneAlleZu } from "@ava/lib/stlbMatch";
 import { neueSchicht } from "@ava/lib/preisschichten";
 import { laufErzeugen } from "@ava/lib/regelLauf";
+import { vertragsmengenEinfrieren } from "@ava/lib/vobMengen";
 import { regelAusMuster } from "@ava/lib/mengenregeln";
 import { pruefeReferenzenOderWirf } from "@core/lib/rules/catalogs";
 import { classifiedElements } from "@core/lib/bimClassification";
@@ -635,6 +636,19 @@ export default function AVA() {
     toast.success("Angebot aktualisiert");
     reload(projectId);
   };
+  // 96-02: freeze the contracted quantity (VOB/B § 2 Abs. 3 reference) on every
+  // position of the awarded tender — only where none is set yet, so a re-award
+  // never moves the contract basis. A failed write is reported, not swallowed;
+  // the award itself stands (the positions then simply get no VOB/B rating).
+  const vertragsmengenSchreiben = async (tender) => {
+    const patches = vertragsmengenEinfrieren(tender, positions, new Date().toISOString().slice(0, 10));
+    try {
+      await Promise.all(patches.map(({ id, patch }) => bitApi.entities.LVPosition.update(id, patch)));
+    } catch (e) {
+      console.error("Vertragsmenge konnte nicht eingefroren werden:", e);
+      toast.error(`${t("Vertragsmengen nicht eingefroren:")} ${e?.message || e}`);
+    }
+  };
   const award = async (tender, bid) => {
     // 74-01: once a tender has a submission, its bids may be sealed portal bids
     // that no UPDATE reaches (0011) — the award then runs through the RPC,
@@ -649,6 +663,7 @@ export default function AVA() {
         }
         if (weg === "rpc") {
           await zuschlagErteilen(tender.id, bid.id);
+          await vertragsmengenSchreiben(tender);
           toast.success(`Zuschlag an ${bid.bidder_name}`);
           reload(projectId);
           return;
@@ -664,6 +679,7 @@ export default function AVA() {
       ...tBids.filter((b) => b.id !== bid.id).map((b) => bitApi.entities.Bid.update(b.id, { status: "rejected" })),
       bitApi.entities.Tender.update(tender.id, { status: "awarded", awarded_bid_id: bid.id, awarded_date: new Date().toISOString() }), // 73-11: award date = possible project start for funding
     ]);
+    await vertragsmengenSchreiben(tender);
     toast.success(`Zuschlag an ${bid.bidder_name}`);
     reload(projectId);
   };

@@ -120,3 +120,10 @@ test("Bereich rules noch nicht fertig: keine Regeltreffer (kein Sprung auf einen
   const fertig = sucheImUmfang("zahlungsziel", kontext);
   assert.ok(enthaelt(fertig, "rules", "buchhaltung.zahlungsziel_tage"), JSON.stringify(fertig));
 });
+
+// 94-02 (B-ABN-01): tax number, VAT ID and IBAN are found under "Büro & Briefkopf".
+test("Steuer, IdNr und IBAN treffen Büro & Briefkopf (94-02)", () => {
+  for (const wort of ["Steuer", "IdNr", "IBAN"]) {
+    assert.ok(suche(wort).some((t) => t.bereich === "office"), wort);
+  }
+});

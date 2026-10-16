@@ -56,7 +56,7 @@ export const EN = {
   "Pauschale anteilig nach LPH-Prozent": "Lump sum split by work-stage percentage",
   "Leistungsstand nur für die Objektplanung": "Progress only for the object planning profiles",
   "die Ampel bleibt grau.": "the traffic light stays grey.",
-  "Noch kein Leistungsstand erfasst — im Designer-Reiter „Planer“ eintragen.": "No progress recorded yet — enter it in the Designer tab “Planner”.",
+  "Noch kein Leistungsstand erfasst — im Architektenvertrag (Angebot & Auftrag) oder im Designer-Reiter „Planer“ eintragen.": "No progress recorded yet — enter it in the architect's contract (Offer & contract) or in the Designer tab “Planner”.",
   "{stunden} ohne Kostensatz": "{stunden} without a cost rate",
   "Kostensätze pflegen": "Maintain cost rates",
   "Honorar gegen Aufwand je Leistungsphase": "Fee against effort per work stage",

@@ -5,7 +5,8 @@
 // as a suggestion (BayBO Art. 69, guide value — to be checked). Deleting asks
 // first (useBestaetigung). Unsaved input is protected.
 //
-// In:  props termin (stored record or null), projekte, onSpeichern, onLoeschen, onClose. Out: the dialog.
+// In:  props termin (stored record or null), projekte, projektVorwahl (active project, 94-04 B-ABN-09:
+//      a NEW appointment starts on it), onSpeichern, onLoeschen, onClose. Out: the dialog.
 
 import React, { useState } from "react";
 import FormModal from "@core/components/common/FormModal";
@@ -21,16 +22,16 @@ const TERMINARTEN = [["sonstiges", "Sonstiges"], ["jour_fixe", "Jour fixe"], ["b
 const RHYTHMEN = [["", "keine"], ["woechentlich", "wöchentlich"], ["zweiwoechentlich", "zweiwöchentlich"], ["monatlich", "monatlich"]];
 
 /**
- * @param {{termin: Record<string, any>|null, projekte: Array<{id: string, name?: string}>, heute: string,
+ * @param {{termin: Record<string, any>|null, projekte: Array<{id: string, name?: string}>, heute: string, projektVorwahl?: string|null,
  *   onSpeichern: (t: Record<string, any>) => Promise<void>, onLoeschen: (id: string) => Promise<void>, onClose: () => void}} props
  * @returns {React.ReactElement}
  */
-export default function TerminDialog({ termin, projekte, heute, onSpeichern, onLoeschen, onClose }) {
+export default function TerminDialog({ termin, projekte, heute, projektVorwahl = null, onSpeichern, onLoeschen, onClose }) {
   const { t } = useI18n();
   const bestaetige = useBestaetigung();
   const [f, setF] = useState(/** @type {Record<string, any>} */ ({
     titel: termin?.titel || "", datum: termin?.datum || heute, zeit: termin?.zeit || "", dauer_min: termin?.dauer_min ?? "",
-    project_id: termin?.project_id || "", art: termin?.art || "termin", terminart: termin?.terminart || "sonstiges",
+    project_id: termin ? (termin.project_id || "") : (projekte.some((p) => p.id === projektVorwahl) ? /** @type {string} */ (projektVorwahl) : ""), art: termin?.art || "termin", terminart: termin?.terminart || "sonstiges",
     rhythmus: termin?.wiederholung?.rhythmus || "", wiederholung_bis: termin?.wiederholung?.bis || "", genehmigt_am: "", notiz: termin?.notiz || "",
   }));
   const [busy, setBusy] = useState(false);

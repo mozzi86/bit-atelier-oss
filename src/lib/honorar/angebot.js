@@ -32,6 +32,8 @@ export const VERTRAGSFELDER = Object.freeze([
   "zahlungsziel_tage", "zahlungsziel_vertraglich", "anrechenbare_quelle", "kg300_euro", "kg400_euro", "sonstige_euro",
   "bezugswert", "mvb_euro", "mvb_grundlage", "honorarzone", "satz_position_prozent", "lph", "umbauzuschlag_prozent",
   "nebenkosten_prozent", "pauschal_euro", "ust_satz", "textform_am",
+  // 96-03: the frozen LV snapshot travels from the offer into the contract (null = none).
+  "kosten_eingefroren_am", "kosten_eingefroren",
 ]);
 
 /**
@@ -86,6 +88,7 @@ export function neuesAngebot(projekt, wert, vorhandene, { heuteIso, vorschlag = 
     pauschal_euro: null,
     ust_satz: typeof ust === "number" ? ust : (einstBuchhaltung?.ust_satz ?? 19),
     textform_am: null,
+    kosten_eingefroren_am: null, kosten_eingefroren: null,
     ...vorschlag,
   };
 }

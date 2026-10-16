@@ -8,6 +8,8 @@ import { AlertTriangle, Info, PlayCircle, Search } from "lucide-react";
 import { buildIndex } from "@core/lib/rules/ruleEngine";
 import { positionsMenge, sollWaechter } from "@ava/lib/mengenregeln";
 import { fortschritt } from "@ava/lib/regelLauf";
+import { vobMengenBewertung, hatVertragsmenge, VOB_STATUS } from "@ava/lib/vobMengen";
+import { useI18n } from "@core/lib/i18n";
 import { num } from "./avaUtils";
 
 // RegelTabelle — alle Positionen mit Modus, Treffer, Menge, Δ Referenz.
@@ -39,6 +41,48 @@ const MODUS_LABEL = {
   unbekannt: "—",
 };
 
+/**
+ * 96-02: VOB/B § 2 Abs. 3 badge of one row. Information only (`warn`): the
+ * price adjustment happens on request of a party, so nothing here blocks.
+ * @param {{bewertung: import("@ava/lib/vobMengen").VobBewertung|null, einheit: string, t: (k: string) => string}} props
+ *        bewertung = rating of the row (null = position without contracted quantity);
+ *        einheit = unit of the position (m², m³, Stk, …)
+ */
+function VobBadge({ bewertung, einheit, t }) {
+  if (!bewertung || bewertung.status === VOB_STATUS.OHNE_VERTRAGSMENGE || bewertung.status === VOB_STATUS.OHNE_ISTMENGE) {
+    return <span className="text-slate-400">—</span>;
+  }
+  if (bewertung.status === VOB_STATUS.IM_TOLERANZBEREICH) {
+    return (
+      <span className="text-slate-500" title={t("§ 2 Abs. 3 Nr. 1 VOB/B: Abweichung bis 10 % von der Vertragsmenge — der vertragliche Einheitspreis gilt.")}>
+        {t("im Toleranzbereich")}
+      </span>
+    );
+  }
+  const prozent = num(Math.abs(bewertung.abweichungProzent ?? 0));
+  if (bewertung.status === VOB_STATUS.MEHRMENGE) {
+    return (
+      <Badge
+        className="text-[10px] border bg-amber-100 text-amber-800 border-amber-300 whitespace-nowrap"
+        title={t("§ 2 Abs. 3 Nr. 2 VOB/B: Für die über 110 % der Vertragsmenge hinausgehende Menge ist auf Verlangen ein neuer Einheitspreis zu vereinbaren. Hinweis, keine Sperre.")}
+      >
+        {t("Mehrmenge +{p} % (Spitze {m} {e})")
+          .replace("{p}", prozent)
+          .replace("{m}", num(bewertung.spitzenmenge, 3))
+          .replace("{e}", einheit)}
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      className="text-[10px] border bg-amber-100 text-amber-800 border-amber-300 whitespace-nowrap"
+      title={t("§ 2 Abs. 3 Nr. 3 VOB/B: Bei mehr als 10 % Unterschreitung der Vertragsmenge ist auf Verlangen der Einheitspreis für die ausgeführte Menge zu erhöhen. Hinweis, keine Sperre.")}
+    >
+      {t("Mindermenge −{p} %").replace("{p}", prozent)}
+    </Badge>
+  );
+}
+
 export default function RegelTabelle({
   positionen = [],
   regelnJePosition = null,
@@ -49,6 +93,7 @@ export default function RegelTabelle({
   onRecompute,
   letzterLauf = null,
 }) {
+  const { t } = useI18n();
   const [suche, setSuche] = useState("");
   const [nurAuffaellig, setNurAuffaellig] = useState(false);
 
@@ -69,6 +114,11 @@ export default function RegelTabelle({
       const soll = regeln.find((r) => r?.soll != null)?.soll ?? null;
       const waechter = res ? sollWaechter({ soll }, res.menge) : null;
       const treffer = res ? res.regeln.reduce((a, r) => a + (r.treffer || 0), 0) : null;
+      // 96-02: the current quantity is the recomputed one (what the next run
+      // writes), else the stored quantity; rated against the frozen contract quantity.
+      const vob = hatVertragsmenge(p)
+        ? vobMengenBewertung({ vertragsmenge: p.vertragsmenge, istmenge: res ? res.menge : referenz, einheitspreis: p.unit_price })
+        : null;
       return {
         p,
         regeln,
@@ -77,6 +127,7 @@ export default function RegelTabelle({
         referenz,
         delta,
         waechter,
+        vob,
         warnungen: res?.warnungen || [],
         modus: p.mengen_modus ?? (regeln.some((r) => r.art === "modell") ? "filter" : "unbekannt"),
       };
@@ -213,6 +264,9 @@ export default function RegelTabelle({
                 <th className="px-2 py-1 text-right">Menge</th>
                 <th className="px-2 py-1 text-right">Δ Referenz</th>
                 <th className="px-2 py-1">soll-Ampel</th>
+                <th className="px-2 py-1" title={t("Ist-Menge gegen die beim Zuschlag eingefrorene Vertragsmenge (§ 2 Abs. 3 VOB/B, ±10 %)")}>
+                  {t("VOB/B § 2 Abs. 3")}
+                </th>
                 <th className="px-2 py-1">Hinweise</th>
               </tr>
             </thead>
@@ -263,6 +317,9 @@ export default function RegelTabelle({
                         {z.waechter.ampel}
                       </Badge>
                     )}
+                  </td>
+                  <td className="px-2 py-1">
+                    <VobBadge bewertung={z.vob} einheit={z.p.unit ?? ""} t={t} />
                   </td>
                   <td className="px-2 py-1 text-amber-700" title={z.warnungen.join(" · ")}>
                     {z.warnungen.length > 0 ? `${z.warnungen.length}` : "—"}

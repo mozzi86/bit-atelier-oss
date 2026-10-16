@@ -53,7 +53,7 @@ export default function MeineWoche() {
       try {
         const regelWert = (/** @type {string} */ id) => wert(id);
         const [{ termine }, abw] = await Promise.all([
-          ladeTermine(bitApi, { von: /** @type {string} */ (plusTage(heute, -365)), bis: /** @type {string} */ (plusTage(heute, 13)), heute, regelWert, datenquelle: DATENQUELLE, rolle: user?.role ?? null, zugriff }),
+          ladeTermine(bitApi, { von: /** @type {string} */ (plusTage(heute, -365)), bis: /** @type {string} */ (plusTage(heute, 13)), heute, regelWert, kalender: kalenderEinstellung(wert), datenquelle: DATENQUELLE, rolle: user?.role ?? null, zugriff }),
           ladeAbwesenheitsDaten({ datenquelle: DATENQUELLE, rolle: user?.role ?? null }),
         ]);
         const solo = !(zugriff.nutzerListe || []).length && !(abw.mitarbeiter || []).length;

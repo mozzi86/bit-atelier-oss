@@ -89,8 +89,14 @@ export const AFA_METHODEN = Object.freeze(["linear", "gwg", "sammel", "sofort"])
  *   honorarzone?: string, satz_position_prozent?: number,
  *   lph?: Array<{beauftragt: boolean, prozent: number}>, umbauzuschlag_prozent?: number,
  *   nebenkosten_prozent?: number, pauschal_euro?: number|null, ust_satz?: number, textform_am?: string,
+ *   kosten_eingefroren_am?: string|null,
+ *   kosten_eingefroren?: {kg300_cent: number, kg400_cent: number, sonstige_cent: number}|null,
  *   beispiel?: boolean,
  * }} Honorarvertrag
+ * kosten_eingefroren(_am) (96-03): snapshot in integer cents of the costs taken
+ * over from the LV and its day — deliberately frozen, never a live link; the
+ * drift against the LV is only reported (@core/lib/hoai/kostenDrift.js).
+ * Absent/null = no snapshot, behaviour as before.
  */
 
 /**

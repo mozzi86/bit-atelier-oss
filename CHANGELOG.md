@@ -10,6 +10,33 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.5.0] - 2026-10-16
+
+### Wichtig vor dem Update
+
+- **Personaldaten werden verschlüsselt.** Beim ersten Start nach dem Update verschlüsselt die App `personal.json` und `personal-blobs/` (AES-256). Der Schlüssel liegt **außerhalb** des Datenordners — Windows: `%APPDATA%\BIT-Atelier\personal.key`, macOS: `~/Library/Application Support/BIT-Atelier/personal.key`, Linux: `~/.config/bit-atelier/personal.key`. **Diesen Schlüssel einmal getrennt sichern** (USB-Stick, Passwort-Safe). Ohne ihn sind die Personaldaten einer Sicherung nicht lesbar. Einstellungen › Daten & Sicherung zeigt den Pfad; beim Rechnerwechsel gehört die Datei mit an denselben Ort (docs/NOTFALL.md).
+
+### Neu
+
+- **VOB/B § 2 Abs. 3 in der AVA:** Beim Zuschlag wird die Vertragsmenge jeder Position festgehalten. Die Mengenregeln zeigen danach Mehrmengen über 110 % (mit der Spitzenmenge für einen neuen Einheitspreis) und Mindermengen unter 90 % — als Hinweis, keine Sperre.
+- **Anrechenbare Kosten eingefroren:** „Aus LV übernehmen“ hält den Kostenstand im Honorarvertrag fest. Ändert sich das LV um mehr als 1 %, erscheint ein Hinweis mit „Als Honorarnachtrag übernehmen“ (§ 10 HOAI); gestellte Rechnungen bleiben unverändert.
+- **Leistungsstand im Architektenvertrag pflegen** — ohne den Komplex-Designer; es ist derselbe Stand wie im Designer-Reiter „Planer“.
+- **Bauherr aus dem Adressbuch** im Angebots-Assistenten; fehlt das Projekt, lässt es sich direkt im Assistenten anlegen.
+- **Steuernummer, USt-IdNr. und IBAN** auch unter Einstellungen › Büro & Briefkopf, die Einstellungs-Suche findet sie.
+
+### Geändert
+
+- **Ein Büroname:** Buchhaltung, XRechnung und DATEV-Export lesen den Namen aus dem Briefkopf; das eigene Feld in den Buchhaltungs-Einstellungen entfällt (ein alter Name lässt sich mit einem Klick übernehmen).
+- **Rechnung: „Stand (%)“ rechnet den Betrag** der Leistungsphase mit; eine neue Zeile nimmt die nächste Leistungsphase, Zeilen mit 0,00 € werden markiert.
+- **Steuertermine** verschieben sich nach dem Bürokalender (Landesfeiertage, § 108 Abs. 3 AO), wie Fristen und Abwesenheiten.
+- Adressbuch: E-Mail ist kein Pflichtfeld mehr. „Termin anlegen“ übernimmt das aktive Projekt.
+- **Sicherheit der lokalen App:** Schreibende Anfragen aus dem Browser brauchen ein Sitzungs-Token; eine fremde Webseite kann keine Daten mehr in die lokale App schreiben.
+
+### Behoben
+
+- Ein neu angelegtes Projekt wurde nicht aktiv — die Kopfzeile sprang zurück zum vorherigen Projekt.
+- Das Download-Paket enthielt die Vergleichsbilder der Tests (33 statt 17 MB).
+
 ## [1.4.0] - 2026-10-13
 
 ### Geändert

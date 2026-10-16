@@ -7,7 +7,9 @@
 // (numbers, GoBD, payment term); 81 only prepares the template.
 //
 // In:  props zh, bh (79 page loader useBuchhaltung, for the embedded form),
-//      vertrag. Out: the account view; writes only through 79's form.
+//      vertrag. Out: the account view; writes only through 79's form — and, since
+//      94-04 (B-ABN-08), the project's Leistungsstand into its HoaiPlan (the same
+//      record the designer tab "Planer" writes; leistungsstandSpeichern.js).
 
 import React from "react";
 import { Link } from "react-router-dom";
@@ -20,6 +22,9 @@ import { formatEuro } from "@/lib/accounting/geld.js";
 import { rechnungsStatus } from "@/lib/accounting/grundlagen.js";
 import { abschlagMitNachtraegen, vertragskonto } from "@/lib/honorar/vertrag.js";
 import RechnungFormular from "@/components/accounting/RechnungFormular.jsx";
+import { toast } from "sonner";
+import { bitApi } from "@core/api/bitApi";
+import { speichereLeistungsstand } from "@/lib/honorar/leistungsstandSpeichern.js";
 
 /**
  * @param {{zh: import("@/components/zeitHonorar/useZeitHonorar.js").ZeitHonorar, bh: any, vertrag: Record<string, any>}} props
@@ -39,6 +44,26 @@ export default function Vertragskonto({ zh, bh, vertrag }) {
   const alle = (zh.daten.Ausgangsrechnung || []).filter((r) => r.honorarvertrag_id === vertrag.id)
     .sort((a, b) => String(a.rechnungsdatum || "").localeCompare(String(b.rechnungsdatum || "")));
   let abschlagNr = 0;
+  // 94-04 (B-ABN-08): edit the Leistungsstand here (percent per commissioned stage, as text while typing).
+  const [pflege, setPflege] = React.useState(/** @type {Record<number, string>|null} */ (null));
+  const [speichertStand, setSpeichertStand] = React.useState(false);
+  const beauftragt = (h.lph || []).filter((l) => l.beauftragt);
+  const pflegeOeffnen = () => setPflege(Object.fromEntries(beauftragt.map((l) => [l.nr, String(stand?.stand?.[l.nr] ?? 0)])));
+  const standSpeichern = async () => {
+    if (!pflege) return;
+    setSpeichertStand(true);
+    try {
+      const aenderungen = Object.fromEntries(Object.entries(pflege).map(([nr, v]) => [Number(nr), v === "" ? null : Number(v)]));
+      await speichereLeistungsstand(/** @type {any} */ (bitApi), vertrag.project_id, aenderungen, zh.heute);
+      await zh.neuLaden();
+      setPflege(null);
+      toast.success(t("Leistungsstand gespeichert"));
+    } catch (err) {
+      toast.error(`${t("Speichern fehlgeschlagen")}: ${/** @type {any} */ (err)?.message || String(err)}`);
+    } finally {
+      setSpeichertStand(false);
+    }
+  };
 
   const schliessen = async () => {
     setFormular(null);
@@ -60,11 +85,38 @@ export default function Vertragskonto({ zh, bh, vertrag }) {
       {k.hinweise.includes("tafel_fehlt") && <p className="text-sm text-amber-800 dark:text-amber-200">{t("Tafel fehlt")} — {t("Einen Betrag liefert nur eine Pauschale.")}</p>}
 
       <div className="text-sm">
-        <p className="font-medium">{t("Leistungsstand")}</p>
+        <p className="font-medium">
+          {t("Leistungsstand")}
+          {stand?.quelle === "projektphase" && <span className="ml-2 text-xs font-normal text-amber-800 dark:text-amber-200" data-testid="stand-geschaetzt">{t("geschätzt aus der Projektphase")}</span>}
+        </p>
         {stand ? (
-          <ul className="flex flex-wrap gap-2 text-xs">
-            {(h.lph || []).filter((l) => l.beauftragt).map((l) => <li key={l.nr} className="rounded bg-slate-100 px-1.5 py-0.5 dark:bg-slate-800">{t("LPH")} {l.nr}: {stand.stand[l.nr] ?? 0} %</li>)}
-          </ul>
+          pflege ? (
+            <div className="space-y-2" data-testid="stand-pflege">
+              <div className="flex flex-wrap gap-2">
+                {beauftragt.map((l) => (
+                  <label key={l.nr} className="flex flex-col gap-1 text-xs">
+                    {t("LPH")} {l.nr} (%)
+                    <input type="number" min={0} max={100} className="h-8 w-20 rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+                      value={pflege[l.nr] ?? ""} onChange={(e) => setPflege((p) => ({ ...(p || {}), [l.nr]: e.target.value }))} />
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button type="button" className={buttonVariants({ variant: "default", size: "sm" })} disabled={speichertStand} onClick={standSpeichern}>{t("Speichern")}</button>
+                <button type="button" className={buttonVariants({ variant: "ghost", size: "sm" })} onClick={() => setPflege(null)}>{t("Abbrechen")}</button>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300">{t("Derselbe Leistungsstand wie im Designer-Reiter „Planer“ — eine Quelle für Controlling und Abschläge.")}</p>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <ul className="flex flex-wrap gap-2 text-xs">
+                {beauftragt.map((l) => <li key={l.nr} className="rounded bg-slate-100 px-1.5 py-0.5 dark:bg-slate-800">{t("LPH")} {l.nr}: {stand.stand[l.nr] ?? 0} %</li>)}
+              </ul>
+              {vertrag.project_id && (
+                <button type="button" className={buttonVariants({ variant: "outline", size: "sm" })} onClick={pflegeOeffnen} data-testid="stand-pflegen">{t("Leistungsstand pflegen")}</button>
+              )}
+            </div>
+          )
         ) : <p className="text-xs text-slate-600 dark:text-slate-300">{t("Leistungsstand im Formular eintragen (Leistungsbild ohne neun LPH).")}</p>}
       </div>
 

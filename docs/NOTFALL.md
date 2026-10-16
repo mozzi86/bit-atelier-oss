@@ -7,6 +7,11 @@ Für die heruntergeladene App (Installer oder ZIP). Kurz, in der Reihenfolge, in
 - **Einstellungen › Daten & Sicherung** zeigt den Datenordner und öffnet ihn („Ordner öffnen“).
 - Standard nach Installer: `%LOCALAPPDATA%\BIT-Atelier\daten` (Windows) bzw. `~/BIT-Atelier/daten` (macOS/Linux).
 - Darin: `db.json` (Projektdaten), `db.json.bak` (vorheriger Stand), `personal.json` (Personaldaten, getrennt), `blobs/` (große Inhalte aus dem Objektspeicher: Bauteillisten, Dokumente über 1 MB).
+- **Personaldaten sind verschlüsselt** (`personal.json`, `personal-blobs/`, AES-256-GCM, seit 1.5). Der Schlüssel liegt
+  **außerhalb** des Datenordners: `%APPDATA%\BIT-Atelier\personal.key` (Windows), `~/Library/Application Support/BIT-Atelier/personal.key`
+  (macOS), `~/.config/bit-atelier/personal.key` (Linux); anderer Ort über `BIT_PERSONAL_SCHLUESSEL` in `.env`.
+  Einstellungen › Daten & Sicherung zeigt den Pfad. **Ohne diesen Schlüssel sind die Personaldaten nicht mehr lesbar** —
+  ihn einmal getrennt sichern (USB-Stick, Passwort-Safe), nicht in denselben Cloud-Ordner wie die Daten.
 - Mit der Umgebungsvariable `BIT_DATA_DIR` (in `.env` im App-Ordner) liegt der Ordner woanders — z. B. auf einem gesicherten Laufwerk.
 
 **Wichtig:** `%LOCALAPPDATA%` wird von vielen Büro-Sicherungen nicht erfasst. Datenordner verlegen oder regelmäßig sichern (Punkt 2).
@@ -58,7 +63,10 @@ Seit 93-11 startet die Verknüpfung BIT-Atelier **ohne Konsolenfenster**; Fehler
 
 ## 6. Rechnerwechsel
 
-App auf dem neuen Rechner installieren, App beenden, den alten Datenordner über den neuen kopieren, starten.
+App auf dem neuen Rechner installieren, App beenden, den alten Datenordner über den neuen kopieren, **und den
+Personal-Schlüssel `personal.key` an denselben Ort wie auf dem alten Rechner kopieren** (Punkt 1), dann starten.
+Fehlt er, startet die App, sperrt aber den Personalbereich mit dem Hinweis auf den erwarteten Pfad — sie legt
+dann bewusst keinen neuen Schlüssel an und überschreibt nichts.
 
 ## 7. Deinstallieren
 

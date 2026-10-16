@@ -181,7 +181,8 @@ test.describe("93-12 Lokale KI und Harness im Programm", () => {
     await expect(page.getByTestId("nur-lokal-schalter")).toBeEnabled();
     await page.getByTestId("nur-lokal-schalter").check();
     await expect(page.getByTestId("nur-lokal-plakette").first()).toBeVisible();
-    expect((await (await request.get("/api/llm/einstellungen")).json()).nur_lokal).toBe(true);
+    // The switch is optimistic — wait until the PUT has reached the server.
+    await expect.poll(async () => (await (await request.get("/api/llm/einstellungen")).json()).nur_lokal).toBe(true);
 
     await page.getByTestId("ki-vorlage").selectOption("openai");
     await page.getByTestId("ki-modell").fill("gpt-x");

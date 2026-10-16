@@ -19,7 +19,7 @@ export const EN = {
   // Rule messages (xrechnung.js MELDUNGEN).
   "Rechnungsnummer fehlt (BT-1) — nur gestellte Rechnungen haben eine Nummer.": "Invoice number missing (BT-1) — only issued invoices have a number.",
   "Rechnungsdatum fehlt (BT-2).": "Invoice date missing (BT-2).",
-  "Name des Büros fehlt (BT-27) — Buchhaltung › Einstellungen oder Briefkopf.": "Office name missing (BT-27) — Accounting › Settings or letterhead.",
+  "Name des Büros fehlt (BT-27) — Einstellungen › Büro & Briefkopf.": "Office name missing (BT-27) — Settings › Office & letterhead.",
   "Name des Rechnungsempfängers fehlt (BT-44).": "Name of the invoice recipient missing (BT-44).",
   "Die Rechnung hat keine Position (BG-25).": "The invoice has no line (BG-25).",
   "Ein Einzelpreis ist negativ (BT-146).": "A unit price is negative (BT-146).",

@@ -81,7 +81,11 @@ export async function apiUmleiten(page, basis) {
         const antwort = await route.fetch({ url: `${basis}${url.pathname}${url.search}` });
         return route.fulfill({ response: antwort });
       } catch (e) {
-        if (versuch >= 2 || !/ECONNRESET|socket hang up/i.test(String(e))) throw e;
+        // A request still in flight when the test ends (e.g. the map tiles' osm-buildings call of
+        // the previous page) has nobody left to answer — not a failure of this screenshot.
+        if (/Test ended|has been closed/i.test(String(e))) return undefined;
+        // EADDRINUSE: Windows ran out of ephemeral ports during a long serial run — retry like a reset.
+        if (versuch >= 2 || !/ECONNRESET|socket hang up|EADDRINUSE/i.test(String(e))) throw e;
       }
     }
   });

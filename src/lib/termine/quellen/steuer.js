@@ -5,7 +5,7 @@
 //     statutory and due day already moved by § 108 Abs. 3 AO; `bezahlt` = done.
 //     The stable id uses the period (zeitraum.von, else nenn), not the date: a
 //     later permanent extension moves the date and must keep the acknowledgement.
-//   - vorauszahlungsTermine(jahr, art, saetze) for the kinds steuerartenFuer(einst)
+//   - vorauszahlungsTermine(jahr, art, saetze, einst.kalender) for the kinds steuerartenFuer(einst)
 //     knows (legal form, E-04: a freelancer pays no trade tax); a paid
 //     Steuerzahlung of the same kind and due day marks it done.
 // Data through 79's ladeAlles (locked like the books), settings through
@@ -30,7 +30,8 @@ export const QUELLE = Object.freeze({
   standardAn: true,
   laden: async (/** @type {any} */ api) => ladeAlles(api),
   berechnen: (/** @type {{daten: Record<string, any[]>, setting: any}} */ roh, /** @type {any} */ ctx) => {
-    const einst = wirksameEinstellungen(roh?.setting?.value ?? null);
+    // 96: the office calendar of the deadlines page (ctx.kalender) decides the § 108 Abs. 3 AO shift.
+    const einst = { ...wirksameEinstellungen(roh?.setting?.value ?? null), kalender: ctx.kalender ?? null };
     const daten = roh?.daten || {};
     const zahlungen = Array.isArray(daten.Steuerzahlung) ? daten.Steuerzahlung : [];
     const vonJahr = Number(String(ctx.von).slice(0, 4));
