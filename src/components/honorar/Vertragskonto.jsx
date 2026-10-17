@@ -72,22 +72,22 @@ export default function Vertragskonto({ zh, bh, vertrag }) {
 
   return (
     <section className="space-y-3" data-testid="vertragskonto">
-      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("Vertragskonto")}</h3>
+      <h3 className="text-sm font-semibold text-foreground dark:text-slate-100">{t("Vertragskonto")}</h3>
       <dl className="grid gap-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
         {[["Summe inkl. Honorarnachträge", k.summe], ["Erbracht", k.erbracht], ["Abgerechnet", k.abgerechnet], ["Bezahlt", k.bezahlt], ["Offen", k.offen], ["Rest bis zur Schlussrechnung", k.rest]].map(([l, w]) => (
-          <div key={/** @type {string} */ (l)} className="rounded-lg border border-slate-200 p-2 dark:border-slate-700">
-            <dt className="text-xs text-slate-500">{t(/** @type {string} */ (l))}</dt>
+          <div key={/** @type {string} */ (l)} className="rounded-lg border border-border p-2 dark:border-slate-700">
+            <dt className="text-xs text-muted-foreground">{t(/** @type {string} */ (l))}</dt>
             <dd className="tabular-nums font-medium">{euro(/** @type {number|null} */ (w))}</dd>
           </div>
         ))}
       </dl>
-      {k.hinweise.includes("tafel_geaendert") && <p className="text-sm text-amber-800 dark:text-amber-200">{t("Tafel seit Vertragsschluss geändert — maßgeblich ist der Vergütungs-Beleg.")}</p>}
-      {k.hinweise.includes("tafel_fehlt") && <p className="text-sm text-amber-800 dark:text-amber-200">{t("Tafel fehlt")} — {t("Einen Betrag liefert nur eine Pauschale.")}</p>}
+      {k.hinweise.includes("tafel_geaendert") && <p className="text-sm text-warnung dark:text-amber-200">{t("Tafel seit Vertragsschluss geändert — maßgeblich ist der Vergütungs-Beleg.")}</p>}
+      {k.hinweise.includes("tafel_fehlt") && <p className="text-sm text-warnung dark:text-amber-200">{t("Tafel fehlt")} — {t("Einen Betrag liefert nur eine Pauschale.")}</p>}
 
       <div className="text-sm">
         <p className="font-medium">
           {t("Leistungsstand")}
-          {stand?.quelle === "projektphase" && <span className="ml-2 text-xs font-normal text-amber-800 dark:text-amber-200" data-testid="stand-geschaetzt">{t("geschätzt aus der Projektphase")}</span>}
+          {stand?.quelle === "projektphase" && <span className="ml-2 text-xs font-normal text-warnung dark:text-amber-200" data-testid="stand-geschaetzt">{t("geschätzt aus der Projektphase")}</span>}
         </p>
         {stand ? (
           pflege ? (
@@ -96,7 +96,7 @@ export default function Vertragskonto({ zh, bh, vertrag }) {
                 {beauftragt.map((l) => (
                   <label key={l.nr} className="flex flex-col gap-1 text-xs">
                     {t("LPH")} {l.nr} (%)
-                    <input type="number" min={0} max={100} className="h-8 w-20 rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900"
+                    <input type="number" min={0} max={100} className="h-8 w-20 rounded-md border border-border bg-card px-2 text-sm dark:border-slate-600 dark:bg-slate-900"
                       value={pflege[l.nr] ?? ""} onChange={(e) => setPflege((p) => ({ ...(p || {}), [l.nr]: e.target.value }))} />
                   </label>
                 ))}
@@ -105,31 +105,31 @@ export default function Vertragskonto({ zh, bh, vertrag }) {
                 <button type="button" className={buttonVariants({ variant: "default", size: "sm" })} disabled={speichertStand} onClick={standSpeichern}>{t("Speichern")}</button>
                 <button type="button" className={buttonVariants({ variant: "ghost", size: "sm" })} onClick={() => setPflege(null)}>{t("Abbrechen")}</button>
               </div>
-              <p className="text-xs text-slate-600 dark:text-slate-300">{t("Derselbe Leistungsstand wie im Designer-Reiter „Planer“ — eine Quelle für Controlling und Abschläge.")}</p>
+              <p className="text-xs text-muted-foreground dark:text-slate-300">{t("Derselbe Leistungsstand wie im Designer-Reiter „Planer“ — eine Quelle für Controlling und Abschläge.")}</p>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               <ul className="flex flex-wrap gap-2 text-xs">
-                {beauftragt.map((l) => <li key={l.nr} className="rounded bg-slate-100 px-1.5 py-0.5 dark:bg-slate-800">{t("LPH")} {l.nr}: {stand.stand[l.nr] ?? 0} %</li>)}
+                {beauftragt.map((l) => <li key={l.nr} className="rounded bg-muted px-1.5 py-0.5 dark:bg-slate-800">{t("LPH")} {l.nr}: {stand.stand[l.nr] ?? 0} %</li>)}
               </ul>
               {vertrag.project_id && (
                 <button type="button" className={buttonVariants({ variant: "outline", size: "sm" })} onClick={pflegeOeffnen} data-testid="stand-pflegen">{t("Leistungsstand pflegen")}</button>
               )}
             </div>
           )
-        ) : <p className="text-xs text-slate-600 dark:text-slate-300">{t("Leistungsstand im Formular eintragen (Leistungsbild ohne neun LPH).")}</p>}
+        ) : <p className="text-xs text-muted-foreground dark:text-slate-300">{t("Leistungsstand im Formular eintragen (Leistungsbild ohne neun LPH).")}</p>}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+      <div className="overflow-x-auto rounded-lg border border-border dark:border-slate-700">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-800/60">
-            <tr className="text-left text-slate-600 dark:text-slate-300">
+          <thead className="bg-muted dark:bg-slate-800/60">
+            <tr className="text-left text-muted-foreground dark:text-slate-300">
               <th scope="col" className="px-2 py-1">{t("Rechnung")}</th><th scope="col" className="px-2 py-1">{t("Datum")}</th>
               <th scope="col" className="px-2 py-1 text-right">{t("Netto")}</th><th scope="col" className="px-2 py-1">{t("Status")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {alle.length === 0 && <tr><td colSpan={4} className="px-2 py-2 text-slate-500">{t("Noch keine Rechnung zu diesem Vertrag.")}</td></tr>}
+          <tbody className="divide-y divide-border dark:divide-slate-800">
+            {alle.length === 0 && <tr><td colSpan={4} className="px-2 py-2 text-muted-foreground">{t("Noch keine Rechnung zu diesem Vertrag.")}</td></tr>}
             {alle.map((r) => {
               const nr = r.art === "abschlag" && r.status === "gestellt" ? ++abschlagNr : null;
               const st = rechnungsStatus(r, zh.heute);
@@ -152,8 +152,8 @@ export default function Vertragskonto({ zh, bh, vertrag }) {
           onClick={() => setFormular(abschlag)} data-testid="abschlag-stellen">
           <Receipt aria-hidden="true" /> {t("Abschlagsrechnung stellen")}
         </button>
-        {abschlag && <span className="text-xs text-slate-600 dark:text-slate-300" data-testid="abschlag-titel">{abschlag.titel} · {euro(abschlag.vorlage.netto)}</span>}
-        <Link to={`/Accounting?tab=invoices&neu=1&vertrag=${encodeURIComponent(vertrag.id)}`} className="text-xs underline text-slate-600 dark:text-slate-300">
+        {abschlag && <span className="text-xs text-muted-foreground dark:text-slate-300" data-testid="abschlag-titel">{abschlag.titel} · {euro(abschlag.vorlage.netto)}</span>}
+        <Link to={`/Accounting?tab=invoices&neu=1&vertrag=${encodeURIComponent(vertrag.id)}`} className="text-xs underline text-muted-foreground dark:text-slate-300">
           {t("in der Buchhaltung öffnen (ohne Honorarnachträge)")}
         </Link>
       </div>

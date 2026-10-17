@@ -12,7 +12,7 @@ import React, { useState } from "react";
 export default function FehlplanungHinweise({ befunde, t }) {
   const [offen, setOffen] = useState(false);
   const warn = befunde.filter((b) => b.stufe === "warn").length;
-  const farbe = warn ? "border-amber-300 bg-amber-50 text-amber-800" : befunde.length ? "border-sky-200 bg-sky-50 text-sky-800" : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  const farbe = warn ? "border-warnung-rand bg-warnung-flaeche text-warnung" : befunde.length ? "border-hinweis-rand bg-hinweis-flaeche text-hinweis" : "border-erfolg-rand bg-erfolg-flaeche text-erfolg";
   return (
     <div className="relative" data-testid="fehlplanung" data-anzahl={befunde.length}>
       <button type="button" onClick={() => setOffen((o) => !o)} aria-expanded={offen} disabled={!befunde.length}
@@ -21,11 +21,11 @@ export default function FehlplanungHinweise({ befunde, t }) {
         {befunde.length ? `⚠ ${befunde.length} ${t(befunde.length === 1 ? "Hinweis" : "Hinweise")}` : `✓ ${t("keine Hinweise")}`}
       </button>
       {offen && befunde.length > 0 && (
-        <ul className="absolute right-0 z-30 mt-1 w-[320px] space-y-1 rounded-lg border border-slate-200 bg-white p-2 text-[11px] shadow-lg" data-testid="fehlplanung-liste">
+        <ul className="absolute right-0 z-30 mt-1 w-[320px] space-y-1 rounded-lg border border-border bg-card p-2 text-[11px] shadow-lg" data-testid="fehlplanung-liste">
           {befunde.map((b) => (
             <li key={`${b.regel}-${b.code}-${b.ids.join(",")}`} data-testid="fehlplanung-befund" data-regel={b.regel} data-code={b.code}
-              className={`rounded border-l-2 px-2 py-1 ${b.stufe === "warn" ? "border-amber-500 bg-amber-50/60" : "border-sky-400 bg-sky-50/50"}`}>
-              <span className="mr-1 font-semibold text-slate-500">R{b.regel}</span>{b.text}
+              className={`rounded border-l-2 px-2 py-1 ${b.stufe === "warn" ? "border-warnung-rand bg-warnung-flaeche" : "border-hinweis-rand bg-hinweis-flaeche"}`}>
+              <span className="mr-1 font-semibold text-muted-foreground">R{b.regel}</span>{b.text}
             </li>
           ))}
         </ul>

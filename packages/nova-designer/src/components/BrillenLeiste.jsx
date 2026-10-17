@@ -19,32 +19,32 @@ export default function BrillenLeiste({ wert, onChange, t, sw = false, onSw = nu
   const aktiv = brilleVon(wert);
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="brillen-leiste">
-      <div role="radiogroup" aria-label={t("Brille")} className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5 text-[11px] shadow-sm">
+      <div role="radiogroup" aria-label={t("Brille")} className="flex items-center rounded-lg border border-border bg-card p-0.5 text-[11px] shadow-sm">
         {BRILLEN.map((b) => {
           const an = b.id === aktiv.id;
           return (
             <button key={b.id} type="button" role="radio" aria-checked={an} data-testid={`brille-${b.id}`}
               title={`${t(b.label)} — ${t(b.zweck)}`} onClick={() => onChange(b.id)}
-              className={`rounded-md px-2 py-1 transition-colors ${an ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+              className={`rounded-md px-2 py-1 transition-colors ${an ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
               {t(b.kurz)}
             </button>
           );
         })}
       </div>
-      <div className="flex items-center gap-2 text-[10px] text-slate-500" data-testid="brillen-legende" aria-label={t("Legende")}>
+      <div className="flex items-center gap-2 text-[10px] text-muted-foreground" data-testid="brillen-legende" aria-label={t("Legende")}>
         {LEGENDE.map((s) => {
           const sicht = aktiv.sicht[s];
           return (
             <span key={s} data-testid={`legende-${s}`} data-sicht={sicht} className={`flex items-center gap-1 ${sicht === "aus" ? "line-through opacity-40" : ""}`}>
-              <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm border border-slate-300"
+              <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm border border-border"
                 style={{ background: statusFarbe(s === "ohne" ? null : s), opacity: sicht === "blass" ? 0.4 : 1, outline: sicht === "hervor" ? "1.5px solid #0f172a" : "none" }} />
               {t(STATUS_DARSTELLUNG[s].label)}
             </span>
           );
         })}
-        <span className="text-slate-400">1:{aktiv.massstab}</span>
+        <span className="text-muted-foreground">1:{aktiv.massstab}</span>
         {aktiv.sw && onSw && (
-          <label className="flex items-center gap-1 text-slate-600" title={t("Schwarz-Weiß nach Bauvorlagenverordnung: Bestand hellgrau, Abbruch gestrichelt, Neubau schraffiert")}>
+          <label className="flex items-center gap-1 text-muted-foreground" title={t("Schwarz-Weiß nach Bauvorlagenverordnung: Bestand hellgrau, Abbruch gestrichelt, Neubau schraffiert")}>
             <input type="checkbox" checked={sw} onChange={(e) => onSw(e.target.checked)} data-testid="brille-sw" /> {t("S/W")}
           </label>
         )}

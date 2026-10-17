@@ -18,6 +18,12 @@
     --muted-foreground: 0 0% 45.1%;
     --accent: 0 0% 96.1%;
     --accent-foreground: 0 0% 9%;
+    /* Semantic state colours: warning (amber), success (emerald), hint (sky), error (rose) —
+       text / surface / border. Contrast text on surface >= 4.5:1. */
+    --warnung: 23 83% 31%; --warnung-flaeche: 48 100% 96%; --warnung-rand: 48 97% 77%;
+    --erfolg: 163 94% 24%; --erfolg-flaeche: 152 81% 96%; --erfolg-rand: 152 76% 80%;
+    --hinweis: 201 90% 27%; --hinweis-flaeche: 204 100% 97%; --hinweis-rand: 201 94% 86%;
+    --fehler: 0 74% 42%; --fehler-flaeche: 356 100% 97%; --fehler-rand: 353 96% 90%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 89.8%;
@@ -60,6 +66,10 @@
     --muted-foreground: 0 0% 63.9%;
     --accent: 0 0% 14.9%;
     --accent-foreground: 0 0% 98%;
+    --warnung: 46 97% 65%; --warnung-flaeche: 22 78% 10%; --warnung-rand: 23 83% 31%;
+    --erfolg: 156 72% 67%; --erfolg-flaeche: 164 86% 9%; --erfolg-rand: 163 94% 24%;
+    --hinweis: 199 95% 74%; --hinweis-flaeche: 204 80% 10%; --hinweis-rand: 201 90% 27%;
+    --fehler: 0 94% 82%; --fehler-flaeche: 0 63% 12%; --fehler-rand: 0 70% 35%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 14.9%;

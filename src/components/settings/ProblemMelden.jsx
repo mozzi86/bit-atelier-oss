@@ -46,11 +46,11 @@ export default function ProblemMelden() {
   };
 
   return (
-    <div className="space-y-2 rounded-lg border border-slate-200 p-4 dark:border-slate-700" data-testid="problem-melden">
-      <p className="flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100">
+    <div className="space-y-2 rounded-lg border border-border p-4 dark:border-slate-700" data-testid="problem-melden">
+      <p className="flex items-center gap-2 font-medium text-foreground dark:text-slate-100">
         <Bug className="h-4 w-4" aria-hidden="true" /> {t("Problem melden")}
       </p>
-      <p className="text-xs text-slate-600 dark:text-slate-300">
+      <p className="text-xs text-muted-foreground dark:text-slate-300">
         {t("Bereitet eine Meldung für GitHub vor: Version, Seite, Browser und die letzten Protokollzeilen — ohne Projektdaten. Sie sehen den ganzen Text und schicken ihn selbst ab.")}
       </p>
       {!offen ? (
@@ -59,17 +59,17 @@ export default function ProblemMelden() {
         </button>
       ) : (
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="problem-beschreibung">{t("Was ist passiert?")}</label>
+          <label className="block text-sm font-medium text-foreground dark:text-slate-200" htmlFor="problem-beschreibung">{t("Was ist passiert?")}</label>
           <textarea id="problem-beschreibung" rows={3} value={beschreibung} onChange={(e) => setBeschreibung(e.target.value)}
-            className="w-full rounded-md border border-slate-300 bg-white p-2 text-sm dark:border-slate-600 dark:bg-slate-900" />
-          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+            className="w-full rounded-md border border-border bg-card p-2 text-sm dark:border-slate-600 dark:bg-slate-900" />
+          <label className="flex items-center gap-2 text-sm text-foreground dark:text-slate-200">
             <input type="checkbox" checked={mitProtokoll} onChange={(e) => setMitProtokoll(e.target.checked)} />
             {t("Protokollzeilen anhängen")}
           </label>
-          {fehler && <p role="alert" className="text-xs text-rose-700 dark:text-rose-300">{t("Protokoll nicht lesbar:")} {fehler}</p>}
+          {fehler && <p role="alert" className="text-xs text-fehler dark:text-rose-300">{t("Protokoll nicht lesbar:")} {fehler}</p>}
           <details>
-            <summary className="cursor-pointer text-sm text-emerald-700 dark:text-emerald-400">{t("Diese Meldung geht an GitHub")}</summary>
-            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-slate-100 p-2 text-xs dark:bg-slate-800" data-testid="problem-vorschau">{issueText(daten)}</pre>
+            <summary className="cursor-pointer text-sm text-erfolg dark:text-emerald-400">{t("Diese Meldung geht an GitHub")}</summary>
+            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs dark:bg-slate-800" data-testid="problem-vorschau">{issueText(daten)}</pre>
           </details>
           <div className="flex flex-wrap gap-2">
             <a className={buttonVariants({ variant: "default", size: "sm" })} href={issueUrl(daten)} target="_blank" rel="noopener noreferrer" data-testid="problem-github">
@@ -77,7 +77,7 @@ export default function ProblemMelden() {
             </a>
             <button type="button" className={buttonVariants({ variant: "ghost", size: "sm" })} onClick={() => setOffen(false)}>{t("Abbrechen")}</button>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">{t("Für GitHub brauchen Sie ein kostenloses Konto. Ohne Konto: Feedback per E-Mail im Fuß der App.")}</p>
+          <p className="text-xs text-muted-foreground dark:text-muted-foreground">{t("Für GitHub brauchen Sie ein kostenloses Konto. Ohne Konto: Feedback per E-Mail im Fuß der App.")}</p>
         </div>
       )}
     </div>

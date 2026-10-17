@@ -20,7 +20,7 @@ import { bestandsToepfe, vermutetAnteil, statusMischung, ABBRUCH_KG, ABBRUCH_KG_
 import { positionMode } from "@ava/components/avaUtils";
 
 const BASEN = [["area", "Fläche (m²)"], ["volume", "Volumen (m³)"], ["length", "Länge (m)"], ["count", "Anzahl"]];
-const FARBE = { rueckbau: "border-rose-200 bg-rose-50", bestand: "border-slate-200 bg-slate-50", neu: "border-emerald-200 bg-emerald-50", unbekannt: "border-amber-200 bg-amber-50" };
+const FARBE = { rueckbau: "border-fehler-rand bg-fehler-flaeche", bestand: "border-border bg-muted", neu: "border-erfolg-rand bg-erfolg-flaeche", unbekannt: "border-warnung-rand bg-warnung-flaeche" };
 
 /**
  * @param {{elements?: object[], positions?: object[], filters?: object[], onKennzeichnen?: (p: object) => Promise<void>}} props
@@ -75,34 +75,34 @@ export default function BestandsMengenKarte({ elements = [], positions = [], fil
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-base"><Layers className="h-4 w-4" /> {t("Mengentöpfe (Bestand)")}</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
-            <select className="h-8 rounded border border-slate-200 px-2 text-xs" value={abbruchKg} aria-label={t("Kostengruppe Abbruch")} data-testid="bm-abbruch-kg"
+            <select className="h-8 rounded border border-border px-2 text-xs" value={abbruchKg} aria-label={t("Kostengruppe Abbruch")} data-testid="bm-abbruch-kg"
               onChange={(e) => abbruchKgSpeichern(e.target.value)}>
               {ABBRUCH_KG.map((k) => <option key={k.wert} value={k.wert}>{t(k.label)}</option>)}
             </select>
-            <select className="h-8 rounded border border-slate-200 px-2 text-xs" value={basis} onChange={(e) => setBasis(/** @type {any} */ (e.target.value))} data-testid="bm-basis">
+            <select className="h-8 rounded border border-border px-2 text-xs" value={basis} onChange={(e) => setBasis(/** @type {any} */ (e.target.value))} data-testid="bm-basis">
               {BASEN.map(([k, l]) => <option key={k} value={k}>{t(l)}</option>)}
             </select>
           </div>
         </div>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           {aufnahme.elemente ? `${t("Quelle: Bauaufnahme")} „${aufnahme.name}“` : t("Quelle: Mengenquelle der AVA (keine Bauaufnahme gespeichert)")}
           {" · "}{t("Der Topf „Unbekannt“ wird nicht auf die anderen verteilt.")}
         </p>
-        {aufnahme.fehler && <p className="text-xs text-rose-600">{aufnahme.fehler}</p>}
+        {aufnahme.fehler && <p className="text-xs text-fehler">{aufnahme.fehler}</p>}
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid gap-2 md:grid-cols-4">
           {toepfe.map((tp) => (
             <div key={tp.key} className={`rounded-lg border p-2 ${FARBE[tp.key]}`} data-testid={`bm-topf-${tp.key}`} data-menge={tp.menge}>
-              <div className="text-[11px] text-slate-500">{t(tp.label)} · {t(tp.hinweis)}</div>
+              <div className="text-[11px] text-muted-foreground">{t(tp.label)} · {t(tp.hinweis)}</div>
               <div className="text-base font-semibold tabular-nums">{tp.menge.toLocaleString("de-DE")} <span className="text-xs font-normal">{tp.einheit}</span></div>
-              <div className="text-[11px] text-slate-600">{tp.text}</div>
+              <div className="text-[11px] text-muted-foreground">{tp.text}</div>
             </div>
           ))}
         </div>
         {gemischt.length > 0 && (
-          <div className="rounded border border-rose-200 bg-rose-50 p-2 text-xs" data-testid="bm-gemischt">
-            <div className="mb-1 font-medium text-rose-900">{t("Positionen, die Abbruch mit Bestand/Neubau mischen — nach Status trennen")}</div>
+          <div className="rounded border border-fehler-rand bg-fehler-flaeche p-2 text-xs" data-testid="bm-gemischt">
+            <div className="mb-1 font-medium text-fehler">{t("Positionen, die Abbruch mit Bestand/Neubau mischen — nach Status trennen")}</div>
             <ul className="space-y-0.5">
               {gemischt.map(({ p, r }) => (
                 <li key={p.id} data-testid={`bm-gemischt-${p.oz}`}>
@@ -113,8 +113,8 @@ export default function BestandsMengenKarte({ elements = [], positions = [], fil
           </div>
         )}
         {vorschlaege.length > 0 && (
-          <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs">
-            <div className="mb-1 font-medium text-amber-900">{t("Positionen mit überwiegend angenommener Menge")}</div>
+          <div className="rounded border border-warnung-rand bg-warnung-flaeche p-2 text-xs">
+            <div className="mb-1 font-medium text-warnung">{t("Positionen mit überwiegend angenommener Menge")}</div>
             <ul className="space-y-1">
               {vorschlaege.map(({ p, r }) => (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2" data-testid={`bm-vorschlag-${p.oz}`}>

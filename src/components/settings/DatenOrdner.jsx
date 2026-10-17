@@ -49,28 +49,28 @@ export default function DatenOrdner() {
 
   return (
     <div className="space-y-1" data-testid="daten-ordner">
-      <p className="font-medium text-slate-800 dark:text-slate-100">{t("Datenordner")}</p>
+      <p className="font-medium text-foreground dark:text-slate-100">{t("Datenordner")}</p>
       {info ? (
         <div className="flex flex-wrap items-center gap-2">
-          <code className="min-w-0 break-all rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-900" data-testid="daten-ordner-pfad">{info.ordner}</code>
+          <code className="min-w-0 break-all rounded bg-muted px-1.5 py-0.5 text-xs dark:bg-slate-900" data-testid="daten-ordner-pfad">{info.ordner}</code>
           <button type="button" onClick={oeffnen} data-testid="daten-ordner-oeffnen"
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-white dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-card dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
             <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" /> {t("Ordner öffnen")}
           </button>
         </div>
-      ) : !fehler && <p className="text-xs text-slate-600 dark:text-slate-300">{t("Wird geladen …")}</p>}
-      <p className="text-xs text-slate-600 dark:text-slate-300">
+      ) : !fehler && <p className="text-xs text-muted-foreground dark:text-slate-300">{t("Wird geladen …")}</p>}
+      <p className="text-xs text-muted-foreground dark:text-slate-300">
         {t("Hier liegen alle Projekte dieser Installation. Nehmen Sie den Ordner in Ihre Datensicherung auf – Ordner unter AppData erfasst eine Büro-Sicherung oft nicht.")}
       </p>
       {info?.personalSchluessel && (
-        <p className="text-xs text-slate-600 dark:text-slate-300" data-testid="personal-schluessel">
+        <p className="text-xs text-muted-foreground dark:text-slate-300" data-testid="personal-schluessel">
           {t("Personaldaten sind verschlüsselt. Ihr Schlüssel liegt außerhalb des Datenordners:")}{" "}
-          <code className="break-all rounded bg-slate-100 px-1 dark:bg-slate-900">{info.personalSchluessel}</code>{" "}
+          <code className="break-all rounded bg-muted px-1 dark:bg-slate-900">{info.personalSchluessel}</code>{" "}
           {t("— getrennt sichern; ohne ihn sind die Personaldaten einer Sicherung nicht lesbar.")}
         </p>
       )}
-      <p role="status" className="text-xs text-emerald-700 dark:text-emerald-400" data-testid="daten-ordner-status">{status}</p>
-      {fehler && <p role="alert" className="text-xs text-rose-700 dark:text-rose-300" data-testid="daten-ordner-fehler">{t("Datenordner nicht abrufbar:")} {fehler}</p>}
+      <p role="status" className="text-xs text-erfolg dark:text-emerald-400" data-testid="daten-ordner-status">{status}</p>
+      {fehler && <p role="alert" className="text-xs text-fehler dark:text-rose-300" data-testid="daten-ordner-fehler">{t("Datenordner nicht abrufbar:")} {fehler}</p>}
     </div>
   );
 }

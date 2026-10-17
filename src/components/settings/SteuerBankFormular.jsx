@@ -18,8 +18,8 @@ import { useI18n } from "@core/lib/i18n";
 import { leseEinstellung, useEinstellung } from "@core/lib/useEinstellung.js";
 import { SETTING_KEY } from "@/lib/accounting/datenmodell.js";
 
-const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";
-const LABEL = "text-sm font-medium text-slate-700 dark:text-slate-200";
+const FELD = "h-9 w-full rounded-md border border-border bg-card px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";
+const LABEL = "text-sm font-medium text-foreground dark:text-slate-200";
 
 /**
  * @returns {React.ReactElement}
@@ -57,9 +57,9 @@ export default function SteuerBankFormular() {
   };
 
   return (
-    <form onSubmit={speichern} className="space-y-3 rounded-lg border border-slate-200 p-4 dark:border-slate-700" data-testid="steuer-bank" aria-labelledby="steuer-bank-titel">
-      <h3 id="steuer-bank-titel" className="font-semibold text-slate-800 dark:text-slate-100">{t("Steuer- und Bankdaten")}</h3>
-      <p className="text-xs text-slate-600 dark:text-slate-300">
+    <form onSubmit={speichern} className="space-y-3 rounded-lg border border-border p-4 dark:border-slate-700" data-testid="steuer-bank" aria-labelledby="steuer-bank-titel">
+      <h3 id="steuer-bank-titel" className="font-semibold text-foreground dark:text-slate-100">{t("Steuer- und Bankdaten")}</h3>
+      <p className="text-xs text-muted-foreground dark:text-slate-300">
         {t("Für Rechnungen, XRechnung und Mahnungen — dieselben Angaben wie in Buchhaltung › Einstellungen.")}{" "}
         <Link to="/Accounting" className="underline">{t("Zur Buchhaltung")}</Link>
       </p>

@@ -34,6 +34,7 @@ export const LAYER_VERSION = {
   barrierefreiheit_layer: 1, // 73-13 rest (BarrierefreiheitPlanner, { abweichungen })
   schallschutz_vermerke_layer: 1, // 73-13 rest (SchallschutzPlanner summary, { abweichungen })
   bauteil_attribute_layer: 1, // 97-02: { attribute: { [wt-/hull-id]: {status, kg, gewerk, …} } }
+  massing_layer: 1, // 98-01: { koerper[], gruppen{nr → definition}, naechsteId } (massing/massingModell.js)
 };
 
 /**

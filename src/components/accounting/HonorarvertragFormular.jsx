@@ -27,7 +27,7 @@ import { KOSTEN_SNAPSHOT_LEER, kostenEinfrieren } from "@core/lib/hoai/kostenDri
 import { datumText, heuteLokal } from "@core/lib/kalender/datum.js";
 import KostenDriftHinweis from "@/components/honorar/KostenDriftHinweis.jsx";
 
-const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900";
+const FELD = "h-9 w-full rounded-md border border-border bg-card px-2 text-sm dark:border-slate-600 dark:bg-slate-900";
 // Native <label> instead of the shadcn Label wrapper: same tsc-cost reason as
 // the Card wrappers (RechnungenAbschnitt.jsx).
 const LABEL = "text-sm font-medium leading-none";
@@ -209,7 +209,7 @@ export default function HonorarvertragFormular({ bh, modus, vertrag = null, proj
         </div>
 
         {kostenregel === "p33" ? (
-          <fieldset className="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+          <fieldset className="space-y-2 rounded-lg border border-border p-3 dark:border-slate-700">
             <legend className="px-1 text-sm font-medium">{t("Anrechenbare Kosten")} (§ 33)</legend>
             <div className="grid gap-2 sm:grid-cols-3">
               <label className="flex flex-col gap-1 text-xs">{t("KG 300 (€)")}
@@ -220,9 +220,9 @@ export default function HonorarvertragFormular({ bh, modus, vertrag = null, proj
                 <input type="number" className={FELD} value={sonstige} onChange={(e) => setSonstige(Number(e.target.value))} /></label>
             </div>
             <button type="button" className={buttonVariants({ variant: "outline", size: "sm" })} onClick={uebernehmen}>{t("aus LV übernehmen")}</button>
-            {lvQuelle === "lv" && <p className="text-xs text-slate-500">{t("Quelle")}: {t("aus dem Leistungsverzeichnis")}</p>}
+            {lvQuelle === "lv" && <p className="text-xs text-muted-foreground">{t("Quelle")}: {t("aus dem Leistungsverzeichnis")}</p>}
             {snapshotAnzeige.kosten_eingefroren_am && (
-              <p className="text-xs text-slate-500" data-testid="hv-kosten-eingefroren-am">{t("eingefroren am {datum}").replace("{datum}", datumText(snapshotAnzeige.kosten_eingefroren_am, lang === "en" ? "en" : "de"))}</p>
+              <p className="text-xs text-muted-foreground" data-testid="hv-kosten-eingefroren-am">{t("eingefroren am {datum}").replace("{datum}", datumText(snapshotAnzeige.kosten_eingefroren_am, lang === "en" ? "en" : "de"))}</p>
             )}
             {projekt && <KostenDriftHinweis vertrag={snapshotAnzeige} projektId={projekt.id} hinweis={t("Mit „aus LV übernehmen“ den neuen Stand einfrieren.")} />}
           </fieldset>
@@ -230,7 +230,7 @@ export default function HonorarvertragFormular({ bh, modus, vertrag = null, proj
           <div>
             <label className={LABEL} htmlFor="hv-bezugswert">{info?.einheit === "ha" ? t("Fläche (ha)") : t("Anrechenbare Kosten (€)")}</label>
             <input id="hv-bezugswert" type="number" className={FELD} value={bezugswertManuell} onChange={(e) => setBezugswertManuell(Number(e.target.value))} />
-            <p className="text-xs text-slate-500">§ {info?.tafelParagraf ?? "—"}</p>
+            <p className="text-xs text-muted-foreground">§ {info?.tafelParagraf ?? "—"}</p>
           </div>
         )}
 
@@ -244,19 +244,19 @@ export default function HonorarvertragFormular({ bh, modus, vertrag = null, proj
           <div>
             <label className={LABEL} htmlFor="hv-satzposition">{t("Satzposition (%)")}</label>
             <input id="hv-satzposition" type="number" min={0} max={100} className={FELD} value={satzPosition} onChange={(e) => setSatzPosition(Number(e.target.value))} />
-            <p className="text-xs text-slate-500">{t("0 = Basishonorarsatz, § 7 Abs. 1")}</p>
+            <p className="text-xs text-muted-foreground">{t("0 = Basishonorarsatz, § 7 Abs. 1")}</p>
           </div>
           <div>
             <label className={LABEL} htmlFor="hv-umbau">{t("Umbauzuschlag (%)")}</label>
             <input id="hv-umbau" type="number" min={0} className={FELD} value={umbauProzent} onChange={(e) => setUmbauProzent(Number(e.target.value))} />
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               {t("20 % gelten ohne Textform ab Zone III, § 6 Abs. 2")}
               {typeof info?.umbau_max_prozent === "number" ? ` · ${t("höchstens")} ${info.umbau_max_prozent} %` : ""}
             </p>
           </div>
         </div>
 
-        <fieldset className="space-y-1 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+        <fieldset className="space-y-1 rounded-lg border border-border p-3 dark:border-slate-700">
           <legend className="px-1 text-sm font-medium">{t("Leistungsphasen")}</legend>
           {lphZeilen.map((z, i) => (
             <div key={z.nr} className="flex flex-wrap items-center gap-2 text-sm">
@@ -267,9 +267,9 @@ export default function HonorarvertragFormular({ bh, modus, vertrag = null, proj
               </label>
               <input type="number" min={0} max={100} className={`${FELD} w-20`} value={lph[i]?.prozent ?? 0}
                 onChange={(e) => setLph((liste) => liste.map((p, j) => (j === i ? { ...p, prozent: Number(e.target.value) } : p)))} />
-              <span className="text-slate-500">%</span>
+              <span className="text-muted-foreground">%</span>
               {leistungsstand && (
-                <span className="text-xs text-slate-500">{t("Stand")}: {leistungsstand.stand[z.nr] ?? 0} % ({t(leistungsstandQuelle(leistungsstand.quelle))})</span>
+                <span className="text-xs text-muted-foreground">{t("Stand")}: {leistungsstand.stand[z.nr] ?? 0} % ({t(leistungsstandQuelle(leistungsstand.quelle))})</span>
               )}
             </div>
           ))}
@@ -292,7 +292,7 @@ export default function HonorarvertragFormular({ bh, modus, vertrag = null, proj
           </div>
         </div>
 
-        <fieldset className="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+        <fieldset className="space-y-2 rounded-lg border border-border p-3 dark:border-slate-700">
           <legend className="px-1 text-sm font-medium">{t("Bauherr")}</legend>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-xs">{t("Name")}
@@ -326,22 +326,22 @@ export default function HonorarvertragFormular({ bh, modus, vertrag = null, proj
           </div>
         </div>
 
-        <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800">
+        <div className="rounded-lg bg-muted px-3 py-2 text-sm dark:bg-slate-800">
           {berechnet.netto == null ? (
-            <p className="text-slate-600 dark:text-slate-300">
+            <p className="text-muted-foreground dark:text-slate-300">
               {berechnet.quelle === "tafel_fehlt"
                 ? t("Tafel fehlt — HOAI § {nr} noch nicht amtlich übertragen").replace("{nr}", String(info?.tafelParagraf ?? ""))
                 : t("frei vereinbar")}
             </p>
           ) : (
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 tabular-nums sm:grid-cols-3">
-              <dt className="text-slate-500">{t("Grundhonorar")}</dt><dd>{formatEuro(Math.round((berechnet.grund || 0) * 100))}</dd>
-              <dt className="text-slate-500">{t("Netto")}</dt><dd>{formatEuro(Math.round(berechnet.netto * 100))}</dd>
-              <dt className="text-slate-500">{t("Brutto")}</dt><dd>{formatEuro(Math.round((berechnet.brutto || 0) * 100))}</dd>
-              <dt className="text-slate-500">{t("Rest bis Schlussrechnung")}</dt><dd>{rest == null ? "—" : formatEuro(Math.round(rest * 100))}</dd>
+              <dt className="text-muted-foreground">{t("Grundhonorar")}</dt><dd>{formatEuro(Math.round((berechnet.grund || 0) * 100))}</dd>
+              <dt className="text-muted-foreground">{t("Netto")}</dt><dd>{formatEuro(Math.round(berechnet.netto * 100))}</dd>
+              <dt className="text-muted-foreground">{t("Brutto")}</dt><dd>{formatEuro(Math.round((berechnet.brutto || 0) * 100))}</dd>
+              <dt className="text-muted-foreground">{t("Rest bis Schlussrechnung")}</dt><dd>{rest == null ? "—" : formatEuro(Math.round(rest * 100))}</dd>
             </dl>
           )}
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mt-2 text-xs text-muted-foreground">
             {t("HOAI 2021, Orientierungswerte § {nr} (Quelle und Abrufdatum der Tafel) — vor Vertragsverwendung gegenlesen, keine Rechtsberatung").replace("{nr}", String(info?.tafelParagraf ?? ""))}
           </p>
         </div>

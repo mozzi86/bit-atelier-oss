@@ -35,8 +35,8 @@ import { useProject } from "@core/lib/ProjectContext";
 import { bauherrAusKontakt, kontaktText, sortiereKontakte } from "@/lib/honorar/bauherrKontakt.js";
 import { vergissVorschlag } from "@/lib/honorar/vorschlagMerker.js";
 
-const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";
-const LABEL = "text-sm font-medium text-slate-700 dark:text-slate-200";
+const FELD = "h-9 w-full rounded-md border border-border bg-card px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";
+const LABEL = "text-sm font-medium text-foreground dark:text-slate-200";
 const SCHRITTE = ["Projekt und Bauherr", "Leistungsbild und Kosten", "Honorarzone", "Leistungsumfang", "Neubau oder Umbau"];
 
 /**
@@ -130,7 +130,7 @@ export default function AngebotAssistent({ zh, wert, projektVorwahl = null, vors
           {SCHRITTE.map((s, i) => (
             <li key={s}>
               <button type="button" onClick={() => setSchritt(i)} aria-current={i === schritt ? "step" : undefined}
-                className={`rounded-full border px-2 py-0.5 ${i === schritt ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100" : "border-slate-300 text-slate-600 dark:text-slate-300"}`}>
+                className={`rounded-full border px-2 py-0.5 ${i === schritt ? "border-emerald-600 bg-erfolg-flaeche text-erfolg dark:bg-emerald-950 dark:text-emerald-100" : "border-border text-muted-foreground dark:text-slate-300"}`}>
                 {i + 1}. {t(s)}
               </button>
             </li>
@@ -151,7 +151,7 @@ export default function AngebotAssistent({ zh, wert, projektVorwahl = null, vors
                   <button type="button" className={buttonVariants({ variant: "outline" })} onClick={() => setNeuesProjekt("")} data-testid="as-neues-projekt">{t("Neues Projekt")}</button>
                 )}
               </div>
-              {projektFehler && <p id="as-projekt-fehler" role="alert" className="text-sm text-red-700 dark:text-red-300">{t("Bitte ein Projekt wählen oder neu anlegen.")}</p>}
+              {projektFehler && <p id="as-projekt-fehler" role="alert" className="text-sm text-fehler dark:text-red-300">{t("Bitte ein Projekt wählen oder neu anlegen.")}</p>}
               {neuesProjekt !== null && (
                 <div className="flex gap-2">
                   <label htmlFor="as-projekt-name" className="sr-only">{t("Name des neuen Projekts")}</label>
@@ -194,8 +194,8 @@ export default function AngebotAssistent({ zh, wert, projektVorwahl = null, vors
           <div className="space-y-3">
             <LeistungsbildFelder wert={entwurf} onChange={aendere} idPraefix="as" teile={["zone"]} />
             {PUNKTE_LEISTUNGSBILDER.includes(entwurf.leistungsbild) && (
-              <details className="rounded-lg border border-slate-200 p-2 dark:border-slate-700">
-                <summary className="cursor-pointer text-sm text-slate-700 dark:text-slate-200">{t("Honorarzone aus Punkten (§ 35 Abs. 6 HOAI)")}</summary>
+              <details className="rounded-lg border border-border p-2 dark:border-slate-700">
+                <summary className="cursor-pointer text-sm text-foreground dark:text-slate-200">{t("Honorarzone aus Punkten (§ 35 Abs. 6 HOAI)")}</summary>
                 <div className="mt-2 flex flex-wrap items-end gap-2">
                   <div className="space-y-1">
                     <label htmlFor="as-punkte" className={LABEL}>{t("Punkte gesamt")}</label>
@@ -219,14 +219,14 @@ export default function AngebotAssistent({ zh, wert, projektVorwahl = null, vors
                 <label className="flex items-center gap-2 text-sm"><input type="radio" name="as-umbau" checked={!istUmbau} onChange={() => aendere({ umbauzuschlag_prozent: 0, textform_am: null })} /> {t("Neubau")}</label>
                 <label className="flex items-center gap-2 text-sm"><input type="radio" name="as-umbau" checked={istUmbau} onChange={() => aendere({ umbauzuschlag_prozent: 20 })} /> {t("Umbau oder Modernisierung")}</label>
                 {istUmbau && <LeistungsbildFelder wert={entwurf} onChange={aendere} idPraefix="as" projekt={projekt} teile={["umbau"]} />}
-                {istUmbau && !entwurf.textform_am && <p className="text-xs text-slate-600 dark:text-slate-300">{t("Ohne Vereinbarung in Textform gilt ein Zuschlag von 20 % (§ 6 Abs. 2 HOAI).")}</p>}
+                {istUmbau && !entwurf.textform_am && <p className="text-xs text-muted-foreground dark:text-slate-300">{t("Ohne Vereinbarung in Textform gilt ein Zuschlag von 20 % (§ 6 Abs. 2 HOAI).")}</p>}
               </fieldset>
-            ) : <p className="text-sm text-slate-600 dark:text-slate-300">{t("Für dieses Leistungsbild gibt es keinen Umbauzuschlag.")}</p>}
+            ) : <p className="text-sm text-muted-foreground dark:text-slate-300">{t("Für dieses Leistungsbild gibt es keinen Umbauzuschlag.")}</p>}
           </div>
         )}
 
-        <details open={mehr} onToggle={(e) => setMehr(/** @type {HTMLDetailsElement} */ (e.currentTarget).open)} className="rounded-lg border border-slate-200 p-2 dark:border-slate-700">
-          <summary className="cursor-pointer text-sm text-slate-700 dark:text-slate-200">{t("Mehr Optionen")}</summary>
+        <details open={mehr} onToggle={(e) => setMehr(/** @type {HTMLDetailsElement} */ (e.currentTarget).open)} className="rounded-lg border border-border p-2 dark:border-slate-700">
+          <summary className="cursor-pointer text-sm text-foreground dark:text-slate-200">{t("Mehr Optionen")}</summary>
           <div className="mt-2 space-y-3">
             <LeistungsbildFelder wert={entwurf} onChange={aendere} idPraefix="as-mehr" teile={["position", "pauschal"]} />
             <div className="grid gap-3 sm:grid-cols-3">
@@ -244,11 +244,11 @@ export default function AngebotAssistent({ zh, wert, projektVorwahl = null, vors
               </div>
             </div>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={entwurf.zahlungsziel_vertraglich !== false} onChange={(e) => aendere({ zahlungsziel_vertraglich: e.target.checked })} /> {t("Zahlungsziel vertraglich vereinbart")}</label>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{t("Vorbelegt aus der Buchhaltung: Bauherr, sonst Bürostandard (14 Tage).")}</p>
+            <p className="text-xs text-muted-foreground dark:text-muted-foreground">{t("Vorbelegt aus der Buchhaltung: Bauherr, sonst Bürostandard (14 Tage).")}</p>
           </div>
         </details>
 
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-900" data-testid="angebot-live-summe" aria-live="polite">
+        <div className="rounded-lg border border-border bg-muted p-3 text-sm dark:border-slate-700 dark:bg-slate-900" data-testid="angebot-live-summe" aria-live="polite">
           {a.tafelFehlt ? (
             <span>{t("Tafel fehlt — HOAI § {nr} noch nicht amtlich übertragen").replace("{nr}", String(info?.tafelParagraf ?? ""))}</span>
           ) : a.ausserhalb ? (

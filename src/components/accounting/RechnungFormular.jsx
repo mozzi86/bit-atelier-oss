@@ -21,7 +21,7 @@ import { formatEuro } from "@/lib/accounting/geld.js";
 import BetragFeld from "./gemeinsam/BetragFeld.jsx";
 import XRechnungKnopf from "./XRechnungKnopf.jsx";
 
-const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900";
+const FELD = "h-9 w-full rounded-md border border-border bg-card px-2 text-sm dark:border-slate-600 dark:bg-slate-900";
 // Native <label> instead of the shadcn Label wrapper: same tsc-cost reason as
 // the Card wrappers (RechnungenAbschnitt.jsx).
 const LABEL = "text-sm font-medium leading-none";
@@ -164,14 +164,14 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
     return (
       <FormModal title={`${t("Rechnung")} ${rechnung?.nummer || ""}`} onClose={onClose} schuetzen={false}>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-          <dt className="text-slate-500">{t("Projekt")}</dt><dd>{rechnung?.project_name || projekt?.name || "—"}</dd>
-          <dt className="text-slate-500">{t("Netto")}</dt><dd className="tabular-nums">{formatEuro(Math.round((rechnung?.netto || 0) * 100))}</dd>
-          <dt className="text-slate-500">{t("USt")}</dt><dd className="tabular-nums">{formatEuro(Math.round((rechnung?.ust || 0) * 100))}</dd>
-          <dt className="text-slate-500">{t("Brutto")}</dt><dd className="tabular-nums">{formatEuro(Math.round((rechnung?.brutto || 0) * 100))}</dd>
-          <dt className="text-slate-500">{t("Rechnungsdatum")}</dt><dd>{rechnung?.rechnungsdatum || "—"}</dd>
-          <dt className="text-slate-500">{t("Fällig am")}</dt><dd>{rechnung?.faellig_am || "—"}</dd>
-          <dt className="text-slate-500">{t("Empfänger")}</dt><dd>{rechnung?.empfaenger?.name || "—"}</dd>
-          <dt className="text-slate-500">{t("Leitweg-ID")}</dt><dd>{rechnung?.leitweg_id || rechnung?.empfaenger?.leitweg_id || "—"}</dd>
+          <dt className="text-muted-foreground">{t("Projekt")}</dt><dd>{rechnung?.project_name || projekt?.name || "—"}</dd>
+          <dt className="text-muted-foreground">{t("Netto")}</dt><dd className="tabular-nums">{formatEuro(Math.round((rechnung?.netto || 0) * 100))}</dd>
+          <dt className="text-muted-foreground">{t("USt")}</dt><dd className="tabular-nums">{formatEuro(Math.round((rechnung?.ust || 0) * 100))}</dd>
+          <dt className="text-muted-foreground">{t("Brutto")}</dt><dd className="tabular-nums">{formatEuro(Math.round((rechnung?.brutto || 0) * 100))}</dd>
+          <dt className="text-muted-foreground">{t("Rechnungsdatum")}</dt><dd>{rechnung?.rechnungsdatum || "—"}</dd>
+          <dt className="text-muted-foreground">{t("Fällig am")}</dt><dd>{rechnung?.faellig_am || "—"}</dd>
+          <dt className="text-muted-foreground">{t("Empfänger")}</dt><dd>{rechnung?.empfaenger?.name || "—"}</dd>
+          <dt className="text-muted-foreground">{t("Leitweg-ID")}</dt><dd>{rechnung?.leitweg_id || rechnung?.empfaenger?.leitweg_id || "—"}</dd>
         </dl>
         <div className="mt-4 flex flex-wrap items-start justify-end gap-2">
           {rechnung && <XRechnungKnopf bh={bh} rechnung={rechnung} groesse="default" />}
@@ -217,7 +217,7 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
           </div>
         </div>
 
-        <fieldset className="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+        <fieldset className="space-y-2 rounded-lg border border-border p-3 dark:border-slate-700">
           <legend className="px-1 text-sm font-medium">{t("Leistungsphasen")}</legend>
           {lpPos.map((pos, i) => (
             <div key={i} className="flex flex-wrap items-end gap-2">
@@ -225,7 +225,7 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
               {pos.nachtrag_id ? (
                 <span className="flex min-w-40 flex-col gap-1 text-xs" data-testid="rf-nachtrag-position">
                   {t("Honorarnachtrag")}
-                  <span className="text-sm text-slate-800 dark:text-slate-100">{pos.bezeichnung || pos.nachtrag_id}</span>
+                  <span className="text-sm text-foreground dark:text-slate-100">{pos.bezeichnung || pos.nachtrag_id}</span>
                 </span>
               ) : (
               <label className="flex flex-col gap-1 text-xs">
@@ -255,16 +255,16 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
             })}>{t("Leistungsphase hinzufügen")}</button>
         </fieldset>
 
-        <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm tabular-nums dark:bg-slate-800">
+        <div className="rounded-lg bg-muted px-3 py-2 text-sm tabular-nums dark:bg-slate-800">
           {t("Netto")} {formatEuro(Math.round(betraege.netto * 100))} · {t("USt")} {formatEuro(Math.round(betraege.ust * 100))} · {t("Brutto")} {formatEuro(Math.round(betraege.brutto * 100))}
         </div>
         {nullZeilen > 0 && (
-          <p role="status" data-testid="rf-null-zeile" className="text-sm text-amber-800 dark:text-amber-200">
+          <p role="status" data-testid="rf-null-zeile" className="text-sm text-warnung dark:text-amber-200">
             {nullZeilen === 1 ? t("Eine Zeile steht auf 0,00 € — Stand oder Betrag prüfen.") : t("{n} Zeilen stehen auf 0,00 € — Stand oder Betrag prüfen.").replace("{n}", String(nullZeilen))}
           </p>
         )}
         {!rechnung && vorlage?.stand_quelle && (
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-muted-foreground dark:text-muted-foreground">
             {t("Abschlagsvorschlag aus dem Leistungsstand")} ({t(standQuelleLabel(vorlage.stand_quelle))})
           </p>
         )}
@@ -284,7 +284,7 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
           </div>
         </div>
 
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-muted-foreground dark:text-muted-foreground">
           {t("Zahlungsziel")}: {zielTage} {t("Tage")} ({t(zielQuelleLabel(zielQuelle(vertrag, bh.einst, schluessel)))})
         </p>
 
@@ -298,7 +298,7 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
           {t("Verzugshinweis nach § 286 Abs. 3 BGB")}
         </label>
 
-        <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+        <p className="rounded-md bg-muted px-3 py-2 text-sm text-foreground dark:bg-slate-800 dark:text-slate-200">
           {t("Empfänger")}: {empfaenger.name || t("noch kein Empfänger")}
         </p>
 
@@ -309,7 +309,7 @@ export default function RechnungFormular({ bh, modus, rechnung = null, vorlage =
         </div>
 
         {stellenBestaetigen && (
-          <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-700 dark:bg-amber-950">
+          <div className="space-y-2 rounded-lg border border-warnung-rand bg-warnung-flaeche px-3 py-2 text-sm dark:border-amber-700 dark:bg-amber-950">
             <p className="font-medium">{t("Rechnung wirklich stellen? Danach nur noch Zahlungen, Mahnungen oder Storno möglich.")}</p>
             {warnungen.length > 0 && (
               <ul className="list-disc space-y-0.5 pl-5">

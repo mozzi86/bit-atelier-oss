@@ -31,8 +31,8 @@ import { personenPruefen, rechtsformWirkung } from "@/lib/accounting/rechtsform.
 import { useBriefkopf } from "@core/lib/useBriefkopf.js";
 import { bueroNameAus, nurAlterBueroName } from "@/lib/accounting/bueroName.js";
 
-const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900";
-const LABEL = "text-sm font-medium text-slate-700 dark:text-slate-200";
+const FELD = "h-9 w-full rounded-md border border-border bg-card px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900";
+const LABEL = "text-sm font-medium text-foreground dark:text-slate-200";
 
 /**
  * The effect of a legal form in one line, e.g. "EÜR · Privatentnahmen der
@@ -126,32 +126,32 @@ export default function EinstellungenDialog({ bh, onClose }) {
   return (
     <FormModal title={t("Einstellungen der Buchhaltung")} onClose={onClose}>
       <form onSubmit={speichern} className="space-y-6" data-testid="buchhaltung-einstellungen">
-        <section className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-950/40" aria-labelledby="bh-regeln-titel">
-          <h3 id="bh-regeln-titel" className="font-semibold text-slate-800 dark:text-slate-100">{t("Sätze und Bürowerte der Buchhaltung pflegen Sie in Einstellungen › Regelwerke")}</h3>
+        <section className="space-y-2 rounded-lg border border-erfolg-rand bg-erfolg-flaeche p-3 dark:border-emerald-800 dark:bg-emerald-950/40" aria-labelledby="bh-regeln-titel">
+          <h3 id="bh-regeln-titel" className="font-semibold text-foreground dark:text-slate-100">{t("Sätze und Bürowerte der Buchhaltung pflegen Sie in Einstellungen › Regelwerke")}</h3>
           <Link to="/Settings?tab=rules" className={buttonVariants({ variant: "outline" })}>{t("Zu den Regelwerken")}</Link>
         </section>
 
         <section className="space-y-2" aria-labelledby="bh-rechtsform-titel">
-          <h3 id="bh-rechtsform-titel" className="font-semibold text-slate-800 dark:text-slate-100">{t("Rechtsform")}</h3>
-          <p className="text-sm text-slate-700 dark:text-slate-200">{rechtsformText(wirkung.rechtsform, t)}</p>
-          <p data-testid="rechtsform-wirkung" className="text-sm text-slate-700 dark:text-slate-200">{wirkungText(wirkung, t)}</p>
+          <h3 id="bh-rechtsform-titel" className="font-semibold text-foreground dark:text-slate-100">{t("Rechtsform")}</h3>
+          <p className="text-sm text-foreground dark:text-slate-200">{rechtsformText(wirkung.rechtsform, t)}</p>
+          <p data-testid="rechtsform-wirkung" className="text-sm text-foreground dark:text-slate-200">{wirkungText(wirkung, t)}</p>
           {wirkung.hinweise.includes("ug_ruecklage") && (
-            <p className="text-sm text-slate-600 dark:text-slate-300">{t("UG: 25 % des Jahresüberschusses gehen in die Rücklage (§ 5a Abs. 3 GmbHG).")}</p>
+            <p className="text-sm text-muted-foreground dark:text-slate-300">{t("UG: 25 % des Jahresüberschusses gehen in die Rücklage (§ 5a Abs. 3 GmbHG).")}</p>
           )}
           {warnungen.includes("einzel_mehrere_personen") && (
-            <p role="status" className="text-sm text-amber-800 dark:text-amber-200">{t("Rechtsform prüfen: Im Einzelunternehmen ist mehr als eine Person aktiv.")}</p>
+            <p role="status" className="text-sm text-warnung dark:text-amber-200">{t("Rechtsform prüfen: Im Einzelunternehmen ist mehr als eine Person aktiv.")}</p>
           )}
           {warnungen.includes("schluessel_fehlt") && (
-            <p role="status" className="text-sm text-amber-800 dark:text-amber-200">{t("Für die Gesellschafter fehlt ein Gewinnschlüssel mit 100 %.")}</p>
+            <p role="status" className="text-sm text-warnung dark:text-amber-200">{t("Für die Gesellschafter fehlt ein Gewinnschlüssel mit 100 %.")}</p>
           )}
         </section>
 
         <section className="space-y-3" aria-labelledby="bh-buero-titel">
-          <h3 id="bh-buero-titel" className="font-semibold text-slate-800 dark:text-slate-100">{t("Büro")}</h3>
+          <h3 id="bh-buero-titel" className="font-semibold text-foreground dark:text-slate-100">{t("Büro")}</h3>
           <div className="space-y-1" data-testid="bh-buero-name">
             <p className={LABEL}>{t("Büroname")}</p>
-            <p className="text-sm text-slate-800 dark:text-slate-100">{name || t("noch nicht eingetragen")}</p>
-            <p className="text-xs text-slate-600 dark:text-slate-300">
+            <p className="text-sm text-foreground dark:text-slate-100">{name || t("noch nicht eingetragen")}</p>
+            <p className="text-xs text-muted-foreground dark:text-slate-300">
               {t("Kommt aus dem Briefkopf — eine Quelle für Rechnungen, XRechnung, Mahnungen und Berichte.")}{" "}
               <Link to="/Settings?tab=office" className="underline">{t("Im Briefkopf ändern")}</Link>
             </p>

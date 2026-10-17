@@ -120,12 +120,12 @@ export default function DurchbruchListe({ projectId, projektName = "" }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {liste.length === 0 ? (
-          <p className="text-sm text-slate-500">{t("Noch keine Durchbrüche beantragt.")}</p>
+          <p className="text-sm text-muted-foreground">{t("Noch keine Durchbrüche beantragt.")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-slate-400 border-b">
+                <tr className="text-left text-xs text-muted-foreground border-b">
                   <th className="py-2 px-2">{t("Nr.")}</th>
                   <th className="py-2 px-2">{t("Art / Maße")}</th>
                   <th className="py-2 px-2">{t("Bauteil")}</th>
@@ -145,16 +145,16 @@ export default function DurchbruchListe({ projectId, projektName = "" }) {
                   return (
                     <tr key={d.id} className="border-b last:border-0 align-top" data-testid="db-zeile" data-nr={d.nr} data-status={d.status}>
                       <td className="py-1.5 px-2 font-mono text-xs">{d.nr}</td>
-                      <td className="py-1.5 px-2">{t(labelAus(DURCHBRUCH_ARTEN, d.art))}<div className="text-xs text-slate-500">{masseText(d)}</div></td>
-                      <td className="py-1.5 px-2 text-xs">{d.bauteil_name || "—"}<div className="font-mono text-slate-400">{d.bauteil_guid || ""}</div>{d.geschoss && <div>{d.geschoss}</div>}</td>
+                      <td className="py-1.5 px-2">{t(labelAus(DURCHBRUCH_ARTEN, d.art))}<div className="text-xs text-muted-foreground">{masseText(d)}</div></td>
+                      <td className="py-1.5 px-2 text-xs">{d.bauteil_name || "—"}<div className="font-mono text-muted-foreground">{d.bauteil_guid || ""}</div>{d.geschoss && <div>{d.geschoss}</div>}</td>
                       <td className="py-1.5 px-2 text-xs">{d.gewerk || "—"}</td>
-                      <td className="py-1.5 px-2 text-xs">{d.feuerwiderstand || "ohne"}{d.abschottung && <div className="text-slate-500">{d.abschottung}</div>}
-                        {d.brandschott && <div className="text-slate-500" data-testid="db-schott">{t("Schott")} {d.brandschott.klasse}{d.brandschott.system ? ` · ${d.brandschott.system}` : ""}{d.brandschott.zulassung_nr ? ` · ${d.brandschott.zulassung_art} ${d.brandschott.zulassung_nr}` : ""}</div>}</td>
+                      <td className="py-1.5 px-2 text-xs">{d.feuerwiderstand || "ohne"}{d.abschottung && <div className="text-muted-foreground">{d.abschottung}</div>}
+                        {d.brandschott && <div className="text-muted-foreground" data-testid="db-schott">{t("Schott")} {d.brandschott.klasse}{d.brandschott.system ? ` · ${d.brandschott.system}` : ""}{d.brandschott.zulassung_nr ? ` · ${d.brandschott.zulassung_art} ${d.brandschott.zulassung_nr}` : ""}</div>}</td>
                       <td className="py-1.5 px-2 text-xs" data-testid="db-statik">{vermerk(d.pruefung?.statik)}</td>
                       <td className="py-1.5 px-2 text-xs" data-testid="db-architekt">{vermerk(d.pruefung?.architekt)}</td>
                       <td className="py-1.5 px-2">{t(labelAus(DURCHBRUCH_STATUS, d.status))}</td>
                       <td className="py-1.5 px-2 text-xs">
-                        {hw.map((h) => <div key={h.code} data-code={h.code} className={h.stufe === "warn" ? "text-amber-700" : "text-slate-500"}>{t(h.text)}</div>)}
+                        {hw.map((h) => <div key={h.code} data-code={h.code} className={h.stufe === "warn" ? "text-warnung" : "text-muted-foreground"}>{t(h.text)}</div>)}
                       </td>
                       <td className="py-1.5 px-2">
                         <div className="flex flex-wrap gap-1 justify-end">
@@ -183,8 +183,8 @@ export default function DurchbruchListe({ projectId, projektName = "" }) {
             </table>
           </div>
         )}
-        {fehler && <p className="text-sm text-rose-700" role="alert" data-testid="db-fehler">{fehler}</p>}
-        <p className="text-xs text-slate-400">
+        {fehler && <p className="text-sm text-fehler" role="alert" data-testid="db-fehler">{fehler}</p>}
+        <p className="text-xs text-muted-foreground">
           {t("Ablauf: beantragt → Statik prüft → Architekt gibt frei → ausgeführt. Hinweise ersetzen keine Prüfung durch Tragwerks- und Brandschutzplanung.")}
         </p>
       </CardContent>
@@ -217,8 +217,8 @@ export default function DurchbruchListe({ projectId, projektName = "" }) {
             </div>
             {/* 97-02a: the fire stop as its own element — only when the penetrated element has a rating. */}
             {formular.feuerwiderstand && formular.feuerwiderstand !== "ohne" && (
-              <fieldset className="grid grid-cols-2 gap-3 rounded-md border border-amber-200 bg-amber-50/40 p-3" data-testid="db-schott-form">
-                <legend className="px-1 text-xs font-semibold text-amber-800">{t("Brandschott")}</legend>
+              <fieldset className="grid grid-cols-2 gap-3 rounded-md border border-warnung-rand bg-warnung-flaeche p-3" data-testid="db-schott-form">
+                <legend className="px-1 text-xs font-semibold text-warnung">{t("Brandschott")}</legend>
                 {auswahl("schott_klasse", "Feuerwiderstand des Schotts", [{ wert: "", text: t("wie Bauteil") }, ...FEUERWIDERSTAENDE.filter((f) => f !== "ohne").map((f) => ({ wert: f, text: f }))])}
                 {feld("schott_system", "System / Produkt")}
                 {auswahl("schott_zulassung_art", "Zulassung", ZULASSUNG_ARTEN.map((z) => ({ wert: z.key, text: t(z.label) })))}

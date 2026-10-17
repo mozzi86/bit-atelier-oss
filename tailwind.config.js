@@ -40,6 +40,27 @@ module.exports = {
   				DEFAULT: 'hsl(var(--destructive))',
   				foreground: 'hsl(var(--destructive-foreground))'
   			},
+  			// Semantic state colours (light/dark in index.css): text, surface, border.
+  			warnung: {
+  				DEFAULT: 'hsl(var(--warnung))',
+  				flaeche: 'hsl(var(--warnung-flaeche))',
+  				rand: 'hsl(var(--warnung-rand))'
+  			},
+  			erfolg: {
+  				DEFAULT: 'hsl(var(--erfolg))',
+  				flaeche: 'hsl(var(--erfolg-flaeche))',
+  				rand: 'hsl(var(--erfolg-rand))'
+  			},
+  			hinweis: {
+  				DEFAULT: 'hsl(var(--hinweis))',
+  				flaeche: 'hsl(var(--hinweis-flaeche))',
+  				rand: 'hsl(var(--hinweis-rand))'
+  			},
+  			fehler: {
+  				DEFAULT: 'hsl(var(--fehler))',
+  				flaeche: 'hsl(var(--fehler-flaeche))',
+  				rand: 'hsl(var(--fehler-rand))'
+  			},
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',

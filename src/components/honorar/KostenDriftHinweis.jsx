@@ -44,7 +44,7 @@ export default function KostenDriftHinweis({ vertrag, projektId = null, aktionTe
   }, [hatSnapshot, projektId]);
 
   if (fehler) {
-    return <p className="text-xs text-red-700 dark:text-red-300" role="alert">{t("LV konnte für den Kostenvergleich nicht geladen werden")}: {fehler}</p>;
+    return <p className="text-xs text-fehler dark:text-red-300" role="alert">{t("LV konnte für den Kostenvergleich nicht geladen werden")}: {fehler}</p>;
   }
   if (!positionen) return null;
   const drift = kostenDrift(vertrag, positionen);
@@ -59,7 +59,7 @@ export default function KostenDriftHinweis({ vertrag, projektId = null, aktionTe
   const euro = (/** @type {number} */ c) => formatEuro(c, lang);
 
   return (
-    <div className="space-y-1 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100" role="status" data-testid="kosten-drift-hinweis">
+    <div className="space-y-1 rounded-lg border border-warnung-rand bg-warnung-flaeche p-3 text-sm text-warnung dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100" role="status" data-testid="kosten-drift-hinweis">
       <p className="font-medium">{text}</p>
       <p className="text-xs tabular-nums">
         {`KG 300: ${euro(drift.jeKg.kg300.eingefrorenCent)} → ${euro(drift.jeKg.kg300.aktuellCent)} · KG 400: ${euro(drift.jeKg.kg400.eingefrorenCent)} → ${euro(drift.jeKg.kg400.aktuellCent)}`}
