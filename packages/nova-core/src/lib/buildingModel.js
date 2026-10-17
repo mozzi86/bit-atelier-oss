@@ -3,33 +3,15 @@
 // (y = oben). Footprint-Polygon zentriert um den Ursprung.
 
 import { metersPerPixel } from "@core/lib/geo";
+import { WALL_COMPOSITES } from "./bauteil/aufbauten.js";
 
 // ---- Wand-Aufbauten (Composites, mehrschichtig) ---------------------------
 // Schichten von außen (oben in der Liste) nach innen. thickness in mm.
 // material = Id im MATERIAL_KATALOG (@designer/lib/bauteilAufbau — Phase 44,
 // gemeinsame Kennwert-Quelle für Bauphysik/Schallschutz). rw = bewertetes
 // Schalldämm-Maß R'w in dB, [ASSUMED]-Richtwert je Aufbau (Phase 39).
-export const WALL_COMPOSITES = [
-  { id: "single24", name: "Stahlbeton 24 cm", rw: 57, skins: [
-    { name: "Stahlbeton", material: "beton", thickness: 240, color: "#9aa6b2", hatch: "concrete" },
-  ] },
-  { id: "cavity", name: "Klinker + Dämmung + KS (39 cm)", rw: 55, skins: [
-    { name: "Klinker", material: "klinker", thickness: 100, color: "#b45309", hatch: "brick" },
-    // Zweischalige Luftschicht ist über Lüftungsöffnungen belüftet (DIN-1053-
-    // Muster) — bauphysikalisch endet der Querschnitt hier (luftbel, Phase 44).
-    { name: "Luftschicht", material: "luftbel", thickness: 50, color: "#f1f5f9", hatch: "none" },
-    { name: "Dämmung", material: "mw035", thickness: 120, color: "#fde68a", hatch: "insul" },
-    { name: "Kalksandstein", material: "ks", thickness: 175, color: "#94a3b8", hatch: "block" },
-    { name: "Innenputz", material: "gipsputz", thickness: 15, color: "#e2e8f0", hatch: "none" },
-  ] },
-  { id: "timber", name: "Holzrahmen (30 cm)", rw: 44, skins: [
-    { name: "Fassade Holz", material: "holz", thickness: 24, color: "#92400e", hatch: "wood" },
-    { name: "Hinterlüftung", material: "luftbel", thickness: 40, color: "#f1f5f9", hatch: "none" },
-    { name: "Dämmung", material: "mw035", thickness: 200, color: "#fde68a", hatch: "insul" },
-    { name: "OSB", material: "osb", thickness: 18, color: "#d6b38a", hatch: "wood" },
-    { name: "GK-Beplankung", material: "gk", thickness: 18, color: "#e2e8f0", hatch: "none" },
-  ] },
-];
+// 97-02a: defined in the ONE build-up table (bauteil/aufbauten.js), re-exported here.
+export { WALL_COMPOSITES };
 export const compositeById = (id) => WALL_COMPOSITES.find((c) => c.id === id) || null;
 
 // ---- Fenster-Bibliothek (Typen mit Flügeln/Sprossen) ----------------------

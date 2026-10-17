@@ -24,10 +24,10 @@ import { serialisiereZustand } from "@ifc/lib/viewerLink";
 import { Plus } from "lucide-react";
 import {
   DURCHBRUCH_ARTEN, DURCHBRUCH_STATUS, DURCHBRUCH_GEWERKE, FEUERWIDERSTAENDE,
-  labelAus, masseText, durchbruchHinweise, pruefSchritt, ausgefuehrtPatch, neuerDurchbruch, alsBcfTopic,
+  labelAus, masseText, durchbruchHinweise, pruefSchritt, ausgefuehrtPatch, neuerDurchbruch, alsBcfTopic, ZULASSUNG_ARTEN,
 } from "@/lib/werkplanung/durchbrueche";
 
-const LEER = { art: "durchbruch", form: "rechteck", x: "", y: "", z: "", b_mm: "", h_mm: "", d_mm: "", t_mm: "", bauteil_guid: "", bauteil_name: "", geschoss: "", gewerk: "GH", feuerwiderstand: "ohne", abschottung: "", kommentar: "" };
+const LEER = { art: "durchbruch", form: "rechteck", x: "", y: "", z: "", b_mm: "", h_mm: "", d_mm: "", t_mm: "", bauteil_guid: "", bauteil_name: "", geschoss: "", gewerk: "GH", feuerwiderstand: "ohne", abschottung: "", kommentar: "", schott_klasse: "", schott_system: "", schott_zulassung_art: "abZ", schott_zulassung_nr: "", schott_hersteller: "" };
 const fehlerText = (e) => (e instanceof Error ? e.message : String(e));
 const dateiTeil = (s) => String(s || "Projekt").replace(/[^\p{L}\p{N}_-]+/gu, "_");
 
@@ -148,7 +148,8 @@ export default function DurchbruchListe({ projectId, projektName = "" }) {
                       <td className="py-1.5 px-2">{t(labelAus(DURCHBRUCH_ARTEN, d.art))}<div className="text-xs text-slate-500">{masseText(d)}</div></td>
                       <td className="py-1.5 px-2 text-xs">{d.bauteil_name || "—"}<div className="font-mono text-slate-400">{d.bauteil_guid || ""}</div>{d.geschoss && <div>{d.geschoss}</div>}</td>
                       <td className="py-1.5 px-2 text-xs">{d.gewerk || "—"}</td>
-                      <td className="py-1.5 px-2 text-xs">{d.feuerwiderstand || "ohne"}{d.abschottung && <div className="text-slate-500">{d.abschottung}</div>}</td>
+                      <td className="py-1.5 px-2 text-xs">{d.feuerwiderstand || "ohne"}{d.abschottung && <div className="text-slate-500">{d.abschottung}</div>}
+                        {d.brandschott && <div className="text-slate-500" data-testid="db-schott">{t("Schott")} {d.brandschott.klasse}{d.brandschott.system ? ` · ${d.brandschott.system}` : ""}{d.brandschott.zulassung_nr ? ` · ${d.brandschott.zulassung_art} ${d.brandschott.zulassung_nr}` : ""}</div>}</td>
                       <td className="py-1.5 px-2 text-xs" data-testid="db-statik">{vermerk(d.pruefung?.statik)}</td>
                       <td className="py-1.5 px-2 text-xs" data-testid="db-architekt">{vermerk(d.pruefung?.architekt)}</td>
                       <td className="py-1.5 px-2">{t(labelAus(DURCHBRUCH_STATUS, d.status))}</td>
@@ -214,6 +215,17 @@ export default function DurchbruchListe({ projectId, projektName = "" }) {
               {auswahl("feuerwiderstand", "Feuerwiderstand des Bauteils", FEUERWIDERSTAENDE.map((f) => ({ wert: f, text: f === "ohne" ? t("ohne") : f })))}
               {feld("abschottung", "Abschottung (System, Zulassung)")}
             </div>
+            {/* 97-02a: the fire stop as its own element — only when the penetrated element has a rating. */}
+            {formular.feuerwiderstand && formular.feuerwiderstand !== "ohne" && (
+              <fieldset className="grid grid-cols-2 gap-3 rounded-md border border-amber-200 bg-amber-50/40 p-3" data-testid="db-schott-form">
+                <legend className="px-1 text-xs font-semibold text-amber-800">{t("Brandschott")}</legend>
+                {auswahl("schott_klasse", "Feuerwiderstand des Schotts", [{ wert: "", text: t("wie Bauteil") }, ...FEUERWIDERSTAENDE.filter((f) => f !== "ohne").map((f) => ({ wert: f, text: f }))])}
+                {feld("schott_system", "System / Produkt")}
+                {auswahl("schott_zulassung_art", "Zulassung", ZULASSUNG_ARTEN.map((z) => ({ wert: z.key, text: t(z.label) })))}
+                {feld("schott_zulassung_nr", "Zulassungsnummer")}
+                {feld("schott_hersteller", "Hersteller")}
+              </fieldset>
+            )}
             {feld("kommentar", "Kommentar")}
             <div className="flex justify-end gap-2 pt-1">
               <Button type="button" variant="ghost" onClick={() => setFormular(null)}>{t("Abbrechen")}</Button>

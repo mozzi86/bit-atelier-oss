@@ -26,7 +26,7 @@ export const EN = {
   // 73-07: condition and Erfassungsgrad of drawn elements
   "Zustand": "Condition",
   "Erfassung": "Survey accuracy",
-  "nicht gesetzt (gilt als Neubau)": "not set (counts as new build)",
+  "noch nicht festgelegt": "not decided yet",
   "Abbruch": "Demolition",
   "Bestand": "Existing",
   "Gemessen": "Measured",

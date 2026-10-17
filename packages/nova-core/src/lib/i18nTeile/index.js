@@ -146,6 +146,7 @@ import { EN as DATEI_OEFFNEN } from "./datei-oeffnen.js";
 import { EN as APP_MODUS } from "./app-modus.js";
 // Phase 94: acceptance findings stations 0–2.
 import { EN as ABNAHME_94 } from "./abnahme-94.js";
+import { EN as STECKBRIEF_97 } from "./steckbrief-97.js";
 import { EN as KOSTENDRIFT_96 } from "./kostendrift-96.js";
 
 export const TEILE_EN = Object.freeze({
@@ -245,4 +246,5 @@ export const TEILE_EN = Object.freeze({
   ...ABNAHME_94,
   ...VOB_MENGEN_96,
   ...KOSTENDRIFT_96,
+  ...STECKBRIEF_97,
 });

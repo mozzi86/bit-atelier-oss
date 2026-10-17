@@ -13,32 +13,13 @@
 //
 // In:  ScheduleTask rows, LVPosition rows, element rows. Out: findings, award units, coverage.
 // Pure — no React, no API.
+import { STLB_LB } from "@core/lib/bauteil/gewerke.js";
 
 /**
- * STLB-Bau Leistungsbereiche of the office catalogue (catalog-seed StlbKatalog) with an
- * order on site. [ASSUMED] usual sequence of a new building (site setup → demolition →
- * earthworks → shell → envelope → fit-out → finishes); not a standard — a different order
- * only produces a hint.
- * @type {ReadonlyArray<{lb: string, name: string, folge: number}>}
+ * STLB-Bau Leistungsbereiche with an order on site — 97-02a: the ONE catalogue lives in
+ * @core/lib/bauteil/gewerke.js (shared with the element data sheet).
  */
-export const GEWERKE_KATALOG = Object.freeze([
-  { lb: "000", name: "Sicherheitseinrichtungen, Baustelleneinrichtungen", folge: 0 },
-  { lb: "040", name: "Abbruch- und Rückbauarbeiten", folge: 1 },
-  { lb: "002", name: "Erdarbeiten", folge: 2 },
-  { lb: "013", name: "Betonarbeiten", folge: 3 },
-  { lb: "012", name: "Mauerarbeiten", folge: 4 },
-  { lb: "016", name: "Zimmer- und Holzbauarbeiten", folge: 5 },
-  { lb: "018", name: "Abdichtungsarbeiten", folge: 6 },
-  { lb: "020", name: "Dachdeckungsarbeiten", folge: 7 },
-  { lb: "031", name: "Metallbauarbeiten", folge: 8 },
-  { lb: "039", name: "Trockenbauarbeiten", folge: 9 },
-  { lb: "023", name: "Putz- und Stuckarbeiten", folge: 10 },
-  { lb: "024", name: "Fliesen- und Plattenarbeiten", folge: 11 },
-  { lb: "036", name: "Bodenbelagarbeiten", folge: 12 },
-  { lb: "027", name: "Tischlerarbeiten", folge: 13 },
-  { lb: "029", name: "Beschlagarbeiten", folge: 14 },
-  { lb: "034", name: "Maler- und Lackierarbeiten", folge: 15 },
-]);
+export const GEWERKE_KATALOG = STLB_LB;
 
 /** Relationship types (labels double as i18n keys). */
 export const ANORDNUNG = Object.freeze([

@@ -53,6 +53,16 @@ import { useProject } from "@core/lib/ProjectContext";
 import { bauartVon } from "@core/lib/bauart";
 import { useI18n } from "@core/lib/i18n";
 import { zustandFelder } from "@designer/components/ZustandFelder";
+import { steckbriefFelder } from "@designer/components/SteckbriefFelder";
+import { steckbrief, typFuerWand } from "@core/lib/bauteil/steckbrief.js";
+import { attributeVon, attributPatch, mitAttributen, werkstattMitAttributen } from "@core/lib/bauteil/attribute.js";
+import { statusFarbe } from "@core/lib/plan/statusDarstellung.js";
+import { brilleVon, sichtbarUnter, zeigtStatus, STANDARD_BRILLE } from "@core/lib/plan/brillen.js";
+import BrillenLeiste from "@designer/components/BrillenLeiste";
+import FehlplanungHinweise from "@designer/components/FehlplanungHinweise";
+import { planGrafik, vektorPlanPdf } from "@designer/lib/vektorPlan";
+import { fehlplanungPruefen } from "@core/lib/bauteil/pruefregeln.js";
+import { bitApi } from "@core/api/bitApi";
 import { useElevationGrid } from "@designer/lib/useElevationGrid";
 import { useOsmBuildings } from "@designer/lib/useOsmBuildings";
 import { useOsmEnvironment } from "@designer/lib/useOsmEnvironment";
@@ -421,6 +431,23 @@ export default function BitBimStudio({ complexData }) {
   const storeyHeight = bp.storeyHeight, setStoreyHeight = (v) => bp.set({ storeyHeight: v });
   const unit = bp.unit || "m", setUnit = (u) => bp.set({ unit: u });
   const [view, setView] = useState("3d"); // 3d | grundriss | schnitt
+  // 97-03: lens per view (plan, section), remembered per viewer in the browser — a view setting,
+  // never part of the model. Storage may be blocked (private window): then the input lens.
+  const [brillen, setBrillen] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem("bit.brillen") || "{}") || {}; } catch { return {}; }
+  });
+  const brilleId = brillen[view] || STANDARD_BRILLE;
+  const swPlan = !!brillen.sw; // 97-04b: S/W variant of the permit lens (same storage entry)
+  const setSwPlan = (v) => setBrillen((alt) => {
+    const neu = { ...alt, sw: v };
+    try { window.localStorage.setItem("bit.brillen", JSON.stringify(neu)); } catch { /* storage blocked: keep in memory */ }
+    return neu;
+  });
+  const setBrille = (id) => setBrillen((alt) => {
+    const neu = { ...alt, [view]: id };
+    try { window.localStorage.setItem("bit.brillen", JSON.stringify(neu)); } catch { /* storage blocked: keep in memory */ }
+    return neu;
+  });
   const [planLevel, setPlanLevel] = useState(0);
   const [wallRef, setWallRef] = useState("center"); // Referenzlinie: center | outside | inside
   const [parapet, setParapet] = useState({ enabled: true, height: 1.0 }); // Attika
@@ -447,6 +474,9 @@ export default function BitBimStudio({ complexData }) {
   const [envOpenings, setEnvOpenings] = useState([]); // Hüllwand-Öffnungen: [{level,edge,u,typeId,kind,_idx}]
   const [customZones, setCustomZones] = useState([]); // Räume: [{points:[{x,z}],level,name,_idx}]
   const [netzLayer, setNetzLayer] = useState(null); // Phase 41: TGA-Netz (netz_layer) read-only für den IFC-Export
+  const [statikLayer, setStatikLayer] = useState(null); // 97-02a: beams (statik_layer) read-only for the IFC export
+  const [attributLayer, setAttributLayer] = useState(null); // 97-02: decisions on hull/workshop elements (bauteil_attribute_layer)
+  const [durchbrueche, setDurchbrueche] = useState(/** @type {any[]} */ ([])); // 97-06: openings planning, read only for the checks
   const [customSlabs, setCustomSlabs] = useState([]); // Decken: [{points,level,_idx}]
   const [customRoofs, setCustomRoofs] = useState([]); // Dächer: [{points,level,pitch,_idx}]
   const [sketchJson, setSketchJson] = useState(null); // PW-05: Sketch aus dem BIT Sketcher (read-only Overlay)
@@ -483,6 +513,15 @@ export default function BitBimStudio({ complexData }) {
   const [hatGespeichertesModell, setHatGespeichertesModell] = useState(true);
   const loadingRef = useRef(false);
   const projectId = project?.id || null;
+  // 97-06: openings of the project for the checks (read only; written in Werkplanung › Durchbrüche).
+  useEffect(() => {
+    let aktiv = true;
+    if (!projectId) { setDurchbrueche([]); return undefined; }
+    bitApi.entities.Durchbruch.filter({ project_id: projectId })
+      .then((rows) => { if (aktiv) setDurchbrueche(Array.isArray(rows) ? rows : []); })
+      .catch((err) => { if (aktiv) { setDurchbrueche([]); setHint(`Durchbrüche für die Prüfregeln nicht geladen: ${err?.message || err}`); } });
+    return () => { aktiv = false; };
+  }, [projectId]);
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
@@ -512,6 +551,8 @@ export default function BitBimStudio({ complexData }) {
           setSketchJson(m.sketch_layer || null);
           // Phase 41: TGA-Netz für den IFC-Export (IfcPipe-/Duct-/CableSegment) — geschrieben wird es nur im Haustechnik-Reiter.
           setNetzLayer(m.netz_layer || null);
+          setStatikLayer(m.statik_layer || null);
+          setAttributLayer(m.bauteil_attribute_layer || null);
           // Programmfelder (footprintM/storeys/storeyHeight/unit) setzt der Hook
           // useBimModelSync in die gemeinsame Quelle — hier NICHT doppelt.
           // _idx-Zähler hinter die geladenen Elemente setzen (keine Kollisionen)
@@ -519,7 +560,7 @@ export default function BitBimStudio({ complexData }) {
           idRef.current = maxIdx + 1;
         } else {
           // Neues Projekt ohne Modell: Editor leeren (kein Übertrag vom Vorprojekt)
-          setCustomWalls([]); setCustomColumns([]); setCustomWindows([]); setEnvOpenings([]); setNetzLayer(null);
+          setCustomWalls([]); setCustomColumns([]); setCustomWindows([]); setEnvOpenings([]); setNetzLayer(null); setStatikLayer(null); setAttributLayer(null);
           setCustomZones([]); setCustomSlabs([]); setCustomRoofs([]);
           setSketchJson(null);
         }
@@ -1201,6 +1242,8 @@ export default function BitBimStudio({ complexData }) {
       customWalls, customColumns, customWindows, envOpenings, autoOpenings,
       customZones, customSlabs, customRoofs, storeyHeight,
       netz: netzLayer, // Phase 41 (NETZ-05): Leitungen als Segment-Elemente
+      // 97-02a: every element with its data sheet (stable GUID, Pset_BIT_Bauteil, material, DIN 276); beams from statik_layer.
+      steckbrief: { projektId: projectId || null }, tragwerk: statikLayer, bauteilAttribute: attributLayer,
       // 89-03: workshop walls/doors/rooms with stable GUIDs and Pset_BIT_Bauteil (store zones).
       werkstatt: werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight }),
       projectName: project?.name || "BIT-Atelier",
@@ -1237,6 +1280,30 @@ export default function BitBimStudio({ complexData }) {
   // ---- Plan-Output: aktuellen 2D-Plan als PDF ----
   const exportPlanPDF = async () => {
     if (view === "3d") { setHint("PDF-Plan nur aus Grundriss/Schnitt — bitte 2D-Ansicht wählen."); return; }
+    // 97-09: the floor plan as VECTOR at true scale from the model data (lens applied, status
+    // colours, ISO 128 line weights, title block with lens and legend). The section still uses
+    // the raster path below and says so ("nicht maßstäblich").
+    if (view === "grundriss") {
+      try {
+        const brille = brilleVon(brilleId);
+        const lvl = Math.min(planLevel, storeys - 1);
+        const grafik = planGrafik({ model, level: lvl, customWalls: sichtbarUnter(brille, customWalls), customColumns: sichtbarUnter(brille, customColumns),
+          customSlabs: sichtbarUnter(brille, customSlabs), customRoofs: sichtbarUnter(brille, customRoofs), customZones, brille,
+          huelleStatus: zeigtStatus(brille, attributeVon(attributLayer, "hull-wall")?.status) ? attributeVon(attributLayer, "hull-wall")?.status ?? null : null, massstab: scale, sw: swPlan });
+        const planinhalt = `Grundriss ${model.storeys[lvl]?.name || ""}`.trim();
+        const { bytes, format } = await vektorPlanPdf(grafik, { massstab: scale, projekt: project?.name || "", planinhalt, brille, datum: new Date().toLocaleDateString("de-DE") });
+        const url = URL.createObjectURL(new Blob([/** @type {any} */ (bytes)], { type: "application/pdf" }));
+        const a = document.createElement("a");
+        a.href = url; a.download = `${(project?.name || "plan").replace(/[^\w-]+/g, "_")}_${planinhalt.replace(/[^\w-]+/g, "_")}_1-${scale}.pdf`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        // Rule 7 (concept §5): the lens has its own scale — say so when the sheet differs.
+        setHint(brille.massstab !== scale
+          ? `PDF 1:${scale} (${format}) erstellt — Hinweis: die Brille „${brille.label}“ ist für 1:${brille.massstab} gedacht.`
+          : `PDF 1:${scale} (${format}) erstellt — maßstäblich, Vektor.`);
+      } catch (e) { setHint("PDF-Export fehlgeschlagen: " + (e?.message || e)); }
+      return;
+    }
     const wrap = mountRef.current?.parentElement?.querySelector("svg");
     const svgEl = [.../** @type {any} */ (document.querySelectorAll("div"))].find((d) => d.style.height === "520px" && d.className.includes("bg-slate-50"))?.querySelector("svg");
     const target = svgEl || wrap; if (!target) { setHint("Keine 2D-Zeichnung gefunden."); return; }
@@ -1265,7 +1332,8 @@ export default function BitBimStudio({ complexData }) {
       pdf.setFontSize(12); pdf.setTextColor(20);
       pdf.text(`${project?.name || "BIT-Atelier"} — ${view === "schnitt" ? "Schnitt" : "Grundriss " + (model.storeys[Math.min(planLevel, storeys - 1)]?.name || "")}`, margin + 3, ph - margin - titleH + 7);
       pdf.setFontSize(9); pdf.setTextColor(80);
-      pdf.text(`Maßstab 1:${scale}   ·   Ebenen: ${combo}   ·   BIT-Atelier`, margin + 3, ph - margin - titleH + 12);
+      // 97-09: the raster path is fitted to the sheet — it is NOT to scale and must not claim it.
+      pdf.text(`nicht maßstäblich (Bildschirmbild)   ·   Ebenen: ${combo}   ·   BIT-Atelier`, margin + 3, ph - margin - titleH + 12);
       pdf.save(`${(project?.name || "plan").replace(/[^\w-]+/g, "_")}_${view}.pdf`);
     } catch (e) { setHint("PDF-Export fehlgeschlagen: " + (e?.message || e)); }
   };
@@ -1709,6 +1777,18 @@ export default function BitBimStudio({ complexData }) {
       m.userData.layer = "zones"; m.userData.kind = "zone"; m.userData.id = z._idx;
       t.customGroup.add(m);
     });
+    // 97-04b: in 3D, walls and columns with a decided status take its colour (one table:
+    // Bestand grey, Neubau red, Abbruch yellow); elements without status keep their material.
+    // Selection still highlights through the emissive channel.
+    t.customGroup.children.forEach((m) => {
+      const el = m.userData?.kind === "wall" ? customWalls.find((w) => w._idx === m.userData.id)
+        : m.userData?.kind === "column" ? customColumns.find((c) => c._idx === m.userData.id) : null;
+      const st = el?.status;
+      if ((st === "bestand" || st === "abbruch" || st === "neubau" || st === "temporaer") && m.material?.color) {
+        m.material.color.set(statusFarbe(st));
+        m.userData.status = st;
+      }
+    });
     applyLayerVisibility(t, layersRef.current);
     applyPickHighlight(t, selectedRef.current, multiSelRef.current);
   }, [customWalls, customColumns, customWindows, customZones, customSlabs, customRoofs, storeyHeight]);
@@ -1920,6 +2000,15 @@ export default function BitBimStudio({ complexData }) {
               ✏ Sketch
             </button>
           </div>
+          {view !== "3d" && <BrillenLeiste wert={brilleId} onChange={setBrille} t={tz} sw={swPlan} onSw={setSwPlan} />}
+          {view !== "3d" && (
+            // 97-06: checks against wrong planning on the current state (drawn, workshop, hull, network, openings).
+            <FehlplanungHinweise t={tz} befunde={fehlplanungPruefen({
+              modell: { customWalls, customColumns, customWindows, envOpenings, customSlabs, customRoofs, netz_layer: netzLayer, bauteil_attribute_layer: attributLayer },
+              werkstatt: werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight }),
+              durchbrueche, projektId: projectId || null, bauart: bauartVon(project).bauart,
+            })} />
+          )}
           {sketchEdit && (
             <div className="flex items-center gap-1.5 text-xs">
               <button onClick={() => { setSketchTool("line"); setSketchDraft(null); }}
@@ -2217,11 +2306,22 @@ export default function BitBimStudio({ complexData }) {
                 </label>
               </div>
             )}
-            {view !== "3d" && (
+            {view !== "3d" && (() => {
+              // 97-03: the lens hides statuses (never elements without status); openings go with
+              // their wall. The input lens returns the same arrays — plan unchanged.
+              const brille = brilleVon(brilleId);
+              const planWalls = sichtbarUnter(brille, customWalls);
+              const wandDa = new Set(planWalls.map((w) => w._idx));
+              const planWindows = sichtbarUnter(brille, customWindows).filter((o) => planWalls === customWalls || wandDa.has(o.wallIdx));
+              const huelleSichtbar = zeigtStatus(brille, attributeVon(attributLayer, "hull-wall")?.status);
+              const planLayerVis = huelleSichtbar ? layerVis : { ...layerVis, shell: false };
+              return (
               <BimPlan2D
                 model={model} mode={/** @type {"grundriss"|"schnitt"} */ (view)} level={Math.min(planLevel, storeys - 1)} storeyHeight={storeyHeight}
-                layerVis={layerVis} envOpenings={envOpenings} customZones={customZones} customSlabs={customSlabs} customRoofs={customRoofs} unit={unit}
-                edit={view === "grundriss" && !sketchEdit ? { tool, draft, hover, customWalls, customColumns, customWindows, selected, multiSel, onPoint, onHover: setHover, onFinish, onPick, onMarquee, onClear, onMoveWallPt, onMoveWall, onMoveColumn, onMoveOpening, onMovePolyVert, onMoveFootVert, onMoveFootEdge, onInsertFootVert, onDeleteFootVert } : undefined}
+                brille={brille} huelleStatus={attributeVon(attributLayer, "hull-wall")?.status ?? null} sw={swPlan}
+                werkstattWaende={attributLayer?.attribute ? sichtbarUnter(brille, werkstattMitAttributen(werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight }), attributLayer).waende || []) : null}
+                layerVis={planLayerVis} envOpenings={huelleSichtbar ? sichtbarUnter(brille, envOpenings) : []} customZones={customZones} customSlabs={sichtbarUnter(brille, customSlabs)} customRoofs={sichtbarUnter(brille, customRoofs)} unit={unit}
+                edit={view === "grundriss" && !sketchEdit ? { tool, draft, hover, customWalls: planWalls, customColumns: sichtbarUnter(brille, customColumns), customWindows: planWindows, selected, multiSel, onPoint, onHover: setHover, onFinish, onPick, onMarquee, onClear, onMoveWallPt, onMoveWall, onMoveColumn, onMoveOpening, onMovePolyVert, onMoveFootVert, onMoveFootEdge, onInsertFootVert, onDeleteFootVert } : undefined}
                 focus={focus2d}
                 overlayBounds={sketchEdit ? sketchEditBounds : sketchBounds}
                 overlay={
@@ -2257,7 +2357,8 @@ export default function BitBimStudio({ complexData }) {
                       : undefined
                 }
               />
-            )}
+              );
+            })()}
             {/* 3D-Kontextmenü (Rechtsklick) */}
             {view === "3d" && ctxMenu && (
               <div className="absolute z-20 min-w-[180px] rounded-lg border border-slate-200 bg-white shadow-lg text-xs py-1"
@@ -2309,6 +2410,10 @@ export default function BitBimStudio({ complexData }) {
               const storeyOpts = model.storeys.map((s) => <option key={s.level} value={s.level}>{s.name}</option>);
               // 73-07: condition + Erfassungsgrad rows, only in an existing-building project.
               const zfOpts = { bauart: bauartVon(project).bauart, field, selCls, t: tz };
+              // 97-02a: data sheet rows under the attributes (same element object, optional fields).
+              const sbCtx = { projektId: projectId || null, storeyHeight };
+              const sbFelder = (el, typ, quelle, patch, extra = {}) => steckbriefFelder(steckbrief(el, typ, { ...sbCtx, quelle, ...extra }), patch,
+                { field, selCls, t: tz, schichtStatus: zfOpts.bauart === "bestand" ? { wert: el?.schicht_status || null } : null });
               let title = "Objekt", body = null, readOnly = false, favSpec = null; // favSpec: ★-Favorit aus der Auswahl (BIM-F)
 
               if (panelSel.type === "wall") {
@@ -2322,6 +2427,7 @@ export default function BitBimStudio({ complexData }) {
                   !hasComp && field("Dicke (m)", <input type="number" className={numCls} step="0.05" min="0.1" max="0.6" value={w.thickness ?? 0.3} onChange={(e) => patchWall(w._idx, { thickness: +e.target.value })} />),
                   field("Bezug", <select className={selCls} value={w.refLine || "center"} onChange={(e) => patchWall(w._idx, { refLine: e.target.value })}><option value="center">Mitte</option><option value="outside">Außen</option><option value="inside">Innen</option></select>),
                   ...zustandFelder(w, (p) => patchWall(w._idx, p), zfOpts),
+                  ...(() => { const ty = typFuerWand(w); return sbFelder(w, ty.typ, "customWalls", (p) => patchWall(w._idx, p), { typAbgeleitet: ty.abgeleitet }); })(),
                 ];
               } else if (panelSel.type === "column") {
                 const c = customColumns.find((x) => x._idx === panelSel.index); if (!c) return null;
@@ -2330,6 +2436,7 @@ export default function BitBimStudio({ complexData }) {
                   field("Geschoss", <select className={selCls} value={c.level} onChange={(e) => patchColumn(c._idx, { level: +e.target.value })}>{storeyOpts}</select>),
                   field("Größe (m)", <input type="number" className={numCls} step="0.05" min="0.2" max="1.2" value={c.size ?? 0.4} onChange={(e) => patchColumn(c._idx, { size: +e.target.value })} />),
                   ...zustandFelder(c, (p) => patchColumn(c._idx, p), zfOpts),
+                  ...sbFelder(c, "stuetze", "customColumns", (p) => patchColumn(c._idx, p)),
                 ];
               } else if (panelSel.type === "opening") {
                 const scope = panelSel.scope || "custom";
@@ -2342,6 +2449,7 @@ export default function BitBimStudio({ complexData }) {
                   field("Position (m)", <input type="number" className={numCls} step="0.25" value={+o.u.toFixed(2)} onChange={(e) => patchOpening(o._idx, scope, { u: Math.max(0.2, +e.target.value) })} />),
                   field("Lage", <span className="text-slate-400">{scope === "env" ? "Hüllwand" : "Innenwand"}</span>),
                   ...zustandFelder(o, (p) => patchOpening(o._idx, scope, p), zfOpts),
+                  ...sbFelder(o, o.kind === "door" ? (scope === "env" ? "tuer-aussen" : "tuer-innen") : "fenster", `oeffnung|${scope === "env" ? `env:${o.level}:${o.edge}` : `cw:${o.wallIdx}`}|${o.kind}|${o._idx}`, (p) => patchOpening(o._idx, scope, p)),
                 ];
               } else if (panelSel.type === "zone") {
                 const z = customZones.find((x) => x._idx === panelSel.index); if (!z) return null;
@@ -2351,11 +2459,12 @@ export default function BitBimStudio({ complexData }) {
                   field("Name", <input type="text" className="w-28 rounded border border-slate-300 px-1 py-0.5 bg-white" value={z.name} onChange={(e) => patchZone(z._idx, { name: e.target.value })} />),
                   field("Geschoss", <select className={selCls} value={z.level} onChange={(e) => patchZone(z._idx, { level: +e.target.value })}>{storeyOpts}</select>),
                   field("Fläche", <span className="text-slate-500">{area.toFixed(1)} m²</span>),
+                  ...sbFelder(z, "raum", "customZones", (p) => patchZone(z._idx, p)),
                 ];
               } else if (panelSel.type === "slab") {
                 const s = customSlabs.find((x) => x._idx === panelSel.index); if (!s) return null;
                 title = "Decke";
-                body = [field("Geschoss", <select className={selCls} value={s.level} onChange={(e) => patchSlab(s._idx, { level: +e.target.value })}>{storeyOpts}</select>), ...zustandFelder(s, (p) => patchSlab(s._idx, p), zfOpts)];
+                body = [field("Geschoss", <select className={selCls} value={s.level} onChange={(e) => patchSlab(s._idx, { level: +e.target.value })}>{storeyOpts}</select>), ...zustandFelder(s, (p) => patchSlab(s._idx, p), zfOpts), ...sbFelder(s, "decke", "customSlabs", (p) => patchSlab(s._idx, p))];
               } else if (panelSel.type === "roof") {
                 const rf = customRoofs.find((x) => x._idx === panelSel.index); if (!rf) return null;
                 title = "Dach";
@@ -2363,6 +2472,7 @@ export default function BitBimStudio({ complexData }) {
                   field("Geschoss", <select className={selCls} value={rf.level} onChange={(e) => patchRoof(rf._idx, { level: +e.target.value })}>{storeyOpts}</select>),
                   field("Firsthöhe (m)", <input type="number" className={numCls} step="0.25" min="0.5" max="6" value={rf.pitch ?? 2.5} onChange={(e) => patchRoof(rf._idx, { pitch: +e.target.value })} />),
                   ...zustandFelder(rf, (p) => patchRoof(rf._idx, p), zfOpts),
+                  ...sbFelder(rf, (Number(rf.pitch) || 0) <= 10 ? "dach-flach" : "dach-geneigt", "customRoofs", (p) => patchRoof(rf._idx, p)),
                 ];
               } else if (panelSel.type === "hullwall") {
                 const w = model.walls.find((x) => x.level === panelSel.level && x.edge === panelSel.edge); if (!w) return null;
@@ -2375,6 +2485,17 @@ export default function BitBimStudio({ complexData }) {
                   field("Aufbau", <select className={selCls} value={envComposite || "single"} onChange={(e) => setEnvComposite(e.target.value === "single" ? null : e.target.value)}><option value="single">Einschichtig</option>{WALL_COMPOSITES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>),
                   !hasComp && field("Dicke (m)", <input type="number" className={numCls} step="0.05" min="0.1" max="0.6" value={envThickness} onChange={(e) => setEnvThickness(+e.target.value)} />),
                   field("Hinweis", <span className="text-slate-400 text-[10px]">Griffe ziehen verformt den Grundriss (alle Geschosse)</span>),
+                  // 97-02: the hull's decisions live in the attribute table ("hull-wall" — one entry for the
+                  // whole generated envelope, as the AVA classifies it); written at once, not with the debounce.
+                  ...(() => {
+                    const huellPatch = (p) => {
+                      const neu = attributPatch(attributLayer, "hull-wall", p);
+                      setAttributLayer(neu);
+                      saveBimModel(projectId, { bauteil_attribute_layer: neu }).catch((err) => setHint(`Speichern fehlgeschlagen: ${err?.message || err}`));
+                    };
+                    const huelle = mitAttributen({ ...w, huelle: true, composite: envComposite || undefined, thickness: envThickness, id: `${w.level}:${w.edge}` }, attributeVon(attributLayer, "hull-wall"));
+                    return [...zustandFelder(/** @type {{status?: string, erfassung?: string}} */ (huelle), huellPatch, zfOpts), ...sbFelder(huelle, "wand-aussen", "huelle", huellPatch)];
+                  })(),
                 ];
               } else if (panelSel.type === "autowin") {
                 title = panelSel.kind === "door" ? "Tür (Hülle)" : "Fenster (Hülle)"; readOnly = true;
@@ -2482,7 +2603,7 @@ export default function BitBimStudio({ complexData }) {
                 <div className="text-[10px] uppercase text-slate-400 px-1 pb-1">Pläne / Output</div>
                 <button onClick={exportPlanPDF} className="w-full rounded-md bg-emerald-600 text-white px-2 py-1.5 hover:bg-emerald-700">Aktuellen Plan als PDF</button>
                 <button onClick={downloadIFC} className="w-full mt-1 rounded-md border border-slate-300 text-slate-600 px-2 py-1.5 hover:bg-slate-50">Modell als IFC</button>
-                <div className="px-1 pt-1 text-[10px] text-slate-400">PDF im A3 mit Schriftfeld (Maßstab + Ebenen). Grundriss/Schnitt.</div>
+                <div className="px-1 pt-1 text-[10px] text-slate-400">Grundriss: Vektor-PDF im gewählten Maßstab mit Plankopf und Brille (Blatt A3–A0 nach Größe). Schnitt: Bildschirmbild, nicht maßstäblich.</div>
               </div>
             </div>
           )}

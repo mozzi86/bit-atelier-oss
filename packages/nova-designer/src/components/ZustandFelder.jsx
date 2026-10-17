@@ -29,7 +29,8 @@ export function zustandFelder(el, patch, { bauart, field, selCls, t }) {
       <span className="flex items-center gap-1">
         <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: rgb(farbe) }} />
         <select className={selCls} value={status} data-testid="el-zustand" onChange={(e) => patch({ status: e.target.value || null })}>
-          <option value="">{t("nicht gesetzt (gilt als Neubau)")}</option>
+          {/* 97-01 (D-BW-03): an element without status is "ohne Status", never silently new build. */}
+          <option value="">{t("noch nicht festgelegt")}</option>
           {STATUS_WERTE.map((w) => <option key={w} value={w}>{t(STATUS_LABEL[w])}</option>)}
         </select>
       </span>

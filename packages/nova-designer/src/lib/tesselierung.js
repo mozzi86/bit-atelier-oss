@@ -20,6 +20,7 @@
 // Mittelpunkt); Zonen passen 1:1 in useBuildingProgram().zones.
 
 import { OKTAMETER, TUER_WERKSTATT, TUER_ECKABSTAND_OKTAMETER } from "./massordnung.js";
+import { WANDSTAERKEN } from "@core/lib/bauteil/aufbauten.js";
 import { rettungsweg as lauflinie, punktInPolygon, innenwegUeberTueren } from "./rettungsweg.js";
 // 75-13: ONE source for the lift duty numbers (import-free module, as rettungsweg.js).
 import { aufzugPflicht, AUFZUG_GESCHOSS_GRENZE, AUFZUG_OKF_GRENZE } from "./accessibility.js";
@@ -144,8 +145,8 @@ export const PHI = (1 + Math.sqrt(5)) / 2;
  */
 export const MINDESTBREITEN = { aufenthalt: 3.6, schlafen: 2.8, kueche: 2.8, sanitaer: 2.2, abstell: 2.3, flur: 1.2 };
 
-/** Wandstärken NUR als Darstellung (D-P75-06): Außen 36,5 · tragend 24 · leicht 11,5 cm. */
-export const WANDSTAERKEN = { aussen: 0.365, tragend: 0.24, leicht: 0.115 };
+/** Wandstärken NUR als Darstellung (D-P75-06): Außen 36,5 · tragend 24 · leicht 11,5 cm — 97-02a: from the ONE build-up table. */
+export { WANDSTAERKEN };
 
 /**
  * Lauflänge vom tiefsten Punkt einer Nutzungseinheit bis zum notwendigen

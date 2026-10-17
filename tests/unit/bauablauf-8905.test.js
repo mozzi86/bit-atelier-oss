@@ -11,9 +11,11 @@ const T = (id, start, end, extra = {}) => ({ id, name: id, start_date: `${start}
 const codes = (m, id) => (m.get(id) || []).map((h) => h.code).sort();
 
 describe('89-05 Bauablauf-Kette', () => {
-  it('catalogue covers the 16 STLB work sections of the seed with a unique order', () => {
-    assert.equal(GEWERKE_KATALOG.length, 16);
-    assert.equal(new Set(GEWERKE_KATALOG.map((g) => g.folge)).size, 16);
+  // 97-02a: the catalogue moved to @core (bauteil/gewerke.js) and grew by services, steel,
+  // windows, screed, special foundations and fire stopping (29 sections; Abbruch is LB 084).
+  it('catalogue covers the STLB work sections with a unique order', () => {
+    assert.equal(GEWERKE_KATALOG.length, 29);
+    assert.equal(new Set(GEWERKE_KATALOG.map((g) => g.folge)).size, 29);
   });
 
   it('finish-to-start violation warns; lag respected; AA and EE', () => {

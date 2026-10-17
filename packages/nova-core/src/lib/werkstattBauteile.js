@@ -34,12 +34,10 @@
 // furniture reads the component's swing instead of placing its own catalogue doors. `tuerGuid`
 // derives the GUID from the same key the swing overrides use (werkstatt_layer.tuerAufschlaege).
 
-/** Wall classes of the workshop [ASSUMED rule build-ups]; thickness m, KG DIN 276, trade. */
-export const WAND_KLASSEN = Object.freeze({
-  aussen: { dicke_m: 0.365, kg: "331", gewerk: "Rohbau", material: "Mauerwerk 36,5 cm (Außenwand, Hülle)", tragend: true },
-  tragend: { dicke_m: 0.24, kg: "341", gewerk: "Rohbau", material: "Kalksandstein 24 cm, beidseitig Putz", tragend: true },
-  leicht: { dicke_m: 0.115, kg: "342", gewerk: "Rohbau", material: "Kalksandstein 11,5 cm, beidseitig Putz", tragend: false },
-});
+import { WAND_KLASSEN } from "./bauteil/aufbauten.js";
+
+/** Wall classes of the workshop — 97-02a: defined in the ONE build-up table (bauteil/aufbauten.js). */
+export { WAND_KLASSEN };
 
 /** Door cost groups (DIN 276): interior doors 344, exterior doors 334. */
 export const TUER_KG = Object.freeze({ innen: "344", aussen: "334" });

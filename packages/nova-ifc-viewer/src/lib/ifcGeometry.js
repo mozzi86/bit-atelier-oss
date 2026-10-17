@@ -22,13 +22,17 @@ import * as WebIFC from "web-ifc";
 // extractSemantics heißt bei uns extractFromModel (Phase 33, liefert zusätzlich
 // warnungen/kennzahlen und Elemente mit `guid` statt `globalId` — unten geshimt).
 import { extractFromModel } from "./ifcImport.js";
+import { statusRgb } from "@core/lib/plan/statusDarstellung.js";
 
 // Statusfarben (RGB 0..1): Abbruch rot, Neubau grün, Bestand grau, unbekannt hellgrau.
+// 97-01: one look per status for viewer, legends and plan (@core/lib/plan/statusDarstellung.js,
+// state permit regulations: Bestand grey, Neubau red, Abbruch yellow). Before: Abbruch red, Neubau green.
 export const STATUS_COLORS = {
-  abbruch: [0.937, 0.267, 0.267],
-  neubau: [0.133, 0.773, 0.369],
-  bestand: [0.58, 0.639, 0.722],
-  unbekannt: [0.784, 0.816, 0.859],
+  abbruch: [...statusRgb("abbruch")],
+  neubau: [...statusRgb("neubau")],
+  bestand: [...statusRgb("bestand")],
+  temporaer: [...statusRgb("temporaer")],
+  unbekannt: [...statusRgb(null)],
 };
 export const HIGHLIGHT_COLOR = [1.0, 0.62, 0.04]; // Amber — markierte Bauteile (Filter/GUIDs)
 export const SELECT_COLOR = [0.23, 0.51, 0.96]; // Blau — per Klick ausgewähltes Bauteil

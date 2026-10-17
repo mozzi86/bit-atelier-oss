@@ -23,6 +23,9 @@
 import { normalisiereStatus } from "./kataloge.js";
 // 89-03: workshop components (walls/doors) as classified elements.
 import { werkstattBauteile } from "./werkstattBauteile.js";
+import { WALL_COMPOSITES, aufbauVon } from "./bauteil/aufbauten.js";
+import { openingTypeById } from "./buildingModel.js";
+import { attributeVon, istAbgeleitet } from "./bauteil/attribute.js";
 
 // Defensive, nicht-negative, endliche Zahl.
 const num = (x) => Math.max(0, Number(x) || 0);
@@ -218,15 +221,11 @@ export function normalizeStatusMitWarnung(raw, snapshot = null) {
 
 // --- Auto-Ableitung (überschreibbar durch eigene Element-Attribute) --------------------
 
-// [ASSUMED A3] Composite → Schichten: spiegelt die WALL_COMPOSITES-Skins
-// (buildingModel.js — single24/cavity/timber). Unbekannt/undefined → [].
+// [ASSUMED A3] Composite → Schichten: read from the skins of the ONE build-up table (97-02a,
+// bauteil/aufbauten.js; each skin names its AVA layer in `schicht`). Unknown/undefined → [].
 export function schichtFromComposite(compositeId) {
-  const map = {
-    single24: ["Stahlbeton"],
-    cavity: ["Klinker", "Dämmung", "Kalksandstein"],
-    timber: ["Holz", "Dämmung"],
-  };
-  return map[compositeId] || [];
+  const c = WALL_COMPOSITES.find((x) => x.id === compositeId);
+  return c ? c.skins.filter((s) => s.schicht).map((s) => /** @type {string} */ (s.schicht)) : [];
 }
 
 // [ASSUMED A1] Elementart → Kostengruppe (DIN-276-Orientierung, nicht normverbindlich).
@@ -487,5 +486,36 @@ export function classifiedElements(bimModel, building, optionen = {}) {
   const haveKinds = new Set(els.map((e) => e.kind));
   const hull = synthHull(bimModel || (building ? { storeys: building.floors } : null))
     .filter((h) => !haveKinds.has(h.kind));
-  return [...hull, ...els];
+  // 97-05: a NEW opening in an EXISTING wall cuts material out of it — that volume is a
+  // demolition quantity of its own (concept §2), the wall itself stays "bestand". Only when both
+  // statuses are set; otherwise the list is unchanged.
+  arr(m.customWindows).forEach((o, i) => {
+    const w = arr(m.customWalls).find((x) => x?._idx === o?.wallIdx);
+    if (!w || normalizeStatus(o?.status) !== "neubau" || normalizeStatus(w?.status) !== "bestand") return;
+    const typ = openingTypeById(o?.kind === "door" ? "door" : "window", o?.typeId);
+    const breite = num(o?.width) || num(typ?.w), hoehe = num(o?.height) || num(typ?.h);
+    // Thickness of the build-up (layers) or the single thickness; 24 cm [ASSUMED] as for walls above.
+    const dickeW = aufbauVon(w).dicke_m || num(w?.thickness) || 0.24;
+    const r4 = (v) => Math.round(v * 10000) / 10000;
+    els.push({
+      id: `oeffnung-abbruch-${o?._idx ?? i}`, kind: "wall-inner", kg: "394", gewerk: "Rohbau", schicht: schichtFromComposite(w?.composite), status: "abbruch",
+      mengen: { area: r4(breite * hoehe), volume: r4(breite * hoehe * dickeW), length: r4(breite), count: 1 },
+    });
+  });
+
+  // 97-02: decisions on derived elements (workshop, hull) come from the ONE attribute table
+  // (bauteil_attribute_layer). Without an entry the element is returned unchanged.
+  const tabelle = m.bauteil_attribute_layer;
+  if (!tabelle?.attribute) return [...hull, ...els];
+  return [...hull, ...els].map((e) => {
+    const a = istAbgeleitet(e.id) ? attributeVon(tabelle, e.id) : null;
+    if (!a) return e;
+    return {
+      ...e,
+      ...(a.kg ? { kg: String(a.kg) } : {}),
+      ...(a.gewerk ? { gewerk: String(a.gewerk) } : {}),
+      ...(Array.isArray(a.schicht) && a.schicht.length ? { schicht: a.schicht } : {}),
+      ...(a.status != null ? { status: normalizeStatus(a.status) } : {}),
+    };
+  });
 }

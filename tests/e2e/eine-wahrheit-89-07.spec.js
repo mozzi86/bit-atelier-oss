@@ -61,8 +61,16 @@ async function werkstattBereit(page) {
     }
     await page.waitForTimeout(800);
   }
-  await page.waitForTimeout(1600);
   expect(await page.getByTestId("wt-we").count(), "WE-Zonen vorhanden").toBeGreaterThan(0);
+  // Wait for the SAVED record, not a fixed time: in a long serial run the debounced save took
+  // longer than 1.6 s, the AVA then loaded a record without `angewendet` and derived nothing.
+  await expect.poll(async () => {
+    const projekte = await (await page.request.get(`/api/entities/Project?name=${PROJEKT}`)).json();
+    const id = projekte?.[0]?.id;
+    if (!id) return false;
+    const modelle = await (await page.request.get(`/api/entities/BimModel?project_id=${encodeURIComponent(id)}`)).json();
+    return modelle?.[0]?.werkstatt_layer?.angewendet === true;
+  }, { timeout: 30000, message: "werkstatt_layer.angewendet gespeichert" }).toBe(true);
 }
 
 test.describe("89-07 Eine Wahrheit — Türen und Werkstatt-Bauteile", () => {

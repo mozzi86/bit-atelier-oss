@@ -37,3 +37,40 @@ describe("73-08 Mengentöpfe", () => {
     assert.equal(vermutetAnteil({ was: { kg: ["999"] } }, W).anteil, null);
   });
 });
+
+// 97-07: demolition is KG 394 by default (was "KG 200 / LB 040"), selectable per project
+// (212 / 394 / at the affected groups), trade LB 084 per DIN 18459.
+import { ABBRUCH_KG, rueckbauHinweis } from "@ava/lib/bestandsMengen";
+describe("97-07 Kostengruppe Abbruch", () => {
+  it("Standard 394, wählbar 212 und 3xx, Unbekanntes fällt auf 394", () => {
+    assert.deepEqual(ABBRUCH_KG.map((k) => k.wert), ["394", "212", "3xx"]);
+    const t = (kg) => bestandsToepfe([{ status: "abbruch", mengen: { area: 10 } }], "area", { abbruchKg: kg }).find((x) => x.key === "rueckbau");
+    assert.equal(t(null).kg, "394");
+    assert.equal(t("212").kg, "212");
+    assert.equal(t("quatsch").kg, "394");
+    assert.match(t("212").hinweis, /KG 212 · LB 084 · DIN 18459/);
+    assert.equal(rueckbauHinweis("3xx"), "KG 3xx · LB 084 · DIN 18459");
+    assert.equal(t(null).menge, 10, "Menge unverändert");
+  });
+});
+
+// 97-06 rule 2: a tender position mixing demolition with existing/new (or unknown with known).
+import { statusMischung } from "@ava/lib/bestandsMengen";
+describe("97-06 Regel 2 Statusmischung", () => {
+  const E = [
+    { status: "abbruch", kg: "341", mengen: { area: 10 } },
+    { status: "neubau", kg: "341", mengen: { area: 5 } },
+    { status: null, kg: "342", mengen: { area: 2 } },
+    { status: "bestand", kg: "342", mengen: { area: 0 } },
+  ];
+  it("Abbruch + Neubau gemischt, mit Mengen je Status", () => {
+    assert.deepEqual(statusMischung({ was: { kg: ["341"] } }, E), { gemischt: true, anteile: { abbruch: 10, neubau: 5 } });
+  });
+  it("nur ein Status: ruhig; Menge 0 zählt nicht", () => {
+    assert.equal(statusMischung({ zustand: { status: ["abbruch"] } }, E).gemischt, false);
+    assert.equal(statusMischung({ was: { kg: ["342"] } }, E).gemischt, false, "ohne Status allein, Bestand mit 0 m²");
+  });
+  it("ohne Status mit bekanntem Status gemischt", () => {
+    assert.equal(statusMischung({}, [{ status: null, mengen: { area: 1 } }, { status: "neubau", mengen: { area: 1 } }]).gemischt, true);
+  });
+});

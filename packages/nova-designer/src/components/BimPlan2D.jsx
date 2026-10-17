@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { compositeById, openingTypeById } from "@core/lib/buildingModel";
 import { fmtLen } from "@core/lib/useBuildingProgram";
+import { planDarstellung, schraffur45 } from "@core/lib/plan/brillen.js"; // 97-04: status look per lens
 import { usePlanViewport, bildPxJeEinheit } from "@core/lib/usePlanViewport"; // 75-09: bildPxJeEinheit = Letterbox-korrekte Bildschirm-Skala (MSB-16)
 // 75-11 Task 4 (MSB-5/MSB-12): short room names + label collision in screen
 // pixels — reuse the 75-05 helpers, never rebuild them (one source).
@@ -57,7 +58,7 @@ function wallSkinBands(w) {
   return comp.skins.map((sk) => {
     const tk = sk.thickness / 1000; const a1 = cur, a2 = cur - tk; cur = a2;
     return {
-      color: sk.color, name: sk.name,
+      color: sk.color, name: sk.name, hatch: sk.hatch,
       pts: [
         { x: w.a.x + nx * a1, z: w.a.z + nz * a1 },
         { x: w.b.x + nx * a1, z: w.b.z + nz * a1 },
@@ -113,7 +114,44 @@ function polyHit(pts, r, crossing) {
 }
 
 // =====================  GRUNDRISS  =========================================
-function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, overlay, overlayBounds, maxSvgH = 460, readOnly = false, massstab = null, fuellen = false }) {
+/**
+ * 97-04b: material hatches after DIN ISO 128-50 / DIN 1356-1 [ASSUMED mapping of the catalogue's
+ * hatch keys]: concrete = 45° lines with dots, brick = dense 45° lines, block (sand-lime) = 45°
+ * lines, insulation = zigzag band, wood = crossing diagonals. Size in plan units (≈ 2 mm on paper).
+ * @param {{groesse: number}} props
+ */
+function MaterialSchraffuren({ groesse }) {
+  const g = Math.max(1.5, groesse);
+  const linie = { stroke: "#27272a", strokeWidth: Math.max(0.25, g / 14) };
+  return (
+    <defs>
+      <pattern id="iso-concrete" width={g} height={g} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <line x1="0" y1="0" x2="0" y2={g} {...linie} /><circle cx={g * 0.55} cy={g * 0.4} r={g / 16} fill="#27272a" />
+      </pattern>
+      <pattern id="iso-brick" width={g / 2} height={g / 2} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <line x1="0" y1="0" x2="0" y2={g / 2} {...linie} />
+      </pattern>
+      <pattern id="iso-block" width={g} height={g} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <line x1="0" y1="0" x2="0" y2={g} {...linie} />
+      </pattern>
+      <pattern id="iso-insul" width={g} height={g / 2} patternUnits="userSpaceOnUse">
+        <polyline points={`0,0 ${g / 4},${g / 2} ${g / 2},0 ${(3 * g) / 4},${g / 2} ${g},0`} fill="none" {...linie} />
+      </pattern>
+      <pattern id="iso-wood" width={g} height={g} patternUnits="userSpaceOnUse">
+        <line x1="0" y1="0" x2={g} y2={g} {...linie} /><line x1={g} y1="0" x2="0" y2={g} {...linie} />
+      </pattern>
+    </defs>
+  );
+}
+
+function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, overlay, overlayBounds, maxSvgH = 460, readOnly = false, massstab = null, fuellen = false, brille = null, huelleStatus = null, sw = false, werkstattWaende = null }) {
+  // 97-04: look of an element with renovation status under the chosen lens (null = today's look).
+  const look = (status) => planDarstellung(brille, status, { sw });
+  // 97-04b: at layer depth (1:50 lens) the layer bands carry their material hatch (DIN ISO 128-50).
+  const schichtTiefe = brille?.tiefe === "schichten";
+  const schraffurUeber = (b, k) => (schichtTiefe && b.hatch && b.hatch !== "none"
+    ? <path key={`h${k}`} d={`M${X(b.pts[0].x)},${Z(b.pts[0].z)} L${X(b.pts[1].x)},${Z(b.pts[1].z)} L${X(b.pts[2].x)},${Z(b.pts[2].z)} L${X(b.pts[3].x)},${Z(b.pts[3].z)} Z`} fill={`url(#iso-${b.hatch})`} stroke="none" data-schraffur-material={b.hatch} style={{ pointerEvents: "none" }} />
+    : null);
   const svgRef = useRef(null);
   const L = layerVis || {};
   const show = (id) => L[id] !== false;
@@ -337,6 +375,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
       {fuellen
         ? <rect x={vp.sicht.x} y={vp.sicht.y} width={vp.sicht.w} height={vp.sicht.h} fill="#f8fafc" />
         : <rect x="0" y="0" width={W} height={H} fill="#f8fafc" />}
+      {schichtTiefe && <MaterialSchraffuren groesse={(2 * (brille?.massstab || 50) / 1000) * SCALE} />}
 
       {/* ---- Räume/Zonen (Polygon-Füllung + Name + Fläche) ----
           75-11 Task 4 (MSB-5/MSB-12): labels in SCREEN PIXELS via px() (was
@@ -410,7 +449,9 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         const onClick = (e) => { if (edit?.tool === "arrow" && edit.onPick) { e.stopPropagation(); edit.onPick({ type: "slab", index: s._idx }, e.shiftKey); } };
         return (
           <g key={`cslab${i}`}>
-            <path d={d} fill="#cbd5e1" fillOpacity={sel ? 0.5 : 0.25} stroke={sel ? "#475569" : "#94a3b8"} strokeWidth={sel ? "1.2" : "0.6"} strokeDasharray="4 2" onClick={onClick} style={{ cursor: edit?.tool === "arrow" ? "pointer" : "inherit" }} />
+            {(() => { const lk = look(s.status); return (
+              <path d={d} fill={lk ? lk.fill : "#cbd5e1"} fillOpacity={sel ? 0.5 : 0.25} stroke={sel ? "#475569" : lk ? lk.stroke : "#94a3b8"} strokeWidth={sel ? "1.2" : lk ? lk.strokeWidth : "0.6"} strokeDasharray={lk?.dash || "4 2"} opacity={lk?.opacity} data-status={s.status || undefined} onClick={onClick} style={{ cursor: edit?.tool === "arrow" ? "pointer" : "inherit" }} />
+            ); })()}
             {sel && edit?.tool === "arrow" && s.points.map((p, vi) => (
               <Handle key={`sh${vi}`} x={X(p.x)} y={Z(p.z)} onDown={(ev) => startDrag(ev, { kind: "polyVert", which: "slab", idx: s._idx, vi })} />
             ))}
@@ -429,7 +470,9 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         const onClick = (e) => { if (edit?.tool === "arrow" && edit.onPick) { e.stopPropagation(); edit.onPick({ type: "roof", index: rf._idx }, e.shiftKey); } };
         return (
           <g key={`croof${i}`} onClick={onClick} style={{ cursor: edit?.tool === "arrow" ? "pointer" : "inherit" }}>
-            <path d={d} fill="#fed7aa" fillOpacity={sel ? 0.5 : 0.25} stroke={sel ? "#9a3412" : "#fb923c"} strokeWidth={sel ? "1.2" : "0.6"} />
+            {(() => { const lk = look(rf.status); return (
+              <path d={d} fill={lk ? lk.fill : "#fed7aa"} fillOpacity={sel ? 0.5 : 0.25} stroke={sel ? "#9a3412" : lk ? lk.stroke : "#fb923c"} strokeWidth={sel ? "1.2" : lk ? lk.strokeWidth : "0.6"} strokeDasharray={lk?.dash} opacity={lk?.opacity} data-status={rf.status || undefined} />
+            ); })()}
             <line x1={X(ridge[0].x)} y1={Z(ridge[0].z)} x2={X(ridge[1].x)} y2={Z(ridge[1].z)} stroke="#9a3412" strokeWidth="0.8" strokeDasharray="5 2" />
             {sel && edit?.tool === "arrow" && rf.points.map((p, vi) => (
               <Handle key={`rh${vi}`} x={X(p.x)} y={Z(p.z)} onDown={(ev) => startDrag(ev, { kind: "polyVert", which: "roof", idx: rf._idx, vi })} />
@@ -443,7 +486,9 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         const sel = edit?.selected?.type === "hullwall" && edit.selected.level === w.level && edit.selected.edge === w.edge;
         const onClick = (e) => { if (edit?.tool === "arrow" && edit.onPick) { e.stopPropagation(); edit.onPick({ type: "hullwall", level: w.level, edge: w.edge }, e.shiftKey); } };
         const style = { cursor: edit?.tool === "arrow" ? "pointer" : "inherit" };
-        const bands = wallSkinBands(w);
+        const lk = look(huelleStatus);
+        // 97-04: with a status the core shows the status colour; 1:50 (tiefe "schichten") keeps the layers.
+        const bands = lk && brille?.tiefe !== "schichten" ? null : wallSkinBands(w);
         const r = wallRectXZ(w);
         const outline = `M${X(r[0].x)},${Z(r[0].z)} L${X(r[1].x)},${Z(r[1].z)} L${X(r[2].x)},${Z(r[2].z)} L${X(r[3].x)},${Z(r[3].z)} Z`;
         const n = fp.length, va = fp[w.edge], vb = fp[(w.edge + 1) % n];
@@ -456,16 +501,18 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         ) : null;
         if (bands) {
           return (
-            <g key={`w${i}`} onClick={onClick} style={style}>
+            <g key={`w${i}`} onClick={onClick} style={style} data-huellwand={`${w.level}:${w.edge}`} data-status={huelleStatus || undefined} opacity={lk?.opacity}>
               {bands.map((b, k) => <path key={k} d={`M${X(b.pts[0].x)},${Z(b.pts[0].z)} L${X(b.pts[1].x)},${Z(b.pts[1].z)} L${X(b.pts[2].x)},${Z(b.pts[2].z)} L${X(b.pts[3].x)},${Z(b.pts[3].z)} Z`} fill={b.color} stroke="#475569" strokeWidth="0.3"><title>{b.name}</title></path>)}
+              {bands.map(schraffurUeber)}
+              {lk && <path d={outline} fill="none" stroke={lk.stroke} strokeWidth={lk.strokeWidth} strokeDasharray={lk.dash} />}
               {sel && <path d={outline} fill="none" stroke="#0d9488" strokeWidth="1.2" />}
               {grips}
             </g>
           );
         }
         return (
-          <g key={`w${i}`} onClick={onClick} style={style}>
-            <path d={outline} fill={sel ? "#0f766e" : "#334155"} stroke={sel ? "#0d9488" : "#1e293b"} strokeWidth={sel ? "1.2" : "0.5"} />
+          <g key={`w${i}`} onClick={onClick} style={style} data-huellwand={`${w.level}:${w.edge}`} data-status={huelleStatus || undefined} opacity={lk?.opacity}>
+            <path d={outline} fill={lk ? lk.fill : sel ? "#0f766e" : "#334155"} stroke={sel ? "#0d9488" : lk ? lk.stroke : "#1e293b"} strokeWidth={sel ? "1.2" : lk ? lk.strokeWidth : "0.5"} strokeDasharray={lk?.dash} />
             {grips}
           </g>
         );
@@ -512,14 +559,19 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         const sel = edit?.selected?.type === "wall" && edit.selected.index === w._idx;
         const onClick = (e) => { if (edit?.tool === "arrow" && edit.onPick) { e.stopPropagation(); edit.onPick({ type: "wall", index: w._idx }, e.shiftKey); } };
         const style = { cursor: edit?.tool === "arrow" ? "pointer" : cursor };
-        const bands = wallSkinBands(w);
+        const lk = look(w.status);
+        const bands = lk && brille?.tiefe !== "schichten" ? null : wallSkinBands(w);
         if (bands) {
+          const o = wallRectXZ(w);
+          const umriss = `M${X(o[0].x)},${Z(o[0].z)} L${X(o[1].x)},${Z(o[1].z)} L${X(o[2].x)},${Z(o[2].z)} L${X(o[3].x)},${Z(o[3].z)} Z`;
           return (
-            <g key={`cw${i}`} onClick={onClick} style={style}>
+            <g key={`cw${i}`} onClick={onClick} style={style} data-wand={w._idx} data-status={w.status || undefined} opacity={lk?.opacity}>
+              {lk && !sel && <path d={umriss} fill="none" stroke={lk.stroke} strokeWidth={lk.strokeWidth} strokeDasharray={lk.dash} />}
               {bands.map((b, k) => {
                 const d = `M${X(b.pts[0].x)},${Z(b.pts[0].z)} L${X(b.pts[1].x)},${Z(b.pts[1].z)} L${X(b.pts[2].x)},${Z(b.pts[2].z)} L${X(b.pts[3].x)},${Z(b.pts[3].z)} Z`;
                 return <path key={k} d={d} fill={b.color} stroke="#475569" strokeWidth="0.3"><title>{b.name}</title></path>;
               })}
+              {bands.map(schraffurUeber)}
               {sel && (() => {
                 const o = wallRectXZ(w);
                 const d = `M${X(o[0].x)},${Z(o[0].z)} L${X(o[1].x)},${Z(o[1].z)} L${X(o[2].x)},${Z(o[2].z)} L${X(o[3].x)},${Z(o[3].z)} Z`;
@@ -530,16 +582,37 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         }
         const r = wallRectXZ(w);
         const d = `M${X(r[0].x)},${Z(r[0].z)} L${X(r[1].x)},${Z(r[1].z)} L${X(r[2].x)},${Z(r[2].z)} L${X(r[3].x)},${Z(r[3].z)} Z`;
-        return <path key={`cw${i}`} d={d} fill={sel ? "#0ea5a4" : "#0f766e"} stroke={sel ? "#0d9488" : "#134e4a"} strokeWidth="0.6"
-          onClick={onClick} style={style} />;
+        return <path key={`cw${i}`} d={d} fill={sel ? "#0ea5a4" : lk ? lk.fill : "#0f766e"} stroke={sel ? "#0d9488" : lk ? lk.stroke : "#134e4a"} strokeWidth={lk ? lk.strokeWidth : "0.6"}
+          strokeDasharray={lk?.dash} opacity={lk?.opacity} onClick={onClick} style={style} data-wand={w._idx} data-status={w.status || undefined} data-sw={lk?.schraffur ? "schraffur" : lk?.leer ? "leer" : undefined} />;
+      })}
+
+      {/* 97-04b: hatch of S/W new-build walls (45°, 2 mm on paper at the lens scale [ASSUMED]) */}
+      {show("walls") && sw && customWalls.map((w) => {
+        const lk = look(w.status);
+        if (!lk?.schraffur) return null;
+        const abst = (2 * (brille?.massstab || 100)) / 1000;
+        return <g key={`sch${w._idx}`} style={{ pointerEvents: "none" }} data-schraffur={w._idx}>
+          {schraffur45(wallRectXZ(w), abst).map(([p, q], k) => <line key={k} x1={X(p.x)} y1={Z(p.z)} x2={X(q.x)} y2={Z(q.z)} stroke="#18181b" strokeWidth="0.4" />)}
+        </g>;
+      })}
+
+      {/* 97-04b: workshop walls as own elements — only those with a decided status (table
+          bauteil_attribute_layer); without status the zone outlines stay as they are. */}
+      {show("walls") && (werkstattWaende || []).filter((w) => w.level === level && !w.huelle && look(w.status)).map((w) => {
+        const lk = /** @type {any} */ (look(w.status));
+        const r = wallRectXZ({ ...w, thickness: w.dicke_m });
+        const d = `M${X(r[0].x)},${Z(r[0].z)} L${X(r[1].x)},${Z(r[1].z)} L${X(r[2].x)},${Z(r[2].z)} L${X(r[3].x)},${Z(r[3].z)} Z`;
+        return <path key={`wt${w.guid}`} d={d} fill={lk.fill} stroke={lk.stroke} strokeWidth={lk.strokeWidth} strokeDasharray={lk.dash} opacity={lk.opacity}
+          data-werkstattwand={w.guid} data-status={w.status} style={{ pointerEvents: "none" }} />;
       })}
 
       {/* ---- Custom-Stützen ---- */}
       {show("columns") && customCols.map((c, i) => {
         const s = (c.size || 0.4);
         const sel = edit?.selected?.type === "column" && edit.selected.index === c._idx;
+        const lk = look(c.status);
         return <rect key={`cc${i}`} x={X(c.x - s / 2)} y={Z(c.z - s / 2)} width={s * SCALE} height={s * SCALE}
-          fill={sel ? "#0ea5a4" : "#475569"} stroke="#1e293b" strokeWidth="0.6"
+          fill={sel ? "#0ea5a4" : lk ? lk.fill : "#475569"} stroke={lk ? lk.stroke : "#1e293b"} strokeWidth={lk ? lk.strokeWidth : "0.6"} strokeDasharray={lk?.dash} opacity={lk?.opacity} data-status={c.status || undefined}
           onClick={(e) => { if (edit?.tool === "arrow" && edit.onPick) { e.stopPropagation(); edit.onPick({ type: "column", index: c._idx }, e.shiftKey); } }}
           style={{ cursor: edit?.tool === "arrow" ? "pointer" : cursor }} />;
       })}
@@ -720,7 +793,9 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
 }
 
 // =====================  SCHNITT (z = 0)  ===================================
-function Schnitt({ model, storeyHeight, layerVis, unit = "m", maxSvgH = 460 }) {
+function Schnitt({ model, storeyHeight, layerVis, unit = "m", maxSvgH = 460, brille = null, huelleStatus = null, sw = false }) {
+  // 97-04b: the cut hull walls take the status look of the lens (null = today's hatch).
+  const lk = planDarstellung(brille, huelleStatus, { sw });
   const L = layerVis || {};
   const show = (id) => L[id] !== false;
   const fp = model.footprint;
@@ -746,7 +821,7 @@ function Schnitt({ model, storeyHeight, layerVis, unit = "m", maxSvgH = 460 }) {
         <rect key={`s${i}`} x={X(bb.minX)} y={Y(s.elevation + 0.25)} width={wM * SCALE} height={0.25 * SCALE} fill="#9aa6b2" stroke="#64748b" strokeWidth="0.4" />
       ))}
       {show("shell") && sideWalls.map((wx, i) => (
-        <rect key={`sw${i}`} x={X(wx)} y={Y(totalH)} width={wt * SCALE} height={totalH * SCALE} fill="url(#hatch)" stroke="#1e293b" strokeWidth="0.6" />
+        <rect key={`sw${i}`} x={X(wx)} y={Y(totalH)} width={wt * SCALE} height={totalH * SCALE} fill={lk ? (lk.leer ? "none" : lk.fill) : "url(#hatch)"} stroke={lk ? lk.stroke : "#1e293b"} strokeWidth={lk ? lk.strokeWidth : "0.6"} strokeDasharray={lk?.dash} opacity={lk?.opacity} data-schnittwand={i} data-status={huelleStatus || undefined} />
       ))}
       {/* Attika (Brüstung) auf dem Dach */}
       {paraH > 0 && sideWalls.map((wx, i) => (
@@ -840,6 +915,10 @@ function NorthArrow({ x, y }) {
  * @property {number} [storeyHeight] Geschosshöhe in Metern
  * @property {object} [edit] Editier-Props (siehe unten)
  * @property {object} [layerVis] Sichtbarkeit je Layer-Id
+ * @property {any} [brille] 97-04: lens of the core lens register (plan/brillen.js, status look); null = today's look
+ * @property {string|null} [huelleStatus] 97-04: status of the generated hull (attribute table "hull-wall")
+ * @property {boolean} [sw] 97-04b: black-and-white variant of the permit lens
+ * @property {Array<any>|null} [werkstattWaende] 97-04b: workshop walls (with table status) drawn as own elements when they have a status
  * @property {Array<object>} [envOpenings]
  * @property {Array<object>} [customZones]
  * @property {Array<object>} [customSlabs]
@@ -907,7 +986,7 @@ function NorthArrow({ x, y }) {
  * darunter; interaktive Overlay-Elemente (z.B. Sketch-Handles) dürfen Events
  * bewusst behalten.
  */
-export default function BimPlan2D({ model, mode, level = 0, storeyHeight = 3, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, readOnly = false, overlay, overlayBounds, height = 520, elements, massstab = null, fuellen = false }) {
+export default function BimPlan2D({ model, mode, level = 0, storeyHeight = 3, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, readOnly = false, overlay, overlayBounds, height = 520, elements, massstab = null, fuellen = false, brille = null, huelleStatus = null, sw = false, werkstattWaende = null }) {
   const lvl = useMemo(() => Math.min(level, (model?.storeys?.length || 1) - 1), [level, model]);
   if (!model) return null;
   // readOnly: kein Werkzeug, keine Hit-Tests — aber die gezeichneten Innenwände/Stützen/
@@ -920,8 +999,8 @@ export default function BimPlan2D({ model, mode, level = 0, storeyHeight = 3, ed
   return (
     <div className="w-full bg-slate-50 flex items-center justify-center overflow-hidden" style={{ height }}>
       {mode === "schnitt"
-        ? <Schnitt model={model} storeyHeight={storeyHeight} layerVis={layerVis} unit={unit} maxSvgH={maxSvgH} />
-        : <Grundriss model={model} level={lvl} edit={editEff} layerVis={layerVis} envOpenings={envOpenings} customZones={customZones} customSlabs={customSlabs} customRoofs={customRoofs} unit={unit} focus={focus} overlay={overlay} overlayBounds={overlayBounds} maxSvgH={maxSvgH} readOnly={readOnly} massstab={massstab} fuellen={fuellen} />}
+        ? <Schnitt model={model} storeyHeight={storeyHeight} layerVis={layerVis} unit={unit} maxSvgH={maxSvgH} brille={brille} huelleStatus={huelleStatus} sw={sw} />
+        : <Grundriss model={model} level={lvl} edit={editEff} layerVis={layerVis} envOpenings={envOpenings} customZones={customZones} customSlabs={customSlabs} customRoofs={customRoofs} unit={unit} focus={focus} overlay={overlay} overlayBounds={overlayBounds} maxSvgH={maxSvgH} readOnly={readOnly} massstab={massstab} fuellen={fuellen} brille={brille} huelleStatus={huelleStatus} sw={sw} werkstattWaende={werkstattWaende} />}
     </div>
   );
 }

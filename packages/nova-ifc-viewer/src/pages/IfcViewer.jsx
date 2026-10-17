@@ -37,6 +37,7 @@ import { toast } from "sonner";
 import { parseFilterXml, applyNovaFilter } from "@ifc/lib/novaFilters";
 import { byTrade } from "@core/lib/tradeSort";
 import { pruefeAttributeVorUebernahme } from "@ifc/lib/mengenAttributPruefung";
+import { statusFarbe } from "@core/lib/plan/statusDarstellung.js";
 // Modul-Cache: geparstes Modell überlebt Routen-/Tab-Wechsel (kein Re-Import).
 let MODEL_CACHE = null;
 // Label of the model held in MODEL_CACHE — lets ?beispiel=1 see that the cached model
@@ -1171,7 +1172,7 @@ export default function IfcViewer({ embedded = false }) {
           <>
             <span className="mx-1 h-5 w-px bg-slate-200" />
             <span className="text-xs text-slate-500" data-testid="status-sichtbarkeit" data-ausgeblendet={ausgeblendet}>{t("Sichtbar")}:</span>
-            {[["abbruch", "Abbruch", "#ef4444"], ["neubau", "Neubau", "#22c55e"], ["bestand", "Bestand", "#94a3b8"], ["ohne", STATUS_OHNE_LABEL, "#c8d0db"]].map(([k, l, c]) => (
+            {[["abbruch", "Abbruch", statusFarbe("abbruch")], ["neubau", "Neubau", statusFarbe("neubau")], ["bestand", "Bestand", statusFarbe("bestand")], ["ohne", STATUS_OHNE_LABEL, statusFarbe(null)]].map(([k, l, c]) => (
               <button key={k} type="button" aria-pressed={statusSichtbar[k]} data-testid={`status-sichtbar-${k}`}
                 onClick={() => setStatusSichtbar((alt) => ({ ...alt, [k]: !alt[k] }))}
                 title={statusSichtbar[k] ? t("Ausblenden") : t("Einblenden")}
@@ -1283,7 +1284,7 @@ export default function IfcViewer({ embedded = false }) {
           )}
           <div ref={fpsRef} />
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            {[["#ef4444", "Abbruch"], ["#22c55e", "Neubau"], ["#94a3b8", "Bestand"], ["#c8d0db", t(STATUS_OHNE_LABEL)],
+            {[[statusFarbe("abbruch"), "Abbruch"], [statusFarbe("neubau"), "Neubau"], [statusFarbe("bestand"), "Bestand"], [statusFarbe(null), t(STATUS_OHNE_LABEL)],
               ["#ff9e0a", "markiert"], ["#3b82f6", "ausgewählt"]].map(([c, l]) => (
               <span key={l} className="flex items-center gap-1">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: c }} /> {l}

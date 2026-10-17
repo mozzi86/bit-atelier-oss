@@ -35,6 +35,7 @@ const buero = (o) => ({ scope: 'buero', projekt_override_id: null, ...o });
 // Wichtig: 2018 und 2008 sind bei 352/353/354 NICHT deckungsgleich (die Reihe
 // wurde verschoben). Deshalb sind beide Fassungen getrennt geführt, nie gemappt.
 const DIN276_2018 = [
+  ['212', 'Abbruchmaßnahmen'], // 97-07: demolition when preparing the site (Herrichten)
   ['311', 'Baugrubenherstellung'], ['321', 'Baugrund'], ['322', 'Flachgründungen'],
   ['332', 'Nichttragende Außenwände'], ['334', 'Außenwandöffnungen'],
   ['338', 'Lichtschutz zur KG 330'], ['341', 'Tragende Innenwände'],
@@ -255,7 +256,7 @@ const stlbKatalog = [
   buero({ lb: '034', name: 'Maler- und Lackierarbeiten' }),
   buero({ lb: '036', name: 'Bodenbelagarbeiten' }),
   buero({ lb: '039', name: 'Trockenbauarbeiten' }),
-  buero({ lb: '040', name: 'Abbruch- und Rückbauarbeiten' }),
+  buero({ lb: '084', name: 'Abbruch- und Rückbauarbeiten' }), // 97-02a: was wrongly 040 (Wärmeversorgung)
 ];
 
 // --- 13. ReferenzpreisPool ---------------------------------------------

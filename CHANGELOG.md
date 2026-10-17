@@ -10,6 +10,27 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.6.0] - 2026-10-17
+
+### Neu
+
+- **Bauteil-Steckbrief für alle Bauteile:** Jedes Bauteil im Gebäudemodell zeigt IFC-Klasse, Bauteiltyp, Kostengruppe (DIN 276), Gewerk (STLB-Bau-Leistungsbereich mit Stelle im Bauablauf), Material und Schichtaufbau, Menge, Bauabschnitt und eine stabile GUID — auch Haustechnik, Tragwerk, Durchbrüche und Brandschotts. Werte, die nur aus dem Bauteiltyp abgeleitet sind, tragen einen orangen Punkt („bitte bestätigen“).
+- **Brillen:** Ein Modell, mehrere Sichten — Eingabe, Bestand, Abbruchplan, Bauantrag (auch schwarz-weiß), Ausführung 1:50 (Materialschraffuren), Ausschreibung, Bauleitung. Bestand grau, Neubau rot, Abbruch gelb nach den Bauvorlagenverordnungen; Bauteile ohne Status werden nie ausgeblendet und nie als Neubau gezählt.
+- **Prüfregeln gegen Fehlplanung:** Hinweise im Gebäudemodell und in der AVA, z. B. Fenster in einer Wand, die abgebrochen wird; Abbruch tragender Bauteile ohne Statik-Vermerk; Durchbruch durch eine Brandwand ohne Brandschott oder mit schwächerem Schott; Leitung kreuzt eine Wand ohne geplanten Durchbruch; LV-Position mischt Abbruch mit Neubau.
+- **Brandschott** als eigenes Bauteil am Durchbruch (Feuerwiderstand, System, Zulassung abZ/aBG/ETA mit Nummer, Hersteller, Kennzeichnung).
+- **Status je Schicht** (z. B. Bestandswand mit neuer Dämmung), Zumauerung als eigenes Bauteil, neue Öffnung in einer Bestandswand als eigene Abbruchmenge.
+- **Grundriss als Vektor-PDF im echten Maßstab** mit Plankopf, Brille und Statuslegende (A3 bis A0 nach Größe).
+
+### Geändert
+
+- **IFC-Export:** stabile GUIDs, Eigenschaften, Material-Schichten und DIN-276-Klassifizierung für alle Bauteile; Umbaustatus nach IFC4 in `Pset_*Common.Status` (ohne Status „NOTKNOWN“, nie „NEW“); Abwasserleitungen als Rohr statt Dachrinne.
+- **Rückbau:** Kostengruppe 394 (wählbar je Projekt: 394, 212 oder bei den betroffenen Gruppen), Leistungsbereich 084, DIN 18459.
+
+### Behoben
+
+- **Abbruch stand im Gewerke-Katalog unter LB 040** (Wärmeversorgung); jetzt LB 084. Bereits gespeicherte Bauablauf-Vorgänge mit „040“ bitte prüfen.
+- **„Plan als PDF“ war nicht maßstäblich:** Der Grundriss wurde als Bild aufs Blatt gestreckt, trug aber „1:100“. Der Grundriss kommt jetzt als Vektor im echten Maßstab; der Schnitt ist bis auf Weiteres als „nicht maßstäblich“ beschriftet.
+
 ## [1.5.1] - 2026-10-16
 
 ### Neu

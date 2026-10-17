@@ -4,6 +4,7 @@ import { bitApi } from "@core/api/bitApi";
 import { motion } from "framer-motion";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@core/components/ui/tabs";
 import { useProject } from "@core/lib/ProjectContext";
+import { saveBimModel } from "@core/lib/useBimModelSync";
 import { useAuth } from "@core/lib/AuthContext";
 import { DATENQUELLE } from "@core/lib/umgebung";
 import { submissionLesen, zuschlagErteilen } from "@core/api/zugriff";
@@ -52,6 +53,7 @@ import { aktiveSchicht, rangfolge } from "@core/lib/rules/priceStack";
 import { nachtraegeDesProjekts } from "@core/lib/nachtraege";
 import { useTabParam } from "@core/lib/useTabParam";
 import { useI18n } from "@core/lib/i18n";
+import { attributPatch, istAbgeleitet } from "@core/lib/bauteil/attribute.js";
 
 // The eight AVA tabs, addressable as #/AVA?tab=<key> (72-15, N-16). The keys are
 // the TabsTrigger values below and a contract: links from Finance (?tab=control,
@@ -310,7 +312,17 @@ export default function AVA() {
       return null;
     };
     let applied = 0;
+    // 97-02: workshop and hull elements are regenerated — their decisions go into the ONE
+    // attribute table keyed by the stable id (wt-wall-<guid>, hull-wall …).
+    let tabelle = bimModel.bauteil_attribute_layer || null;
+    let tabelleGeaendert = false;
     for (const [elId, attrs] of Object.entries(patch || {})) {
+      if (istAbgeleitet(elId)) {
+        tabelle = attributPatch(tabelle, elId, { kg: attrs.kg, gewerk: attrs.gewerk, schicht: attrs.schicht, status: attrs.status });
+        tabelleGeaendert = true;
+        applied++;
+        continue;
+      }
       const key = arrayForId(elId);
       if (!key) continue;
       const idx = Number(elId.slice(elId.lastIndexOf("-") + 1));
@@ -326,10 +338,12 @@ export default function AVA() {
       applied++;
     }
     if (applied === 0) {
-      toast("Synthetische Hüllen-Bauteile sind nicht persistierbar — Bauteile im Komplex-Designer zeichnen");
+      toast("Keine Bauteile zum Speichern");
       return;
     }
-    await bitApi.entities.BimModel.update(bimModel.id, arrays);
+    // 97-01 (KD-17): through the ONE write path — cache, layer stamps and live listeners
+    // (usePlanModel, designer) see the status change; a direct update raced the designer debounce.
+    await saveBimModel(projectId || bimModel.project_id, tabelleGeaendert ? { ...arrays, bauteil_attribute_layer: tabelle } : arrays);
     toast.success(`Klassifizierung für ${applied} ${applied === 1 ? "Bauteil" : "Bauteile"} gespeichert`);
     reload(projectId);
   };

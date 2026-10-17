@@ -46,6 +46,7 @@ const EINTRAEGE = [
   { schluessel: 'nc-theme', speicher: 'localStorage', zweck: 'Hell/Dunkel-Darstellung', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: false },
   { schluessel: 'sidebar:collapsed', speicher: 'localStorage', zweck: 'Zustand der Seitenleiste', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: false },
   { schluessel: 'currentProjectId', speicher: 'localStorage', zweck: 'Kennung des zuletzt geöffneten Projekts', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: false },
+  { schluessel: 'bit.brillen', speicher: 'localStorage', zweck: 'Gewählte Brille je Planansicht im Gebäudemodell', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: true },
   { schluessel: 'nc-bim-favs', speicher: 'localStorage', zweck: 'Favoriten im Gebäudemodell', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: true },
   { schluessel: 'bit-atelier.ifc.autoload.v1', speicher: 'localStorage', zweck: 'Einstellung „IFC automatisch laden“ (Dateiname)', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: true },
   // Drawing content is the visitor's own work, not a device setting — deleting

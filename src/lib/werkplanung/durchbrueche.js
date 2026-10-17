@@ -12,18 +12,27 @@
 //    feuerwiderstand ('ohne'|'EI 30'|'EI 60'|'EI 90'|'EI 120' — of the PENETRATED
 //    element, DIN EN 13501-2), abschottung (text: system, approval no.),
 //    status, pruefung: {statik: Pruefvermerk|null, architekt: Pruefvermerk|null},
-//    bcf_topic_guid (UUID, fixed at creation → stable topic across exports), kommentar}
+//    bcf_topic_guid (UUID, fixed at creation → stable topic across exports), kommentar,
+//    brandschott?: Brandschott (97-02a — the fire stop as its own element at the opening)}
 //   Pruefvermerk = {ergebnis: 'ok'|'abgelehnt', von, am (ISO), kommentar}
 // - status: 'beantragt' → 'statik_geprueft' → 'freigegeben' → 'ausgefuehrt';
 //   rejection by either reviewer → 'abgelehnt' (final; a new request replaces it).
 //   The architect reviews only after the structural engineer [ASSUMED usual order:
 //   statics decides whether the opening is possible, the architect whether it is wanted].
 //
-// In:  Durchbruch records, form values. Out: labels, findings, patches, BCF topics.
+// - 97-02a: the fire stop is its own element (`brandschott`) with rating, system, approval,
+//   manufacturer and marking; the old free text `abschottung` stays readable (records before
+//   97-02a). Opening and fire stop each get a data sheet (@core/lib/bauteil/steckbrief.js):
+//   a requested opening is a "provision for void" (IfcBuildingElementProxy PROVISIONFORVOID),
+//   an executed one an IfcOpeningElement.
+//
+// In:  Durchbruch records, form values. Out: labels, findings, patches, BCF topics, data sheets.
 // Pure — no React, no API.
 
 import { KATALOG } from "@ifc/lib/dateiname";
 import { newTopicGuid } from "@ifc/lib/bcf";
+import { steckbrief } from "@core/lib/bauteil/steckbrief.js";
+import { feuerMinuten } from "@core/lib/bauteil/pruefregeln.js";
 
 /** Kinds of openings (labels double as i18n keys). */
 export const DURCHBRUCH_ARTEN = Object.freeze([
@@ -34,6 +43,19 @@ export const DURCHBRUCH_ARTEN = Object.freeze([
 
 /** Fire resistance of the penetrated element after DIN EN 13501-2 (EI = integrity + insulation, minutes). */
 export const FEUERWIDERSTAENDE = Object.freeze(["ohne", "EI 30", "EI 60", "EI 90", "EI 120"]);
+
+/**
+ * Kinds of approval of a fire stop (labels double as i18n keys): national technical approval
+ * (abZ), general type approval (aBG), European Technical Assessment (ETA).
+ */
+export const ZULASSUNG_ARTEN = Object.freeze([
+  Object.freeze({ key: "abZ", label: "abZ (allgemeine bauaufsichtliche Zulassung)" }),
+  Object.freeze({ key: "aBG", label: "aBG (allgemeine Bauartgenehmigung)" }),
+  Object.freeze({ key: "ETA", label: "ETA (Europäische Technische Bewertung)" }),
+]);
+
+/** Minutes of a fire resistance class — 97-06: ONE helper in @core (bauteil/pruefregeln.js). */
+export { feuerMinuten };
 
 /** Status keys in order with German labels (labels double as i18n keys). */
 export const DURCHBRUCH_STATUS = Object.freeze([
@@ -90,6 +112,20 @@ const IFC_GUID = /^[0-9A-Za-z_$]{22}$/;
  * @property {{statik?: Pruefvermerk|null, architekt?: Pruefvermerk|null}} [pruefung]
  * @property {string} [bcf_topic_guid]
  * @property {string} [kommentar]
+ * @property {Brandschott|null} [brandschott]
+ * @property {string} [kg]            97-02a: DIN 276 cost group of the opening (optional, data sheet)
+ * @property {string} [gewerk_lb]     97-02a: STLB-Bau LB of the opening (optional)
+ * @property {string} [bauabschnitt]  97-02a: construction section (optional)
+ */
+
+/**
+ * @typedef {object} Brandschott fire stop at an opening (97-02a)
+ * @property {string} klasse      fire resistance of the stop ("EI 90"), must be ≥ the penetrated element
+ * @property {string} system      product/system name
+ * @property {string} zulassung_art  'abZ'|'aBG'|'ETA'|''
+ * @property {string} zulassung_nr   approval number
+ * @property {string} hersteller
+ * @property {boolean} kennzeichnung  marking plate set on site
  */
 
 const zahl = (v) => {
@@ -164,8 +200,21 @@ export function durchbruchHinweise(d, alle = []) {
   if ([d.x, d.y, d.z].some((v) => zahl(v) === null)) h.push({ code: "lage_fehlt", stufe: "hinweis", text: "Lage (x, y, z) unvollständig" });
   // MLAR (Muster-Leitungsanlagen-Richtlinie) Abschn. 4: lines through fire-resisting
   // elements need an approved seal (Abschottung) of the same rating.
-  if (d.feuerwiderstand && d.feuerwiderstand !== "ohne" && !String(d.abschottung || "").trim()) {
+  const schott = d.brandschott && typeof d.brandschott === "object" ? d.brandschott : null;
+  const hatSchott = !!(schott && (String(schott.klasse || "").trim() || String(schott.system || "").trim()));
+  if (d.feuerwiderstand && d.feuerwiderstand !== "ohne" && !String(d.abschottung || "").trim() && !hatSchott) {
     h.push({ code: "abschottung_fehlt", stufe: "warn", text: "Bauteil mit Feuerwiderstand — Abschottung angeben (MLAR Abschn. 4)" });
+  }
+  // 97-02a: the stop must reach the rating of the penetrated element (MLAR Abschn. 4.1: same
+  // fire resistance duration). warn, not fail: the fire-protection engineer may justify otherwise.
+  if (hatSchott && d.feuerwiderstand && d.feuerwiderstand !== "ohne") {
+    const soll = feuerMinuten(d.feuerwiderstand), ist = feuerMinuten(schott?.klasse);
+    if (soll && (ist === null || ist === 0)) h.push({ code: "schott_klasse_fehlt", stufe: "warn", text: "Brandschott ohne Feuerwiderstandsklasse" });
+    else if (soll && ist !== null && ist < soll) h.push({ code: "schott_schwaecher", stufe: "warn", text: `Brandschott ${schott?.klasse} schwächer als das Bauteil (${d.feuerwiderstand})` });
+    // A seal without a verifiable approval is not usable (MLAR 4.1 / MVV TB) — hinweis because the
+    // number is often entered once the product is chosen.
+    if (!String(schott?.zulassung_nr || "").trim()) h.push({ code: "schott_zulassung_fehlt", stufe: "hinweis", text: "Brandschott ohne Zulassungsnummer (abZ/aBG/ETA)" });
+    if (d.status === "ausgefuehrt" && !schott?.kennzeichnung) h.push({ code: "schott_kennzeichnung_fehlt", stufe: "hinweis", text: "Ausgeführt — Kennzeichnungsschild des Brandschotts bestätigen" });
   }
   const r = radius(d);
   if (r !== null && IFC_GUID.test(String(d.bauteil_guid || ""))) {
@@ -216,6 +265,44 @@ export function ausgefuehrtPatch(d) {
 }
 
 /**
+ * Fire stop from form values (schott_* fields), or null when the element has no fire
+ * resistance or nothing about the stop was entered. The class defaults to the element's rating.
+ * @param {Record<string, any>} w
+ * @returns {Brandschott|null}
+ */
+export function brandschottAus(w) {
+  if (!w || !w.feuerwiderstand || w.feuerwiderstand === "ohne") return null;
+  const txt = (v) => String(v ?? "").trim();
+  const felder = ["schott_system", "schott_zulassung_nr", "schott_hersteller", "schott_klasse"].map((k) => txt(w[k]));
+  if (!felder.some(Boolean)) return null;
+  return {
+    klasse: FEUERWIDERSTAENDE.includes(w.schott_klasse) && w.schott_klasse !== "ohne" ? w.schott_klasse : w.feuerwiderstand,
+    system: txt(w.schott_system),
+    zulassung_art: ZULASSUNG_ARTEN.some((z) => z.key === w.schott_zulassung_art) ? w.schott_zulassung_art : "",
+    zulassung_nr: txt(w.schott_zulassung_nr),
+    hersteller: txt(w.schott_hersteller),
+    kennzeichnung: w.schott_kennzeichnung === true || w.schott_kennzeichnung === "ja",
+  };
+}
+
+/**
+ * Data sheets of an opening and its fire stop (97-02a). Requested/approved openings are a
+ * provision for void, an executed one a real opening; the fire stop is its own element.
+ * @param {DurchbruchRecord} d
+ * @param {{projektId?: string|number|null}} [ctx]
+ * @returns {{durchbruch: import("@core/lib/bauteil/steckbrief.js").Steckbrief, brandschott: import("@core/lib/bauteil/steckbrief.js").Steckbrief|null}}
+ */
+export function durchbruchSteckbriefe(d, { projektId = null } = {}) {
+  const id = d?.id || d?.nr || "?";
+  const durchbruch = steckbrief({ id, kg: d?.kg, gewerk_lb: d?.gewerk_lb, bauabschnitt: d?.bauabschnitt }, d?.status === "ausgefuehrt" ? "oeffnung" : "durchbruch", { projektId, quelle: "durchbruch" });
+  const s = d?.brandschott;
+  const brandschott = s && typeof s === "object"
+    ? steckbrief({ id, material: [s.system, s.hersteller].filter(Boolean).join(", ") || null }, "brandschott", { projektId, quelle: "brandschott" })
+    : null;
+  return { durchbruch, brandschott };
+}
+
+/**
  * New opening from form values (status 'beantragt', stable BCF topic guid).
  * @param {Record<string, any>} w form values (sizes in mm as typed, positions in m)
  * @param {{projectId: string, alle: DurchbruchRecord[], rng?: () => number}} kontext
@@ -241,6 +328,7 @@ export function neuerDurchbruch(w, { projectId, alle, rng = Math.random }) {
     gewerk: DURCHBRUCH_GEWERKE.some((g) => g.wert === w.gewerk) ? w.gewerk : "",
     feuerwiderstand: FEUERWIDERSTAENDE.includes(w.feuerwiderstand) ? w.feuerwiderstand : "ohne",
     abschottung: String(w.abschottung || "").trim(),
+    brandschott: brandschottAus(w),
     status: "beantragt",
     pruefung: { statik: null, architekt: null },
     bcf_topic_guid: newTopicGuid(rng),

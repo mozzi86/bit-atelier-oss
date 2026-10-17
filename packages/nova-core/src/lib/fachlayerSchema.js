@@ -33,6 +33,7 @@ export const LAYER_VERSION = {
   brandschutz_vermerke_layer: 1, // 73-13 rest (BrandschutzPlanner, { abweichungen })
   barrierefreiheit_layer: 1, // 73-13 rest (BarrierefreiheitPlanner, { abweichungen })
   schallschutz_vermerke_layer: 1, // 73-13 rest (SchallschutzPlanner summary, { abweichungen })
+  bauteil_attribute_layer: 1, // 97-02: { attribute: { [wt-/hull-id]: {status, kg, gewerk, …} } }
 };
 
 /**
