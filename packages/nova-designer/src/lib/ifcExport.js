@@ -14,7 +14,8 @@
 import { compositeTotalM, openingTypeById } from "@core/lib/buildingModel";
 import { GEWERKE_TGA, netzHardened } from "@designer/lib/tgaNetz";
 import { layerHardened as statikHardened, traegerVordim } from "@designer/lib/tragwerkPlan";
-import { steckbrief, typFuerWand, typFuerNetz } from "@core/lib/bauteil/steckbrief.js";
+import { steckbrief, typFuerWand, typFuerNetz, bauteilGuid } from "@core/lib/bauteil/steckbrief.js";
+import { geometrie as massingGeometrie } from "@core/lib/massing/massingModell.js";
 import { attributeVon, mitAttributen, werkstattMitAttributen } from "@core/lib/bauteil/attribute.js";
 
 // Phase 41 (NETZ-05): Achshöhe der TGA-Leitungen über OK Rohdecke des Geschosses (m).
@@ -54,7 +55,7 @@ const S = (v) => {
  *   envOpenings?: Array<object>, autoOpenings?: Array<object>, customZones?: Array<object>,
  *   customSlabs?: Array<object>, customRoofs?: Array<object>, storeyHeight?: number, projectName?: string,
  *   timestamp?: number, onWarn?: ((msg: string) => void)|null, netz?: object|null, werkstatt?: any,
- *   steckbrief?: {projektId?: string|number|null}|null, tragwerk?: object|null, bauteilAttribute?: object|null }} [opts]
+ *   steckbrief?: {projektId?: string|number|null}|null, tragwerk?: object|null, bauteilAttribute?: object|null, massing?: object|null }} [opts]
  *   netz (Phase 41): TGA-Netz (`netz_layer`) — je Kante ein IfcPipe-/Duct-/CableSegment mit
  *   Polylinien-Achse; ohne Netz ist die Datei byte-identisch zu vorher.
  *   werkstatt (89-03): `werkstattBauteile(...)` of @core — interior walls as IfcWall, doors as
@@ -68,11 +69,14 @@ const S = (v) => {
  *   origin of each value), IfcRelAssociatesMaterial (layer set / material) and
  *   IfcRelAssociatesClassification (DIN 276:2018). Without it the file is byte-identical to before.
  *   tragwerk (97-02a, needs steckbrief): `statik_layer` — beams as IfcBeam.
+ *   massing (98-05): `massing_layer` of the Massing Studio — each body an IfcBuildingElementProxy (stable
+ *   GUID, extruded profile, Pset_BIT_Bauteil), each group number an IfcElementAssembly aggregating its
+ *   instances; placed via `massing.bezug` (site → model). Without bodies the file is unchanged.
  *   bauteilAttribute (97-02): `bauteil_attribute_layer` — decisions on workshop and hull elements
  *   (status, KG, trade, section) by stable id; without it nothing changes.
  * @returns {string} STEP-Text
  */
-export function exportIFC(model, { customWalls = [], customColumns = [], customWindows = [], envOpenings = [], autoOpenings = [], customZones = [], customSlabs = [], customRoofs = [], storeyHeight = 3, projectName = "BIT-Atelier", timestamp = 0, onWarn = null, netz = null, werkstatt = null, steckbrief: sbOpt = null, tragwerk = null, bauteilAttribute = null } = {}) {
+export function exportIFC(model, { customWalls = [], customColumns = [], customWindows = [], envOpenings = [], autoOpenings = [], customZones = [], customSlabs = [], customRoofs = [], storeyHeight = 3, projectName = "BIT-Atelier", timestamp = 0, onWarn = null, netz = null, werkstatt = null, steckbrief: sbOpt = null, tragwerk = null, bauteilAttribute = null, massing = null } = {}) {
   // 97-02: workshop walls/doors carry the attribute table's decisions (status, KG, trade …).
   if (werkstatt && bauteilAttribute) werkstatt = werkstattMitAttributen(werkstatt, bauteilAttribute);
   const rows = []; let nid = 0; let gid = 1;
@@ -416,6 +420,28 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
       datenblatt(beam, tSb, [["Breite", t.breite_m], ["Hoehe", h], ["Spannweite", len]]);
       pset(beam, "Pset_BeamCommon", [["LoadBearing", true], ["Span", len], ["Status", statusEnum(tSb)]]);
     });
+  }
+
+  // ---- 98-05: bodies of the Massing Studio (proxies) and their groups (assemblies) ----
+  if (massing && Array.isArray(massing.koerper) && massing.koerper.length) {
+    const bz = massing.bezug || { x: 0, y: 0 };
+    const gruppenRefs = new Map();
+    for (const k of massing.koerper) {
+      const g = massingGeometrie(massing, k);
+      if (!g.profil || g.profil.length < 3 || !(g.hoehe > 0)) continue;
+      const pts = g.profil.map((p) => ({ x: p.x - bz.x, z: p.y - bz.y }));
+      const guidK = bauteilGuid(sbOpt?.projektId ?? null, "massing", { id: k.id });
+      // IfcBuildingElementProxy (IFC4): GlobalId … Representation, Tag, PredefinedType.
+      const ref = E("IFCBUILDINGELEMENTPROXY", `'${guidK}',$,${S(k.name || "Baukörper")},$,${S(k.gruppe != null ? `Gruppe ${k.gruppe}` : "Massing")},${placement(0, 0, g.basis || 0)},${shape(polySolid(pts, g.hoehe))},${S(k.id)},.ELEMENT.`);
+      pset(ref, "Pset_BIT_Bauteil", [["Bauteiltyp", "Massing-Körper"], ["Hoehe", g.hoehe], ["Basis", g.basis || 0], ["Gruppe", k.gruppe ?? "—"], ["GUID_Quelle", "Massing-Studio (stabil je Körper-ID)"]]);
+      if (k.gruppe != null) { const l = gruppenRefs.get(k.gruppe) || []; l.push(ref); gruppenRefs.set(k.gruppe, l); } else contain(0, ref);
+    }
+    for (const [nr, refs] of gruppenRefs) {
+      // IfcElementAssembly (IFC4): … Tag, AssemblyPlace, PredefinedType — one per group number.
+      const asm = E("IFCELEMENTASSEMBLY", `'${bauteilGuid(sbOpt?.projektId ?? null, "massing-gruppe", { id: nr })}',$,${S(`Gruppe ${nr}`)},$,${S("Massing-Gruppe")},${placement(0, 0, 0)},$,$,.NOTDEFINED.,.USERDEFINED.`);
+      E("IFCRELAGGREGATES", `${G()},$,$,$,${asm},(${refs.join(",")})`);
+      contain(0, asm);
+    }
   }
 
   // ---- 97-02a: materials (layer sets for walls) and DIN 276 classification ----

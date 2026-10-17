@@ -14,7 +14,10 @@
 // werden geblockt, NUR der MapLibre-Style wird lokal mit einem Leer-Style
 // beantwortet (route.fulfill = kein Netzwerk-Egress), damit die Karte offline
 // initialisiert und der Klick-Handler sich anmeldet. „Entwurf speichern" wird
-// NICHT geklickt; db.json bleibt ab dem Hash-Startpunkt unverändert.
+// NICHT geklickt. Seit 95-01 speichert der Komplex-Designer den Entwurf nach der
+// Standort-Übernahme automatisch (Nutzerticket 15.10.: Arbeit ging verloren) —
+// erlaubt ist deshalb genau der BuildingComplex des Testhauses; alles andere in
+// db.json muss unverändert bleiben (und der Entwurf wird am Ende wieder gelöscht).
 
 import { request } from "@playwright/test";
 import { test, expect } from "./fixtures/base.js";
@@ -38,10 +41,20 @@ const VERBOTENE_KONSOLE = [
 /** Netzwerk-/Tile-Fehler sind offline erwartet und zählen nicht. */
 const ERLAUBT_OFFLINE = /(ERR_|net::|Failed to fetch|timeout|aborted|404|503|tiles\.|openfreemap|elevation-tiles|Image could not be loaded|AbortError)/i;
 
-const hash = () => crypto.createHash("sha256").update(fs.readFileSync(DB_PFAD)).digest("hex");
+/**
+ * Hash of db.json WITHOUT the BuildingComplex records of one project (95-01 autosave writes
+ * exactly that record; any other change is still a failure).
+ * @param {string} [ohneProjekt] project id whose complex drafts are ignored
+ */
+const hash = (ohneProjekt) => {
+  const db = JSON.parse(fs.readFileSync(DB_PFAD, "utf8"));
+  if (ohneProjekt && Array.isArray(db.BuildingComplex)) db.BuildingComplex = db.BuildingComplex.filter((c) => c.project_id !== ohneProjekt);
+  return crypto.createHash("sha256").update(JSON.stringify(db)).digest("hex");
+};
 
 test.describe("72-01 Stufe A — Review Testhaus", () => {
   test("Parzelle ~1.500 m², BGF ~1.200 m², keine WE-KPI, Karte > 0 px, Konsole sauber", async ({ page }) => {
+    test.setTimeout(60000); // 95-01: + autosave wait
     await page.route("**/*", (route) => {
       const url = route.request().url();
       const host = new URL(url).hostname;
@@ -69,7 +82,7 @@ test.describe("72-01 Stufe A — Review Testhaus", () => {
     }
     // Express persistiert gebündelt (Debounce 120 ms) — kurz warten, dann Hash.
     await page.waitForTimeout(700);
-    const hashStart = hash();
+    const hashStart = hash(testhaus.id);
 
     const warnungen = [];
     page.on("console", (msg) => {
@@ -134,8 +147,12 @@ test.describe("72-01 Stufe A — Review Testhaus", () => {
     const verbotene = warnungen.filter((w) => VERBOTENE_KONSOLE.some((re) => re.test(w)));
     expect(verbotene, `Verbotene Konsolen-Meldungen: ${JSON.stringify(verbotene, null, 2)}`).toEqual([]);
 
-    // Nichts persistiert (abzüglich des aufgeräumten Review-Artefakts).
-    expect(hash(), "db.json wurde verändert — der Lauf darf nichts speichern").toBe(hashStart);
+    // Nichts persistiert außer dem automatisch gesicherten Entwurf des Testhauses (95-01).
+    await page.waitForTimeout(2500); // autosave debounce 1.5 s + server persist
+    expect(hash(testhaus.id), "db.json wurde außerhalb des Testhaus-Entwurfs verändert").toBe(hashStart);
+    for (const c of (await (await api.get("entities/BuildingComplex")).json()).filter((x) => x.project_id === testhaus.id)) {
+      await api.delete(`entities/BuildingComplex/${c.id}`);
+    }
 
     console.log(`MESSWERTE 72-01: parzelle_m2=${flaeche} bgf_m2=${bgf} karte_h_px=${kartenHoehe} warnungen_gesamt=${warnungen.length} verbotene=0`);
   });

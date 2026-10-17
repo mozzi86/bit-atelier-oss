@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/ca
 import { Sun, Building2, Maximize2, Ruler, Layers, Car, Home, Info, Users } from "lucide-react";
 import BimModelViewer from "@ifc/components/BimModelViewer";
 import MassingView3D from "@designer/components/MassingView3D";
+import { useModellierer, ModellWerkzeugleiste, ModellEbene, ErsteSchritte } from "@designer/components/MassingModellierer";
+import KnotenEditor from "@designer/components/KnotenEditor";
 import { useBuildingProgram, rectFootprint, polygonAreaM } from "@core/lib/useBuildingProgram";
 import { useProject } from "@core/lib/ProjectContext";
 import { useOsmBuildings } from "@designer/lib/useOsmBuildings";
@@ -13,6 +15,7 @@ import { useSvgDrag } from "@core/lib/useSvgDrag";
 import { FADENKREUZ_CURSOR, ECKE_CURSOR, PLUS_CURSOR, kantenCursor } from "@core/lib/planCursor";
 import { phiSnap, proportionHinweis, istAchsparallelesRechteck } from "@core/lib/proportion";
 import { kantenNormale, projektionAufNormale, verschiebeKante, kantenLaenge, kantenWinkelGrad, himmelsrichtung } from "@core/lib/polygonKante";
+import { abstandsStreifen } from "@core/lib/massing/baurecht";
 import { snapKette, grenzSnap, abstandSnap, rasterSnap } from "@core/lib/snapKette";
 import LehrlingPalette from "@designer/components/LehrlingPalette";
 import { leererStack, merke, zurueck, vor } from "@core/lib/undoStack";
@@ -96,15 +99,6 @@ export default function MassingStudio({
     return pts.map((p) => ({ x: +(p.x - cx).toFixed(2), z: +(p.y - cy).toFixed(2) }));
   };
   const shoelace = (pts) => Math.abs(pts.reduce((a, p, i) => { const q = pts[(i + 1) % pts.length]; return a + (p.x * q.y - q.x * p.y); }, 0) / 2);
-  // Punkt-in-Polygon (Ray-Casting) — für die Außenseiten-Erkennung der Abstandsflächen.
-  const pointInPoly = (x, y, pts) => {
-    let inside = false;
-    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-      const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
-      if (((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)) inside = !inside;
-    }
-    return inside;
-  };
 
   const initFloors = store.storeys || 6;
   // 72-01 A-4 (Befund N-04): EINE Parzellen-Quelle — das Zeichenfeld kommt aus
@@ -377,7 +371,8 @@ export default function MassingStudio({
   // 75-16: fill mode outside split view — the plan fills the column at a
   // window-high height; the viewBox follows the box aspect (no side bands).
   const fuellen = viewMode !== "split";
-  const vp = usePlanViewport({ svgRef, W: CANVAS_W, H: CANVAS_H, minZoom: 1, maxZoom: 8, attachKey: viewMode, fuellen });
+  // 95-03: minZoom 0.1 (was 1) — zoom out beyond the plot (the "stuck at 100 %" ticket).
+  const vp = usePlanViewport({ svgRef, W: CANVAS_W, H: CANVAS_H, minZoom: 0.1, maxZoom: 8, attachKey: viewMode, fuellen });
   // 75-01 (MS-01): screen pixels → viewBox units. Handles, hit areas, strokes
   // and labels use px() so they measure the same on screen at every zoom.
   const px = vp.px;
@@ -388,6 +383,18 @@ export default function MassingStudio({
   const hoverKanten = !hover ? [] : hover.art === "kante" ? [hover.idx] : hover.art === "ecke" ? [(hover.idx - 1 + (griffPoly?.length || 0)) % (griffPoly?.length || 1), hover.idx] : [];
 
   const clampPt = (p) => ({ x: +Math.max(0, Math.min(site.w, p.x)).toFixed(1), y: +Math.max(0, Math.min(site.d, p.y)).toFixed(1) });
+  // 98-02: SketchUp-like modelling tools (line → face, push/pull, move/copy with *n and /n, groups).
+  const bezugMitte = useMemo(() => { const b = polyBBox(poly); return { x: +((b.minX + b.maxX) / 2).toFixed(2), y: +((b.minY + b.maxY) / 2).toFixed(2) }; }, [poly]);
+  const modell = useModellierer({ projectId: project?.id || null, geschossHoehe: floorH, flaeche: { w: site.w, d: site.d }, bezug: bezugMitte });
+  /** Pointer event → site metres (same transform as the axis tool), not clamped: bodies may sit anywhere. */
+  const zuSite = (e) => {
+    const svg = svgRef.current, ctm = svg?.getScreenCTM?.();
+    if (!svg || !ctm) return null;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const u = pt.matrixTransform(ctm.inverse());
+    return { x: (u.x - offX) / scale, y: (u.y - offY) / scale };
+  };
 
   // Client-Pixel-Delta → Meter. Der alte Code teilte nur durch `scale` und
   // ignorierte gerenderte Breite (w-full!) und Zoom — der Griff lief dem
@@ -873,24 +880,12 @@ export default function MassingStudio({
   // „ok" erscheinen.
   const boundaryPts = parcelPts;          // echte Parzelle in Site-Metern oder null
   const boundaryKnown = Array.isArray(boundaryPts) && boundaryPts.length >= 3;
-  const setbacks = useMemo(() => {
-    const T = Math.max(abstandMin, abstandFaktor * height);
-    return poly.map((a, i) => {
-      const b = poly[(i + 1) % poly.length];
-      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-      let nx = (b.y - a.y) / len, ny = -(b.x - a.x) / len; // Normale (Kandidat)
-      const mxp = (a.x + b.x) / 2 + nx * 0.2, myp = (a.y + b.y) / 2 + ny * 0.2;
-      if (pointInPoly(mxp, myp, poly)) { nx = -nx; ny = -ny; } // nach außen drehen
-      const pts = [a, b, { x: b.x + nx * T, y: b.y + ny * T }, { x: a.x + nx * T, y: a.y + ny * T }];
-      // Näherung: Eckpunkte des Streifens gegen die Parzelle testen. Für stark
-      // konkave Parzellen kann eine Kante die Grenze schneiden, ohne dass eine
-      // Ecke außerhalb liegt — deshalb ist auch das Ergebnis nur eine Studie.
-      const conflict = boundaryKnown
-        ? pts.some((p) => !pointInPoly(p.x, p.y, boundaryPts))
-        : null; // nicht prüfbar
-      return { pts, conflict, depth: T };
-    });
-  }, [poly, height, abstandFaktor, abstandMin, boundaryPts, boundaryKnown]);
+  // 95-06: the strip logic lives in @core/lib/massing/baurecht.js — the site plan checks its
+  // blocks with the same function (one rule set, no second editor).
+  const setbacks = useMemo(
+    () => abstandsStreifen(poly, height, { faktor: abstandFaktor, min: abstandMin, grenze: boundaryKnown ? boundaryPts : null }),
+    [poly, height, abstandFaktor, abstandMin, boundaryPts, boundaryKnown],
+  );
   const conflictCount = boundaryKnown ? setbacks.filter((s) => s.conflict).length : 0;
 
   const Slider = ({ label, value, min, max, step, set, unit }) => (
@@ -926,6 +921,12 @@ export default function MassingStudio({
   // 75-08 Task 5 I: ONE props object for every MassingView3D render site
   // (large iso, split iso). Identical across sites; the referentially-stable
   // KEINE list keeps the setback/neighbour mesh effects quiet while idle.
+  // 98-02/09: lists for the 3D view built ONLY when the model changes. A new array on every render
+  // (the studio re-renders on each mouse move) made the 3D effects rebuild hundreds of meshes per
+  // frame — the 3D view froze with a large bar.
+  const modellKoerper3d = useMemo(() => (modell.vorschau.length ? [...modell.aufgeloest, ...modell.vorschau] : modell.aufgeloest), [modell.aufgeloest, modell.vorschau]);
+  const riegel3d = useMemo(() => modell.riegelAbgeleitet.flatMap((r) => Array.from({ length: r.kennzahlen.geschosse }, (_, g) =>
+    r.einheiten.map((e) => ({ profil: e.profil, basis: g * (r.opt.geschossHoehe || floorH), hoehe: (r.opt.geschossHoehe || floorH) - 0.15, farbe: e.typ }))).flat()), [modell.riegelAbgeleitet, floorH]);
   const isoProps = {
     poly,
     siteW: site.w,
@@ -939,6 +940,12 @@ export default function MassingStudio({
     massstab,
     info: isoInfo,
     kameraRef: isoKameraRef,
+    weitereKoerper: modellKoerper3d, // 98-02/07: bodies + parametric preview (memoised — the 3D effects key on identity)
+    gelaende: modell.gelaende, // 98-06: sandbox terrain
+    // 98-09: residential bars — one coloured box per unit and storey
+    riegel3d: riegel3d,
+    // 98-03: push/pull by dragging a body in 3D while the tool is active
+    pushPull: { aktiv: modell.werkzeug === "pushpull", anwenden: (id, delta, strg) => modell.pushPullAnwenden([id], delta, strg) },
   };
 
   return (
@@ -954,7 +961,9 @@ export default function MassingStudio({
               {viewMode !== "3d" && (
                 <span className="text-sm font-normal text-slate-500">— {t("Fläche ziehen · Ecken formen · Kante schieben · + fügt Ecken ein · Doppelklick löscht · Tab = Zahl · Alt = frei · Esc = zurück")}</span>
               )}
-              <span className="ml-auto flex items-center gap-3">
+              {/* Wraps (flex-wrap, min-w-0): on a 1280 px laptop the row was 892 px wide in a 632 px column and
+                  pushed the 2D/Iso/Split switch UNDER the key-figure column — the 3D view could not be clicked. */}
+              <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1.5">
                 {/* 75-08 Task 5 F: neighbours AND scale stay visible in every
                     mode — both also drive the iso (grey bodies, zoom ladder). */}
                 <label className="flex items-center gap-1.5 text-xs font-normal text-slate-600 cursor-pointer" title={t("OSM-Nachbargebäude als graue Referenz einblenden")}>
@@ -1104,6 +1113,8 @@ export default function MassingStudio({
                via its own ResizeObserver (75-01). The inner 2D block below is
                unchanged; nothing between the anchors moved. */
             <div className={viewMode === "split" ? "grid grid-cols-2 gap-2 items-start" : undefined}>
+            {/* 98-02: modelling toolbar with typed input above the plan */}
+            <div className={viewMode === "split" ? "col-span-2 space-y-2" : "mb-2 space-y-2"}><ModellWerkzeugleiste m={modell} t={t} /><ErsteSchritte m={modell} t={t} /></div>
             <div className="relative" ref={containerRef} onPointerMove={onContainerMove} onPointerLeave={() => setHover(null)}>
             {lod.zonen && zones.length === 0 && wtLayer?.angewendet !== true && (
               <div className="absolute top-2 left-2 z-10 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50/95 px-2 py-1 text-[11px] text-amber-800" role="status" data-msb9-hinweis>
@@ -1117,7 +1128,7 @@ export default function MassingStudio({
                 a tall one the plan never grows taller than the content needs. */}
             <svg ref={svgRef} viewBox={vp.viewBox} className={`w-full ${fuellen ? "" : "h-auto "}bg-slate-50 rounded-lg border select-none`}
               style={fuellen ? { touchAction: "none", aspectRatio: `${CANVAS_W} / ${CANVAS_H}`, minHeight: CANVAS_H, maxHeight: `max(${CANVAS_H}px, calc(100vh - 160px))` } : { touchAction: "none" }}
-              onPointerDown={(e) => { if (e.button === 1) { e.preventDefault(); vp.beginPan(e); } }}
+              onPointerDown={(e) => { if (e.button === 1 || (e.button === 0 && vp.leertaste())) { e.preventDefault(); vp.beginPan(e); } }}
               onPointerMove={(e) => vp.panMove(e)}
               onPointerUp={vp.endPan}
               onPointerLeave={vp.endPan}>
@@ -1471,6 +1482,8 @@ export default function MassingStudio({
                   }}
                   onDoubleClick={achseFertig} />
               )}
+              {/* 98-02: modelled bodies + drawing input (above the axis layer, below the scale bar) */}
+              <ModellEbene m={modell} mx={mx} my={my} px={px} toSite={zuSite} breite={CANVAS_W} hoehe={CANVAS_H} leertaste={vp.leertaste} />
               {/* 75-05: Maßstabsbalken (geteilt mit BimPlan2D), Länge je Maßstab */}
               <ScaleBar x={12} y={CANVAS_H - 14} scale={scale} laengeM={lod.balkenM} />
               {/* north arrow — 75-06 Task 6 (D-P75-05), sign CORRECTED by 75-08
@@ -1536,6 +1549,17 @@ export default function MassingStudio({
             </div>
             )}
           </CardContent>
+        </Card>
+
+        {/* 98-07: parametric design with nodes (Grasshopper-like) — collapsed by default. */}
+        <Card>
+          <details data-testid="parametrik">
+            <summary className="cursor-pointer select-none px-6 py-3 text-sm font-semibold">{t("Parametrik — Knoten verbinden")}</summary>
+            <CardContent>
+              <KnotenEditor graph={modell.graph} setGraph={modell.setGraph} ergebnis={modell.ergebnis} onBacken={modell.backen}
+                onBeispiel={() => modell.beispiel({ x: site.w / 2, y: site.d / 2 })} t={t} />
+            </CardContent>
+          </details>
         </Card>
 
         <div className="grid sm:grid-cols-2 gap-4">

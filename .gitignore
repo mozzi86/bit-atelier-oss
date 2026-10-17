@@ -139,3 +139,6 @@ build-cloud-groessen.md
 server/.oeffnen-schluessel
 server/dateiquelle.json
 server/vor-import/
+
+# Manual acceptance (Station 3, 17.10.2026): own data folder of the test instance
+abnahme-daten/

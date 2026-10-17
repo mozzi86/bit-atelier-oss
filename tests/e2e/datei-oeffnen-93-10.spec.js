@@ -96,8 +96,14 @@ test.describe("93-10 Doppelklick auf .bitproj", () => {
       const kopie = alle.find((p) => p.name === `${PROJEKT.name} (Kopie)`);
       expect(kopie.id).not.toBe(PROJEKT.id);
 
-      // 4. Save back from Settings › Daten & Sicherung.
-      await page.goto("/Settings?tab=data");
+      // 4. Save back from Settings › Daten & Sicherung. The import reloads the app after "Als Kopie" —
+      // a goto racing that reload ends in net::ERR_ABORTED (full run 17.10.), so settle and retry once.
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.goto("/Settings?tab=data").catch(async (e) => {
+        if (!/ERR_ABORTED/.test(String(e))) throw e;
+        await page.waitForLoadState("networkidle").catch(() => {});
+        await page.goto("/Settings?tab=data");
+      });
       await expect(page.getByTestId("datei-quelle-pfad")).toContainText("Arbeitsstand.bitproj", { timeout: 30000 });
       await page.getByTestId("datei-zurueckschreiben").click();
       await expect(page.getByTestId("datei-quelle-status")).toHaveText(/In die Datei gespeichert|Saved to the file/, { timeout: 20000 });

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
-import { TERRAIN_SOURCE, footprintToGeoJson, osmBuildingsToGeoJson } from "@designer/lib/maplibreStyles";
+import { TERRAIN_SOURCE, footprintToGeoJson, osmBuildingsToGeoJson, canvasPointToLngLat } from "@designer/lib/maplibreStyles";
 import { draftToGeoJson } from "@designer/lib/mapDraw";
 import { buildSiteParcel } from "@designer/lib/siteParcel";
 import { polygonAreaM2 } from "@core/lib/geo";
@@ -35,6 +35,20 @@ function pickFootprintPoints(complexData) {
     (a) => Array.isArray(a?.points) && a.points.length >= 3
   );
   return area?.points || null;
+}
+
+/**
+ * 95-01: the saved drawn parcel as an open [lng, lat] ring around the saved location, or [] (no
+ * parcel, a generic one, or no location). Sets the anchor the ring belongs to.
+ * @param {any} complexData
+ * @param {{current: {lat: number, lng: number}|null}} ankerRef
+ * @returns {Array<[number, number]>}
+ */
+function gespeicherterRing(complexData, ankerRef) {
+  const p = complexData?.site_parcel, l = complexData?.location;
+  if (!p || p.source !== "gezeichnet" || !Array.isArray(p.points) || p.points.length < 3 || typeof l?.lat !== "number") return [];
+  ankerRef.current = { lat: l.lat, lng: l.lng };
+  return p.points.map((q) => /** @type {[number, number]} */ (canvasPointToLngLat(q, l.lat, l.lng, Number(p.m_per_px) > 0 ? Number(p.m_per_px) : undefined)));
 }
 
 export default function LocationSelector({ complexData, onLocationChange, onNameChange, projekt = null }) {
@@ -77,7 +91,11 @@ export default function LocationSelector({ complexData, onLocationChange, onName
   const [terrainOn, setTerrainOn] = useState(false);
   const [terrainBroken, setTerrainBroken] = useState(false);
   // KARTE-04a: echte Parzelle auf der Karte zeichnen — [lng,lat]-Ring (offen).
-  const [parcelRing, setParcelRing] = useState([]);
+  // 95-01: start from the SAVED drawn parcel (back to [lng,lat] around the saved location) — before,
+  // the ring lived only in this component and was gone after a tab switch; "Standort übernehmen" then
+  // had nothing to keep. A generic (estimated) parcel is not shown as a drawing.
+  const ankerRef = useRef(/** @type {{lat: number, lng: number}|null} */ (null));
+  const [parcelRing, setParcelRing] = useState(() => gespeicherterRing(complexData, ankerRef));
   const [drawing, setDrawing] = useState(false);
   const drawingRef = useRef(false);
   drawingRef.current = drawing;
@@ -99,7 +117,7 @@ export default function LocationSelector({ complexData, onLocationChange, onName
     const update = () => {
       const points = pickFootprintPoints(complexData);
       const fc = points
-        ? footprintToGeoJson(points, lat, lng)
+        ? footprintToGeoJson(points, lat, lng, Number(complexData?.site_parcel?.m_per_px) > 0 && complexData?.site_parcel?.points === points ? Number(complexData.site_parcel.m_per_px) : undefined)
         : { type: "FeatureCollection", features: [] };
       map.getSource("footprint")?.setData(fc);
     };
@@ -159,10 +177,21 @@ export default function LocationSelector({ complexData, onLocationChange, onName
   // würde die Übernahme ihn mit dem NEUEN Zentrum konvertieren — Fläche
   // cos(lat)-verzerrt, Canvas-Punkte zehntausende px neben der Konvention,
   // Ring nach easeTo unsichtbar. Deshalb: Zeichnung verwerfen.
+  // 95-01: only a REAL move of the location discards it — not the first render or loading the same
+  // coordinates again (that used to clear the ring on every mount).
   useEffect(() => {
+    const a = ankerRef.current;
+    if (!a || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (Math.abs(a.lat - lat) < 1e-7 && Math.abs(a.lng - lng) < 1e-7) return;
+    ankerRef.current = null;
     setParcelRing([]);
     setDrawing(false);
   }, [lat, lng]);
+  // The saved parcel may arrive after mount (record loads asynchronously): adopt it while nothing is drawn.
+  useEffect(() => {
+    if (drawingRef.current) return;
+    setParcelRing((cur) => (cur.length ? cur : gespeicherterRing(complexData, ankerRef)));
+  }, [complexData?.site_parcel, complexData?.location?.lat, complexData?.location?.lng]);
 
   // Zeichen-Klicks (volle Präzision über das Map-Event; onPick ist derweil stumm).
   // detail>1 verwirft den Zweitklick eines Doppelklicks (sonst doppelte Ecke).
@@ -416,6 +445,7 @@ export default function LocationSelector({ complexData, onLocationChange, onName
                 className="shadow"
                 onClick={() => {
                   setParcelRing([]);
+                  ankerRef.current = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
                   setDrawing(true);
                 }}
               >

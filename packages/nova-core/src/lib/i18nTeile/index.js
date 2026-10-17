@@ -147,6 +147,8 @@ import { EN as APP_MODUS } from "./app-modus.js";
 // Phase 94: acceptance findings stations 0–2.
 import { EN as ABNAHME_94 } from "./abnahme-94.js";
 import { EN as STECKBRIEF_97 } from "./steckbrief-97.js";
+import { EN as MASSING_98 } from "./massing-98.js";
+import { EN as LAGEPLAN_95 } from "./lageplan-95.js";
 import { EN as KOSTENDRIFT_96 } from "./kostendrift-96.js";
 
 export const TEILE_EN = Object.freeze({
@@ -247,4 +249,6 @@ export const TEILE_EN = Object.freeze({
   ...VOB_MENGEN_96,
   ...KOSTENDRIFT_96,
   ...STECKBRIEF_97,
+  ...MASSING_98,
+  ...LAGEPLAN_95,
 });

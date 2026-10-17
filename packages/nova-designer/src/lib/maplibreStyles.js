@@ -73,23 +73,27 @@ const EMPTY_FC = () => ({ type: "FeatureCollection", features: [] });
  * Standort (centerLat, centerLng). Punkt-Basis für footprintToGeoJson — und für
  * KARTE-03-Konsumenten (Höhenpunkte, Baukörper), die keine Ringe haben.
  */
-export function canvasPointToLngLat(p, centerLat, centerLng) {
+// 95-02: `mPerPx` = metres per canvas unit of the parcel record (site_parcel.m_per_px). The generic
+// (estimated) parcel uses its own scale (edge / 800 px); with the fixed 1.25 m it was drawn ~18×
+// too large on the map. Default 1.25 = drawn parcels, unchanged behaviour.
+export function canvasPointToLngLat(p, centerLat, centerLng, mPerPx = M_PER_UNIT) {
   const lat = Number(centerLat) || 0;
   const lng = Number(centerLng) || 0;
   const mPerLon = M_PER_LAT * Math.cos((lat * Math.PI) / 180) || 1;
-  const xM = ((Number(p?.x) || 0) - CANVAS_CENTER_X) * M_PER_UNIT;
-  const yM = ((Number(p?.y) || 0) - CANVAS_CENTER_Y) * M_PER_UNIT;
+  const m = Number(mPerPx) > 0 ? Number(mPerPx) : M_PER_UNIT;
+  const xM = ((Number(p?.x) || 0) - CANVAS_CENTER_X) * m;
+  const yM = ((Number(p?.y) || 0) - CANVAS_CENTER_Y) * m;
   return [lng + xM / mPerLon, lat - yM / M_PER_LAT];
 }
 
 /** INVERSE zu canvasPointToLngLat: [lng, lat] → Canvas-Punkt {x, y}. */
-export function lngLatToCanvasPoint(lngLat, centerLat, centerLng) {
+export function lngLatToCanvasPoint(lngLat, centerLat, centerLng, mPerPx = M_PER_UNIT) {
   const lat = Number(centerLat) || 0;
   const lng = Number(centerLng) || 0;
   const mPerLon = M_PER_LAT * Math.cos((lat * Math.PI) / 180) || 1;
   return {
-    x: CANVAS_CENTER_X + ((Number(lngLat?.[0]) - lng) * mPerLon) / M_PER_UNIT,
-    y: CANVAS_CENTER_Y - ((Number(lngLat?.[1]) - lat) * M_PER_LAT) / M_PER_UNIT,
+    x: CANVAS_CENTER_X + ((Number(lngLat?.[0]) - lng) * mPerLon) / (Number(mPerPx) > 0 ? Number(mPerPx) : M_PER_UNIT),
+    y: CANVAS_CENTER_Y - ((Number(lngLat?.[1]) - lat) * M_PER_LAT) / (Number(mPerPx) > 0 ? Number(mPerPx) : M_PER_UNIT),
   };
 }
 
@@ -98,9 +102,9 @@ export function lngLatToCanvasPoint(lngLat, centerLat, centerLng) {
  * in [lon, lat] um den Standort (centerLat, centerLng). Ring wird geschlossen.
  * null/leer/<3 Punkte → leere FeatureCollection.
  */
-export function footprintToGeoJson(points, centerLat, centerLng) {
+export function footprintToGeoJson(points, centerLat, centerLng, mPerPx = M_PER_UNIT) {
   if (!Array.isArray(points) || points.length < 3) return EMPTY_FC();
-  const ring = points.map((p) => canvasPointToLngLat(p, centerLat, centerLng));
+  const ring = points.map((p) => canvasPointToLngLat(p, centerLat, centerLng, mPerPx));
   const first = ring[0];
   const last = ring[ring.length - 1];
   if (first[0] !== last[0] || first[1] !== last[1]) ring.push([first[0], first[1]]);
@@ -125,13 +129,13 @@ export function footprintToGeoJson(points, centerLat, centerLng) {
  * werden — alle Bestandskonsumenten (footprintToMeters, polygonAreaM2,
  * BitBimStudio) arbeiten unverändert weiter.
  */
-export function geoJsonToFootprint(ringLngLat, centerLat, centerLng) {
+export function geoJsonToFootprint(ringLngLat, centerLat, centerLng, mPerPx = M_PER_UNIT) {
   if (!Array.isArray(ringLngLat) || ringLngLat.length < 3) return null;
   let ring = ringLngLat;
   const first = ring[0];
   const last = ring[ring.length - 1];
   if (ring.length > 3 && first[0] === last[0] && first[1] === last[1]) ring = ring.slice(0, -1);
-  return ring.map((ll) => lngLatToCanvasPoint(ll, centerLat, centerLng));
+  return ring.map((ll) => lngLatToCanvasPoint(ll, centerLat, centerLng, mPerPx));
 }
 
 /**

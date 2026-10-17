@@ -86,3 +86,74 @@ test("Linien schließen sich zur Fläche; Goldener Schnitt als Vorschlag", () =>
   assert.ok(Math.abs(v.punkt.y - 10 / PHI) < 1e-6 && v.punkt.x === 10);
   assert.ok(goldenerSchnittVorschlag({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: -15 }).punkt.y < 0, "Seite des Cursors");
 });
+
+// 98-03/04: rotate, scale (group definition scales for all instances), follow-me.
+import { drehen, skalieren, pfadUmriss, folgeMir, schwerpunkt } from "@core/lib/massing/massingModell.js";
+test("Drehen um den Schwerpunkt: 90° vertauscht Breite und Tiefe, Fläche bleibt", () => {
+  const { layer, id } = koerperAnlegen(leererLayer(), Q, 3);
+  const z = schwerpunkt(layer, [id]);
+  assert.deepEqual(z, { x: 2, y: 1.5 });
+  const d = drehen(layer, [id], z, 90);
+  const p = geometrie(d, d.koerper[0]).profil;
+  const xs = p.map((q) => q.x), ys = p.map((q) => q.y);
+  assert.ok(Math.abs(Math.max(...xs) - Math.min(...xs) - 3) < 1e-6 && Math.abs(Math.max(...ys) - Math.min(...ys) - 4) < 1e-6);
+  assert.equal(d.koerper[0].drehung, 90);
+});
+test("Skalieren: eigener Körper skaliert, Gruppe skaliert ihre Definition für alle Instanzen", () => {
+  const a = koerperAnlegen(leererLayer(), Q, 3);
+  const s = skalieren(a.layer, [a.id], { x: 0, y: 0 }, 2);
+  assert.deepEqual(geometrie(s, s.koerper[0]).profil[2], { x: 8, y: 6 });
+  const k = kopieren(a.layer, [a.id], { x: 10, y: 0 });
+  const g = gruppeBilden(k.layer, [a.id, k.neu[0]]).layer;
+  const s2 = skalieren(g, [a.id], schwerpunkt(g, [a.id]), 0.5);
+  assert.deepEqual(s2.gruppen["1"].profil[2], { x: 2, y: 1.5 });
+  assert.equal(geometrie(s2, s2.koerper[1]).profil[2].x - geometrie(s2, s2.koerper[1]).profil[0].x, 2, "andere Instanz mitgeändert");
+  assert.throws(() => skalieren(g, [a.id], { x: 0, y: 0 }, 0), /größer als 0/);
+});
+test("Folge mir: Querschnitt entlang eines L-Pfads ergibt einen Körper mit richtiger Fläche", () => {
+  const pfad = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 6 }];
+  const u = pfadUmriss(pfad, 0.4);
+  assert.equal(u.length, 6);
+  let f = 0;
+  for (let i = 0; i < u.length; i++) { const q = u[(i + 1) % u.length]; f += u[i].x * q.y - q.x * u[i].y; }
+  assert.ok(Math.abs(Math.abs(f) / 2 - 0.4 * 16) < 1e-6, `Fläche ${Math.abs(f) / 2}`);
+  const r = folgeMir(leererLayer(), pfad, 0.4, 2.5);
+  assert.equal(geometrie(r.layer, r.layer.koerper[0]).hoehe, 2.5);
+  assert.throws(() => pfadUmriss([{ x: 0, y: 0 }], 1), /mindestens 2 Punkte/);
+});
+
+// 98-05: editing a corner of a group instance changes the definition — all instances follow,
+// also a rotated one; an own body changes alone.
+import { eckeVerschieben } from "@core/lib/massing/massingModell.js";
+test("Ecke ziehen: eigener Körper allein, Gruppeninstanz ändert alle (auch gedrehte)", () => {
+  const a = koerperAnlegen(leererLayer(), Q, 3);
+  const e = eckeVerschieben(a.layer, a.id, 2, { x: 6, y: 5 });
+  assert.deepEqual(geometrie(e, e.koerper[0]).profil[2], { x: 6, y: 5 });
+  const k = kopieren(a.layer, [a.id], { x: 20, y: 0 });
+  let g = gruppeBilden(k.layer, [a.id, k.neu[0]]).layer;
+  g = drehen(g, [k.neu[0]], schwerpunkt(g, [k.neu[0]]), 90);
+  const ziel = { x: 5, y: 4 };
+  const n = eckeVerschieben(g, a.id, 2, ziel);
+  assert.deepEqual(n.gruppen["1"].profil[2], { x: 5, y: 4 });
+  const p2 = geometrie(n, n.koerper[1]).profil;
+  const breite = Math.max(...p2.map((p) => p.y)) - Math.min(...p2.map((p) => p.y));
+  assert.ok(Math.abs(breite - 5) < 1e-6, "gedrehte Instanz: neue Breite 5 m quer");
+  const r = koerperAnlegen(leererLayer(), Q, 3);
+  const g2 = gruppeBilden(r.layer, [r.id]).layer;
+  const versetzt = verschieben(g2, [r.id], { x: 10, y: 10 });
+  const n2 = eckeVerschieben(versetzt, r.id, 0, { x: 9, y: 9 });
+  assert.deepEqual(n2.gruppen["1"].profil[0], { x: -1, y: -1 }, "in Gruppenkoordinaten");
+});
+
+// 98-03: Ctrl + push/pull stacks a new body on top instead of stretching.
+import { aufstocken } from "@core/lib/massing/massingModell.js";
+test("Aufstocken: neuer Körper mit gleichem Umriss auf der Oberkante, Quelle unverändert", () => {
+  const { layer, id } = koerperAnlegen(leererLayer(), Q, 9);
+  const r = aufstocken(layer, id, 3);
+  assert.equal(r.layer.koerper.length, 2);
+  const neu = geometrie(r.layer, r.layer.koerper[1]);
+  assert.deepEqual([neu.basis, neu.hoehe], [9, 3]);
+  assert.deepEqual(neu.profil, Q);
+  assert.equal(geometrie(r.layer, r.layer.koerper[0]).hoehe, 9);
+  assert.equal(aufstocken(layer, id, 0).id, null);
+});

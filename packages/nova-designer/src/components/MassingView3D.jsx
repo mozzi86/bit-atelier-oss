@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { Camera } from "lucide-react";
 import { useI18n } from "@core/lib/i18n";
 import { lichtrichtung } from "@designer/lib/sonnenstand";
@@ -136,6 +137,11 @@ const NACHBAR_FARBE = 0x9ca3af;
 /** Focus-zone teal (75-09) [ASSUMED] — 0x0f766e is the colour of the focus
  *  room outline in the 2D plan (WohnungsFokus), so the iso highlight matches. */
 const FOKUS_FARBE = 0x0f766e;
+/** 98-02: modelled bodies (massing layer) — warm grey like a working model; group instances darker. */
+const MODELL_FARBE = 0xd6d3d1;
+const MODELL_GRUPPE_FARBE = 0xa8a29e;
+/** 98-09: unit-type colours of the residential bar (same as WOHNUNGSTYPEN in @core/lib/massing/riegel). */
+const RIEGEL_FARBEN = { "1-Zi": 0x22d3ee, "2-Zi": 0xfacc15, "3-Zi": 0xec4899, "4-Zi": 0x6366f1, Ecke: 0xa855f7 };
 /** Body opacity when focus zones are shown (75-09) [ASSUMED 0.25] — the
  *  building turns glassy so the unit volume inside stays readable; WITHOUT
  *  fokusZonen the body keeps its 75-08 opacity 0.92 (byte-identical). */
@@ -155,7 +161,7 @@ export default function MassingView3D({
   poly, siteW, siteD, height, setbacks,
   sonne = null, schatten = true, nordwinkel = 0, nachbarn = [],
   massstab = null, info = null, kameraRef = null,
-  fokusZonen = null, geschossHoehe = 3,
+  fokusZonen = null, geschossHoehe = 3, weitereKoerper = null, gelaende = null, pushPull = null, riegel3d = null,
 }) {
   const { t } = useI18n();
   const mountRef = useRef(null);
@@ -171,7 +177,7 @@ export default function MassingView3D({
   // closures without re-running the scene setup).
   /** @type {React.MutableRefObject<{[k: string]: any}>} */
   const propsRef = useRef({});
-  propsRef.current = { poly, siteW, siteD, height, sonne, nordwinkel, info, geschossHoehe };
+  propsRef.current = { poly, siteW, siteD, height, sonne, nordwinkel, info, geschossHoehe, pushPull };
   // 75-09: focus mode is active when at least one zone volume was passed —
   // the body turns semi-transparent (mesh effect dependency) and the wrapper
   // carries data-iso-fokus-zonen. Derived from the PROP only (not from GL
@@ -181,8 +187,8 @@ export default function MassingView3D({
   // the single active tween and the wheel accumulator.
   /** Input-layer state. `tween` is null between tweens — typed as any so the
    *  effect may fill it without a cast at every use. */
-  /** @type {React.MutableRefObject<{panKeys: Set<string>, drag: {on: boolean, x: number, y: number, id: number|null}, edge: {dx: number, dy: number, seit: number}, tween: any, radAccum: number, letzteZeit: number, loopGeplant?: boolean, loopRaf?: number}>} */
-  const eingabe = useRef({ panKeys: new Set(), drag: { on: false, x: 0, y: 0, id: null }, edge: { dx: 0, dy: 0, seit: 0 }, tween: null, radAccum: 0, letzteZeit: 0 });
+  /** @type {React.MutableRefObject<{panKeys: Set<string>, drag: {on: boolean, x: number, y: number, id: number|null}, edge: {dx: number, dy: number, seit: number}, tween: any, radAccum: number, letzteZeit: number, loopGeplant?: boolean, loopRaf?: number, pp: {id: string, y: number, strg: boolean}|null}>} */
+  const eingabe = useRef(({ panKeys: new Set(), drag: { on: false, x: 0, y: 0, id: null }, edge: { dx: 0, dy: 0, seit: 0 }, tween: null, radAccum: 0, letzteZeit: 0, pp: null }));
   // Camera state (isoKamera convention): yaw/pitch degrees, ziel = ground
   // target in scene metres, massstab = ladder denominator (fractional during
   // a zoom tween), zielYaw/zielMassstab = tween TARGETS (shown in the wrapper
@@ -260,6 +266,12 @@ export default function MassingView3D({
     // scene graph and the rendered image stay byte-identical to 75-08.
     const fzGroup = new THREE.Group();
     scene.add(fzGroup);
+    const mkGroup = new THREE.Group(); // 98-02: modelled bodies of the massing layer
+    scene.add(mkGroup);
+    const glGroup = new THREE.Group(); // 98-06: sandbox terrain
+    scene.add(glGroup);
+    const rgGroup = new THREE.Group(); // 98-09: residential bars (unit boxes per storey)
+    scene.add(rgGroup);
 
     // Orthographic camera: near/far only clip (0.1…2000 m covers the 500-m
     // camera distance); image size comes from the frustum = scale ladder.
@@ -491,7 +503,7 @@ export default function MassingView3D({
       starteZoom(bis, G);
     };
 
-    Object.assign(three.current, { renderer, scene, camera, group, nbGroup, fzGroup, dir, requestRender, anwenden, startLoop, starteYaw, starteZoom, starteHome, zoomMitte, tweenBeenden, reduziert });
+    Object.assign(three.current, { renderer, scene, camera, group, nbGroup, fzGroup, mkGroup, glGroup, rgGroup, dir, requestRender, anwenden, startLoop, starteYaw, starteZoom, starteHome, zoomMitte, tweenBeenden, reduziert });
     anwenden();
 
     // --- Keyboard (Task 3 B) — handlers are wired to the WRAPPER via React
@@ -574,6 +586,21 @@ export default function MassingView3D({
 
     const onPointerDown = (ev) => {
       if (ev.button !== 0 && ev.button !== 1) return;
+      // 98-03: with the push/pull tool, dragging a modelled body changes its height (Ctrl = stack).
+      const pp = propsRef.current.pushPull;
+      if (ev.button === 0 && pp?.aktiv && three.current.mkGroup) {
+        const rect = el.getBoundingClientRect();
+        ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+        ray.setFromCamera(ndc, three.current.camera);
+        const treffer = ray.intersectObjects(three.current.mkGroup.children.filter((o) => o.userData?.art === "modellkoerper"), false)[0];
+        if (treffer) {
+          eingabe.current.pp = { id: treffer.object.userData.id, y: ev.clientY, strg: ev.ctrlKey || ev.metaKey };
+          try { el.setPointerCapture(ev.pointerId); } catch { /* capture unsupported */ }
+          el.style.cursor = "ns-resize";
+          return;
+        }
+      }
       // Middle button: preventDefault against the browser autoscroll glyph
       // (same pattern as the 2D plan, MassingStudio.jsx middle-drag).
       if (ev.button === 1) ev.preventDefault();
@@ -614,6 +641,18 @@ export default function MassingView3D({
     };
     const onPointerUp = (ev) => {
       const e = eingabe.current;
+      if (e.pp) {
+        // Screen px → metres: a vertical metre shows as pxJeM · cos(pitch) pixels in the iso view.
+        const k = kam.current;
+        const meter = (e.pp.y - ev.clientY) / Math.max(1e-6, k.pxJeM * Math.cos(((k.pitch || 30) * Math.PI) / 180));
+        const ziel = e.pp;
+        e.pp = null;
+        try { el.releasePointerCapture(ev.pointerId); } catch { /* already released */ }
+        el.style.cursor = "grab";
+        // Rounded to 5 cm [ASSUMED] — a free mouse drag is not a measured input (type it for exact values).
+        propsRef.current.pushPull?.anwenden(ziel.id, Math.round(meter * 20) / 20, ziel.strg);
+        return;
+      }
       if (!e.drag.on) return;
       e.drag.on = false;
       try { el.releasePointerCapture(ev.pointerId); } catch { /* already released */ }
@@ -902,6 +941,104 @@ export default function MassingView3D({
     }
     tt.requestRender?.();
   }, [fokusZonen, geschossHoehe]);
+
+  // 98-02: bodies drawn with the modelling tools (massing_layer), each extruded from its base to
+  // base + height in the SAME site frame as `poly` (toX3d/toZ3d). Own group + own effect — the
+  // main body, neighbours and focus zones are untouched; without the prop nothing is drawn.
+  useEffect(() => {
+    const tt = three.current;
+    if (!tt.mkGroup) return;
+    clearGroup(tt.mkGroup);
+    const liste = Array.isArray(weitereKoerper) ? weitereKoerper : [];
+    const { siteW: sw, siteD: sd } = propsRef.current;
+    for (const k of liste) {
+      const pts = Array.isArray(k?.profil) ? k.profil : null;
+      if (!pts || pts.length < 3 || pts.length > NACHBAR_MAX_PUNKTE || !(k.hoehe > 0)) continue;
+      if (pts.some((p) => !Number.isFinite(p?.x) || !Number.isFinite(p?.y))) continue;
+      const shape = new THREE.Shape();
+      pts.forEach((p, i) => (i === 0 ? shape.moveTo(toX3d(p, sw), -toZ3d(p, sd)) : shape.lineTo(toX3d(p, sw), -toZ3d(p, sd))));
+      shape.closePath();
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: k.hoehe, bevelEnabled: false });
+      geo.rotateX(-Math.PI / 2);
+      const farbe = k.gruppe != null ? MODELL_GRUPPE_FARBE : MODELL_FARBE;
+      const mesh = /** @type {any} */ (new THREE.Mesh(geo, /** @type {any} */ (new THREE.MeshLambertMaterial({ color: farbe, side: THREE.DoubleSide }))));
+      mesh.position.y = k.basis || 0;
+      mesh.castShadow = true;
+      mesh.userData.art = "modellkoerper";
+      mesh.userData.id = k.id;
+      tt.mkGroup.add(mesh);
+      const kanten = /** @type {any} */ (new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x44403c })));
+      kanten.position.y = mesh.position.y;
+      tt.mkGroup.add(kanten);
+    }
+    tt.requestRender?.();
+  }, [weitereKoerper, siteW, siteD]);
+
+  // 98-06: sandbox terrain as a height mesh in the site frame (only once it exists — untouched
+  // projects render exactly as before).
+  useEffect(() => {
+    const tt = three.current;
+    if (!tt.glGroup) return;
+    clearGroup(tt.glGroup);
+    const g = gelaende;
+    if (g && g.nx >= 2 && g.ny >= 2 && Array.isArray(g.h) && g.h.length === g.nx * g.ny) {
+      const { siteW: sw, siteD: sd } = propsRef.current;
+      const geo = new THREE.BufferGeometry();
+      const pos = new Float32Array(g.nx * g.ny * 3);
+      for (let k = 0; k < g.h.length; k++) {
+        const p = { x: g.x0 + (k % g.nx) * g.zelle, y: g.y0 + Math.floor(k / g.nx) * g.zelle };
+        pos[k * 3] = toX3d(p, sw); pos[k * 3 + 1] = Number(g.h[k]) || 0; pos[k * 3 + 2] = toZ3d(p, sd);
+      }
+      const idx = [];
+      for (let j = 0; j < g.ny - 1; j++) for (let i = 0; i < g.nx - 1; i++) {
+        const a = j * g.nx + i, b = a + 1, c = a + g.nx, d = c + 1;
+        idx.push(a, c, b, b, c, d);
+      }
+      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      const mesh = /** @type {any} */ (new THREE.Mesh(geo, /** @type {any} */ (new THREE.MeshLambertMaterial({ color: 0x9caf88, side: THREE.DoubleSide, transparent: true, opacity: 0.85 }))));
+      mesh.receiveShadow = true;
+      mesh.userData.art = "gelaende";
+      tt.glGroup.add(mesh);
+    }
+    tt.requestRender?.();
+  }, [gelaende, siteW, siteD]);
+
+  // 98-09: residential bars — one extruded box per unit and storey in the unit-type colour (a 15 cm
+  // gap between storeys keeps the floors readable, like the reference video). One material per type.
+  useEffect(() => {
+    const tt = three.current;
+    if (!tt.rgGroup) return;
+    clearGroup(tt.rgGroup);
+    const liste = Array.isArray(riegel3d) ? riegel3d : [];
+    const { siteW: sw, siteD: sd } = propsRef.current;
+    // One merged geometry per unit-type colour (a few draw calls instead of hundreds of meshes —
+    // an 8-storey bar has ~500 unit boxes).
+    /** @type {Record<number, any[]>} */
+    const jeFarbe = {};
+    for (const u of liste) {
+      const pts = u.profil;
+      if (!Array.isArray(pts) || pts.length < 3 || !(u.hoehe > 0)) continue;
+      const shape = new THREE.Shape();
+      pts.forEach((p, i) => (i === 0 ? shape.moveTo(toX3d(p, sw), -toZ3d(p, sd)) : shape.lineTo(toX3d(p, sw), -toZ3d(p, sd))));
+      shape.closePath();
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: u.hoehe, bevelEnabled: false });
+      geo.rotateX(-Math.PI / 2);
+      geo.translate(0, u.basis || 0, 0);
+      const farbe = RIEGEL_FARBEN[u.farbe] ?? 0xd6d3d1;
+      (jeFarbe[farbe] = jeFarbe[farbe] || []).push(geo);
+    }
+    for (const [farbe, geos] of Object.entries(jeFarbe)) {
+      const merged = mergeGeometries(geos, false);
+      geos.forEach((g) => g.dispose());
+      if (!merged) continue;
+      const mesh = /** @type {any} */ (new THREE.Mesh(merged, /** @type {any} */ (new THREE.MeshLambertMaterial({ color: Number(farbe) }))));
+      mesh.castShadow = true;
+      tt.rgGroup.add(mesh);
+    }
+    tt.requestRender?.();
+  }, [riegel3d, siteW, siteD]);
 
   // Sun light (Task 4 D): DirectionalLight follows sunPosition via
   // lichtrichtung(az, elev, nordwinkel) — geographic sun → plan/scene axes.

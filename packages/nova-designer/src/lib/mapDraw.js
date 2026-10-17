@@ -8,38 +8,45 @@ import { footprintToGeoJson, canvasPointToLngLat } from "@designer/lib/maplibreS
 const EMPTY_FC = () => ({ type: "FeatureCollection", features: [] });
 
 /** Baufeld-Polygone (designated_areas) → FC, ein Polygon-Feature je Fläche. */
-export function areasToGeoJson(areas, centerLat, centerLng) {
+export function areasToGeoJson(areas, centerLat, centerLng, mPerPx = undefined) {
   const features = [];
   for (const a of areas || []) {
-    const fc = footprintToGeoJson(a?.points, centerLat, centerLng);
+    const fc = footprintToGeoJson(a?.points, centerLat, centerLng, mPerPx);
     const f = fc.features[0];
     if (f) features.push({ ...f, properties: { id: a.id } });
   }
   return { type: "FeatureCollection", features };
 }
 
-/** Baukörper ({x,y,width,height,floors}-Rechtecke) → FC mit floors-Label. */
-export function buildingsToGeoJson(buildings, centerLat, centerLng) {
+/**
+ * Baukörper ({x,y,width,height,floors[,drehung_grad]}-Rechtecke) → FC mit floors-Label.
+ * @param {any[]} buildings stored buildings, canvas units
+ * @param {number} centerLat
+ * @param {number} centerLng
+ * @param {number} [mPerPx] metres per canvas unit
+ * @param {((b: any) => Record<string, any>)|null} [props] extra feature properties (95-04: selection, conflict)
+ */
+export function buildingsToGeoJson(buildings, centerLat, centerLng, mPerPx = undefined, props = null) {
   const features = [];
   for (const b of buildings || []) {
     const w = Number(b?.width) || 0;
     const h = Number(b?.height) || 0;
     if (w <= 0 || h <= 0) continue;
-    const corners = [
-      { x: b.x, y: b.y },
-      { x: b.x + w, y: b.y },
-      { x: b.x + w, y: b.y + h },
-      { x: b.x, y: b.y + h },
-    ];
-    const fc = footprintToGeoJson(corners, centerLat, centerLng);
+    // 95-04: optional rotation `drehung_grad` (degrees, clockwise on screen) about the centre;
+    // x/y/width/height stay the unrotated box (backward-compatible storage).
+    const rad = ((Number(b?.drehung_grad) || 0) * Math.PI) / 180, c = Math.cos(rad), s = Math.sin(rad);
+    const mx = b.x + w / 2, my = b.y + h / 2;
+    const corners = [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]]
+      .map(([x, y]) => ({ x: mx + x * c - y * s, y: my + x * s + y * c }));
+    const fc = footprintToGeoJson(corners, centerLat, centerLng, mPerPx);
     const f = fc.features[0];
-    if (f) features.push({ ...f, properties: { id: b.id, floors: b.floors || 1 } });
+    if (f) features.push({ ...f, properties: { id: b.id, floors: b.floors || 1, ...(props ? props(b) : {}) } });
   }
   return { type: "FeatureCollection", features };
 }
 
 /** Höhen-Demopunkte → Punkt-FC mit vorberechneter Farbe (circle-color: get). */
-export function elevationToGeoJson(points, centerLat, centerLng) {
+export function elevationToGeoJson(points, centerLat, centerLng, mPerPx = undefined) {
   const features = (points || [])
     .filter((e) => Number.isFinite(Number(e?.x)) && Number.isFinite(Number(e?.y)))
     .map((e) => ({
@@ -51,7 +58,7 @@ export function elevationToGeoJson(points, centerLat, centerLng) {
         elevation: Number.isFinite(Number(e?.elevation)) ? Number(e.elevation) : 0,
         color: elevColor(Number(e?.elevation) || 0),
       },
-      geometry: { type: "Point", coordinates: canvasPointToLngLat(e, centerLat, centerLng) },
+      geometry: { type: "Point", coordinates: canvasPointToLngLat(e, centerLat, centerLng, mPerPx) },
     }));
   return { type: "FeatureCollection", features };
 }

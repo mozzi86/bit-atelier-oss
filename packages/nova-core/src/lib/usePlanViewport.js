@@ -207,6 +207,10 @@ export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, whe
   // fits its content by min(rw/W, rh/H), not rw/W alone.
   const [renderedH, setRenderedH] = useState(0);
   const panRef = useRef(null);
+  // 95-03: space bar held = pan with the left mouse button (like most drawing programs). Only while
+  // the pointer is over this plan, so typing elsewhere and page scrolling stay untouched.
+  const leerRef = useRef(false);
+  const ueberPlanRef = useRef(false);
   // Aktuelle Maße/Grenzen über Ref, damit der einmalig registrierte
   // Wheel-Listener und die Setter nie mit veralteten Werten rechnen.
   const dims = useRef(null);
@@ -240,6 +244,19 @@ export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, whe
       setViewT((v) => zoomedAt(v, loc, f, d.minZoom, d.maxZoom));
     };
     svg.addEventListener("wheel", onWheel, { passive: false });
+    const rein = () => { ueberPlanRef.current = true; };
+    const raus = () => { ueberPlanRef.current = false; };
+    const taste = (e) => {
+      if (e.code !== "Space" || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target?.tagName || "")) return;
+      if (e.type === "keyup") { leerRef.current = false; return; }
+      if (!ueberPlanRef.current) return;
+      leerRef.current = true;
+      e.preventDefault(); // no page scroll while panning the plan
+    };
+    svg.addEventListener("pointerenter", rein);
+    svg.addEventListener("pointerleave", raus);
+    window.addEventListener("keydown", taste);
+    window.addEventListener("keyup", taste);
     // Track the rendered width (75-01) and height (75-09). Same attachKey
     // lifetime as the wheel listener — after a remount the observer must
     // follow the new element.
@@ -257,6 +274,10 @@ export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, whe
     }
     return () => {
       svg.removeEventListener("wheel", onWheel);
+      svg.removeEventListener("pointerenter", rein);
+      svg.removeEventListener("pointerleave", raus);
+      window.removeEventListener("keydown", taste);
+      window.removeEventListener("keyup", taste);
       ro?.disconnect();
     };
     // svgRef ist ein stabiler Ref-Container; Registrierung einmal je Mount —
@@ -325,6 +346,8 @@ export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, whe
       : `${viewT.x} ${viewT.y} ${W / viewT.zoom} ${H / viewT.zoom}`,
     sicht,
     clientToLocal,
+    /** 95-03: true while the space bar is held over this plan — callers start panning on left drag. */
+    leertaste: () => leerRef.current,
     zoomBy,
     resetView,
     zoomToBBox,

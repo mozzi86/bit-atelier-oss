@@ -276,7 +276,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
 
   const handleDown = (e) => {
     if (dragRef.current) return; // Griff-Drag hat Vorrang (pointerdown feuert vor mousedown)
-    if (e.button === 1) { e.preventDefault(); vp.beginPan(e); return; } // Mittel-Taste = verschieben
+    if (e.button === 1 || (e.button === 0 && vp.leertaste())) { e.preventDefault(); vp.beginPan(e); return; } // Mittel-Taste oder Leertaste+Ziehen (95-03) = verschieben
     if (e.button === 0 && edit?.tool === "arrow") { const p = rawMeters(e); if (p) marqRef.current = { sx: p.x, sz: p.z, cx: p.x, cz: p.z, moved: false }; }
   };
   const handleClick = (e) => {

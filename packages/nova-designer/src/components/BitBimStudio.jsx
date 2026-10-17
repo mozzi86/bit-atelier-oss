@@ -476,6 +476,7 @@ export default function BitBimStudio({ complexData }) {
   const [netzLayer, setNetzLayer] = useState(null); // Phase 41: TGA-Netz (netz_layer) read-only für den IFC-Export
   const [statikLayer, setStatikLayer] = useState(null); // 97-02a: beams (statik_layer) read-only for the IFC export
   const [attributLayer, setAttributLayer] = useState(null); // 97-02: decisions on hull/workshop elements (bauteil_attribute_layer)
+  const [massingLayer, setMassingLayer] = useState(null); // 98-05: bodies of the Massing Studio, read only for the IFC export
   const [durchbrueche, setDurchbrueche] = useState(/** @type {any[]} */ ([])); // 97-06: openings planning, read only for the checks
   const [customSlabs, setCustomSlabs] = useState([]); // Decken: [{points,level,_idx}]
   const [customRoofs, setCustomRoofs] = useState([]); // Dächer: [{points,level,pitch,_idx}]
@@ -553,6 +554,7 @@ export default function BitBimStudio({ complexData }) {
           setNetzLayer(m.netz_layer || null);
           setStatikLayer(m.statik_layer || null);
           setAttributLayer(m.bauteil_attribute_layer || null);
+          setMassingLayer(m.massing_layer || null);
           // Programmfelder (footprintM/storeys/storeyHeight/unit) setzt der Hook
           // useBimModelSync in die gemeinsame Quelle — hier NICHT doppelt.
           // _idx-Zähler hinter die geladenen Elemente setzen (keine Kollisionen)
@@ -560,7 +562,7 @@ export default function BitBimStudio({ complexData }) {
           idRef.current = maxIdx + 1;
         } else {
           // Neues Projekt ohne Modell: Editor leeren (kein Übertrag vom Vorprojekt)
-          setCustomWalls([]); setCustomColumns([]); setCustomWindows([]); setEnvOpenings([]); setNetzLayer(null); setStatikLayer(null); setAttributLayer(null);
+          setCustomWalls([]); setCustomColumns([]); setCustomWindows([]); setEnvOpenings([]); setNetzLayer(null); setStatikLayer(null); setAttributLayer(null); setMassingLayer(null);
           setCustomZones([]); setCustomSlabs([]); setCustomRoofs([]);
           setSketchJson(null);
         }
@@ -1244,6 +1246,7 @@ export default function BitBimStudio({ complexData }) {
       netz: netzLayer, // Phase 41 (NETZ-05): Leitungen als Segment-Elemente
       // 97-02a: every element with its data sheet (stable GUID, Pset_BIT_Bauteil, material, DIN 276); beams from statik_layer.
       steckbrief: { projektId: projectId || null }, tragwerk: statikLayer, bauteilAttribute: attributLayer,
+      massing: massingLayer, // 98-05: Massing-Studio bodies (proxies) and groups (assemblies)
       // 89-03: workshop walls/doors/rooms with stable GUIDs and Pset_BIT_Bauteil (store zones).
       werkstatt: werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight }),
       projectName: project?.name || "BIT-Atelier",

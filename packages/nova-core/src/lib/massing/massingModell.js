@@ -27,7 +27,11 @@ export const PHI = (1 + Math.sqrt(5)) / 2;
  * @property {Pkt} pos             position of the profile origin (m)
  * @property {number} drehung      rotation about the origin in degrees (counter-clockwise)
  * @property {string|null} gruppe  group number ("1", "2" …) — instance of that definition
- * @typedef {{v?: number, koerper: Koerper[], gruppen: Record<string, {profil: Pkt[], hoehe: number}>, naechsteId: number}} MassingLayer
+ * @typedef {{v?: number, koerper: Koerper[], gruppen: Record<string, {profil: Pkt[], hoehe: number}>, naechsteId: number, parametrik?: {knoten: any[], kanten: any[]}, gelaende?: import('./gelaende.js').Gelaende, bezug?: Pkt, riegel?: Array<{id: string, pfad: Pkt[], opt: Record<string, any>}>}} MassingLayer
+ *   parametrik (98-07): node graph of the parametric editor (@core/lib/massing/knoten.js), optional
+ *   gelaende (98-06): sandbox height grid (./gelaende.js), optional
+ *   bezug (98-05): site point of the main body's centre = building model origin (IFC placement)
+ *   riegel (98-09): residential bars along a path (./riegel.js), units derived, not stored
  */
 
 /** @returns {MassingLayer} */
@@ -257,4 +261,136 @@ export function goldenerSchnittVorschlag(a, b, cursor) {
   const abstaende = [[l / PHI, "1 : φ"], [l * PHI, "φ : 1"]];
   const kandidaten = abstaende.map(([d, v]) => ({ punkt: { x: runde(b.x + nx * d * seite), y: runde(b.y + ny * d * seite) }, verhaeltnis: v }));
   return kandidaten.sort((p, q) => Math.hypot(p.punkt.x - cursor.x, p.punkt.y - cursor.y) - Math.hypot(q.punkt.x - cursor.x, q.punkt.y - cursor.y))[0];
+}
+
+/** Centroid of the resolved profiles of some bodies (m). */
+export function schwerpunkt(layer, ids) {
+  const pts = layer.koerper.filter((k) => ids.includes(k.id)).flatMap((k) => geometrie(layer, k).profil);
+  if (!pts.length) return { x: 0, y: 0 };
+  return { x: runde(pts.reduce((s, p) => s + p.x, 0) / pts.length), y: runde(pts.reduce((s, p) => s + p.y, 0) / pts.length) };
+}
+
+/**
+ * Rotate bodies about a centre by `winkel` degrees (counter-clockwise). The position turns about
+ * the centre and the body's own rotation grows — group definitions stay untouched (an instance
+ * may stand at any angle, like a SketchUp component).
+ * @param {MassingLayer} layer
+ * @param {string[]} ids
+ * @param {Pkt} zentrum
+ * @param {number} winkel degrees
+ * @returns {MassingLayer}
+ */
+export function drehen(layer, ids, zentrum, winkel) {
+  const w = (winkel * Math.PI) / 180, c = Math.cos(w), s = Math.sin(w);
+  return {
+    ...layer,
+    koerper: layer.koerper.map((k) => {
+      if (!ids.includes(k.id)) return k;
+      const dx = k.pos.x - zentrum.x, dy = k.pos.y - zentrum.y;
+      return { ...k, pos: { x: runde(zentrum.x + dx * c - dy * s), y: runde(zentrum.y + dx * s + dy * c) }, drehung: runde(((k.drehung || 0) + winkel) % 360) };
+    }),
+  };
+}
+
+/**
+ * Scale bodies in plan about a centre by `faktor` (> 0). Own profiles are scaled; for group
+ * instances the DEFINITION is scaled — every instance of that number changes (component rule).
+ * Height is not changed (that is push/pull).
+ * @param {MassingLayer} layer
+ * @param {string[]} ids
+ * @param {Pkt} zentrum
+ * @param {number} faktor
+ * @returns {MassingLayer}
+ */
+export function skalieren(layer, ids, zentrum, faktor) {
+  if (!(faktor > 0)) throw new Error("Faktor muss größer als 0 sein");
+  const skal = (p) => ({ x: runde(p.x * faktor), y: runde(p.y * faktor) });
+  const gruppen = { ...layer.gruppen };
+  const erledigt = new Set();
+  const koerper = layer.koerper.map((k) => {
+    if (!ids.includes(k.id)) return k;
+    const pos = { x: runde(zentrum.x + (k.pos.x - zentrum.x) * faktor), y: runde(zentrum.y + (k.pos.y - zentrum.y) * faktor) };
+    if (k.gruppe != null) {
+      if (!erledigt.has(k.gruppe)) { gruppen[k.gruppe] = { ...gruppen[k.gruppe], profil: gruppen[k.gruppe].profil.map(skal) }; erledigt.add(k.gruppe); }
+      return { ...k, pos };
+    }
+    return { ...k, pos, profil: (k.profil || []).map(skal) };
+  });
+  return { ...layer, gruppen, koerper };
+}
+
+/**
+ * "Folge mir": a rectangular cross-section (breite × hoehe, m) swept along a plan path — the
+ * result is one body whose footprint is the path offset by breite/2 to both sides (mitred joins,
+ * mitre limited to 4 × half width [ASSUMED] so sharp corners do not spike).
+ * @param {Pkt[]} pfad at least 2 points
+ * @param {number} breite m (> 0)
+ * @returns {Pkt[]} footprint polygon
+ */
+export function pfadUmriss(pfad, breite) {
+  if (!Array.isArray(pfad) || pfad.length < 2 || !(breite > 0)) throw new Error("Pfad braucht mindestens 2 Punkte und eine Breite");
+  const h = breite / 2;
+  const normale = (a, b) => { const l = Math.hypot(b.x - a.x, b.y - a.y) || 1; return { x: -(b.y - a.y) / l, y: (b.x - a.x) / l }; };
+  const versatz = (seite) => pfad.map((p, i) => {
+    const n1 = i > 0 ? normale(pfad[i - 1], p) : null, n2 = i < pfad.length - 1 ? normale(p, pfad[i + 1]) : null;
+    const n = n1 && n2 ? { x: n1.x + n2.x, y: n1.y + n2.y } : n1 || n2;
+    const l = Math.hypot(n.x, n.y) || 1;
+    const cos = n1 && n2 ? Math.max(0.25, (n.x / l) * n1.x + (n.y / l) * n1.y) : 1;
+    const d = (h / cos) * seite;
+    return { x: runde(p.x + (n.x / l) * d), y: runde(p.y + (n.y / l) * d) };
+  });
+  return [...versatz(1), ...versatz(-1).reverse()];
+}
+
+/**
+ * Body from a swept cross-section ("Folge mir").
+ * @param {MassingLayer} layer
+ * @param {Pkt[]} pfad
+ * @param {number} breite m
+ * @param {number} hoehe m
+ * @returns {{layer: MassingLayer, id: string}}
+ */
+export function folgeMir(layer, pfad, breite, hoehe) {
+  return koerperAnlegen(layer, pfadUmriss(pfad, breite), hoehe, { name: "Folge mir" });
+}
+
+/**
+ * Move one corner of a body to a new site point. For a group instance the point is turned back
+ * into the group's own coordinates (position and rotation undone) and the DEFINITION changes —
+ * every instance of that number follows (component rule).
+ * @param {MassingLayer} layer
+ * @param {string} id
+ * @param {number} index corner index
+ * @param {Pkt} ziel site metres
+ * @returns {MassingLayer}
+ */
+export function eckeVerschieben(layer, id, index, ziel) {
+  const k = layer.koerper.find((x) => x.id === id);
+  if (!k) return layer;
+  const w = (-(k.drehung || 0) * Math.PI) / 180, c = Math.cos(w), s = Math.sin(w);
+  const dx = ziel.x - k.pos.x, dy = ziel.y - k.pos.y;
+  const lokal = { x: runde(dx * c - dy * s), y: runde(dx * s + dy * c) };
+  if (k.gruppe != null) {
+    const d = layer.gruppen[k.gruppe];
+    if (!d.profil[index]) return layer;
+    return gruppeAendern(layer, k.gruppe, { profil: d.profil.map((p, i) => (i === index ? lokal : p)) });
+  }
+  if (!k.profil?.[index]) return layer;
+  return { ...layer, koerper: layer.koerper.map((x) => (x.id === id ? { ...x, profil: (x.profil || []).map((p, i) => (i === index ? lokal : p)) } : x)) };
+}
+
+/**
+ * Ctrl + Push/Pull (SketchUp "create new starting face"): instead of stretching, a NEW body with
+ * the same footprint is stacked on top (base = top of the source) — e.g. a set-back storey.
+ * The new body owns its profile (also when the source is a group instance).
+ * @param {MassingLayer} layer
+ * @param {string} id source body
+ * @param {number} hoehe height of the new body in m (> 0)
+ * @returns {{layer: MassingLayer, id: string|null}}
+ */
+export function aufstocken(layer, id, hoehe) {
+  const k = layer.koerper.find((x) => x.id === id);
+  if (!k || !(hoehe > 0)) return { layer, id: null };
+  const g = geometrie(layer, k);
+  return koerperAnlegen(layer, g.profil, hoehe, { basis: runde(g.basis + g.hoehe), name: "Aufstockung" });
 }

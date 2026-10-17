@@ -10,6 +10,32 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.7.0] - 2026-10-17
+
+### Neu
+
+- **Massing-Studio als Modellierer (wie SketchUp):** Linie zeichnen schließt zur Fläche (mit Vorschlag im Goldenen Schnitt), Push/Pull, Folge mir, Verschieben, Drehen, Skalieren und Aufstocken. Strg beim Verschieben = Kopie; danach `*3` tippt drei Kopien im selben Abstand, `/3` teilt die Strecke in drei. Maße lassen sich während des Zeichnens eintippen, Ecken rasten mit grüner Markierung ein. Eine Karte „Erste Schritte“ führt durch die Werkzeuge.
+- **Gruppen mit Nummern:** Körper lassen sich zu Gruppen zusammenfassen. Alle Körper derselben Gruppennummer ändern sich gemeinsam; „Eindeutig“ löst einen Körper aus seiner Gruppe.
+- **Parametrik mit Knoten** (ähnlich Grasshopper): Bausteine wie Zahl, Reihe, Rechteck und Extrusion werden verbunden, das Ergebnis erscheint im Modell.
+- **Gelände-Sandbox:** Gelände anheben, absenken und glätten, mit Erdmengen (Abtrag/Auftrag).
+- **Wohnriegel entlang eines Pfads:** Pfad zeichnen ergibt einen Mittelflur- oder einhüftigen Riegel mit farbigem Wohnungsmix (1- bis 4-Zimmer, Eckwohnungen), gestapelt nach Geschossen, mit Kennzahlen.
+- **Push/Pull direkt im 3D** durch Ziehen am Körper; Massing-Körper und Gruppen gehen in den IFC-Export.
+- **Baufeld-Planung mit CAD-Bedienung:** neuer Modus „Auswahl“ — Klick, Umschalt+Klick, Rahmen nach rechts (ganz drin) oder links (berührt); Ziehen verschiebt (Strg = Kopie, Alt = ohne Fang), oranger Griff dreht in 15°-Schritten, Pfeiltasten 0,1 m (Umschalt 1 m), Entf löscht, Strg+A/C/V, Rückgängig/Wiederholen mit Strg+Z/Y. Fang an Grundstücksgrenze, Baufeld, anderen Blöcken und an der Abstandstiefe.
+- **Prüfung nach jeder Bewegung:** GRZ und GFZ über alle Blöcke; gemeldet werden Blöcke außerhalb des Grundstücks, Überlappungen, Abstandsflächen über der Grenze und Abstandsflächen, die sich treffen (Studie, kein Nachweis).
+
+### Geändert
+
+- **Komplex-Entwurf speichert automatisch** etwa 1,5 Sekunden nach einer Änderung, sobald Name und Standort gesetzt sind — „Entwurf speichern“ ist nicht mehr nötig.
+- **Zoom:** Pläne lassen sich unter 100 % verkleinern; Leertaste + Ziehen verschiebt die Ansicht (wie in den gängigen Zeichenprogrammen).
+- Massing-Studio und Baufeld-Planung rechnen die Abstandsflächen mit derselben Funktion.
+
+### Behoben
+
+- **Gezeichnete Parzelle verschwand** beim Wechsel zwischen den Reitern; sie bleibt jetzt erhalten.
+- **Geschätzte Parzelle war auf der Karte etwa 18-mal zu groß** dargestellt; sie erscheint jetzt im richtigen Maßstab, ebenso die Geschoss-Beschriftung der Baukörper.
+- **3D-Umschalter im Massing-Studio** war bei schmalem Fenster nicht anklickbar.
+- Das Massing-Studio schrieb beim bloßen Öffnen das Modell zurück in die Datenbank; es speichert jetzt nur echte Änderungen.
+
 ## [1.6.0] - 2026-10-17
 
 ### Neu

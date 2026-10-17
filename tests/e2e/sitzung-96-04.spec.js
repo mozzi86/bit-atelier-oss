@@ -31,10 +31,12 @@ test("Fremde Herkunft ohne Sitzung → 401, die App schreibt weiter (96-04)", as
     expect(status).toBe(201);
 
     // Without the wrapper (original fetch would not add it): a browser write with a wrong token is refused.
-    const falsch = await page.evaluate(async () => {
-      const r = await fetch("/api/entities/Project", { method: "POST", headers: { "content-type": "application/json", "X-Bit-Session": "falsch" }, body: "{}" });
+    // Named like the other test records so the cleanup removes it (an empty body left one nameless
+    // project in the dev DB per run, 17.10.2026).
+    const falsch = await page.evaluate(async (name) => {
+      const r = await fetch("/api/entities/Project", { method: "POST", headers: { "content-type": "application/json", "X-Bit-Session": "falsch" }, body: JSON.stringify({ name }) });
       return r.status;
-    });
+    }, `${NAME} falsch`);
     expect([200, 201]).toContain(falsch); // the wrapper overwrites a stale/wrong token with the right one
 
     const namen = (await (await request.get(`${API}/Project`)).json()).map((p) => p.name);

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { useBimModelSync } from "@core/lib/useBimModelSync";
 import { buildingProgram, useBuildingProgram } from "@core/lib/useBuildingProgram";
 import { footprintToMeters } from "@core/lib/buildingModel";
-import { polygonAreaM2, DEFAULT_METERS_PER_PIXEL } from "@core/lib/geo";
+import { polygonAreaM2, DEFAULT_METERS_PER_PIXEL, metersPerPixel } from "@core/lib/geo";
 // 75-06 Task 2: convex hull as the union approximation of imported parcels.
 import { konvexeHuelle } from "@core/lib/polygonInnen";
 import { buildSiteParcel, parcelBbox, bboxIntersects, reanchorParcel, reanchorPoints } from "@designer/lib/siteParcel";
@@ -147,20 +147,30 @@ export default function ComplexDesigner() {
   // ID des bestehenden BuildingComplex-Datensatzes je Projekt — speichern
   // aktualisiert dann (update) statt bei jedem Klick ein Duplikat anzulegen.
   const complexRecordId = useRef(null);
+  // 95-01: autosave state — only after the record was loaded (never overwrite unread data), only when
+  // something changed since the load, serialised (two overlapping saves would create two records).
+  const geladenAls = useRef(/** @type {string|null} */ (null));
+  const speichertGerade = useRef(Promise.resolve());
 
   // Beim Mount / Projektwechsel: vorhandenen Entwurf aus der DB rehydrieren,
   // damit Standort, Baufelder, Gebäude & Kosten einen Reload überleben.
   useEffect(() => {
     if (!project?.id) return;
     complexRecordId.current = null;
+    geladenAls.current = null;
     let cancelled = false;
     (async () => {
       try {
         const rows = await bitApi.entities.BuildingComplex.filter({ project_id: project.id });
-        if (cancelled || !rows?.length) return;
+        if (cancelled) return;
+        if (!rows?.length) { geladenAls.current = "leer"; return; }
         const { id, ...rest } = rows[0];
         complexRecordId.current = id;
-        setComplexData((prev) => ({ ...prev, ...rest }));
+        setComplexData((prev) => {
+          const neu = { ...prev, ...rest };
+          geladenAls.current = JSON.stringify(neu);
+          return neu;
+        });
       } catch (error) {
         console.error("BuildingComplex laden fehlgeschlagen:", error);
         if (!cancelled) toast.error("Gespeicherter Entwurf konnte nicht geladen werden");
@@ -312,9 +322,20 @@ export default function ComplexDesigner() {
             const moved = reanchorPoints(a.points, prev.location, location);
             return moved ? { ...a, points: moved } : a;
           });
+          // 95-04: the metre mirror (mitte_m) moves by the same offset, otherwise it would
+          // contradict x/y after the re-anchor.
+          const mpp = metersPerPixel(prev.site_parcel);
           nextBuildings = nextBuildings.map((b) => {
             const moved = reanchorPoints([{ x: b.x, y: b.y }], prev.location, location);
-            return moved ? { ...b, x: moved[0].x, y: moved[0].y } : b;
+            if (!moved) return b;
+            const neu = { ...b, x: moved[0].x, y: moved[0].y };
+            if (b.mitte_m) {
+              neu.mitte_m = {
+                x: Math.round((b.mitte_m.x + (moved[0].x - b.x) * mpp) * 1000) / 1000,
+                y: Math.round((b.mitte_m.y + (moved[0].y - b.y) * mpp) * 1000) / 1000,
+              };
+            }
+            return neu;
           });
         } else {
           nextParcel = siteParcel;
@@ -373,6 +394,28 @@ export default function ComplexDesigner() {
     // Switch to massing tab to show the result
     setActiveTab("massing");
   };
+
+  // 95-01: save automatically 1.5 s after a change once name and location are set — before, the drawn
+  // parcel and everything else lived only until the page was left, unless "Entwurf speichern" was pressed.
+  useEffect(() => {
+    if (!project?.id || geladenAls.current == null || !complexData.name || !complexData.location) return undefined;
+    const stand = JSON.stringify(complexData);
+    if (stand === geladenAls.current) return undefined;
+    const t = setTimeout(() => {
+      speichertGerade.current = speichertGerade.current.then(async () => {
+        try {
+          const payload = { ...complexData, project_id: project.id };
+          if (complexRecordId.current) await bitApi.entities.BuildingComplex.update(complexRecordId.current, payload);
+          else complexRecordId.current = (await bitApi.entities.BuildingComplex.create(payload))?.id ?? null;
+          geladenAls.current = stand;
+        } catch (error) {
+          console.error("Automatisches Speichern fehlgeschlagen:", error);
+          toast.error("Automatisches Speichern fehlgeschlagen — bitte „Entwurf speichern“");
+        }
+      });
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [complexData, project?.id]);
 
   const saveComplex = async () => {
     if (!complexData.name || !complexData.location) return;

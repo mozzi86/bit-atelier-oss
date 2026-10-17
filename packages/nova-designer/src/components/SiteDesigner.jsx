@@ -3,8 +3,11 @@ import * as maplibregl from "maplibre-gl";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Button } from "@core/components/ui/button";
 import { Badge } from "@core/components/ui/badge";
-import { Building, Trash2, MousePointerClick, PenTool, Check, Undo2 } from "lucide-react";
-import { polygonAreaM2, centroid, pxAreaToM2, pxToM, mToPx, pointInPolygon } from "@core/lib/geo";
+import { Building, Trash2, MousePointerClick, MousePointer2, PenTool, Check, Undo2, Redo2 } from "lucide-react";
+import { polygonAreaM2, centroid, pxAreaToM2, pxToM, mToPx, pointInPolygon, metersPerPixel } from "@core/lib/geo";
+// 95-04…06: blocks as objects in metres — selection, move/copy/rotate, snapping, checks.
+import { alsBlock, ecken } from "@core/lib/massing/bloecke";
+import { useBlockBearbeitung } from "@designer/lib/useBlockBearbeitung";
 import { useI18n } from "@core/lib/i18n";
 import { baukoerperDefaults } from "@designer/lib/siteParcel";
 // 75-06 Task 2 (D-P75-04): GeoJSON parcel import — pure parse, no dependency.
@@ -24,6 +27,9 @@ import {
   elevColor,
 } from "@designer/lib/mapDraw";
 import MapLibreMap from "./MapLibreMap";
+
+/** Rotate handle distance above the selection, screen px. [ASSUMED] */
+const GRIFF_PX = 28;
 
 // Kreis-Handle für Vertex-Marker (Karten-Modus). stopPropagation, damit ein
 // Klick auf den Handle nicht zusätzlich als Karten-Klick zeichnet/platziert.
@@ -55,7 +61,11 @@ function LageplanKarte({
   onAddBuilding,
   onCloseDraft,
   onVertexCommit,
+  bb = null,
+  mSite = 1.25,
 }) {
+  // 95-02: metres per canvas unit of THIS parcel (generic parcels have their own scale).
+  const mpp = Number(parcel?.m_per_px) > 0 ? Number(parcel.m_per_px) : undefined;
   const mapComp = useRef(null);
   const [mapReady, setMapReady] = useState(0); // Zähler: zählt je Map-Instanz (Stilwechsel = Remount) hoch
   const areaMarkersRef = useRef([]);
@@ -73,17 +83,21 @@ function LageplanKarte({
   const onLayersReady = (map) => {
     const addSrc = (id) =>
       map.addSource(id, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    ["sd-parcel", "sd-elev", "sd-areas", "sd-draft", "sd-buildings"].forEach(addSrc);
+    ["sd-parcel", "sd-elev", "sd-areas", "sd-draft", "sd-abstand", "sd-buildings"].forEach(addSrc);
     map.addLayer({ id: "sd-parcel-fill", type: "fill", source: "sd-parcel", paint: { "fill-color": "#10b981", "fill-opacity": 0.06 } });
     map.addLayer({ id: "sd-parcel-line", type: "line", source: "sd-parcel", paint: { "line-color": "#10b981", "line-width": 3, "line-dasharray": [2, 1.5] } });
     map.addLayer({ id: "sd-elev-circle", type: "circle", source: "sd-elev", paint: { "circle-radius": 5, "circle-color": ["get", "color"], "circle-opacity": 0.8 } });
     map.addLayer({ id: "sd-areas-fill", type: "fill", source: "sd-areas", paint: { "fill-color": "#0d9488", "fill-opacity": 0.28 } });
     map.addLayer({ id: "sd-areas-line", type: "line", source: "sd-areas", paint: { "line-color": "#0d9488", "line-width": 2.5 } });
     map.addLayer({ id: "sd-draft-line", type: "line", source: "sd-draft", paint: { "line-color": "#14b8a6", "line-width": 2.5, "line-dasharray": [2, 1.5] } });
-    map.addLayer({ id: "sd-buildings-fill", type: "fill", source: "sd-buildings", paint: { "fill-color": "#3b82f6", "fill-opacity": 0.75 } });
-    map.addLayer({ id: "sd-buildings-line", type: "line", source: "sd-buildings", paint: { "line-color": "#1e3a8a", "line-width": 2 } });
+    // 95-06: setback strips (study) under the blocks — green = fine, red = conflict.
+    map.addLayer({ id: "sd-abstand-fill", type: "fill", source: "sd-abstand", paint: { "fill-color": ["case", ["get", "konflikt"], "#ef4444", "#22c55e"], "fill-opacity": 0.16 } });
+    map.addLayer({ id: "sd-abstand-line", type: "line", source: "sd-abstand", paint: { "line-color": ["case", ["get", "konflikt"], "#dc2626", "#16a34a"], "line-width": 1, "line-dasharray": [2, 2] } });
+    // 95-04: selected blocks amber outline, blocks with a conflict red fill.
+    map.addLayer({ id: "sd-buildings-fill", type: "fill", source: "sd-buildings", paint: { "fill-color": ["case", ["get", "konflikt"], "#ef4444", "#3b82f6"], "fill-opacity": 0.75 } });
+    map.addLayer({ id: "sd-buildings-line", type: "line", source: "sd-buildings", paint: { "line-color": ["case", ["get", "sel"], "#f59e0b", "#1e3a8a"], "line-width": ["case", ["get", "sel"], 4, 2] } });
     // Parzelle voll ins Bild — einmal je Map-Instanz.
-    const ring = footprintToGeoJson(parcel.points, loc.lat, loc.lng).features[0]?.geometry
+    const ring = footprintToGeoJson(parcel.points, loc.lat, loc.lng, mpp).features[0]?.geometry
       ?.coordinates?.[0];
     const bounds = ringBounds(ring);
     if (bounds) map.fitBounds(bounds, { padding: 60, duration: 0, maxZoom: 18 });
@@ -93,28 +107,133 @@ function LageplanKarte({
   // --- Daten → Sources -----------------------------------------------------
   useEffect(() => {
     const map = getMap();
-    map?.getSource("sd-parcel")?.setData(footprintToGeoJson(parcel.points, loc.lat, loc.lng));
+    map?.getSource("sd-parcel")?.setData(footprintToGeoJson(parcel.points, loc.lat, loc.lng, mpp));
   }, [mapReady, parcel, loc.lat, loc.lng]);
 
   useEffect(() => {
     const map = getMap();
-    map?.getSource("sd-elev")?.setData(elevationToGeoJson(elevation, loc.lat, loc.lng));
-  }, [mapReady, elevation, loc.lat, loc.lng]);
+    map?.getSource("sd-elev")?.setData(elevationToGeoJson(elevation, loc.lat, loc.lng, mpp));
+  }, [mapReady, elevation, loc.lat, loc.lng, mpp]);
 
   useEffect(() => {
     const map = getMap();
-    map?.getSource("sd-areas")?.setData(areasToGeoJson(areas, loc.lat, loc.lng));
-  }, [mapReady, areas, loc.lat, loc.lng]);
+    map?.getSource("sd-areas")?.setData(areasToGeoJson(areas, loc.lat, loc.lng, mpp));
+  }, [mapReady, areas, loc.lat, loc.lng, mpp]);
 
   useEffect(() => {
     const map = getMap();
     map?.getSource("sd-draft")?.setData(draftToGeoJson(draftGeo));
   }, [mapReady, draftGeo]);
 
+  const auswahlSet = useMemo(() => new Set(bb?.auswahl || []), [bb?.auswahl]);
+  const pruefJe = bb?.pruefung?.je;
   useEffect(() => {
     const map = getMap();
-    map?.getSource("sd-buildings")?.setData(buildingsToGeoJson(buildings, loc.lat, loc.lng));
-  }, [mapReady, buildings, loc.lat, loc.lng]);
+    const konflikt = (id) => {
+      const j = pruefJe?.[id];
+      return !!j && (j.ausserhalb || j.grenzKonflikt || j.ueberlappt.length > 0 || j.abstandZu.length > 0);
+    };
+    map?.getSource("sd-buildings")?.setData(buildingsToGeoJson(buildings, loc.lat, loc.lng, mpp,
+      (b) => ({ sel: auswahlSet.has(b.id), konflikt: konflikt(b.id) })));
+  }, [mapReady, buildings, loc.lat, loc.lng, mpp, auswahlSet, pruefJe]);
+
+  // 95-06: setback strips of every block while the selection tool is active.
+  useEffect(() => {
+    const map = getMap();
+    const features = [];
+    if (mode === "auswahl" && pruefJe) {
+      for (const j of Object.values(pruefJe)) {
+        for (const st of j.streifen) {
+          const f = footprintToGeoJson(st.pts.map((q) => ({ x: q.x / mSite, y: q.y / mSite })), loc.lat, loc.lng, mpp).features[0];
+          if (f) features.push({ ...f, properties: { konflikt: st.conflict === true } });
+        }
+      }
+    }
+    map?.getSource("sd-abstand")?.setData({ type: "FeatureCollection", features });
+  }, [mapReady, mode, pruefJe, loc.lat, loc.lng, mpp, mSite]);
+
+  // --- 95-04/05: selection tool on the map ---------------------------------------------
+  // Map pan is off while selecting (a drag draws a frame or moves blocks); space held = pan,
+  // wheel zoom stays. Points: map → canvas units → site metres (× mSite).
+  const altRef = useRef(false);
+  // The controller object changes on every render; the map listeners read it through this ref so
+  // they are not re-subscribed mid-drag (which reset the "button down" state).
+  const bbRef = useRef(bb);
+  bbRef.current = bb;
+  const hatBb = !!bb;
+  useEffect(() => {
+    const map = getMap();
+    if (!map || !mapReady) return undefined;
+    const auswahl = mode === "auswahl" && hatBb;
+    if (auswahl) { map.dragPan.disable(); map.boxZoom.disable(); map.getCanvas().style.cursor = "default"; }
+    else { map.dragPan.enable(); map.boxZoom.enable(); map.getCanvas().style.cursor = ""; }
+    if (!auswahl) return undefined;
+    const zuM = (/** @type {any} */ lngLat) => {
+      const c = lngLatToCanvasPoint([lngLat.lng, lngLat.lat], loc.lat, loc.lng, mpp);
+      return { x: c.x * mSite, y: c.y * mSite };
+    };
+    const mProPx = (/** @type {any} */ pt) => {
+      const a = zuM(map.unproject([pt.x, pt.y])), b = zuM(map.unproject([pt.x + 10, pt.y]));
+      return Math.hypot(b.x - a.x, b.y - a.y) / 10;
+    };
+    const tasten = (/** @type {any} */ e) => ({ umschalt: e.shiftKey, strg: e.ctrlKey || e.metaKey, alt: e.altKey });
+    let leer = false, gedrueckt = false;
+    const down = (/** @type {any} */ e) => {
+      const oe = e.originalEvent;
+      if (leer || oe.button !== 0) return;
+      gedrueckt = true;
+      bbRef.current?.runter(zuM(e.lngLat), { x: e.point.x, y: e.point.y }, tasten(oe), mProPx(e.point));
+    };
+    const move = (/** @type {any} */ e) => { if (gedrueckt) bbRef.current?.bewegen(zuM(e.lngLat), { x: e.point.x, y: e.point.y }, tasten(e.originalEvent)); };
+    const up = (/** @type {any} */ e) => { if (!gedrueckt) return; gedrueckt = false; bbRef.current?.hoch(tasten(e)); };
+    const taste = (/** @type {KeyboardEvent} */ e) => {
+      altRef.current = e.altKey;
+      if (e.code !== "Space" || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(/** @type {any} */ (e.target)?.tagName || "")) return;
+      leer = e.type === "keydown";
+      if (leer) { map.dragPan.enable(); e.preventDefault(); } else map.dragPan.disable();
+    };
+    map.on("mousedown", down);
+    map.on("mousemove", move);
+    window.addEventListener("mouseup", up);
+    window.addEventListener("keydown", taste);
+    window.addEventListener("keyup", taste);
+    return () => {
+      map.off("mousedown", down);
+      map.off("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      window.removeEventListener("keydown", taste);
+      window.removeEventListener("keyup", taste);
+    };
+  }, [mapReady, mode, hatBb, loc.lat, loc.lng, mpp, mSite]);
+
+  // Rotate handle as a draggable marker above the selection.
+  const griffRef = useRef(/** @type {any} */ (null));
+  const griff = bb?.griff;
+  useEffect(() => {
+    const map = getMap();
+    griffRef.current?.remove();
+    griffRef.current = null;
+    if (!map || !mapReady || !griff || !hatBb) return undefined;
+    const el = document.createElement("div");
+    el.dataset.testid = "sd-drehgriff";
+    el.title = "Drehen (15°-Schritte, Alt = frei)";
+    el.style.cssText = "width:16px;height:16px;border-radius:50%;background:#f59e0b;border:3px solid #fff;box-shadow:0 0 0 1px #92400e;cursor:grab;box-sizing:border-box;";
+    const zuLl = (/** @type {{x:number,y:number}} */ q) => /** @type {[number, number]} */ (canvasPointToLngLat({ x: q.x / mSite, y: q.y / mSite }, loc.lat, loc.lng, mpp));
+    const zuM = () => {
+      const ll = m.getLngLat();
+      const c = lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng, mpp);
+      return { x: c.x * mSite, y: c.y * mSite };
+    };
+    // GRIFF_PX above the selection's top edge (screen offset, see useBlockBearbeitung).
+    const m = new maplibregl.Marker({ element: el, draggable: true, offset: [0, -GRIFF_PX] }).setLngLat(zuLl(griff)).addTo(map);
+    m.on("dragstart", () => bbRef.current?.griffRunter(zuM()));
+    m.on("drag", () => bbRef.current?.bewegen(zuM(), { x: 0, y: 0 }, { alt: altRef.current }));
+    m.on("dragend", () => bbRef.current?.hoch());
+    griffRef.current = m;
+    return () => { m.remove(); if (griffRef.current === m) griffRef.current = null; };
+    // the marker is rebuilt when the handle position changes (after each commit, not per drag frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, griff?.x, griff?.y, hatBb, loc.lat, loc.lng, mpp, mSite]);
 
   // --- Klick zeichnet / platziert (Pan/Zoom bleibt frei) --------------------
   useEffect(() => {
@@ -124,8 +243,9 @@ function LageplanKarte({
       // Zweitklick eines Doppelklicks verwerfen (Review-Fix: platzierte sonst
       // zwei identische Baukörper übereinander bzw. doppelte Draft-Punkte).
       if (e.originalEvent?.detail > 1) return;
+      if (mode === "auswahl") return; // 95-04: the selection tool handles mousedown/up itself
       const lngLat = [e.lngLat.lng, e.lngLat.lat];
-      const cpt = lngLatToCanvasPoint(lngLat, loc.lat, loc.lng);
+      const cpt = lngLatToCanvasPoint(lngLat, loc.lat, loc.lng, mpp);
       if (mode === "polygon") {
         // Klick nahe am Startpunkt (Screen-Px) schließt das Polygon.
         if (draftGeo.length >= 3) {
@@ -144,7 +264,7 @@ function LageplanKarte({
     };
     map.on("click", onClick);
     return () => map.off("click", onClick);
-  }, [mapReady, mode, draftGeo, insideParcel, onAddBuilding, onCloseDraft, setDraftGeo, loc.lat, loc.lng]);
+  }, [mapReady, mode, draftGeo, insideParcel, onAddBuilding, onCloseDraft, setDraftGeo, loc.lat, loc.lng, mpp]);
 
   // Der Lageplan ist eine Zeichenfläche: Doppelklick-Zoom bleibt in BEIDEN
   // Modi aus (Review-Fix: zoomte sonst beim Baukörper-Setzen; Zoomen geht
@@ -173,26 +293,26 @@ function LageplanKarte({
     for (const a of areas) {
       a.points.forEach((p, idx) => {
         const m = new maplibregl.Marker({ element: vertexElement(), draggable: true })
-          .setLngLat(/** @type {[number, number]} */ (canvasPointToLngLat(p, loc.lat, loc.lng)))
+          .setLngLat(/** @type {[number, number]} */ (canvasPointToLngLat(p, loc.lat, loc.lng, mpp)))
           .addTo(map);
         m.on("drag", () => {
           // Live-Vorschau direkt in der Source — Commit erst am Drag-Ende.
           const ll = m.getLngLat();
-          const moved = lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng);
+          const moved = lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng, mpp);
           const live = areas.map((ar) =>
             ar.id !== a.id ? ar : { ...ar, points: ar.points.map((q, i) => (i === idx ? moved : q)) }
           );
-          map.getSource("sd-areas")?.setData(areasToGeoJson(live, loc.lat, loc.lng));
+          map.getSource("sd-areas")?.setData(areasToGeoJson(live, loc.lat, loc.lng, mpp));
         });
         m.on("dragend", () => {
           const ll = m.getLngLat();
-          onVertexCommit(a.id, idx, lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng));
+          onVertexCommit(a.id, idx, lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng, mpp));
         });
         areaMarkersRef.current.push(m);
       });
     }
     return () => clearMarkers(areaMarkersRef);
-  }, [mapReady, areas, onVertexCommit, loc.lat, loc.lng]);
+  }, [mapReady, areas, onVertexCommit, loc.lat, loc.lng, mpp]);
 
   // --- Draft-Punkte: erster Punkt schließt, alle nachjustierbar -------------
   useEffect(() => {
@@ -252,15 +372,15 @@ function LageplanKarte({
       "font:700 13px system-ui;color:#0f766e;text-shadow:0 0 3px #fff,0 0 6px #fff;";
     for (const a of areas) {
       addLabel(
-        canvasPointToLngLat(centroid(a.points), loc.lat, loc.lng),
+        canvasPointToLngLat(centroid(a.points), loc.lat, loc.lng, mpp),
         `${polygonAreaM2(a.points, parcel).toLocaleString("de-DE")} m²`,
         areaCss
       );
     }
     if (draftGeo.length >= 3) {
-      const pts = draftGeo.map((q) => lngLatToCanvasPoint(q, loc.lat, loc.lng));
+      const pts = draftGeo.map((q) => lngLatToCanvasPoint(q, loc.lat, loc.lng, mpp));
       addLabel(
-        canvasPointToLngLat(centroid(pts), loc.lat, loc.lng),
+        canvasPointToLngLat(centroid(pts), loc.lat, loc.lng, mpp),
         `${polygonAreaM2(pts, parcel).toLocaleString("de-DE")} m²`,
         areaCss
       );
@@ -270,14 +390,15 @@ function LageplanKarte({
         canvasPointToLngLat(
           { x: b.x + (b.width || 0) / 2, y: b.y + (b.height || 0) / 2 },
           loc.lat,
-          loc.lng
+          loc.lng,
+          mpp
         ),
         `${b.floors || 1}G`,
         "font:700 12px system-ui;color:#fff;text-shadow:0 0 3px #1e3a8a,0 0 5px #1e3a8a;"
       );
     }
     return () => clearMarkers(labelMarkersRef);
-  }, [mapReady, areas, buildings, draftGeo, parcel, loc.lat, loc.lng]);
+  }, [mapReady, areas, buildings, draftGeo, parcel, loc.lat, loc.lng, mpp]);
 
   return (
     <div
@@ -303,6 +424,19 @@ function LageplanKarte({
         onLayersReady={onLayersReady}
         className="h-full w-full"
       />
+      {bb?.rahmen && (
+        <div
+          data-testid="sd-rahmen"
+          data-modus={bb.rahmen.modus}
+          className="pointer-events-none absolute"
+          style={{
+            left: Math.min(bb.rahmen.sa.x, bb.rahmen.sb.x), top: Math.min(bb.rahmen.sa.y, bb.rahmen.sb.y),
+            width: Math.abs(bb.rahmen.sb.x - bb.rahmen.sa.x), height: Math.abs(bb.rahmen.sb.y - bb.rahmen.sa.y),
+            border: `1.5px ${bb.rahmen.modus === "fenster" ? "solid" : "dashed"} #2563eb`,
+            background: bb.rahmen.modus === "fenster" ? "rgba(37,99,235,0.08)" : "rgba(34,197,94,0.08)",
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -317,6 +451,8 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   const dragRef = useRef(null);   // { areaId, idx }
   const movedRef = useRef(false);
   const parcel = complexData?.site_parcel;
+  // 95-02: metres per canvas unit of THIS parcel — map, areas, buildings and map clicks all use it.
+  const mpp = Number(parcel?.m_per_px) > 0 ? Number(parcel.m_per_px) : undefined;
   const loc = complexData?.location;
   const elevation = complexData?.topography?.elevation_points || [];
   const buildings = complexData?.buildings || [];
@@ -328,7 +464,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   const isSynthetic = complexData?.topography?.source === "synthetisch"
     || complexData?.context_buildings_source === "synthetisch";
 
-  const [mode, setMode] = useState("building"); // building | polygon
+  const [mode, setMode] = useState("building"); // building | polygon | auswahl (95-04)
   const [draft, setDraft] = useState([]);        // SVG-Fallback: {x,y}-Punkte
   const [draftGeo, setDraftGeo] = useState([]);  // Karten-Modus: [lng,lat]-Punkte
   // 75-06 Task 3 (MSB-3): role of the drawn polygon — "footprint" (default,
@@ -337,6 +473,25 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   // so no migration is needed. MUST sit above the !parcel early return
   // (rules of hooks).
   const [areaTyp, setAreaTyp] = useState("footprint");
+  // 95-04…06: blocks in metres. mSite = metres per canvas unit (same scale as every area
+  // figure here); the plot and the "baufeld" envelopes in metres are the snap targets and the
+  // basis of the checks. Hooks above the !parcel early return (rules of hooks).
+  const planRef = useRef(null);
+  const mSite = metersPerPixel(parcel);
+  const grenzeM = useMemo(
+    () => (Array.isArray(parcel?.points) && parcel.points.length >= 3 ? parcel.points.map((q) => ({ x: q.x * mSite, y: q.y * mSite })) : null),
+    [parcel?.points, mSite],
+  );
+  const baufelderM = useMemo(
+    () => areas.filter((a) => a.type === "baufeld").map((a) => a.points.map((q) => ({ x: q.x * mSite, y: q.y * mSite }))),
+    [areas, mSite],
+  );
+  const bb = useBlockBearbeitung({
+    buildings, mpp: mSite, onChange: (next) => onBuildingsChange?.(next), aktiv: mode === "auswahl",
+    grenzeM, baufelderM, containerRef: planRef,
+  });
+  const nummer = useMemo(() => Object.fromEntries(buildings.map((b, i) => [b.id, i + 1])), [buildings]);
+
   // 75-06 Task 2: imported cadastral parcels + last-import warnings (UI-only,
   // the data model write lives in ComplexDesigner.handleFlurstueckImport).
   const [geoWarnungen, setGeoWarnungen] = useState([]);
@@ -422,13 +577,14 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     const defaults = baukoerperDefaults(projektTyp);
     const w = Math.max(2, Math.round(mToPx(defaults.breiteM, parcel)));
     const h = Math.max(2, Math.round(mToPx(defaults.tiefeM, parcel)));
-    onBuildingsChange?.([
+    bb.commit([
       ...buildings,
       { id: `bld_${Date.now()}`, x: Math.round(x - w / 2), y: Math.round(y - h / 2), width: w, height: h, floors: defaults.geschosse },
     ]);
   };
 
-  const removeBuilding = (id) => onBuildingsChange?.(buildings.filter((b) => b.id !== id));
+  // 95-05: every building edit is one undo step (bb.commit).
+  const removeBuilding = (id) => bb.commit(buildings.filter((b) => b.id !== id));
   const removeArea = (id) => onAreasChange?.((complexData?.designated_areas || []).filter((a) => a.id !== id));
 
   const closeDraft = () => {
@@ -443,7 +599,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   // Karten-Draft ([lng,lat]) → Canvas-Px-Bestandsformat (KARTE-03).
   const closeDraftGeo = () => {
     if (draftGeo.length < 3) return;
-    const cpts = geoJsonToFootprint(draftGeo, loc.lat, loc.lng);
+    const cpts = geoJsonToFootprint(draftGeo, loc.lat, loc.lng, mpp);
     if (!cpts) return;
     onAreasChange?.([
       ...(complexData?.designated_areas || []),
@@ -465,6 +621,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
 
   const handleSvgClick = (e) => {
     if (movedRef.current) { movedRef.current = false; return; } // ignore click after a drag
+    if (mode === "auswahl") return; // 95-04: handled by the pointer handlers
     const { x, y } = toView(e);
     if (mode === "building") { addBuilding(x, y); return; }
     // polygon mode
@@ -484,7 +641,18 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     try { e.target.setPointerCapture?.(e.pointerId); } catch (_) { /* noop */ }
   };
 
+  // 95-04/05: selection tool in the SVG fallback — view units × mSite = site metres.
+  const tastenVon = (e) => ({ umschalt: e.shiftKey, strg: e.ctrlKey || e.metaKey, alt: e.altKey });
+  const zuMeter = (e) => { const v = toView(e); return { x: v.x * mSite, y: v.y * mSite }; };
+  const onSvgPointerDown = (e) => {
+    if (mode !== "auswahl" || e.button !== 0) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    try { svgRef.current.setPointerCapture?.(e.pointerId); } catch (_) { /* noop */ }
+    bb.runter(zuMeter(e), { x: e.clientX, y: e.clientY }, tastenVon(e), (VIEW_W / rect.width) * mSite);
+  };
+
   const onPointerMove = (e) => {
+    if (mode === "auswahl") { bb.bewegen(zuMeter(e), { x: e.clientX, y: e.clientY }, tastenVon(e)); return; }
     if (!dragRef.current) return;
     movedRef.current = true;
     const { x, y } = toView(e);
@@ -498,12 +666,17 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     onAreasChange?.(next);
   };
 
-  const endDrag = () => { dragRef.current = null; };
+  const endDrag = (e) => {
+    dragRef.current = null;
+    if (mode === "auswahl" && e?.type === "pointerup") bb.hoch(tastenVon(e));
+  };
 
   const elevColorSvg = elevColor;
+  // View units per screen pixel of the SVG plan (rotate handle in screen pixels); 1 before layout.
+  const vjp = svgRef.current?.clientWidth ? VIEW_W / svgRef.current.clientWidth : 1;
 
   // BGF ≈ Grundfläche (px² → m² über den zentralen Maßstab) × Geschosse.
-  const gfaApprox = buildings.reduce(
+  const gfaApprox = bb.anzeige.reduce(
     (s, b) => s + pxAreaToM2((b.width || 0) * (b.height || 0), parcel) * (b.floors || 1), 0,
   );
   const polyTotalM2 = areas.reduce((s, a) => s + polygonAreaM2(a.points, parcel), 0);
@@ -539,6 +712,16 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
                 onClick={() => setMode("polygon")} aria-label="Polygon-Zeichenmodus">
                 <PenTool className="w-4 h-4 mr-1" /> Polygon
               </Button>
+              <Button size="sm" variant={mode === "auswahl" ? "default" : "outline"} data-testid="sd-modus-auswahl"
+                onClick={() => { setMode("auswahl"); setDraft([]); setDraftGeo([]); }} aria-label={t("Auswahl-Modus")}>
+                <MousePointer2 className="w-4 h-4 mr-1" /> {t("Auswahl")}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={bb.rueckgaengig} disabled={!bb.kannZurueck} aria-label={t("Rückgängig")} title={t("Rückgängig") + " (Strg+Z)"} data-testid="sd-undo">
+                <Undo2 className="w-4 h-4" />
+              </Button>
+              <Button size="sm" variant="ghost" onClick={bb.wiederholen} disabled={!bb.kannVor} aria-label={t("Wiederholen")} title={t("Wiederholen") + " (Strg+Y)"} data-testid="sd-redo">
+                <Redo2 className="w-4 h-4" />
+              </Button>
               {mode === "polygon" && (
                 <>
                   {/* 75-06 Task 3 (MSB-3): role of the drawn polygon — native
@@ -565,18 +748,24 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
           </div>
           <p className="text-xs text-slate-500 mt-1">
             {mode === "building" ? "Klicke in die Parzelle, um einen Baukörper zu setzen."
+              : mode === "auswahl" ? t("Klick wählt, Umschalt+Klick ergänzt; Rahmen nach rechts = ganz drin, nach links = berührt. Ziehen verschiebt (Strg = Kopie, Alt = ohne Fang), oranger Griff dreht, Pfeile 0,1 m (Umschalt 1 m), Entf löscht.")
               : "Klicke Stützpunkte; mit „Schließen\" oder Klick auf den Startpunkt abschließen. Eckpunkte ziehbar."}
-            {hatKarte && " Karte: Ziehen verschiebt, Scrollen zoomt — auch während des Zeichnens."}
+            {hatKarte && (mode === "auswahl" ? ` ${t("Karte: Leertaste + Ziehen verschiebt die Ansicht, Scrollen zoomt.")}` : " Karte: Ziehen verschiebt, Scrollen zoomt — auch während des Zeichnens.")}
+            {(bb.fangZiel || bb.winkel != null) && (
+              <span className="ml-1 font-medium text-warnung" data-testid="sd-fang">
+                {bb.winkel != null ? `${bb.winkel}°` : `${t("Fang")}: ${fangText(bb.fangZiel, t)}`}
+              </span>
+            )}
           </p>
         </CardHeader>
-        <CardContent>
+        <CardContent ref={planRef} data-testid="sd-plan" data-auswahl={bb.auswahl.join(",")}>
           {hatKarte ? (
             <LageplanKarte
               loc={loc}
               styleKey={mapCtx?.style || "normal"}
               parcel={parcel}
               areas={areas}
-              buildings={buildings}
+              buildings={bb.anzeige}
               elevation={elevation}
               mode={mode}
               draftGeo={draftGeo}
@@ -585,14 +774,17 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               onAddBuilding={addBuilding}
               onCloseDraft={closeDraftGeo}
               onVertexCommit={commitVertex}
+              bb={bb}
+              mSite={mSite}
             />
           ) : (
           <div className="relative w-full rounded-lg border overflow-hidden" style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }}>
           <svg
             ref={svgRef}
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-            className="absolute inset-0 w-full h-full cursor-crosshair bg-slate-50"
+            className={`absolute inset-0 w-full h-full bg-slate-50 ${mode === "auswahl" ? "cursor-default" : "cursor-crosshair"}`}
             onClick={handleSvgClick}
+            onPointerDown={onSvgPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={endDrag}
             onPointerLeave={endDrag}
@@ -641,15 +833,45 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               </g>
             )}
 
-            {/* placed buildings */}
-            {buildings.map((b) => (
-              <g key={b.id}>
-                <rect x={b.x} y={b.y} width={b.width} height={b.height} fill="#3b82f6" fillOpacity="0.75" stroke="#1e3a8a" strokeWidth="2" />
-                <text x={b.x + b.width / 2} y={b.y + b.height / 2} textAnchor="middle" dominantBaseline="middle" fontSize="20" fill="white">
-                  {b.floors}G
-                </text>
-              </g>
-            ))}
+            {/* 95-06: setback strips (study) while selecting */}
+            {mode === "auswahl" && Object.values(bb.pruefung.je).flatMap((j, i) => j.streifen.map((st, k) => (
+              <polygon key={`${i}-${k}`} points={st.pts.map((q) => `${q.x / mSite},${q.y / mSite}`).join(" ")}
+                fill={st.conflict ? "rgba(239,68,68,0.16)" : "rgba(34,197,94,0.14)"} stroke={st.conflict ? "#dc2626" : "#16a34a"} strokeWidth="1" strokeDasharray="4 4" pointerEvents="none" />
+            )))}
+
+            {/* placed buildings — 95-04: rotated polygons, selection amber, conflict red */}
+            {bb.anzeige.filter((b) => b.width > 0 && b.height > 0).map((b) => {
+              const k = alsBlock(b, mSite);
+              const j = bb.pruefung.je[b.id];
+              const konflikt = !!j && (j.ausserhalb || j.grenzKonflikt || j.ueberlappt.length > 0 || j.abstandZu.length > 0);
+              const sel = bb.auswahl.includes(b.id);
+              return (
+                <g key={b.id} data-testid="sd-block" data-id={b.id} data-sel={sel ? "1" : "0"} data-mitte={`${k.cx.toFixed(2)},${k.cy.toFixed(2)}`} data-drehung={Math.round(k.drehung)}>
+                  <polygon points={ecken(k).map((q) => `${q.x / mSite},${q.y / mSite}`).join(" ")}
+                    fill={konflikt ? "#ef4444" : "#3b82f6"} fillOpacity="0.75" stroke={sel ? "#f59e0b" : "#1e3a8a"} strokeWidth={sel ? 4 : 2} />
+                  <text x={k.cx / mSite} y={k.cy / mSite} textAnchor="middle" dominantBaseline="middle" fontSize="20" fill="white" pointerEvents="none">
+                    {b.floors}G
+                  </text>
+                </g>
+              );
+            })}
+            {bb.rahmen && (
+              <rect data-testid="sd-rahmen" data-modus={bb.rahmen.modus}
+                x={Math.min(bb.rahmen.a.x, bb.rahmen.b.x) / mSite} y={Math.min(bb.rahmen.a.y, bb.rahmen.b.y) / mSite}
+                width={Math.abs(bb.rahmen.b.x - bb.rahmen.a.x) / mSite} height={Math.abs(bb.rahmen.b.y - bb.rahmen.a.y) / mSite}
+                fill={bb.rahmen.modus === "fenster" ? "rgba(37,99,235,0.08)" : "rgba(34,197,94,0.08)"} stroke="#2563eb" strokeWidth="1.5"
+                strokeDasharray={bb.rahmen.modus === "fenster" ? undefined : "6 4"} pointerEvents="none" />
+            )}
+            {bb.griff && (
+              <line x1={bb.griff.x / mSite} y1={bb.griff.y / mSite} x2={bb.griff.x / mSite} y2={bb.griff.y / mSite - GRIFF_PX * vjp}
+                stroke="#f59e0b" strokeWidth={1.5 * vjp} pointerEvents="none" />
+            )}
+            {bb.griff && (
+              <circle data-testid="sd-drehgriff" cx={bb.griff.x / mSite} cy={bb.griff.y / mSite - GRIFF_PX * vjp} r={8 * vjp} fill="#f59e0b" stroke="#fff" strokeWidth={2.5 * vjp} style={{ cursor: "grab" }}
+                onPointerDown={(e) => { e.stopPropagation(); try { svgRef.current.setPointerCapture?.(e.pointerId); } catch (_) { /* noop */ } bb.griffRunter(zuMeter(e)); }}>
+                <title>{t("Drehen (15°-Schritte, Alt = frei)")}</title>
+              </circle>
+            )}
           </svg>
           </div>
           )}
@@ -675,6 +897,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
             <div className="text-sm text-slate-600">Polygon-Fläche gesamt: <b>{polyTotalM2.toLocaleString("de-DE")} m²</b></div>
             <div className="text-sm text-slate-600">≈ BGF (Baukörper): <b>{Math.round(gfaApprox).toLocaleString("de-DE")} m²</b></div>
             <div className="text-xs text-slate-400">Topografie: {elevation.length} Höhenpunkte</div>
+            <BlockPruefung pruefung={bb.pruefung} nummer={nummer} t={t} />
             {/* KD-06: keine Nachweis-Optik für Demo-Daten. */}
             {isSynthetic && (
               <div className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
@@ -776,8 +999,11 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
           <CardContent className="space-y-2 max-h-72 overflow-y-auto">
             {buildings.length === 0 && <p className="text-sm text-slate-500">Noch keine. Klicke in den Plan.</p>}
             {buildings.map((b, i) => (
-              <div key={b.id} className="flex items-center justify-between text-sm border rounded px-2 py-1">
-                <span>Baukörper {i + 1} · {b.floors} Gesch.</span>
+              <div key={b.id} className={`flex items-center justify-between text-sm border rounded px-2 py-1 ${bb.auswahl.includes(b.id) ? "border-warnung-rand bg-warnung-flaeche" : ""}`}>
+                <button type="button" className="text-left flex-1" data-testid="sd-block-eintrag"
+                  onClick={(e) => { setMode("auswahl"); bb.setAuswahl(e.shiftKey ? [...new Set([...bb.auswahl, b.id])] : [b.id]); }}>
+                  Baukörper {i + 1} · {b.floors} Gesch.{b.drehung_grad ? ` · ${Math.round(b.drehung_grad)}°` : ""}
+                </button>
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => removeBuilding(b.id)} aria-label="Baukörper löschen">
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
@@ -786,6 +1012,50 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+/** Snap target name → short German label (UI). */
+function fangText(ziel, t) {
+  const teil = { grenze: t("Grenze"), abstand: t("Abstandsfläche"), baufeld: t("Baufeld"), block: t("anderer Block"), kante: t("Kante"), ecke: t("Ecke") };
+  return String(ziel || "").split("+").map((z) => teil[z] || z).join(" + ");
+}
+
+/**
+ * 95-06: check after each move — GRZ/GFZ over all blocks and the conflicts per block. Study:
+ * storey height 3.0 m, setback 0.4 H / min. 3 m [ASSUMED], same functions as the Massing-Studio.
+ * `warn` look only (amber/red text), never a legal "ok": without a plot nothing is checkable.
+ */
+function BlockPruefung({ pruefung, nummer, t }) {
+  if (!pruefung || !Object.keys(pruefung.je).length) return null;
+  const meldungen = [];
+  for (const [id, j] of Object.entries(pruefung.je)) {
+    const n = nummer[id] ?? "?";
+    if (j.ausserhalb) meldungen.push(`${t("Baukörper")} ${n}: ${t("liegt nicht ganz auf dem Grundstück")}`);
+    if (j.grenzKonflikt) meldungen.push(`${t("Baukörper")} ${n}: ${t("Abstandsfläche reicht über die Grenze")}`);
+    if (j.ueberlappt.length) meldungen.push(`${t("Baukörper")} ${n}: ${t("überlappt")} ${j.ueberlappt.map((o) => nummer[o] ?? "?").join(", ")}`);
+    if (j.abstandZu.length) meldungen.push(`${t("Baukörper")} ${n}: ${t("Abstandsfläche trifft")} ${j.abstandZu.map((o) => nummer[o] ?? "?").join(", ")}`);
+  }
+  return (
+    <div className="mt-2 space-y-1 rounded border border-border p-2 text-xs" data-testid="sd-pruefung">
+      <div className="font-semibold text-foreground">{t("Prüfung (Studie)")}</div>
+      {pruefung.pruefbar ? (
+        <div className="text-muted-foreground">
+          GRZ <b className={pruefung.grzUeber ? "text-fehler" : ""}>{pruefung.grz.toFixed(2)}</b>
+          {" · "}GFZ <b className={pruefung.gfzHoch ? "text-warnung" : ""}>{pruefung.gfz.toFixed(2)}</b>
+          <span className="text-muted-foreground"> · {t("Richtwerte 0,4 / 1,2")}</span>
+        </div>
+      ) : (
+        <div className="text-warnung">{t("Ohne Grundstück nicht prüfbar.")}</div>
+      )}
+      {meldungen.length > 0 ? (
+        <ul className="space-y-0.5 text-fehler" data-testid="sd-konflikte">
+          {meldungen.map((m) => <li key={m}>{m}</li>)}
+        </ul>
+      ) : pruefung.pruefbar && (
+        <div className="text-muted-foreground">{t("Keine Konflikte gefunden — Abstandsflächen 0,4 H, mind. 3 m, Geschoss 3,0 m [Annahme].")}</div>
+      )}
     </div>
   );
 }

@@ -92,3 +92,24 @@ describe("97-08 IFC4 Status in Pset_*Common", () => {
     assert.equal(normalizeStatus(statusRohFromPsets({ Pset_WallCommon: { Status: "NOTKNOWN" } })), null);
   });
 });
+
+// 98-05: Massing-Studio bodies in the IFC export — proxies with stable GUIDs, one assembly per
+// group number aggregating its instances; placed via the stored reference point.
+import { leererLayer, koerperAnlegen, kopieren, gruppeBilden } from "@core/lib/massing/massingModell.js";
+describe("98-05 Massing-Körper im IFC", () => {
+  it("Körper als IfcBuildingElementProxy, Gruppe als IfcElementAssembly mit Aggregation; ohne Körper byte-gleich", () => {
+    const a = koerperAnlegen(leererLayer(), [{ x: 10, y: 10 }, { x: 14, y: 10 }, { x: 14, y: 13 }, { x: 10, y: 13 }], 9);
+    const k = kopieren(a.layer, [a.id], { x: 6, y: 0 }, { anzahl: 2 });
+    const g = gruppeBilden(k.layer, [a.id, ...k.neu]);
+    const frei = koerperAnlegen(g.layer, [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }], 3);
+    const massing = { ...frei.layer, bezug: { x: 12, y: 11.5 } };
+    const ifc = exportIFC(model, { ...MIT, massing });
+    assert.equal(zeilen(ifc, "IFCBUILDINGELEMENTPROXY").length, 4);
+    assert.equal(zeilen(ifc, "IFCELEMENTASSEMBLY").length, 1);
+    const asm = zeilen(ifc, "IFCELEMENTASSEMBLY")[0].match(/^(#\d+)=/)[1];
+    const agg = zeilen(ifc, "IFCRELAGGREGATES").find((l) => l.includes(`,${asm},(`));
+    assert.equal((agg.split(",(")[1].match(/#\d+/g) || []).length, 3, `Aggregation: 3 Instanzen — ${agg}`);
+    assert.equal(exportIFC(model, { ...MIT, massing: null }), exportIFC(model, { ...MIT, massing: leererLayer() }));
+    assert.equal(exportIFC(model, { ...MIT, massing }), ifc, "deterministisch (stabile GUIDs)");
+  });
+});
