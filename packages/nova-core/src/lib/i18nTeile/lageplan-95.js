@@ -35,6 +35,9 @@ export const EN = {
   "Rolle des gezeichneten Polygons": "Role of the drawn polygon",
   "Flurstücke (GeoJSON)": "Cadastral parcels (GeoJSON)",
   "Flurstück löschen": "Delete parcel",
-  "Der Import wird erst mit „Entwurf speichern“ dauerhaft (Pflichtfelder: Name + Standort).":
-    "The import is only kept after “Save draft” (required: name + location).",
+  // B-ST3-01: since the 95-01 autosave the old "only after Save draft" hint was wrong.
+  "Wird automatisch gespeichert, sobald Projektname und Standort gesetzt sind.":
+    "Saved automatically once the project name and location are set.",
+  // 101-01
+  "Demo-Höhenpunkte zeigen": "Show demo height points",
 };

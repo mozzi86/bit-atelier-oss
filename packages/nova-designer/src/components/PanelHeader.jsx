@@ -55,9 +55,9 @@ export default function PanelHeader({ reiter, bereichTitel, standOverride, herku
   const stand = STAND_STIL[standOverride || reiter.stand] || STAND_STIL.offen;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 border-b border-slate-200 bg-slate-50/80 text-sm min-h-[40px]">
-      <span className="font-medium text-slate-900">
-        <span className="text-slate-500">{bereichTitel} › </span>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-1 text-xs text-muted-foreground">
+      <span className="font-medium text-foreground">
+        <span className="text-muted-foreground">{bereichTitel} › </span>
         {reiter.label}
       </span>
 
@@ -82,7 +82,7 @@ export default function PanelHeader({ reiter, bereichTitel, standOverride, herku
       <Badge className={`ml-auto font-normal border ${stand.klasse}`} title={stand.titel} data-testid="panel-stand" data-stand={standOverride || reiter.stand}>
         {stand.text}
       </Badge>
-      {herkunft && <span className="w-full text-xs text-slate-500" data-testid="panel-herkunft">{herkunft}</span>}
+      {herkunft && <span className="text-xs text-muted-foreground"><span aria-hidden="true">· </span><span data-testid="panel-herkunft">{herkunft}</span></span>}
     </div>
   );
 }

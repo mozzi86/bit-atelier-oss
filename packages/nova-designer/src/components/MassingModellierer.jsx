@@ -614,13 +614,13 @@ export const ERSTE_SCHRITTE = Object.freeze([
 ]);
 
 /**
- * "Erste Schritte" card next to the toolbar — collapsed once all steps are done.
+ * "Erste Schritte" card next to the toolbar — folded by default (101-01: room to draw); the summary line shows the progress.
  * @param {{m: ReturnType<typeof useModellierer>, t: (s: string) => string}} props
  */
 export function ErsteSchritte({ m, t }) {
   const fertig = ERSTE_SCHRITTE.filter((s) => m.erledigt[s.id]).length;
   return (
-    <details className="rounded-lg border border-border bg-card px-3 py-2 text-xs" open={fertig < ERSTE_SCHRITTE.length} data-testid="mm-erste-schritte" data-fertig={fertig}>
+    <details className="rounded-lg border border-border bg-card px-3 py-2 text-xs" data-testid="mm-erste-schritte" data-fertig={fertig}>
       <summary className="cursor-pointer select-none font-semibold text-foreground">{t("Erste Schritte")} · {fertig}/{ERSTE_SCHRITTE.length}</summary>
       <ol className="mt-2 space-y-1">
         {ERSTE_SCHRITTE.map((s) => (

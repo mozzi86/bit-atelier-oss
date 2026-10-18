@@ -181,8 +181,10 @@ export default function BimModelViewer({
     const onPointerDown = (e) => {
       dragging = true;
       moved = false;
-      // Middle mouse button (1) or Shift+left → pan; otherwise orbit.
-      panning = e.button === 1 || (e.button === 0 && e.shiftKey);
+      // 101-09 (CAD mouse, same as the massing iso): middle = pan, Shift + middle = orbit;
+      // left drag still orbits here (this viewer has no drawing tools on the left button).
+      panning = e.button === 1 && !e.shiftKey;
+      if (e.button === 1) e.preventDefault();
       if (panning) e.preventDefault();
       lastX = e.clientX;
       lastY = e.clientY;
@@ -211,11 +213,11 @@ export default function BimModelViewer({
       dragging = false;
       const wasPanning = panning;
       panning = false;
-      // Middle-button "clicks" (no drag): 3 in quick succession → zoom extents.
+      // Middle-button "clicks" (no drag): 2–3 in quick succession → zoom extents (101-08).
       if (e.button === 1 && !moved) {
         midClicks += 1;
         if (midClickTimer) clearTimeout(midClickTimer);
-        if (midClicks >= 3) {
+        if (midClicks >= 2) {
           midClicks = 0;
           zoomExtent();
         } else {
@@ -278,6 +280,9 @@ export default function BimModelViewer({
 
     const el = renderer.domElement;
     el.addEventListener("pointerdown", onPointerDown);
+    // 101-07: no browser context menu on the 3D surface.
+    const ohneMenue = (/** @type {Event} */ ev) => ev.preventDefault();
+    el.addEventListener("contextmenu", ohneMenue);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
     el.addEventListener("wheel", onWheel, { passive: false });
@@ -313,6 +318,7 @@ export default function BimModelViewer({
       if (midClickTimer) clearTimeout(midClickTimer);
       ro.disconnect();
       el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("contextmenu", ohneMenue);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       el.removeEventListener("wheel", onWheel);
@@ -454,10 +460,9 @@ export default function BimModelViewer({
         style={{ cursor: addMode || commentMode || elementMode ? "crosshair" : "grab" }}
       />
       <div className="absolute bottom-2 left-2 rounded-md bg-slate-900/70 px-2 py-1 text-[10px] leading-tight text-slate-100 pointer-events-none">
-        <div>Drehen: Linksklick ziehen</div>
-        <div>Verschieben: Shift+Linksklick oder mittlere Maustaste</div>
-        <div>Zoom: Mausrad</div>
-        <div>Alles einpassen: 3× mittlere Maustaste</div>
+        <div>Verschieben: Mausrad gedrückt</div>
+        <div>Drehen: Umschalt + Mausrad gedrückt (oder links ziehen)</div>
+        <div>Zoom: Mausrad · Alles einpassen: 2× aufs Rad klicken</div>
       </div>
     </div>
   );

@@ -19,11 +19,9 @@ import { istWerkstattZone } from "@designer/lib/tesselierung";
 // after a reload — mounted here so the Massing gets rooms even when the
 // workshop tab was never opened.
 import { useWerkstattRehydrate } from "@designer/lib/useWerkstattRehydrate";
-import { Card, CardContent } from "@core/components/ui/card";
 import { Button } from "@core/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@core/components/ui/tabs";
 import { MapPin, Building, Calculator, Droplets, CheckSquare, Sofa, Boxes, Sparkles, Sun, Plug, CalendarRange, LifeBuoy, ClipboardList, ShieldCheck, Mountain, Frame, Trees, Thermometer, Flame, Accessibility, ClipboardCheck, HandCoins, LayoutTemplate, Volume2, ThermometerSnowflake, Layers, ThermometerSun, Puzzle } from "lucide-react";
-import { motion } from "framer-motion";
 
 import { useProject } from "@core/lib/ProjectContext";
 import { bauartVon, herkunftZeile } from "@core/lib/bauart";
@@ -480,31 +478,8 @@ export default function ComplexDesigner() {
 
   return (
     <div className={seitenWurzel}>
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-2">
         
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4"
-        >
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">
-              Komplex-Designer
-            </h1>
-            <p className="text-slate-600 mt-1">
-              Städtebauliches Massing-Studio mit Kennzahlen, Verschattung und Standortanalyse
-              {project && <> · <span className="font-medium text-slate-700">{project.name}</span></>}
-            </p>
-          </div>
-          <Button
-            onClick={saveComplex}
-            disabled={isSaving || !complexData.name || !complexData.location}
-            className="bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg"
-          >
-            {isSaving ? "Speichern…" : "Entwurf speichern"}
-          </Button>
-        </motion.div>
-
         {/* Testlauf 26.08. (Referenzprojekt): Der Designer startet mit Werkzeug-Voreinstellungen
             (Zeichenfeld 3.500 m², Massing-Rechteck, WE-Schätzung …). Ohne erfassten
             Entwurf sahen diese Defaults wie ein Projektstand aus. Ein Banner an der
@@ -537,13 +512,18 @@ export default function ComplexDesigner() {
         )}
         <SyncHinweis />
 
-        <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-0">
+        {/* 101-01 (user 18.10.2026, "Stufenpyramide"): one flat header row — title, the five areas,
+            the tabs of the active area and the save state — instead of title block + card + two tab rows. */}
+        <div>
+          <div>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <div className="border-b border-slate-200 p-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border pb-2">
+                {/* h1 = menu name exactly (navigation test); the project name stands next to it. */}
+                <h1 className="text-base font-semibold text-foreground whitespace-nowrap">Komplex-Designer</h1>
+                {project && <span className="-ml-2 text-base text-muted-foreground whitespace-nowrap">· {project.name}</span>}
                 {/* Ebene 1: die fünf Arbeitsbereiche (72-02, Befund N-09). role=group, not tablist:
                     the buttons switch area via aria-current, they are no ARIA tabs (72-03). */}
-                <div className="flex flex-wrap gap-1 mb-2" role="group" aria-label="Arbeitsbereiche">
+                <div className="flex flex-wrap gap-1" role="group" aria-label="Arbeitsbereiche">
                   {DESIGNER_BEREICHE.map((b) => (
                     <button
                       key={b.id}
@@ -552,16 +532,17 @@ export default function ComplexDesigner() {
                       aria-current={bereich === b.id ? "true" : undefined}
                       className={
                         bereich === b.id
-                          ? "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 bg-emerald-600 text-white shadow-sm"
-                          : "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          ? "px-2.5 py-1 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 bg-emerald-600 text-white"
+                          : "px-2.5 py-1 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 text-muted-foreground hover:bg-muted"
                       }
                     >
                       {b.titel}
                     </button>
                   ))}
                 </div>
+                <span className="hidden lg:block h-5 w-px bg-border" aria-hidden="true" />
                 {/* Ebene 2: die Reiter des aktiven Bereichs. */}
-                <TabsList className="flex flex-wrap h-auto gap-1 bg-slate-100">
+                <TabsList className="flex flex-wrap h-auto gap-0.5 bg-muted p-0.5">
                   {reiterImBereich(bereich).map((r) => {
                     const Icon = r.icon;
                     return (
@@ -570,6 +551,16 @@ export default function ComplexDesigner() {
                       </TabsTrigger>
                     );
                   })}                </TabsList>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={saveComplex}
+                  disabled={isSaving || !complexData.name || !complexData.location}
+                  className="ml-auto"
+                  title="Speichert sonst automatisch 1,5 s nach jeder Änderung (sobald Name und Standort gesetzt sind)"
+                >
+                  {isSaving ? "Speichern…" : "Entwurf speichern"}
+                </Button>
               </div>
 
               {/* 72-02: eine Zeile statt Textwand — braucht / liefert / Stand. */}
@@ -587,11 +578,11 @@ export default function ComplexDesigner() {
                 );
               })()}
 
-              <TabsContent value="bauaufnahme" className="p-6">
+              <TabsContent value="bauaufnahme" className="px-0 py-2">
                 <BauaufnahmePanel />
               </TabsContent>
 
-              <TabsContent value="studio" className="p-6">
+              <TabsContent value="studio" className="px-0 py-2">
                 <MassingStudio
                   lat={project?.location?.lat || complexData.location?.lat || 50.1}
                   projectName={project?.name || complexData.name}
@@ -624,15 +615,15 @@ export default function ComplexDesigner() {
                 />
               </TabsContent>
 
-              <TabsContent value="program" className="p-6">
+              <TabsContent value="program" className="px-0 py-2">
                 <SpaceProgram siteArea={siteAreaM2} />
               </TabsContent>
 
-              <TabsContent value="compliance" className="p-6">
+              <TabsContent value="compliance" className="px-0 py-2">
                 <UnitMixCompliance siteArea={siteAreaM2} parking={complexData.parking} />
               </TabsContent>
 
-              <TabsContent value="site" className="p-6">
+              <TabsContent value="site" className="px-0 py-2">
                 <LocationSelector 
                   complexData={complexData}
                   projekt={project}
@@ -641,7 +632,7 @@ export default function ComplexDesigner() {
                 />
               </TabsContent>
 
-              <TabsContent value="massing" className="p-6">
+              <TabsContent value="massing" className="px-0 py-2">
                 <SiteDesigner 
                   complexData={complexData}
                   projektTyp={project?.type ?? null}
@@ -653,15 +644,15 @@ export default function ComplexDesigner() {
                 />
               </TabsContent>
 
-              <TabsContent value="terrain" className="p-6">
+              <TabsContent value="terrain" className="px-0 py-2">
                 <TerrainView3D />
               </TabsContent>
 
-              <TabsContent value="bim" className="p-6">
+              <TabsContent value="bim" className="px-0 py-2">
                 <BitBimStudio complexData={complexData} />
               </TabsContent>
 
-              <TabsContent value="buildings" className="p-6">
+              <TabsContent value="buildings" className="px-0 py-2">
                 <BuildingConfig 
                   complexData={complexData}
                   onBuildingsChange={(buildings) => updateComplexData('buildings', buildings)}
@@ -670,55 +661,55 @@ export default function ComplexDesigner() {
                 />
               </TabsContent>
 
-              <TabsContent value="statics" className="p-6">
+              <TabsContent value="statics" className="px-0 py-2">
                 <StaticsPlanner />
               </TabsContent>
 
-              <TabsContent value="landscape" className="p-6">
+              <TabsContent value="landscape" className="px-0 py-2">
                 <LandscapePlanner complexData={complexData} />
               </TabsContent>
 
-              <TabsContent value="haustechnik" className="p-6">
+              <TabsContent value="haustechnik" className="px-0 py-2">
                 <HaustechnikPlanner complexData={complexData} />
               </TabsContent>
 
-              <TabsContent value="brandschutz" className="p-6">
+              <TabsContent value="brandschutz" className="px-0 py-2">
                 <BrandschutzPlanner />
               </TabsContent>
 
-              <TabsContent value="asr" className="p-6">
+              <TabsContent value="asr" className="px-0 py-2">
                 <AsrRaumdatenblatt complexData={complexData} />
               </TabsContent>
 
-              <TabsContent value="barrierefreiheit" className="p-6">
+              <TabsContent value="barrierefreiheit" className="px-0 py-2">
                 <BarrierefreiheitPlanner />
               </TabsContent>
 
-              <TabsContent value="acoustics" className="p-6">
+              <TabsContent value="acoustics" className="px-0 py-2">
                 <SchallschutzPlanner />
               </TabsContent>
 
-              <TabsContent value="waermebruecken" className="p-6">
+              <TabsContent value="waermebruecken" className="px-0 py-2">
                 <WaermebrueckenPlanner />
               </TabsContent>
 
-              <TabsContent value="bauphysik" className="p-6">
+              <TabsContent value="bauphysik" className="px-0 py-2">
                 <BauphysikStudio />
               </TabsContent>
 
-              <TabsContent value="raumklima" className="p-6">
+              <TabsContent value="raumklima" className="px-0 py-2">
                 <RaumklimaPlanner />
               </TabsContent>
 
-              <TabsContent value="funding" className="p-6">
+              <TabsContent value="funding" className="px-0 py-2">
                 <FoerderPlanner />
               </TabsContent>
 
-              <TabsContent value="apartments" className="p-6">
+              <TabsContent value="apartments" className="px-0 py-2">
                 <ApartmentPlanner />
               </TabsContent>
 
-              <TabsContent value="werkstatt" className="p-6">
+              <TabsContent value="werkstatt" className="px-0 py-2">
                 {/* 75-09 Task 6: furniture wiring — the focus writes ONLY through
                     the callback into complexData.moeblierung (same path as
                     InteriorDesigner below, never a store write). speicherbar
@@ -732,7 +723,7 @@ export default function ComplexDesigner() {
                 />
               </TabsContent>
 
-              <TabsContent value="interiors" className="p-6">
+              <TabsContent value="interiors" className="px-0 py-2">
                 <InteriorDesigner 
                   complexData={complexData}
                   onInteriorDesignsChange={(designs) => updateComplexData('interior_designs', designs)}
@@ -741,15 +732,15 @@ export default function ComplexDesigner() {
                 />
               </TabsContent>
 
-              <TabsContent value="analysis" className="p-6">
+              <TabsContent value="analysis" className="px-0 py-2">
                 <ClimaAnalysis complexData={complexData} />
               </TabsContent>
               
-              <TabsContent value="generative" className="p-6">
+              <TabsContent value="generative" className="px-0 py-2">
                 <GenerativeLayout complexData={complexData} siteArea={siteAreaM2} />
               </TabsContent>
 
-              <TabsContent value="energy" className="p-6">
+              <TabsContent value="energy" className="px-0 py-2">
                 <EnergyPlanner 
                   complexData={complexData}
                   onEnergySystemsChange={(systems) => updateComplexData('energy_systems', systems)}
@@ -757,35 +748,35 @@ export default function ComplexDesigner() {
                 <div className="mt-6"><NachhaltigkeitKarte complexData={complexData} /></div>
               </TabsContent>
 
-              <TabsContent value="costs" className="p-6">
+              <TabsContent value="costs" className="px-0 py-2">
                 <CostCalculator 
                   complexData={complexData}
                   onCostUpdate={(costs) => updateComplexData('cost_estimate', costs)}
                 />
               </TabsContent>
 
-              <TabsContent value="integrations" className="p-6">
+              <TabsContent value="integrations" className="px-0 py-2">
                 <IntegrationsPanel />
               </TabsContent>
               
-              <TabsContent value="planner" className="p-6">
+              <TabsContent value="planner" className="px-0 py-2">
                 <ProjectPlanner 
                   selectedProject={complexData}
                 />
               </TabsContent>
               
-              <TabsContent value="flood_risk" className="p-6">
+              <TabsContent value="flood_risk" className="px-0 py-2">
                 <FloodRiskAnalyzer 
                   selectedProject={complexData}
                 />
               </TabsContent>
               
-              <TabsContent value="support" className="p-6">
+              <TabsContent value="support" className="px-0 py-2">
                 <SupportPanel />
               </TabsContent>
             </Tabs>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

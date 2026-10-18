@@ -14,6 +14,7 @@
 // (BimPlan2D-eigene Labels 75-11, ggf. Massing) ist ein eigener Plan.
 
 import { useEffect, useRef, useState } from "react";
+import { mittelklickZaehler } from "./mittelklick.js";
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -172,7 +173,7 @@ export function zoomedToBBox(box, W, H, padU, minZoom, maxZoom) {
 /**
  * Viewport-Hook für SVG-Pläne.
  * @param {{svgRef: any, W: number, H: number, minZoom?: number, maxZoom?: number,
- *          wheelFactor?: number, attachKey?: any, fuellen?: boolean}} q
+ *          wheelFactor?: number, attachKey?: any, fuellen?: boolean, einpassen?: (() => void)|null}} q
  *   svgRef: ref auf das <svg>-Element (viewBox kommt aus diesem Hook);
  *   W/H: SVG-Einheiten-Größe des Inhalts (darf sich dynamisch ändern —
  *               BimPlan2Ds SCALE hängt an der Modell-BBox);
@@ -196,8 +197,10 @@ export function zoomedToBBox(box, W, H, padU, minZoom, maxZoom) {
  * mit `zentrum` (viewBox-Einheiten) in der Mitte — für den festen Maßstab.
  * Pan-Vertrag (Mitteltaste): down → beginPan(e); move → if (panMove(e)) return;
  * up/leave → endPan().
+ * einpassen (101-01, opt.): called on two/three clicks of the mouse wheel (zoom extents);
+ *   without it the whole sheet is shown (zoom 1).
  */
-export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, wheelFactor = 1.15, attachKey, fuellen = false }) {
+export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, wheelFactor = 1.15, attachKey, fuellen = false, einpassen = null }) {
   const [viewT, setViewT] = useState({ zoom: 1, x: 0, y: 0 });
   // Rendered <svg> width in CSS px (75-01): needed to express handle sizes in
   // screen pixels — the SVG is `w-full`, so W ≠ rendered width.
@@ -244,6 +247,18 @@ export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, whe
       setViewT((v) => zoomedAt(v, loc, f, d.minZoom, d.maxZoom));
     };
     svg.addEventListener("wheel", onWheel, { passive: false });
+    // 101-01: two/three clicks on the wheel = zoom extents (the caller's `einpassen`, else the whole sheet).
+    const mehrfach = mittelklickZaehler();
+    const onMitte = (e) => {
+      if (!mehrfach(e)) return;
+      e.preventDefault();
+      const f = dims.current.einpassen;
+      if (typeof f === "function") f(); else setViewT({ zoom: 1, x: 0, y: 0 });
+    };
+    svg.addEventListener("mousedown", onMitte);
+    // 101-07: a drawing surface has no browser context menu ("Bild speichern unter …").
+    const ohneMenue = (/** @type {Event} */ e) => e.preventDefault();
+    svg.addEventListener("contextmenu", ohneMenue);
     const rein = () => { ueberPlanRef.current = true; };
     const raus = () => { ueberPlanRef.current = false; };
     const taste = (e) => {
@@ -274,6 +289,8 @@ export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, whe
     }
     return () => {
       svg.removeEventListener("wheel", onWheel);
+      svg.removeEventListener("mousedown", onMitte);
+      svg.removeEventListener("contextmenu", ohneMenue);
       svg.removeEventListener("pointerenter", rein);
       svg.removeEventListener("pointerleave", raus);
       window.removeEventListener("keydown", taste);
@@ -331,6 +348,7 @@ export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, whe
     ? fuellSicht(viewT, W, H, renderedW, renderedH)
     : { x: viewT.x, y: viewT.y, w: W / viewT.zoom, h: H / viewT.zoom };
   dims.current.fuellen = fuellen;
+  dims.current.einpassen = einpassen;
   dims.current.sichtW = sicht.w;
   dims.current.sichtH = sicht.h;
   dims.current.zoom = viewT.zoom;

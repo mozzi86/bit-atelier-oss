@@ -4,6 +4,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { Camera } from "lucide-react";
 import { useI18n } from "@core/lib/i18n";
 import { lichtrichtung } from "@designer/lib/sonnenstand";
+import { mittelklickZaehler } from "@core/lib/mittelklick";
 import {
   ISO_PITCH_GRAD, ISO_START_YAW, ISO_ZOOMSTUFEN, KAMERA_ABSTAND_M, RAD_SCHWELLE,
   RAND_VERWEIL_MS, PAN_PX_JE_S,
@@ -12,6 +13,9 @@ import {
   zoomEinrasten, naechsteZoomstufe, yawDrehen, yawInterpol,
   tweenFortschritt, tweenDauer, nordpfeilWinkel, randScrollRichtung,
 } from "@designer/lib/isoKamera";
+
+/** 101-09: horizontal pixels of Shift + middle drag per 90° orbit detent. [ASSUMED] */
+const ORBIT_PX = 80;
 
 // MassingView3D — iso window of the massing studio (Phase 75-08, MS-08).
 // True 3D of the free-polygon body incl. setback strips on the ground, drawn
@@ -187,7 +191,7 @@ export default function MassingView3D({
   // the single active tween and the wheel accumulator.
   /** Input-layer state. `tween` is null between tweens — typed as any so the
    *  effect may fill it without a cast at every use. */
-  /** @type {React.MutableRefObject<{panKeys: Set<string>, drag: {on: boolean, x: number, y: number, id: number|null}, edge: {dx: number, dy: number, seit: number}, tween: any, radAccum: number, letzteZeit: number, loopGeplant?: boolean, loopRaf?: number, pp: {id: string, y: number, strg: boolean}|null}>} */
+  /** @type {React.MutableRefObject<{panKeys: Set<string>, drag: {on: boolean, x: number, y: number, id: number|null, orbit?: boolean, acc?: number}, edge: {dx: number, dy: number, seit: number}, tween: any, radAccum: number, letzteZeit: number, loopGeplant?: boolean, loopRaf?: number, pp: {id: string, y: number, strg: boolean}|null}>} */
   const eingabe = useRef(({ panKeys: new Set(), drag: { on: false, x: 0, y: 0, id: null }, edge: { dx: 0, dy: 0, seit: 0 }, tween: null, radAccum: 0, letzteZeit: 0, pp: null }));
   // Camera state (isoKamera convention): yaw/pitch degrees, ziel = ground
   // target in scene metres, massstab = ladder denominator (fractional during
@@ -584,6 +588,7 @@ export default function MassingView3D({
       }
     };
 
+    const mittelMehrfach = mittelklickZaehler();
     const onPointerDown = (ev) => {
       if (ev.button !== 0 && ev.button !== 1) return;
       // 98-03: with the push/pull tool, dragging a modelled body changes its height (Ctrl = stack).
@@ -601,12 +606,15 @@ export default function MassingView3D({
           return;
         }
       }
-      // Middle button: preventDefault against the browser autoscroll glyph
-      // (same pattern as the 2D plan, MassingStudio.jsx middle-drag).
-      if (ev.button === 1) ev.preventDefault();
+      // 101-09 (user 18.10.2026): CAD mouse — the LEFT button belongs to the tools (push/pull, select),
+      // it never pans. Middle button = pan, Shift + middle = orbit (90° detents like Q/E),
+      // 2–3 clicks on the wheel = start view fitted (zoom extents).
+      if (ev.button === 0) { wrapperRef.current?.focus({ preventScroll: true }); return; }
+      ev.preventDefault(); // middle button: no browser autoscroll glyph
       wrapperRef.current?.focus({ preventScroll: true });
+      if (mittelMehrfach(ev)) { three.current.starteHome?.(); return; }
       const e = eingabe.current;
-      e.drag = { on: true, x: ev.clientX, y: ev.clientY, id: ev.pointerId };
+      e.drag = { on: true, x: ev.clientX, y: ev.clientY, id: ev.pointerId, orbit: ev.shiftKey, acc: 0 };
       try { el.setPointerCapture(ev.pointerId); } catch { /* capture unsupported */ }
       el.style.cursor = "grabbing";
     };
@@ -620,6 +628,16 @@ export default function MassingView3D({
         const mdy = ev.clientY - e.drag.y;
         e.drag.x = ev.clientX;
         e.drag.y = ev.clientY;
+        if (e.drag.orbit) {
+          // Shift + middle drag: one 90° detent per ORBIT_PX of horizontal movement [ASSUMED 80 px].
+          e.drag.acc += mdx;
+          while (Math.abs(e.drag.acc) >= ORBIT_PX) {
+            const r = Math.sign(e.drag.acc);
+            three.current.starteYaw?.(r);
+            e.drag.acc -= r * ORBIT_PX;
+          }
+          return;
+        }
         if (mdx || mdy) {
           k.ziel = verschiebeZiel({ yaw: k.yaw, pitch: k.pitch, ziel: k.ziel, pxJeM: k.pxJeM }, -mdx, -mdy);
           anwenden();
@@ -699,6 +717,9 @@ export default function MassingView3D({
     el.addEventListener("pointercancel", onPointerUp);
     el.addEventListener("pointerleave", onPointerLeave);
     el.addEventListener("wheel", onWheel, { passive: false });
+    // 101-07: no browser context menu ("Bild speichern unter …") on the drawing surface.
+    const ohneMenue = (/** @type {Event} */ ev) => ev.preventDefault();
+    el.addEventListener("contextmenu", ohneMenue);
 
     // ResizeObserver instead of a window resize listener: the frame changes
     // size when the view mode switches (split!) without the window resizing.
@@ -743,6 +764,7 @@ export default function MassingView3D({
       el.removeEventListener("webglcontextlost", onLost);
       el.removeEventListener("webglcontextrestored", onRestored);
       el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("contextmenu", ohneMenue);
       el.removeEventListener("pointermove", onPointerMove);
       el.removeEventListener("pointerup", onPointerUp);
       el.removeEventListener("pointercancel", onPointerUp);

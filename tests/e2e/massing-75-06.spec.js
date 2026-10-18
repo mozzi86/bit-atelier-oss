@@ -117,8 +117,8 @@ test.describe("75-06 — Flurstueck, Baufeld, Baukoerper (MS-06)", () => {
       await expect(zeilen.first()).toContainText("Nürnberg"); // Gemarkung aus der Fixture
       // Saubere Datei -> keine Warnbox.
       await expect(page.getByTestId("sd-geojson-warnung")).toHaveCount(0);
-      // Ehrlichkeits-Satz: Import ist erst mit "Entwurf speichern" dauerhaft.
-      await expect(page.getByTestId("sd-geojson-block")).toContainText("Entwurf speichern");
+      // Ehrlichkeits-Satz: seit dem Autosave (95-01, B-ST3-01) wird automatisch gespeichert.
+      await expect(page.getByTestId("sd-geojson-block")).toContainText("automatisch gespeichert");
       // Speichern (Pflichtfelder Name + Standort sind gesetzt).
       await page.getByRole("button", { name: /Entwurf speichern/ }).click();
       await page.waitForTimeout(800);

@@ -10,6 +10,24 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.7.1] - 2026-10-18
+
+### Geändert
+
+- **Mehr Platz zum Arbeiten:** Seiten nutzen auf breiten Bildschirmen die Breite (bis 1.920 px, Zeichenseiten ganz), die Seitentitel sind kompakter.
+- **Komplex-Designer aufgeräumt:** eine schmale Kopfzeile mit Phase 1–5, den Schritten der Phase und „Entwurf speichern“ statt Titelblock und mehrfach geschachtelter Kästen; die Baufeld-Planung zeigt die Karte in Fensterhöhe, Kennzahlen und Prüfung stehen in einer schmalen Spalte, Konflikte sind zusammengefasst.
+- **3D wie in CAD-Programmen:** die linke Maustaste gehört den Werkzeugen (Körper anklicken, Push/Pull ziehen); Mausrad gedrückt verschiebt, Umschalt + Mausrad gedrückt dreht.
+- Die erzeugten Demo-Höhenpunkte auf der Karte sind ausgeblendet (per Schalter einblendbar); „Erste Schritte“ im Massing-Studio startet eingeklappt.
+
+### Neu
+
+- **Alles einpassen:** zwei- oder dreimal auf das Mausrad klicken zeigt den ganzen Plan bzw. das Grundstück — in allen 2D-Plänen, auf der Karte und in 3D.
+
+### Behoben
+
+- Rechtsklick auf Plänen, Karte und 3D öffnete das Browser-Menü („Bild speichern unter …“).
+- Der Hinweis bei den Flurstücken sagte noch „erst mit ‚Entwurf speichern‘ dauerhaft“, obwohl automatisch gespeichert wird.
+
 ## [1.7.0] - 2026-10-17
 
 ### Neu

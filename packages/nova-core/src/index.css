@@ -264,4 +264,9 @@
 /* 75-16: drawing pages (navigation.js `breite: 'voll'` → <main data-breite>)
  * lift the 1280 px page cap. One rule for every drawing page instead of a
  * per-page fix; 2400 px only keeps lines readable on ultra-wide monitors. */
-#hauptinhalt[data-breite="voll"] .max-w-7xl { max-width: 2400px; }
+/* 101-01 (user 18.10.2026: "überall Platz frei"): every page may use up to 1920 px (was 1280 px,
+ * wide screens showed large empty margins); drawing pages ("voll") use the full width. Page titles
+ * written as h1.text-3xl get one compact size here — one rule instead of 27 page edits. */
+#hauptinhalt .max-w-7xl { max-width: 1920px; }
+#hauptinhalt h1.text-3xl { font-size: 1.5rem; line-height: 2rem; }
+#hauptinhalt[data-breite="voll"] .max-w-7xl { max-width: none; }

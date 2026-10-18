@@ -954,8 +954,8 @@ export default function MassingStudio({
     <div className="grid lg:grid-cols-[minmax(0,1fr)_17.5rem] 2xl:grid-cols-[minmax(0,1fr)_20rem] gap-4">
       {/* Plan + sun */}
       <div className="min-w-0 space-y-4">
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="border-0 shadow-none bg-transparent">
+          <CardHeader className="p-0 pb-2">
             <CardTitle className="flex flex-wrap items-center gap-2 text-base">
               <Maximize2 className="w-4 h-4" /> {t("Lageplan & Baukörper")}
               {viewMode !== "3d" && (
@@ -1093,7 +1093,7 @@ export default function MassingStudio({
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {viewMode === "3d" ? (
               /* Großer 3D-Viewport — gleicher Polygon-State wie der 2D-Plan */
               <div className="space-y-1">

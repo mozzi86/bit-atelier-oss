@@ -8,6 +8,7 @@ import { polygonAreaM2, centroid, pxAreaToM2, pxToM, mToPx, pointInPolygon, mete
 // 95-04…06: blocks as objects in metres — selection, move/copy/rotate, snapping, checks.
 import { alsBlock, ecken } from "@core/lib/massing/bloecke";
 import { useBlockBearbeitung } from "@designer/lib/useBlockBearbeitung";
+import { mittelklickZaehler } from "@core/lib/mittelklick";
 import { useI18n } from "@core/lib/i18n";
 import { baukoerperDefaults } from "@designer/lib/siteParcel";
 // 75-06 Task 2 (D-P75-04): GeoJSON parcel import — pure parse, no dependency.
@@ -63,6 +64,7 @@ function LageplanKarte({
   onVertexCommit,
   bb = null,
   mSite = 1.25,
+  zeigeHoehen = false,
 }) {
   // 95-02: metres per canvas unit of THIS parcel (generic parcels have their own scale).
   const mpp = Number(parcel?.m_per_px) > 0 ? Number(parcel.m_per_px) : undefined;
@@ -112,8 +114,9 @@ function LageplanKarte({
 
   useEffect(() => {
     const map = getMap();
-    map?.getSource("sd-elev")?.setData(elevationToGeoJson(elevation, loc.lat, loc.lng, mpp));
-  }, [mapReady, elevation, loc.lat, loc.lng, mpp]);
+    // 101-01: the synthetic demo heights are hidden unless switched on (user 18.10.: "bunte Pünktchen").
+    map?.getSource("sd-elev")?.setData(elevationToGeoJson(zeigeHoehen ? elevation : [], loc.lat, loc.lng, mpp));
+  }, [mapReady, elevation, loc.lat, loc.lng, mpp, zeigeHoehen]);
 
   useEffect(() => {
     const map = getMap();
@@ -266,6 +269,25 @@ function LageplanKarte({
     return () => map.off("click", onClick);
   }, [mapReady, mode, draftGeo, insideParcel, onAddBuilding, onCloseDraft, setDraftGeo, loc.lat, loc.lng, mpp]);
 
+  // 101-01: two/three clicks on the mouse wheel = zoom extents (whole parcel), CAD convention.
+  useEffect(() => {
+    const map = getMap();
+    if (!map || !mapReady) return undefined;
+    const mehrfach = mittelklickZaehler();
+    const el = map.getCanvasContainer();
+    const onMitte = (/** @type {MouseEvent} */ e) => {
+      if (!mehrfach(e)) return;
+      e.preventDefault();
+      const ring = footprintToGeoJson(parcel.points, loc.lat, loc.lng, mpp).features[0]?.geometry?.coordinates?.[0];
+      const bounds = ringBounds(ring);
+      if (bounds) map.fitBounds(bounds, { padding: 60, duration: 300, maxZoom: 19 });
+    };
+    el.addEventListener("mousedown", onMitte);
+    const ohneMenue = (/** @type {Event} */ e) => e.preventDefault(); // 101-07: no browser menu
+    el.addEventListener("contextmenu", ohneMenue);
+    return () => { el.removeEventListener("mousedown", onMitte); el.removeEventListener("contextmenu", ohneMenue); };
+  }, [mapReady, parcel, loc.lat, loc.lng, mpp]);
+
   // Der Lageplan ist eine Zeichenfläche: Doppelklick-Zoom bleibt in BEIDEN
   // Modi aus (Review-Fix: zoomte sonst beim Baukörper-Setzen; Zoomen geht
   // weiter per Scrollrad und NavigationControl).
@@ -407,7 +429,8 @@ function LageplanKarte({
       // a hidden Radix tab the width is 0 and the ratio collapsed the frame to
       // 0 px, leaving the map a white box. [ASSUMED] 560 px map height, 420 px
       // floor (review sec.3 A-1: "feste Höhe").
-      style={{ height: 560, minHeight: 420 }}
+      // 101-01: fills the window below the header and toolbar (was a fixed 560 px).
+      style={{ height: "calc(100dvh - 190px)", minHeight: 460 }}
     >
       {/* 72-01 A-1 rework: the map container gets h-full w-full, NOT
           "absolute inset-0" - maplibre-gl.css sets position:relative on
@@ -465,6 +488,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     || complexData?.context_buildings_source === "synthetisch";
 
   const [mode, setMode] = useState("building"); // building | polygon | auswahl (95-04)
+  const [zeigeHoehen, setZeigeHoehen] = useState(false); // 101-01: demo heights hidden by default
   const [draft, setDraft] = useState([]);        // SVG-Fallback: {x,y}-Punkte
   const [draftGeo, setDraftGeo] = useState([]);  // Karten-Modus: [lng,lat]-Punkte
   // 75-06 Task 3 (MSB-3): role of the drawn polygon — "footprint" (default,
@@ -696,9 +720,9 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   const bboxHm = Math.round(pxToM(maxY - minY, parcel));
 
   return (
-    <div className="grid lg:grid-cols-[3fr_1fr] gap-6">
-      <Card>
-        <CardHeader className="pb-2">
+    <div className="grid xl:grid-cols-[minmax(0,1fr)_300px] gap-3">
+      <Card className="border-0 shadow-none bg-transparent">
+        <CardHeader className="p-0 pb-1.5 space-y-0">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <Building className="w-4 h-4" /> Lageplan
@@ -758,7 +782,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
             )}
           </p>
         </CardHeader>
-        <CardContent ref={planRef} data-testid="sd-plan" data-auswahl={bb.auswahl.join(",")}>
+        <CardContent className="p-0" ref={planRef} data-testid="sd-plan" data-auswahl={bb.auswahl.join(",")}>
           {hatKarte ? (
             <LageplanKarte
               loc={loc}
@@ -776,6 +800,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               onVertexCommit={commitVertex}
               bb={bb}
               mSite={mSite}
+              zeigeHoehen={zeigeHoehen}
             />
           ) : (
           <div className="relative w-full rounded-lg border overflow-hidden" style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }}>
@@ -793,7 +818,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               points={pts.map((p) => `${p.x},${p.y}`).join(" ")}
               fill="rgba(16,185,129,0.06)" stroke="#10b981" strokeWidth="3" strokeDasharray="8 6"
             />
-            {elevation.map((e) => (
+            {zeigeHoehen && elevation.map((e) => (
               <circle key={e.id} cx={e.x} cy={e.y} r="6" fill={elevColorSvg(e.elevation)} opacity="0.8">
                 <title>{`${e.elevation} m`}</title>
               </circle>
@@ -878,8 +903,8 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
         </CardContent>
       </Card>
 
-      <div className="space-y-4">
-        <Card>
+      <div className="space-y-3 text-sm">
+        <Card className="shadow-none">
           <CardContent className="p-4 space-y-2">
             <Badge className="bg-emerald-100 text-emerald-800">
               {parcelIstGezeichnet
@@ -896,7 +921,12 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
             <div className="text-sm text-slate-600">Footprint-Polygone: <b>{areas.length}</b></div>
             <div className="text-sm text-slate-600">Polygon-Fläche gesamt: <b>{polyTotalM2.toLocaleString("de-DE")} m²</b></div>
             <div className="text-sm text-slate-600">≈ BGF (Baukörper): <b>{Math.round(gfaApprox).toLocaleString("de-DE")} m²</b></div>
-            <div className="text-xs text-slate-400">Topografie: {elevation.length} Höhenpunkte</div>
+            {elevation.length > 0 && (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input type="checkbox" checked={zeigeHoehen} onChange={(e) => setZeigeHoehen(e.target.checked)} data-testid="sd-hoehen" />
+                {t("Demo-Höhenpunkte zeigen")} ({elevation.length})
+              </label>
+            )}
             <BlockPruefung pruefung={bb.pruefung} nummer={nummer} t={t} />
             {/* KD-06: keine Nachweis-Optik für Demo-Daten. */}
             {isSynthetic && (
@@ -990,7 +1020,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
             </div>
           )}
           <p className="text-[11px] text-slate-400">
-            {t("Der Import wird erst mit „Entwurf speichern“ dauerhaft (Pflichtfelder: Name + Standort).")}
+            {t("Wird automatisch gespeichert, sobald Projektname und Standort gesetzt sind.")}
           </p>
         </div>
 
@@ -1050,9 +1080,12 @@ function BlockPruefung({ pruefung, nummer, t }) {
         <div className="text-warnung">{t("Ohne Grundstück nicht prüfbar.")}</div>
       )}
       {meldungen.length > 0 ? (
-        <ul className="space-y-0.5 text-fehler" data-testid="sd-konflikte">
-          {meldungen.map((m) => <li key={m}>{m}</li>)}
-        </ul>
+        <details open={meldungen.length <= 3} className="text-fehler">
+          <summary className="cursor-pointer font-medium">{meldungen.length} {t("Konflikte")}</summary>
+          <ul className="mt-1 space-y-0.5" data-testid="sd-konflikte">
+            {meldungen.map((m) => <li key={m}>{m}</li>)}
+          </ul>
+        </details>
       ) : pruefung.pruefbar && (
         <div className="text-muted-foreground">{t("Keine Konflikte gefunden — Abstandsflächen 0,4 H, mind. 3 m, Geschoss 3,0 m [Annahme].")}</div>
       )}
