@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/ca
 import { Sun, Building2, Maximize2, Ruler, Layers, Car, Home, Info, Users } from "lucide-react";
 import BimModelViewer from "@ifc/components/BimModelViewer";
 import MassingView3D from "@designer/components/MassingView3D";
-import { useModellierer, ModellWerkzeugleiste, ModellEbene, ErsteSchritte } from "@designer/components/MassingModellierer";
+import { useModellierer, ModellWerkzeugleiste, ModellEbene, ErsteSchritte, ModellBefehlszeile, modellKontext } from "@designer/components/MassingModellierer";
+import { useKontextmenue, KontextmenueAnzeige } from "@core/components/Kontextmenue";
 import KnotenEditor from "@designer/components/KnotenEditor";
 import { useBuildingProgram, rectFootprint, polygonAreaM } from "@core/lib/useBuildingProgram";
 import { useProject } from "@core/lib/ProjectContext";
@@ -385,6 +386,7 @@ export default function MassingStudio({
   const clampPt = (p) => ({ x: +Math.max(0, Math.min(site.w, p.x)).toFixed(1), y: +Math.max(0, Math.min(site.d, p.y)).toFixed(1) });
   // 98-02: SketchUp-like modelling tools (line → face, push/pull, move/copy with *n and /n, groups).
   const bezugMitte = useMemo(() => { const b = polyBBox(poly); return { x: +((b.minX + b.maxX) / 2).toFixed(2), y: +((b.minY + b.maxY) / 2).toFixed(2) }; }, [poly]);
+  const kontext = useKontextmenue(); // 101-07: own right-click menu on the plan
   const modell = useModellierer({ projectId: project?.id || null, geschossHoehe: floorH, flaeche: { w: site.w, d: site.d }, bezug: bezugMitte });
   /** Pointer event → site metres (same transform as the axis tool), not clamped: bodies may sit anywhere. */
   const zuSite = (e) => {
@@ -951,9 +953,10 @@ export default function MassingStudio({
   return (
     // 75-16: plan column flexible, key-figure column fixed 280/320 px
     // (was 2/3 : 1/3 — the figures took a third of every wide screen).
-    <div className="grid lg:grid-cols-[minmax(0,1fr)_17.5rem] 2xl:grid-cols-[minmax(0,1fr)_20rem] gap-4">
+    // 101-05: on the work surface (lg up) both columns scroll by themselves — never the page.
+    <div className="grid lg:grid-cols-[minmax(0,1fr)_17.5rem] 2xl:grid-cols-[minmax(0,1fr)_20rem] gap-4 ws:h-full ws:min-h-0 ws:grid-rows-[minmax(0,1fr)]">
       {/* Plan + sun */}
-      <div className="min-w-0 space-y-4">
+      <div className="min-w-0 space-y-4 ws:min-h-0 ws:overflow-y-auto ws:pr-1">
         <Card className="border-0 shadow-none bg-transparent">
           <CardHeader className="p-0 pb-2">
             <CardTitle className="flex flex-wrap items-center gap-2 text-base">
@@ -1126,7 +1129,7 @@ export default function MassingStudio({
                 CANVAS_W : CANVAS_H, capped by the window (min. the old 430 px). On a
                 flat window the cap bites and the viewBox widens (no side bands); on
                 a tall one the plan never grows taller than the content needs. */}
-            <svg ref={svgRef} viewBox={vp.viewBox} className={`w-full ${fuellen ? "" : "h-auto "}bg-slate-50 rounded-lg border select-none`}
+            <svg ref={svgRef} onContextMenu={(e) => kontext.oeffnen(e, modellKontext(modell, t, vp.resetView))} viewBox={vp.viewBox} className={`w-full ${fuellen ? "" : "h-auto "}bg-slate-50 rounded-lg border select-none`}
               style={fuellen ? { touchAction: "none", aspectRatio: `${CANVAS_W} / ${CANVAS_H}`, minHeight: CANVAS_H, maxHeight: `max(${CANVAS_H}px, calc(100vh - 160px))` } : { touchAction: "none" }}
               onPointerDown={(e) => { if (e.button === 1 || (e.button === 0 && vp.leertaste())) { e.preventDefault(); vp.beginPan(e); } }}
               onPointerMove={(e) => vp.panMove(e)}
@@ -1176,7 +1179,7 @@ export default function MassingStudio({
                   fill="#94a3b8" opacity="0.35" pointerEvents="none"
                 />
               ))}
-              {/* Baufeld (site_parcel) — gestrichelte blaue read-only Referenzlinie.
+              {/* Grundstücksgrenze (site_parcel) — gestrichelte blaue read-only Referenzlinie.
                   75-06 Task 3: labelled — the line is the PARCEL reference; the
                   envelope (designated_areas type "baufeld") is its own polygon. */}
               {parcelPts && (
@@ -1187,7 +1190,11 @@ export default function MassingStudio({
                     opacity="0.8"
                   />
                   <text x={mx(parcelPts[0].x)} y={my(parcelPts[0].y) - px(4)} fontSize={px(9)} fill="#2563eb">
-                    {flurstuecke.length ? t("Grundstück") : t("Baufeld")}
+                    {/* 101 (user 18.10.2026): it is the plot boundary, never the "Baufeld" (building envelope) —
+                        labelled with the parcel numbers when imported, else boundary / estimated plot. */}
+                    {flurstuecke.length
+                      ? `${t("Flst.")} ${flurstuecke.map((f) => f.nummer).filter(Boolean).join(", ")}`
+                      : parcel?.assumed ? t("Grundstück (geschätzt)") : t("Grundstücksgrenze")}
                   </text>
                 </g>
               )}
@@ -1548,6 +1555,9 @@ export default function MassingStudio({
             )}
             </div>
             )}
+            {/* 101-06: command line — which command runs and what the next input expects */}
+            <ModellBefehlszeile m={modell} t={t} />
+            <KontextmenueAnzeige menue={kontext.menue} schliessen={kontext.schliessen} testid="mm-kontextmenue" />
           </CardContent>
         </Card>
 
@@ -1728,7 +1738,7 @@ export default function MassingStudio({
       </div>
 
       {/* KPIs + 3D */}
-      <div className="space-y-4">
+      <div className="space-y-4 ws:min-h-0 ws:overflow-y-auto ws:pr-1">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Building2 className="w-4 h-4" /> Kennzahlen <span className="text-xs font-normal text-slate-400 ml-auto">[{store.unit}]</span></CardTitle></CardHeader>
           <CardContent className="grid grid-cols-2 gap-1.5">

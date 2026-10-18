@@ -270,3 +270,10 @@
 #hauptinhalt .max-w-7xl { max-width: 1920px; }
 #hauptinhalt h1.text-3xl { font-size: 1.5rem; line-height: 2rem; }
 #hauptinhalt[data-breite="voll"] .max-w-7xl { max-width: none; }
+/* 101-05: a drawing tab marks its page root with data-arbeitsflaeche. From lg up <main> becomes a
+ * column (and at least 760 px high, Tailwind screen `ws`): the page takes the height that is left after "Weiter mit" and the legal footer (both stay
+ * visible, 57-06), so <main> itself never scrolls — the columns inside the page scroll by themselves. */
+@media (min-width: 1024px) and (min-height: 760px) {
+  #hauptinhalt:has(> [data-arbeitsflaeche]) { display: flex; flex-direction: column; overflow: hidden; }
+  #hauptinhalt > [data-arbeitsflaeche] { flex: 1 1 0; min-height: 0; height: auto; }
+}

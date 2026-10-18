@@ -10,6 +10,25 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.7.2] - 2026-10-18
+
+### Neu
+
+- **Amtliche Flurstücke als Kartenebene (Bayern):** In der Baufeld-Planung liegen die Flurstücksgrenzen der Bayerischen Vermessungsverwaltung unter dem Plan (frei nutzbar, CC BY 4.0, Quelle in der Karte); bei einem Standort in Bayern automatisch an, per Schalter abschaltbar.
+- **Grundstücksgrenze bearbeiten:** Die Ecken des Grundstücks lassen sich ziehen — auf die amtlichen Grenzen gezogen gilt das Grundstück als gezeichnet, Fläche und GRZ/GFZ rechnen neu.
+- **Befehlszeile** unter dem Plan (Massing-Studio, Baufeld-Planung): welcher Befehl läuft, was als Nächstes erwartet wird, Eingabefeld für Maße.
+- **Eigenes Rechtsklick-Menü** auf Plänen und Karte: Befehl beenden, letzten Befehl wiederholen, Rückgängig/Wiederholen, Auswahl aufheben, Löschen, Alles einpassen.
+
+### Geändert
+
+- **Zeichenseiten wie ein Programmfenster:** Standort & Karte, Baufeld-Planung, Massing-Studio und Gebäudemodell füllen das Fenster, die Seite scrollt nicht mehr — nur die Spalten in sich (ab 760 px Fensterhöhe).
+- **Standort & Karte:** schmales Formular, die Karte nimmt den Rest der Breite und die volle Höhe.
+
+### Behoben
+
+- Die gestrichelte Grundstückslinie im Massing-Studio hieß „Baufeld“; sie heißt jetzt Grundstücksgrenze bzw. trägt die Flurstücksnummern.
+- Im Lageplan ohne Karte lag der untere Teil der Zeichenfläche außerhalb des sichtbaren Bereichs.
+
 ## [1.7.1] - 2026-10-18
 
 ### Geändert

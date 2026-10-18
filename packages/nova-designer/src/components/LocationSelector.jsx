@@ -331,14 +331,16 @@ export default function LocationSelector({ complexData, onLocationChange, onName
   };
 
   return (
-    <div className="grid lg:grid-cols-2 gap-6">
-      <Card>
-        <CardHeader>
+    // 101-05 (user 18.10.2026: "schau wie viel leer da noch ist nach dem Wort test"): the form is a slim
+    // column, the map takes the rest of the width and the full height of the work surface.
+    <div className="grid lg:grid-cols-[20rem_minmax(0,1fr)] gap-3 ws:h-full ws:min-h-0 ws:grid-rows-[minmax(0,1fr)]">
+      <Card className="shadow-none ws:min-h-0 ws:overflow-y-auto">
+        <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <MapPin className="w-4 h-4" /> Standort & Projekt
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           <div className="space-y-1">
             <Label htmlFor="pname">Projektname</Label>
             <Input id="pname" value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Quartier Nordstern" />
@@ -419,8 +421,8 @@ export default function LocationSelector({ complexData, onLocationChange, onName
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden">
-        <div className="relative h-[460px]">
+      <Card className="overflow-hidden shadow-none ws:h-full ws:min-h-0">
+        <div className="relative h-[460px] ws:h-full">
           <MapLibreMap
             ref={mapComp}
             center={{ lat, lng }}

@@ -48,8 +48,9 @@ test("95-04…06 Blöcke im SVG-Plan: Auswahl, Verschieben, Kopie, Undo, Drehen,
     await page.getByTestId("sd-modus-auswahl").click();
     const svg = plan.locator("svg").first();
     await svg.scrollIntoViewIfNeeded();
-    const box = /** @type {{x: number, y: number, width: number, height: number}} */ (await svg.boundingBox());
-    const pt = (x, y) => ({ x: box.x + (x / 1200) * box.width, y: box.y + (y / 800) * box.height });
+    // Plan units → screen through the SVG's screen matrix (101-05: the plan is letterboxed in the work surface).
+    const m = await svg.evaluate((el) => { const c = /** @type {SVGSVGElement} */ (el).getScreenCTM(); return { a: c.a, d: c.d, e: c.e, f: c.f }; });
+    const pt = (x, y) => ({ x: m.e + x * m.a, y: m.f + y * m.d });
     const klick = async (x, y) => { const p = pt(x, y); await page.mouse.click(p.x, p.y); };
     const ziehen = async (a, b, schritte = 8) => {
       const p = pt(a.x, a.y), q = pt(b.x, b.y);

@@ -8,6 +8,9 @@ import { polygonAreaM2, centroid, pxAreaToM2, pxToM, mToPx, pointInPolygon, mete
 // 95-04…06: blocks as objects in metres — selection, move/copy/rotate, snapping, checks.
 import { alsBlock, ecken } from "@core/lib/massing/bloecke";
 import { useBlockBearbeitung } from "@designer/lib/useBlockBearbeitung";
+import Befehlszeile from "@core/components/Befehlszeile";
+import { useKontextmenue, KontextmenueAnzeige } from "@core/components/Kontextmenue";
+import { baufeldAufforderung } from "@core/lib/befehlszeile";
 import { mittelklickZaehler } from "@core/lib/mittelklick";
 import { useI18n } from "@core/lib/i18n";
 import { baukoerperDefaults } from "@designer/lib/siteParcel";
@@ -28,6 +31,23 @@ import {
   elevColor,
 } from "@designer/lib/mapDraw";
 import MapLibreMap from "./MapLibreMap";
+
+/**
+ * 101-02: official parcel boundaries of Bavaria as a map layer — WMS "ALKIS-Parzellarkarte", layer
+ * "Umring, Schwarz" (lines only), OpenData CC BY 4.0 (geodatenonline.bayern.de, checked 18.10.2026).
+ * Boundaries only as an image (no parcel numbers); vector parcels need the paid ALKIS products.
+ */
+const KATASTER_BY_URL = "https://geoservices.bayern.de/od/wms/alkis/v1/parzellarkarte?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap"
+  + "&LAYERS=by_alkis_parzellarkarte_umr_schwarz&STYLES=&FORMAT=image/png&TRANSPARENT=true&SRS=EPSG:3857&WIDTH=256&HEIGHT=256"
+  + "&BBOX={bbox-epsg-3857}";
+const KATASTER_BY_QUELLE = "Flurstücke: © Bayerische Vermessungsverwaltung (CC BY 4.0)";
+/**
+ * Rough bounding box of Bavaria (WGS84) — the cadastral layer is offered there. [ASSUMED] box, not the border.
+ * @param {{lat?: number|null, lng?: number|null}|null|undefined} l
+ */
+export function inBayern(l) {
+  return l?.lat != null && l?.lng != null && l.lat >= 47.2 && l.lat <= 50.6 && l.lng >= 8.9 && l.lng <= 13.9;
+}
 
 /** Rotate handle distance above the selection, screen px. [ASSUMED] */
 const GRIFF_PX = 28;
@@ -65,7 +85,12 @@ function LageplanKarte({
   bb = null,
   mSite = 1.25,
   zeigeHoehen = false,
+  onKontext = null,
+  zeigeKataster = false,
+  onParcelVertex = null,
 }) {
+  const onKontextRef = useRef(onKontext);
+  onKontextRef.current = onKontext;
   // 95-02: metres per canvas unit of THIS parcel (generic parcels have their own scale).
   const mpp = Number(parcel?.m_per_px) > 0 ? Number(parcel.m_per_px) : undefined;
   const mapComp = useRef(null);
@@ -85,6 +110,9 @@ function LageplanKarte({
   const onLayersReady = (map) => {
     const addSrc = (id) =>
       map.addSource(id, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    // 101-02: official parcel boundaries (Bavaria) under everything we draw.
+    map.addSource("sd-kataster", { type: "raster", tiles: [KATASTER_BY_URL], tileSize: 256, attribution: KATASTER_BY_QUELLE, maxzoom: 20 });
+    map.addLayer({ id: "sd-kataster", type: "raster", source: "sd-kataster", minzoom: 14, layout: { visibility: zeigeKataster ? "visible" : "none" }, paint: { "raster-opacity": 0.85 } });
     ["sd-parcel", "sd-elev", "sd-areas", "sd-draft", "sd-abstand", "sd-buildings"].forEach(addSrc);
     map.addLayer({ id: "sd-parcel-fill", type: "fill", source: "sd-parcel", paint: { "fill-color": "#10b981", "fill-opacity": 0.06 } });
     map.addLayer({ id: "sd-parcel-line", type: "line", source: "sd-parcel", paint: { "line-color": "#10b981", "line-width": 3, "line-dasharray": [2, 1.5] } });
@@ -283,7 +311,8 @@ function LageplanKarte({
       if (bounds) map.fitBounds(bounds, { padding: 60, duration: 300, maxZoom: 19 });
     };
     el.addEventListener("mousedown", onMitte);
-    const ohneMenue = (/** @type {Event} */ e) => e.preventDefault(); // 101-07: no browser menu
+    // 101-07: own menu instead of the browser menu (onKontext from the site plan)
+    const ohneMenue = (/** @type {MouseEvent} */ e) => { e.preventDefault(); onKontextRef.current?.(e, () => { const ring = footprintToGeoJson(parcel.points, loc.lat, loc.lng, mpp).features[0]?.geometry?.coordinates?.[0]; const b = ringBounds(ring); if (b) map.fitBounds(b, { padding: 60, duration: 300, maxZoom: 19 }); }); };
     el.addEventListener("contextmenu", ohneMenue);
     return () => { el.removeEventListener("mousedown", onMitte); el.removeEventListener("contextmenu", ohneMenue); };
   }, [mapReady, parcel, loc.lat, loc.lng, mpp]);
@@ -306,6 +335,47 @@ function LageplanKarte({
     const raf = requestAnimationFrame(() => getMap()?.resize());
     return () => cancelAnimationFrame(raf);
   }, [mapReady]);
+
+  // 101-02: cadastral layer on/off.
+  useEffect(() => {
+    const map = getMap();
+    if (!map || !mapReady || !map.getLayer("sd-kataster")) return;
+    map.setLayoutProperty("sd-kataster", "visibility", zeigeKataster ? "visible" : "none");
+  }, [mapReady, zeigeKataster]);
+
+  // 101-02: the plot boundary is editable — one draggable handle per corner (live preview, commit on drop).
+  const parcelMarkerRef = useRef(/** @type {any[]} */ ([]));
+  // Latest callback through a ref: the markers are rebuilt only when the plot changes, not on every render
+  // (a rebuild during a drag would drop the grabbed handle).
+  const onParcelVertexRef = useRef(onParcelVertex);
+  onParcelVertexRef.current = onParcelVertex;
+  const parcelEditierbar = !!onParcelVertex;
+  useEffect(() => {
+    const map = getMap();
+    if (!map || !mapReady || !parcelEditierbar) return undefined;
+    clearMarkers(parcelMarkerRef);
+    parcel.points.forEach((p, idx) => {
+      const el = vertexElement();
+      el.style.borderColor = "#059669";
+      el.title = "Ecke der Grundstücksgrenze ziehen";
+      el.dataset.testid = "sd-parcel-ecke";
+      const m = new maplibregl.Marker({ element: el, draggable: true })
+        .setLngLat(/** @type {[number, number]} */ (canvasPointToLngLat(p, loc.lat, loc.lng, mpp)))
+        .addTo(map);
+      m.on("drag", () => {
+        const ll = m.getLngLat();
+        const moved = lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng, mpp);
+        const live = parcel.points.map((q, i) => (i === idx ? moved : q));
+        map.getSource("sd-parcel")?.setData(footprintToGeoJson(live, loc.lat, loc.lng, mpp));
+      });
+      m.on("dragend", () => {
+        const ll = m.getLngLat();
+        onParcelVertexRef.current?.(idx, lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng, mpp));
+      });
+      parcelMarkerRef.current.push(m);
+    });
+    return () => clearMarkers(parcelMarkerRef);
+  }, [mapReady, parcel, parcelEditierbar, loc.lat, loc.lng, mpp]);
 
   // --- Vertex-Drag der gespeicherten Baufelder ------------------------------
   useEffect(() => {
@@ -424,13 +494,13 @@ function LageplanKarte({
 
   return (
     <div
-      className="relative w-full rounded-lg border overflow-hidden"
+      className="relative w-full rounded-lg border overflow-hidden h-[560px] ws:h-full"
       // 72-01 A-1 (finding N-01): FIXED height instead of aspectRatio - inside
       // a hidden Radix tab the width is 0 and the ratio collapsed the frame to
       // 0 px, leaving the map a white box. [ASSUMED] 560 px map height, 420 px
       // floor (review sec.3 A-1: "feste Höhe").
-      // 101-01: fills the window below the header and toolbar (was a fixed 560 px).
-      style={{ height: "calc(100dvh - 190px)", minHeight: 460 }}
+      // 101-05: fills the remaining height of the work surface (lg up); below lg a fixed 560 px.
+      style={{ minHeight: 360 }}
     >
       {/* 72-01 A-1 rework: the map container gets h-full w-full, NOT
           "absolute inset-0" - maplibre-gl.css sets position:relative on
@@ -468,7 +538,7 @@ function LageplanKarte({
 // "Polygon" (frei zeichnen, Eckpunkte ziehen, Live-Fläche in m²).
 // Mit Standort (Phase 36, KARTE-03): direkt auf der MapLibre-Karte; ohne
 // Standort bleibt der bisherige SVG-Canvas als Fallback.
-export default function SiteDesigner({ complexData, onBuildingsChange, onAreasChange, onSiteAreaChange, projektTyp = null, onReestimateParcel = null, onFlurstueckImport = null }) {
+export default function SiteDesigner({ complexData, onBuildingsChange, onAreasChange, onSiteAreaChange, projektTyp = null, onReestimateParcel = null, onFlurstueckImport = null, onParcelChange = null }) {
   const { t } = useI18n();
   const svgRef = useRef(null);
   const dragRef = useRef(null);   // { areaId, idx }
@@ -489,6 +559,18 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
 
   const [mode, setMode] = useState("building"); // building | polygon | auswahl (95-04)
   const [zeigeHoehen, setZeigeHoehen] = useState(false); // 101-01: demo heights hidden by default
+  // 101-02: official parcel boundaries — on by default inside Bavaria (the only state with the free WMS here).
+  const [zeigeKataster, setZeigeKataster] = useState(() => inBayern(complexData?.location));
+  // The location arrives after the first render: decide once per location (the user's switch wins afterwards).
+  const katasterFuer = useRef(/** @type {string|null} */ (null));
+  useEffect(() => {
+    const l = complexData?.location;
+    if (l?.lat == null || l?.lng == null) return;
+    const schluessel = `${l.lat},${l.lng}`;
+    if (katasterFuer.current === schluessel) return;
+    katasterFuer.current = schluessel;
+    setZeigeKataster(inBayern(l));
+  }, [complexData?.location?.lat, complexData?.location?.lng]);
   const [draft, setDraft] = useState([]);        // SVG-Fallback: {x,y}-Punkte
   const [draftGeo, setDraftGeo] = useState([]);  // Karten-Modus: [lng,lat]-Punkte
   // 75-06 Task 3 (MSB-3): role of the drawn polygon — "footprint" (default,
@@ -515,6 +597,16 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     grenzeM, baufelderM, containerRef: planRef,
   });
   const nummer = useMemo(() => Object.fromEntries(buildings.map((b, i) => [b.id, i + 1])), [buildings]);
+  // 101-07: right-click menu of the site plan (CAD-like).
+  const kontext = useKontextmenue();
+  const baufeldKontext = (/** @type {(() => void)|null} */ einpassen) => [
+    { label: t("Befehl beenden"), taste: "Esc", onClick: () => { setDraft([]); setDraftGeo([]); bb.abbrechen(); setMode("auswahl"); } },
+    { label: t("Rückgängig"), taste: "Strg+Z", onClick: bb.rueckgaengig, disabled: !bb.kannZurueck, trenner: true },
+    { label: t("Wiederholen"), taste: "Strg+Y", onClick: bb.wiederholen, disabled: !bb.kannVor },
+    { label: t("Auswahl aufheben"), onClick: () => bb.setAuswahl([]), disabled: !bb.auswahl.length, trenner: true },
+    { label: t("Löschen"), taste: "Entf", onClick: bb.loeschen, disabled: !bb.auswahl.length, gefahr: true },
+    einpassen && { label: t("Alles einpassen"), taste: t("2× Mausrad"), onClick: einpassen, trenner: true },
+  ].filter(Boolean);
 
   // 75-06 Task 2: imported cadastral parcels + last-import warnings (UI-only,
   // the data model write lives in ComplexDesigner.handleFlurstueckImport).
@@ -584,13 +676,22 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   const hatKarte = loc?.lat != null && loc?.lng != null;
   const mapCtx = complexData?.map_context;
 
+  // 101-05: screen → view units through the SVG's own screen matrix. The plan now fits the work surface
+  // (letterboxed, preserveAspectRatio "meet"), so the plain rule of three on the bounding box no longer holds.
   const toView = (e) => {
-    const rect = svgRef.current.getBoundingClientRect();
-    return {
-      x: ((e.clientX - rect.left) / rect.width) * VIEW_W,
-      y: ((e.clientY - rect.top) / rect.height) * VIEW_H,
-    };
+    const svg = svgRef.current;
+    const ctm = svg?.getScreenCTM?.();
+    if (ctm) {
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX; pt.y = e.clientY;
+      const v = pt.matrixTransform(ctm.inverse());
+      return { x: v.x, y: v.y };
+    }
+    const rect = svg.getBoundingClientRect();
+    return { x: ((e.clientX - rect.left) / rect.width) * VIEW_W, y: ((e.clientY - rect.top) / rect.height) * VIEW_H };
   };
+  /** View units per screen pixel of the SVG plan (1 before layout). */
+  const einheitJePx = () => { const a = svgRef.current?.getScreenCTM?.()?.a; return a > 0 ? 1 / a : 1; };
 
   const addBuilding = (x, y) => {
     if (!insideParcel(x, y)) return;
@@ -609,6 +710,14 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
 
   // 95-05: every building edit is one undo step (bb.commit).
   const removeBuilding = (id) => bb.commit(buildings.filter((b) => b.id !== id));
+  // 101-02: a moved corner makes the plot a drawn one (no longer the estimated start square).
+  const parcelEcke = (idx, pt) => {
+    if (!onParcelChange || !parcel) return;
+    const points = parcel.points.map((q, i) => (i === idx ? { x: Math.round(pt.x * 100) / 100, y: Math.round(pt.y * 100) / 100 } : q));
+    const { geschaetzte_flaeche_m2: _g, ...rest } = parcel;
+    onParcelChange({ ...rest, points, assumed: false, source: "gezeichnet" });
+  };
+
   const removeArea = (id) => onAreasChange?.((complexData?.designated_areas || []).filter((a) => a.id !== id));
 
   const closeDraft = () => {
@@ -670,12 +779,17 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   const zuMeter = (e) => { const v = toView(e); return { x: v.x * mSite, y: v.y * mSite }; };
   const onSvgPointerDown = (e) => {
     if (mode !== "auswahl" || e.button !== 0) return;
-    const rect = svgRef.current.getBoundingClientRect();
     try { svgRef.current.setPointerCapture?.(e.pointerId); } catch (_) { /* noop */ }
-    bb.runter(zuMeter(e), { x: e.clientX, y: e.clientY }, tastenVon(e), (VIEW_W / rect.width) * mSite);
+    bb.runter(zuMeter(e), { x: e.clientX, y: e.clientY }, tastenVon(e), einheitJePx() * mSite);
   };
 
   const onPointerMove = (e) => {
+    if (dragRef.current?.areaId === "__grundstueck__") {
+      movedRef.current = true;
+      const v = toView(e);
+      parcelEcke(dragRef.current.idx, v);
+      return;
+    }
     if (mode === "auswahl") { bb.bewegen(zuMeter(e), { x: e.clientX, y: e.clientY }, tastenVon(e)); return; }
     if (!dragRef.current) return;
     movedRef.current = true;
@@ -697,7 +811,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
 
   const elevColorSvg = elevColor;
   // View units per screen pixel of the SVG plan (rotate handle in screen pixels); 1 before layout.
-  const vjp = svgRef.current?.clientWidth ? VIEW_W / svgRef.current.clientWidth : 1;
+  const vjp = einheitJePx();
 
   // BGF ≈ Grundfläche (px² → m² über den zentralen Maßstab) × Geschosse.
   const gfaApprox = bb.anzeige.reduce(
@@ -720,8 +834,8 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   const bboxHm = Math.round(pxToM(maxY - minY, parcel));
 
   return (
-    <div className="grid xl:grid-cols-[minmax(0,1fr)_300px] gap-3">
-      <Card className="border-0 shadow-none bg-transparent">
+    <div className="grid xl:grid-cols-[minmax(0,1fr)_300px] gap-3 ws:h-full ws:min-h-0 ws:grid-rows-[minmax(0,1fr)]">
+      <Card className="border-0 shadow-none bg-transparent ws:flex ws:flex-col ws:min-h-0">
         <CardHeader className="p-0 pb-1.5 space-y-0">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -770,19 +884,8 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               )}
             </div>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            {mode === "building" ? "Klicke in die Parzelle, um einen Baukörper zu setzen."
-              : mode === "auswahl" ? t("Klick wählt, Umschalt+Klick ergänzt; Rahmen nach rechts = ganz drin, nach links = berührt. Ziehen verschiebt (Strg = Kopie, Alt = ohne Fang), oranger Griff dreht, Pfeile 0,1 m (Umschalt 1 m), Entf löscht.")
-              : "Klicke Stützpunkte; mit „Schließen\" oder Klick auf den Startpunkt abschließen. Eckpunkte ziehbar."}
-            {hatKarte && (mode === "auswahl" ? ` ${t("Karte: Leertaste + Ziehen verschiebt die Ansicht, Scrollen zoomt.")}` : " Karte: Ziehen verschiebt, Scrollen zoomt — auch während des Zeichnens.")}
-            {(bb.fangZiel || bb.winkel != null) && (
-              <span className="ml-1 font-medium text-warnung" data-testid="sd-fang">
-                {bb.winkel != null ? `${bb.winkel}°` : `${t("Fang")}: ${fangText(bb.fangZiel, t)}`}
-              </span>
-            )}
-          </p>
         </CardHeader>
-        <CardContent className="p-0" ref={planRef} data-testid="sd-plan" data-auswahl={bb.auswahl.join(",")}>
+        <CardContent className="p-0 ws:flex-1 ws:min-h-0" ref={planRef} data-testid="sd-plan" data-auswahl={bb.auswahl.join(",")}>
           {hatKarte ? (
             <LageplanKarte
               loc={loc}
@@ -801,15 +904,19 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               bb={bb}
               mSite={mSite}
               zeigeHoehen={zeigeHoehen}
+              zeigeKataster={zeigeKataster}
+              onParcelVertex={onParcelChange ? parcelEcke : null}
+              onKontext={(e, einpassen) => kontext.oeffnen(e, baufeldKontext(einpassen))}
             />
           ) : (
-          <div className="relative w-full rounded-lg border overflow-hidden" style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }}>
+          <div className="relative w-full rounded-lg border overflow-hidden aspect-[3/2] ws:aspect-auto ws:h-full">
           <svg
             ref={svgRef}
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
             className={`absolute inset-0 w-full h-full bg-slate-50 ${mode === "auswahl" ? "cursor-default" : "cursor-crosshair"}`}
             onClick={handleSvgClick}
             onPointerDown={onSvgPointerDown}
+            onContextMenu={(e) => kontext.oeffnen(e, baufeldKontext(null))}
             onPointerMove={onPointerMove}
             onPointerUp={endDrag}
             onPointerLeave={endDrag}
@@ -818,6 +925,13 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               points={pts.map((p) => `${p.x},${p.y}`).join(" ")}
               fill="rgba(16,185,129,0.06)" stroke="#10b981" strokeWidth="3" strokeDasharray="8 6"
             />
+            {/* 101-02: corners of the plot boundary are draggable */}
+            {onParcelChange && pts.map((p, idx) => (
+              <circle key={`gr-${idx}`} data-testid="sd-parcel-ecke" cx={p.x} cy={p.y} r={7 * vjp} fill="#ffffff" stroke="#059669" strokeWidth={3 * vjp}
+                style={{ cursor: "grab" }} onPointerDown={(e) => startDrag(e, "__grundstueck__", idx)}>
+                <title>{t("Ecke der Grundstücksgrenze ziehen")}</title>
+              </circle>
+            ))}
             {zeigeHoehen && elevation.map((e) => (
               <circle key={e.id} cx={e.x} cy={e.y} r="6" fill={elevColorSvg(e.elevation)} opacity="0.8">
                 <title>{`${e.elevation} m`}</title>
@@ -901,9 +1015,16 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
           </div>
           )}
         </CardContent>
+        {/* 101-06: command line — which command runs and what the next input expects */}
+        {(() => {
+          const b = baufeldAufforderung(/** @type {any} */ (mode), { entwurf: hatKarte ? draftGeo.length : draft.length, gewaehlt: bb.auswahl.length, karte: hatKarte });
+          const meldung = bb.winkel != null ? `${bb.winkel}°` : bb.fangZiel ? `${t("Fang")}: ${fangText(bb.fangZiel, t)}` : "";
+          return <Befehlszeile befehl={t(b.befehl)} aufforderung={t(b.aufforderung)} meldung={meldung} meldungTestid="sd-fang" testid="sd-befehlszeile" />;
+        })()}
+        <KontextmenueAnzeige menue={kontext.menue} schliessen={kontext.schliessen} testid="sd-kontextmenue" />
       </Card>
 
-      <div className="space-y-3 text-sm">
+      <div className="space-y-3 text-sm ws:min-h-0 ws:overflow-y-auto ws:pr-1">
         <Card className="shadow-none">
           <CardContent className="p-4 space-y-2">
             <Badge className="bg-emerald-100 text-emerald-800">
@@ -921,6 +1042,12 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
             <div className="text-sm text-slate-600">Footprint-Polygone: <b>{areas.length}</b></div>
             <div className="text-sm text-slate-600">Polygon-Fläche gesamt: <b>{polyTotalM2.toLocaleString("de-DE")} m²</b></div>
             <div className="text-sm text-slate-600">≈ BGF (Baukörper): <b>{Math.round(gfaApprox).toLocaleString("de-DE")} m²</b></div>
+            {hatKarte && (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground" title={KATASTER_BY_QUELLE}>
+                <input type="checkbox" checked={zeigeKataster} onChange={(e) => setZeigeKataster(e.target.checked)} data-testid="sd-kataster" />
+                {t("Flurstücke Bayern (amtlich)")}
+              </label>
+            )}
             {elevation.length > 0 && (
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <input type="checkbox" checked={zeigeHoehen} onChange={(e) => setZeigeHoehen(e.target.checked)} data-testid="sd-hoehen" />
@@ -956,7 +1083,8 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
                           Neu schätzen
                         </button>
                       )}.</>}
-                {hatKarte && ' Im Tab „Standort & Karte" kannst du die echte Parzelle zeichnen.'}
+                {onParcelChange ? ` ${t("Ziehe die grünen Ecken an die Grundstücksgrenze (amtliche Flurstücke als Hintergrund) — dann gilt das Grundstück als gezeichnet.")}`
+                  : hatKarte && ' Im Tab „Standort & Karte" kannst du die echte Parzelle zeichnen.'}
               </div>
             )}
           </CardContent>

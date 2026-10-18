@@ -22,6 +22,8 @@ import { punktInnen } from "@core/lib/polygonInnen";
 import { auswerten, beispielGraph } from "@core/lib/massing/knoten.js";
 import { leeresGelaende, formen, glaetten, stempeln } from "@core/lib/massing/gelaende.js";
 import { riegelLayout, WOHNUNGSTYPEN, MIX_VORLAGEN, RIEGEL_STANDARD } from "@core/lib/massing/riegel.js";
+import Befehlszeile from "@core/components/Befehlszeile";
+import { befehlsAufforderung } from "@core/lib/befehlszeile";
 import { loadBimModel, saveBimModel } from "@core/lib/useBimModelSync";
 
 /** Tools with their SketchUp shortcut. */
@@ -159,7 +161,9 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   const treffer = (p) => [...aufgeloest].reverse().find((k) => punktInnen(k.profil, p))?.id || null;
 
   const zuruecksetzen = () => { setPunkte([]); setStart(null); setEingabe(""); };
-  const waehle = (id) => { zuruecksetzen(); setWerkzeug(id); setMeldung(""); };
+  // 101-07: the last real command (not the selection) for "Letzten Befehl wiederholen".
+  const letzterBefehl = useRef(/** @type {string|null} */ (null));
+  const waehle = (id) => { zuruecksetzen(); setWerkzeug(id); setMeldung(""); if (id && id !== "auswahl") letzterBefehl.current = id; };
 
   /** Snap: grid, axis lock against the previous point, golden-ratio suggestion for the 3rd point. */
   /** Nearest body corner within ECK_FANG_M (SketchUp endpoint inference), or null. */
@@ -423,6 +427,7 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   return { merkeLeerZug: () => { leerZug.current = true; }, rOpt, setROpt, riegelAbgeleitet, aktiverRiegel, setAktiverRiegel, riegelLoeschen, pushPullAnwenden, eckeZieht, setEckeZieht, eckeLoslassen, erledigt, layer, aufgeloest, gelaende: layer.gelaende || null, gModus, setGModus, gRadius, setGRadius, gSchritt, setGSchritt,
     gelaendeLoeschen: () => { const { gelaende: _g, ...rest } = layer; setLayer(/** @type {any} */ (rest)); }, graph, setGraph, ergebnis, vorschau, backen, beispiel: (mitteSite) => setGraph(beispielGraph(mitteSite)), werkzeug, waehle, aus: () => { zuruecksetzen(); setWerkzeug(null); }, punkte, cursor, setCursor, fange, auswahl, start,
     klick, eingabe, setEingabe, eingabeAnwenden, meldung, gruppe, eindeutig, loeschen, undo, redo,
+    letzterBefehl: () => letzterBefehl.current, auswahlAufheben: () => setAuswahl([]),
     kannUndo: stack.past.length > 0, kannRedo: stack.future.length > 0 };
 }
 
@@ -455,14 +460,8 @@ export function ModellWerkzeugleiste({ m, t }) {
           <button type="button" className={`${knopf} border-border text-fehler hover:bg-muted`} disabled={!m.auswahl.length} onClick={m.loeschen}>{t("Löschen")}</button>
         </span>
       )}
-      {(
-        <form className="ml-auto flex items-center gap-1" onSubmit={(e) => { e.preventDefault(); m.eingabeAnwenden(); }}>
-          <label className="text-[11px] text-muted-foreground" htmlFor="mm-eingabe">{t("Maße")}</label>
-          <input id="mm-eingabe" disabled={!m.werkzeug} value={m.eingabe} onChange={(e) => m.setEingabe(e.target.value)} placeholder="5,40 · *3 · /3"
-            className="w-24 rounded-md border border-border bg-card px-1.5 py-0.5 text-right text-xs tabular-nums" data-testid="mm-eingabe" />
-        </form>
-      )}
-      <div className="flex basis-full min-h-[1.75rem] flex-wrap items-center gap-2 px-1 text-[11px]">
+      {/* 101-06: the typed input and the messages live in the command line under the plan (Befehlszeile). */}
+      <div className="flex basis-full flex-wrap items-center gap-2 px-1 text-[11px] empty:hidden">
         {m.werkzeug === "gelaende" && (
           <span className="flex items-center gap-1.5" data-testid="mm-gelaende-zeile">
             <select value={m.gModus} onChange={(e) => m.setGModus(e.target.value)} className="rounded-md border border-border bg-card px-1 py-0.5" aria-label={t("Gelände-Modus")} data-testid="mm-gelaende-modus">
@@ -493,7 +492,6 @@ export function ModellWerkzeugleiste({ m, t }) {
             {Object.entries(WOHNUNGSTYPEN).map(([k, v]) => <span key={k} className="flex items-center gap-0.5 text-muted-foreground"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: v.farbe }} />{k}</span>)}
           </span>
         )}
-        <span className="text-hinweis" data-testid="mm-meldung">{m.meldung ? t(m.meldung) : ""}</span>
       </div>
     </div>
   );
@@ -632,4 +630,43 @@ export function ErsteSchritte({ m, t }) {
       </ol>
     </details>
   );
+}
+
+/**
+ * 101-06: command line of the modeller — command, expected next input, typed input (Maße), last message.
+ * @param {{m: ReturnType<typeof useModellierer>, t: (s: string) => string}} props
+ */
+export function ModellBefehlszeile({ m, t }) {
+  const { befehl, aufforderung } = befehlsAufforderung(m.werkzeug, { punkte: m.punkte, auswahl: m.auswahl, start: m.start });
+  return (
+    <Befehlszeile
+      befehl={t(befehl)}
+      aufforderung={t(aufforderung)}
+      meldung={m.meldung ? t(m.meldung) : ""}
+      meldungTestid="mm-meldung"
+      eingabe={{ id: "mm-eingabe", testid: "mm-eingabe", label: t("Eingabe"), value: m.eingabe, onChange: m.setEingabe,
+        onSubmit: m.eingabeAnwenden, placeholder: "5,40 · *3 · /3", disabled: !m.werkzeug }}
+    />
+  );
+}
+
+/**
+ * 101-07: right-click menu entries of the modeller (CAD-like).
+ * @param {ReturnType<typeof useModellierer>} m
+ * @param {(s: string) => string} t
+ * @param {() => void} einpassen zoom extents of the plan
+ * @returns {Array<{label: string, taste?: string, onClick: () => void, disabled?: boolean, gefahr?: boolean, trenner?: boolean}>}
+ */
+export function modellKontext(m, t, einpassen) {
+  const letzter = m.letzterBefehl();
+  const name = WERKZEUGE.find((w) => w.id === letzter)?.label;
+  return [
+    { label: t("Befehl beenden"), taste: "Esc", onClick: m.aus, disabled: !m.werkzeug },
+    { label: name ? `${t("Wiederholen:")} ${t(name)}` : t("Letzten Befehl wiederholen"), taste: "Enter", onClick: () => letzter && m.waehle(letzter), disabled: !letzter },
+    { label: t("Rückgängig"), taste: "Strg+Z", onClick: m.undo, disabled: !m.kannUndo, trenner: true },
+    { label: t("Wiederholen"), taste: "Strg+Y", onClick: m.redo, disabled: !m.kannRedo },
+    { label: t("Auswahl aufheben"), onClick: m.auswahlAufheben, disabled: !m.auswahl.length, trenner: true },
+    { label: t("Löschen"), taste: "Entf", onClick: m.loeschen, disabled: !m.auswahl.length, gefahr: true },
+    { label: t("Alles einpassen"), taste: t("2× Mausrad"), onClick: einpassen, trenner: true },
+  ];
 }

@@ -58,6 +58,9 @@ import BauphysikStudio from "../components/BauphysikStudio";
 import RaumklimaPlanner from "../components/RaumklimaPlanner";
 import FoerderPlanner from "../components/FoerderPlanner";
 import ApartmentPlanner from "../components/ApartmentPlanner";
+
+/** 101-05: tabs that work as a full-height drawing surface (no page scroll from lg up). */
+const ARBEITSFLAECHE_REITER = new Set(["site", "massing", "studio", "bim"]);
 import WohnungsWerkstatt from "../components/WohnungsWerkstatt";
 
 /** 73-04: tabs that compute on the build-up (Bauteilaufbau) and show its provenance in an existing building. */
@@ -476,9 +479,14 @@ export default function ComplexDesigner() {
     });
   };
 
+  // 101-05 (user 18.10.2026): drawing tabs behave like an application window — from lg up the page is
+  // exactly the window height and only the columns inside scroll, so the mouse wheel over a plan zooms
+  // and never scrolls the page. Other tabs keep normal page scrolling.
+  const arbeitsflaeche = ARBEITSFLAECHE_REITER.has(activeTab);
+  const af = (klassen) => (arbeitsflaeche ? ` ${klassen}` : "");
   return (
-    <div className={seitenWurzel}>
-      <div className="max-w-7xl mx-auto space-y-2">
+    <div className={seitenWurzel + af("ws:h-full ws:flex ws:flex-col ws:overflow-hidden")} data-arbeitsflaeche={arbeitsflaeche ? "1" : undefined}>
+      <div className={"max-w-7xl mx-auto space-y-2" + af("ws:w-full ws:flex-1 ws:min-h-0 ws:flex ws:flex-col")}>
         
         {/* Testlauf 26.08. (Referenzprojekt): Der Designer startet mit Werkzeug-Voreinstellungen
             (Zeichenfeld 3.500 m², Massing-Rechteck, WE-Schätzung …). Ohne erfassten
@@ -514,9 +522,9 @@ export default function ComplexDesigner() {
 
         {/* 101-01 (user 18.10.2026, "Stufenpyramide"): one flat header row — title, the five areas,
             the tabs of the active area and the save state — instead of title block + card + two tab rows. */}
-        <div>
-          <div>
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className={af("ws:flex-1 ws:min-h-0 ws:flex ws:flex-col").trim() || undefined}>
+          <div className={af("ws:flex-1 ws:min-h-0 ws:flex ws:flex-col").trim() || undefined}>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className={"w-full" + af("ws:flex-1 ws:min-h-0 ws:flex ws:flex-col")}>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border pb-2">
                 {/* h1 = menu name exactly (navigation test); the project name stands next to it. */}
                 <h1 className="text-base font-semibold text-foreground whitespace-nowrap">Komplex-Designer</h1>
@@ -582,7 +590,7 @@ export default function ComplexDesigner() {
                 <BauaufnahmePanel />
               </TabsContent>
 
-              <TabsContent value="studio" className="px-0 py-2">
+              <TabsContent value="studio" className="px-0 py-2 ws:flex-1 ws:min-h-0 ws:overflow-y-auto">
                 <MassingStudio
                   lat={project?.location?.lat || complexData.location?.lat || 50.1}
                   projectName={project?.name || complexData.name}
@@ -623,7 +631,7 @@ export default function ComplexDesigner() {
                 <UnitMixCompliance siteArea={siteAreaM2} parking={complexData.parking} />
               </TabsContent>
 
-              <TabsContent value="site" className="px-0 py-2">
+              <TabsContent value="site" className="px-0 py-2 ws:flex-1 ws:min-h-0 ws:overflow-y-auto">
                 <LocationSelector 
                   complexData={complexData}
                   projekt={project}
@@ -632,7 +640,7 @@ export default function ComplexDesigner() {
                 />
               </TabsContent>
 
-              <TabsContent value="massing" className="px-0 py-2">
+              <TabsContent value="massing" className="px-0 py-2 ws:flex-1 ws:min-h-0 ws:overflow-y-auto">
                 <SiteDesigner 
                   complexData={complexData}
                   projektTyp={project?.type ?? null}
@@ -641,6 +649,7 @@ export default function ComplexDesigner() {
                   onSiteAreaChange={(area) => updateComplexData('site_area', area)}
                   onBuildingsChange={(buildings) => updateComplexData('buildings', buildings)}
                   onFlurstueckImport={handleFlurstueckImport}
+                  onParcelChange={(parcel) => updateComplexData('site_parcel', parcel)}
                 />
               </TabsContent>
 
@@ -648,7 +657,7 @@ export default function ComplexDesigner() {
                 <TerrainView3D />
               </TabsContent>
 
-              <TabsContent value="bim" className="px-0 py-2">
+              <TabsContent value="bim" className="px-0 py-2 ws:flex-1 ws:min-h-0 ws:overflow-y-auto">
                 <BitBimStudio complexData={complexData} />
               </TabsContent>
 

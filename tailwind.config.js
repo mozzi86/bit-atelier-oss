@@ -4,6 +4,9 @@ module.exports = {
     content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}", "./packages/*/src/**/*.{ts,tsx,js,jsx}"],
   theme: {
   	extend: {
+  		// 101-05: work surface of the drawing pages (no page scroll) only on windows that are wide AND tall
+  		// enough — below 760 px height the drawing would get too small, normal page scrolling stays.
+  		screens: { ws: { raw: '(min-width: 1024px) and (min-height: 760px)' } },
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',

@@ -1,5 +1,5 @@
 {
-  "farben": 10775,
+  "farben": 10774,
   "verlaeufe": 123,
   "stand": "2026-10-18",
   "hinweis": "Fest eingetragene Farbklassen und Verläufe; dürfen nie steigen (scripts/farb-baseline.mjs). Senken, wenn auf Tokens umgestellt wurde.",
@@ -105,7 +105,6 @@
     "src/components/settings/DatenschutzBereich.jsx": 34,
     "src/components/site/GanttSchedule.jsx": 34,
     "packages/nova-ausschreibung/src/components/VhbFormularDialog.jsx": 35,
-    "packages/nova-designer/src/components/SiteDesigner.jsx": 34,
     "packages/nova-designer/src/components/TiefgaragenPlaner.jsx": 34,
     "packages/nova-ifc-viewer/src/components/CollaborationPanel.jsx": 34,
     "src/components/accounting/AnlagenReiter.jsx": 33,
@@ -113,6 +112,7 @@
     "src/pages/Accounting.jsx": 34,
     "packages/nova-ausschreibung/src/components/ReferenzpreisPoolPanel.jsx": 33,
     "packages/nova-designer/src/components/BauphysikStudio.jsx": 33,
+    "packages/nova-designer/src/components/SiteDesigner.jsx": 33,
     "packages/nova-designer/src/components/StaticsPlanner.jsx": 33,
     "packages/nova-designer/src/components/UnitMixCompliance.jsx": 33,
     "packages/nova-designer/src/components/VorschlagVergleich.jsx": 33,
