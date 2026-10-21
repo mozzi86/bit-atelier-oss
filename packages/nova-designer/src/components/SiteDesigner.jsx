@@ -3,7 +3,7 @@ import * as maplibregl from "maplibre-gl";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Button } from "@core/components/ui/button";
 import { Badge } from "@core/components/ui/badge";
-import { Building, Trash2, MousePointerClick, MousePointer2, PenTool, Check, Undo2, Redo2, Route } from "lucide-react";
+import { Building, Trash2, MousePointerClick, MousePointer2, PenTool, Check, Undo2, Redo2, Route, Download } from "lucide-react";
 import { polygonAreaM2, centroid, pxAreaToM2, pxToM, mToPx, pointInPolygon, metersPerPixel } from "@core/lib/geo";
 // 95-04…06: blocks as objects in metres — selection, move/copy/rotate, snapping, checks.
 import { alsBlock, ecken } from "@core/lib/massing/bloecke";
@@ -12,12 +12,21 @@ import { useBlockBearbeitung } from "@designer/lib/useBlockBearbeitung";
 import Befehlszeile from "@core/components/Befehlszeile";
 import { eckeVerschieben, eckeEinfuegen, eckeLoeschen, kanteVerschieben, kantenMitten } from "@core/lib/polygonBearbeiten";
 import { useKontextmenue, KontextmenueAnzeige } from "@core/components/Kontextmenue";
+// 104-05: object snap — the same core and switches as the Massing modeller.
+import FangGlyphe, { strahlEnden } from "@core/components/FangGlyphe";
+import { fangIndex, fangPunkt } from "@core/lib/objektfang.js";
+import { useFangEinstellungen, useFangTasten, fangEinstellungen, fangKontextEintraege, fangSchalter } from "@core/lib/fangEinstellungen.js";
+import { lageplanFangSegmente, LAGEPLAN_FANG_PX, QUELLE_GRUNDSTUECK, QUELLE_ENTWURF } from "@designer/lib/lageplanFang";
 import { baufeldAufforderung } from "@core/lib/befehlszeile";
 import { mittelklickZaehler } from "@core/lib/mittelklick";
 import { useI18n } from "@core/lib/i18n";
 import { baukoerperDefaults, baukoerperAusZug, baukoerperKennwerte } from "@designer/lib/siteParcel";
 // 75-06 Task 2 (D-P75-04): GeoJSON parcel import — pure parse, no dependency.
-import { flurstueckeAusGeoJson } from "@designer/lib/flurstueckImport";
+// 101-03: DXF parcels (own reader) and the union of several parcels into one plot boundary.
+import { flurstueckeAusGeoJson, flurstueckeAusDxf, grundstueckAusFlurstuecken } from "@designer/lib/flurstueckImport";
+// 104-06: site plan as DXF R12 (own writer, no dependency).
+import { lageplanDxfDaten, dxfDatei, dxfDateiname, DXF_MIME } from "@designer/lib/dxfPlaene";
+import { dateiAnbieten } from "@core/lib/tabellenExport";
 import {
   footprintToGeoJson,
   geoJsonToFootprint,
@@ -122,10 +131,23 @@ function LageplanKarte({
   onRiegelPunkt = null,
   onRiegelFertig = null,
   parcelSichtbar = true,
+  fangen = null,
 }) {
   const { t } = useI18n();
   const onKontextRef = useRef(onKontext);
   onKontextRef.current = onKontext;
+  // 104-05: object snap on the map — `fangen` (site metres in → snap result in metres) through a ref, so the
+  // marker effects are not rebuilt when the snap geometry changes; the glyph is an SVG overlay in screen pixels.
+  const fangenRef = useRef(fangen);
+  fangenRef.current = fangen;
+  const [fangKarte, setFangKarte] = useState(/** @type {{x:number,y:number,art:string,strahl:any}|null} */ (null));
+  const altFangRef = useRef(false);
+  useEffect(() => {
+    const h = (/** @type {KeyboardEvent} */ e) => { altFangRef.current = e.altKey; };
+    window.addEventListener("keydown", h);
+    window.addEventListener("keyup", h);
+    return () => { window.removeEventListener("keydown", h); window.removeEventListener("keyup", h); };
+  }, []);
   // 95-02: metres per canvas unit of THIS parcel (generic parcels have their own scale).
   const mpp = Number(parcel?.m_per_px) > 0 ? Number(parcel.m_per_px) : undefined;
   const mapComp = useRef(null);
@@ -138,6 +160,40 @@ function LageplanKarte({
   const clearMarkers = (ref) => {
     ref.current.forEach((m) => m.remove());
     ref.current = [];
+  };
+
+  /**
+   * 104-05: snap a map position. Map → canvas units → site metres (× mSite) → snap core → back. The capture
+   * distance follows the zoom (LAGEPLAN_FANG_PX screen pixels in metres at that point).
+   * @param {any} map MapLibre map
+   * @param {{lng: number, lat: number}} lngLat raw position
+   * @param {{basisLl?: [number, number]|null, ausser?: string[]|null, alt?: boolean}} [o] base point of polar /
+   *   ortho tracking (lng/lat), snap sources to ignore, alt = no snapping
+   * @returns {{c: {x:number,y:number}, ll: [number, number], anz: {x:number,y:number,art:string,strahl:any}|null}}
+   *   c canvas units, ll lng/lat, anz glyph in screen pixels (null = nothing to show)
+   */
+  const kartenFang = (map, lngLat, { basisLl = null, ausser = null, alt = false } = {}) => {
+    const zuC = (/** @type {[number, number]} */ ll) => lngLatToCanvasPoint(ll, loc.lat, loc.lng, mpp);
+    const c = zuC([lngLat.lng, lngLat.lat]);
+    const roh = { c, ll: /** @type {[number, number]} */ ([lngLat.lng, lngLat.lat]), anz: null };
+    const f = fangenRef.current;
+    if (!f) return roh;
+    const pt = map.project([lngLat.lng, lngLat.lat]);
+    const ll10 = map.unproject([pt.x + 10, pt.y]);
+    const c10 = zuC([ll10.lng, ll10.lat]);
+    const mProPx = (Math.hypot(c10.x - c.x, c10.y - c.y) * mSite) / 10;
+    const b = basisLl ? zuC(basisLl) : null;
+    const r = f({ x: c.x * mSite, y: c.y * mSite }, { basis: b ? { x: b.x * mSite, y: b.y * mSite } : null, ausser, aus: alt, mProPx });
+    if (!r) return roh;
+    const c2 = { x: r.punkt.x / mSite, y: r.punkt.y / mSite };
+    const ll2 = /** @type {[number, number]} */ (canvasPointToLngLat(c2, loc.lat, loc.lng, mpp));
+    const p2 = map.project(ll2);
+    let strahl = null;
+    if (r.strahl) {
+      const v = map.project(canvasPointToLngLat({ x: r.strahl.von.x / mSite, y: r.strahl.von.y / mSite }, loc.lat, loc.lng, mpp));
+      strahl = strahlEnden({ x: v.x, y: v.y }, { x: p2.x, y: p2.y }, 40, r.strahl.winkel_grad);
+    }
+    return { c: c2, ll: ll2, anz: { x: p2.x, y: p2.y, art: r.art, strahl } };
   };
 
   // Layer-Fundament je Map-Instanz; Reihenfolge wie im alten SVG:
@@ -247,7 +303,10 @@ function LageplanKarte({
       el.title = "Punkt ziehen";
       const m = new maplibregl.Marker({ element: el, draggable: true })
         .setLngLat(/** @type {[number, number]} */ (canvasPointToLngLat(q.p, loc.lat, loc.lng, mpp))).addTo(map);
+      // 104-05: the dragged point snaps (outlines of everything except its own bar)
+      m.on("drag", () => { const f = kartenFang(map, m.getLngLat(), { ausser: [q.id], alt: altFangRef.current }); m.setLngLat(f.ll); setFangKarte(f.anz); });
       m.on("dragend", () => {
+        setFangKarte(null);
         const ll = m.getLngLat();
         onRiegelPunktRef.current?.(q.id, q.idx, lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng, mpp));
       });
@@ -448,8 +507,6 @@ function LageplanKarte({
       // zwei identische Baukörper übereinander bzw. doppelte Draft-Punkte).
       if (e.originalEvent?.detail > 1) return;
       if (mode === "auswahl") return; // 95-04: the selection tool handles mousedown/up itself
-      const lngLat = [e.lngLat.lng, e.lngLat.lat];
-      const cpt = lngLatToCanvasPoint(lngLat, loc.lat, loc.lng, mpp);
       if (mode === "polygon" || mode === "riegel") {
         // Klick nahe am Startpunkt (Screen-Px) schließt das Polygon (101-04: beim Riegel = Blockrand).
         if (draftGeo.length >= 3) {
@@ -459,9 +516,12 @@ function LageplanKarte({
             return;
           }
         }
-        if (!insideParcel(cpt.x, cpt.y)) return;
-        setDraftGeo((d) => [...d, lngLat]);
+        // 104-05: the set point snaps (object snap, polar tracking from the previous point, grid; Alt = free)
+        const f = kartenFang(map, e.lngLat, { basisLl: draftGeo[draftGeo.length - 1] || null, alt: !!e.originalEvent?.altKey });
+        if (!insideParcel(f.c.x, f.c.y)) return;
+        setDraftGeo((d) => [...d, f.ll]);
       } else {
+        const cpt = lngLatToCanvasPoint([e.lngLat.lng, e.lngLat.lat], loc.lat, loc.lng, mpp);
         if (!insideParcel(cpt.x, cpt.y)) return;
         onAddBuilding(cpt.x, cpt.y);
       }
@@ -470,8 +530,30 @@ function LageplanKarte({
     const onDoppel = () => { if (mode === "riegel") onRiegelFertigRef.current?.(false); };
     map.on("click", onClick);
     map.on("dblclick", onDoppel);
-    return () => { map.off("click", onClick); map.off("dblclick", onDoppel); };
-  }, [mapReady, mode, draftGeo, insideParcel, onAddBuilding, onCloseDraft, setDraftGeo, loc.lat, loc.lng, mpp]);
+    // 104-05: the click handler only exists once the style has loaded (with blocked tiles via the fallback
+    // style, i.e. late). Mark the map container while it is attached, so tests can wait for it instead of
+    // clicking into a map that does not listen yet.
+    const behaelter = map.getContainer();
+    behaelter.dataset.klickBereit = "1";
+    return () => { map.off("click", onClick); map.off("dblclick", onDoppel); delete behaelter.dataset.klickBereit; };
+    // kartenFang reads the snap function through a ref and the scale from these deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, mode, draftGeo, insideParcel, onAddBuilding, onCloseDraft, setDraftGeo, loc.lat, loc.lng, mpp, mSite]);
+
+  // 104-05: snap glyph while drawing a polygon / bar (hover = where the next click goes).
+  useEffect(() => {
+    const map = getMap();
+    if (!map || !mapReady || (mode !== "polygon" && mode !== "riegel")) { setFangKarte(null); return undefined; }
+    const move = (/** @type {any} */ e) => {
+      const f = kartenFang(map, e.lngLat, { basisLl: draftGeo[draftGeo.length - 1] || null, alt: !!e.originalEvent?.altKey });
+      setFangKarte(f.anz);
+    };
+    const raus = () => setFangKarte(null);
+    map.on("mousemove", move);
+    map.on("mouseout", raus);
+    return () => { map.off("mousemove", move); map.off("mouseout", raus); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, mode, draftGeo, loc.lat, loc.lng, mpp, mSite]);
 
   // 101-01: two/three clicks on the mouse wheel = zoom extents (whole parcel), CAD convention.
   useEffect(() => {
@@ -541,8 +623,14 @@ function LageplanKarte({
       el.dataset.testid = "sd-parcel-ecke";
       el.addEventListener("dblclick", (ev) => { ev.stopPropagation(); ev.preventDefault(); setzen(eckeLoeschen(pts, idx)); });
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(zuLl(p)).addTo(map);
-      m.on("drag", () => vorschau(eckeVerschieben(pts, idx, zuCanvas(m.getLngLat()))));
-      m.on("dragend", () => setzen(eckeVerschieben(pts, idx, zuCanvas(m.getLngLat()))));
+      // 104-05: the corner snaps to the other outlines (not to the plot's own edges)
+      m.on("drag", () => {
+        const f = kartenFang(map, m.getLngLat(), { ausser: [QUELLE_GRUNDSTUECK], alt: altFangRef.current });
+        m.setLngLat(f.ll);
+        setFangKarte(f.anz);
+        vorschau(eckeVerschieben(pts, idx, f.c));
+      });
+      m.on("dragend", () => { setFangKarte(null); setzen(eckeVerschieben(pts, idx, zuCanvas(m.getLngLat()))); });
       parcelMarkerRef.current.push(m);
     });
     kantenMitten(pts).forEach((mitte, idx) => {
@@ -580,14 +668,18 @@ function LageplanKarte({
           .addTo(map);
         m.on("drag", () => {
           // Live-Vorschau direkt in der Source — Commit erst am Drag-Ende.
-          const ll = m.getLngLat();
-          const moved = lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng, mpp);
+          // 104-05: the corner snaps to the other outlines (not to its own area)
+          const f = kartenFang(map, m.getLngLat(), { ausser: [a.id], alt: altFangRef.current });
+          m.setLngLat(f.ll);
+          setFangKarte(f.anz);
+          const moved = f.c;
           const live = areas.map((ar) =>
             ar.id !== a.id ? ar : { ...ar, points: ar.points.map((q, i) => (i === idx ? moved : q)) }
           );
           map.getSource("sd-areas")?.setData(areasToGeoJson(live, loc.lat, loc.lng, mpp));
         });
         m.on("dragend", () => {
+          setFangKarte(null);
           const ll = m.getLngLat();
           onVertexCommit(a.id, idx, lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng, mpp));
         });
@@ -624,12 +716,16 @@ function LageplanKarte({
         });
       }
       m.on("drag", () => {
-        const ll = m.getLngLat();
+        // 104-05: a draft point snaps like a clicked one (not to the draft itself)
+        const f = kartenFang(map, m.getLngLat(), { ausser: [QUELLE_ENTWURF], alt: altFangRef.current });
+        m.setLngLat(f.ll);
+        setFangKarte(f.anz);
         map
           .getSource("sd-draft")
-          ?.setData(draftToGeoJson(draftGeo.map((q, i) => (i === idx ? [ll.lng, ll.lat] : q))));
+          ?.setData(draftToGeoJson(draftGeo.map((q, i) => (i === idx ? f.ll : q))));
       });
       m.on("dragend", () => {
+        setFangKarte(null);
         const ll = m.getLngLat();
         setDraftGeo((d) => d.map((q, i) => (i === idx ? [ll.lng, ll.lat] : q)));
       });
@@ -725,6 +821,12 @@ function LageplanKarte({
       {/* 101-04: rectangle while a building is pulled open (positioned by the drag handler) */}
       <div ref={aufziehenRef} data-testid="sd-aufziehen" style={{ display: "none" }}
         className="pointer-events-none absolute items-end justify-end border-2 border-primary bg-primary/10 p-0.5 font-mono text-[11px] text-primary" />
+      {/* 104-05: snap glyph over the map (screen pixels) */}
+      {fangKarte && (
+        <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" aria-hidden="true">
+          <FangGlyphe x={fangKarte.x} y={fangKarte.y} s={1} art={fangKarte.art} strahl={fangKarte.strahl} testid="sd-objektfang" />
+        </svg>
+      )}
       {bb?.rahmen && (
         <div
           data-testid="sd-rahmen"
@@ -850,6 +952,22 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     grenzeM, baufelderM, containerRef: planRef, zusatzDichte: riegelSumme,
   });
   const nummer = useMemo(() => Object.fromEntries(buildings.map((b, i) => [b.id, i + 1])), [buildings]);
+  // 104-06: the site plan as DXF R12 (metres around the project location, y north; the
+  // location travels in a comment so the own parcel import can read the boundary back).
+  const [dxfHinweis, setDxfHinweis] = useState(/** @type {string|null} */ (null));
+  const lageplanDxf = () => {
+    try {
+      const daten = lageplanDxfDaten(complexData, { projekt: complexData?.name || "", t });
+      if (daten.leer) { setDxfHinweis(t("Nichts zu exportieren — weder gezeichnetes Grundstück noch Flächen oder Baukörper.")); return; }
+      const { bytes, uebersprungen } = dxfDatei(daten);
+      dateiAnbieten(bytes, dxfDateiname(complexData?.name || "", "Lageplan"), DXF_MIME);
+      setDxfHinweis(uebersprungen
+        ? t("Lageplan als DXF exportiert — {n} Objekt(e) ohne gültige Koordinaten ausgelassen.").replace("{n}", String(uebersprungen))
+        : t("Lageplan als DXF exportiert (R12, Meter, Ursprung = Projektstandort)."));
+    } catch (err) {
+      setDxfHinweis(`${t("DXF-Export fehlgeschlagen")}: ${/** @type {any} */ (err)?.message || err}`);
+    }
+  };
   // 101-07: right-click menu of the site plan (CAD-like).
   const kontext = useKontextmenue();
   const baufeldKontext = (/** @type {(() => void)|null} */ einpassen) => [
@@ -861,7 +979,34 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     { label: t("Auswahl aufheben"), onClick: () => bb.setAuswahl([]), disabled: !bb.auswahl.length, trenner: true },
     { label: t("Löschen"), taste: "Entf", onClick: bb.loeschen, disabled: !bb.auswahl.length, gefahr: true },
     einpassen && { label: t("Alles einpassen"), taste: t("2× Mausrad"), onClick: einpassen, trenner: true },
+    { label: t("Lageplan als DXF exportieren"), onClick: lageplanDxf, trenner: !einpassen },
+    // 104-05: snap switches (checkbox entries), shared with the Massing modeller
+    ...fangKontextEintraege(fangEinstellungen(), t),
   ].filter(Boolean);
+
+  // 104-05: object snap of the site plan — snap geometry in site metres (plot, areas, buildings, bars, the running
+  // draft), one index per geometry change; the same switches as the modeller (F3/F8/F9/F10, menu, chips).
+  const fangEinst = useFangEinstellungen();
+  useFangTasten();
+  /** Snap glyph of the SVG plan: point in view units + the core result (null = none). */
+  const [fangSvg, setFangSvg] = useState(/** @type {{x:number,y:number,r:any}|null} */ (null));
+  const mitStandort = loc?.lat != null && loc?.lng != null;
+  const entwurfC = useMemo(
+    () => (mitStandort ? draftGeo.map((q) => lngLatToCanvasPoint(q, loc.lat, loc.lng, mpp)) : draft),
+    [mitStandort, draftGeo, draft, loc?.lat, loc?.lng, mpp],
+  );
+  const fangIdx = useMemo(() => fangIndex(lageplanFangSegmente({
+    parcel, parcelGeschaetzt, areas, buildings: bb.anzeige, riegel: Array.isArray(riegelDaten) ? riegelDaten : [], entwurf: entwurfC, mSite,
+  })), [parcel, parcelGeschaetzt, areas, bb.anzeige, riegelDaten, entwurfC, mSite]);
+  /**
+   * Snap a point of the site plan (site metres in and out).
+   * @param {{x:number,y:number}} roh raw point, site metres
+   * @param {{basis?: {x:number,y:number}|null, ausser?: string[]|null, aus?: boolean, mProPx?: number}} [o]
+   *   basis = previous point (polar / ortho / perpendicular), ausser = snap sources to ignore, aus = Alt (free),
+   *   mProPx = metres per screen pixel (capture distance LAGEPLAN_FANG_PX on screen)
+   */
+  const fangeM = (roh, { basis = null, ausser = null, aus = false, mProPx = 1 } = {}) =>
+    fangPunkt(roh, fangIdx, { toleranz_m: LAGEPLAN_FANG_PX * mProPx, modi: fangEinst, basis, ausser, aus });
 
   // 75-06 Task 2: imported cadastral parcels + last-import warnings (UI-only,
   // the data model write lives in ComplexDesigner.handleFlurstueckImport).
@@ -871,6 +1016,31 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   // <input type=file> (no shadcn <Input>: tsc legacy). Needs a location as the
   // projection reference — without it, a plain hint, never a silent fallback.
   const flurstuecke = complexData?.grundstueck?.flurstuecke || [];
+  // 101-03: last DXF file (text + its layers) so another layer choice re-reads it without a new upload.
+  const [dxfQuelle, setDxfQuelle] = useState(/** @type {{text: string, ebenen: Array<{name: string, anzahl: number}>, gewaehlt: string[]}|null} */ (null));
+  // 101-03: outcome of the union (united boundary or the honest reason why not).
+  const [grenzMeldung, setGrenzMeldung] = useState(/** @type {{ok: boolean, text: string}|null} */ (null));
+  const parcelGezeichnet = parcel?.source === "gezeichnet";
+  /**
+   * Hand the parcels over; ComplexDesigner derives the boundary unless a drawn plot exists. Report the union here.
+   * unvollstaendig = the file was only partly read, so a "successful" union may still be too small (warning colour).
+   */
+  const flurstueckeUebernehmen = (/** @type {any[]} */ liste, unvollstaendig = false) => {
+    onFlurstueckImport?.(liste);
+    const g = grundstueckAusFlurstuecken(liste, { mPerPx: mSite, t });
+    const zusatz = [
+      g.ok && parcelGezeichnet ? t("Das gezeichnete Grundstück bleibt — „Als Grundstück übernehmen“ ersetzt es.") : "",
+      g.ok && unvollstaendig ? t("Datei nur teilweise übernommen — die Grenze kann zu klein sein, bitte prüfen.") : "",
+    ].filter(Boolean).join(" ");
+    setGrenzMeldung({ ok: g.ok && !unvollstaendig, text: zusatz ? `${g.meldung} ${zusatz}` : g.meldung });
+  };
+  const dxfEinlesen = (/** @type {string} */ text, /** @type {string[]|null} */ ebenen) => {
+    const r = flurstueckeAusDxf(text, loc.lat, loc.lng, mSite, { ebenen, t });
+    setGeoWarnungen(r.warnungen);
+    setDxfQuelle(r.ebenen.length ? { text, ebenen: r.ebenen, gewaehlt: r.gewaehlt } : null);
+    if (r.flurstuecke.length) flurstueckeUebernehmen(r.flurstuecke, !!r.unvollstaendig);
+    else setGrenzMeldung(null);
+  };
   const onGeojsonDatei = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = ""; // allow re-selecting the same file
@@ -881,9 +1051,14 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     }
     try {
       const text = await file.text();
-      const { flurstuecke: liste, warnungen } = flurstueckeAusGeoJson(text, loc.lat, loc.lng);
+      // DXF by extension, or any file that is not JSON (cadastral exports often carry odd extensions).
+      if (/\.dxf$/i.test(file.name) || !/^\s*[[{]/.test(text)) { dxfEinlesen(text, null); return; }
+      setDxfQuelle(null);
+      // The polygons are projected with the scale of THIS plot, so buildings and areas keep their size.
+      const { flurstuecke: liste, warnungen } = flurstueckeAusGeoJson(text, loc.lat, loc.lng, mSite);
       setGeoWarnungen(warnungen);
-      if (liste.length) onFlurstueckImport?.(liste);
+      if (liste.length) flurstueckeUebernehmen(liste);
+      else setGrenzMeldung(null);
     } catch (err) {
       setGeoWarnungen([`${t("Import fehlgeschlagen")}: ${err?.message || err}`]);
     }
@@ -892,7 +1067,16 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     const rest = flurstuecke.filter((f) => f.id !== id);
     // Empty list back to ComplexDesigner clears grundstueck.flurstuecke too.
     onFlurstueckImport?.(rest);
+    setGrenzMeldung(null);
     if (!rest.length) setGeoWarnungen([]);
+  };
+  /** Explicit user action: the united parcels become the plot — also over a drawn one. */
+  const flurstueckeAlsGrundstueck = () => {
+    const g = grundstueckAusFlurstuecken(flurstuecke, { mPerPx: mSite, t });
+    setGrenzMeldung({ ok: g.ok, text: g.meldung });
+    if (!g.ok || !onParcelChange || !parcel) return;
+    const { geschaetzte_flaeche_m2: _g, ...rest } = parcel;
+    onParcelChange({ ...rest, points: g.punkte, assumed: false, source: "flurstuecke", m_per_px: mSite });
   };
 
   const VIEW_W = 1200;
@@ -947,6 +1131,19 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   };
   /** View units per screen pixel of the SVG plan (1 before layout). */
   const einheitJePx = () => { const a = svgRef.current?.getScreenCTM?.()?.a; return a > 0 ? 1 / a : 1; };
+  /**
+   * 104-05: snap a point of the SVG plan (view units = canvas units in and out).
+   * @param {{x:number,y:number}} v raw point, view units
+   * @param {{basis?: {x:number,y:number}|null, ausser?: string[]|null, alt?: boolean}} [o] previous point (view
+   *   units), snap sources to ignore, Alt = free
+   * @returns {{x:number, y:number, r: any}} snapped point (view units) and the core result (null for NaN)
+   */
+  const fangeView = (v, { basis = null, ausser = null, alt = false } = {}) => {
+    const r = fangeM({ x: v.x * mSite, y: v.y * mSite }, {
+      basis: basis ? { x: basis.x * mSite, y: basis.y * mSite } : null, ausser, aus: alt, mProPx: einheitJePx() * mSite,
+    });
+    return r ? { x: r.punkt.x / mSite, y: r.punkt.y / mSite, r } : { x: v.x, y: v.y, r: null };
+  };
 
   const addBuilding = (x, y) => {
     if (!insideParcel(x, y)) return;
@@ -974,6 +1171,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   // Parameters start at the Massing-modeller defaults (RIEGEL_STANDARD); edits go straight to the data
   // (no undo history yet — that is phase 102).
   const riegelListe = Array.isArray(complexData?.riegel) ? complexData.riegel : [];
+  // 1/100 canvas unit; 104-05: also for areas (were whole units — a snapped corner moved up to half a unit away)
   const r2 = (/** @type {number} */ v) => Math.round(v * 100) / 100;
   const riegelFertig = (/** @type {boolean} */ geschlossen) => {
     const punkte = hatKarte ? draftGeo.map((q) => lngLatToCanvasPoint(q, loc.lat, loc.lng, mpp)) : draft;
@@ -1012,7 +1210,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     if (areaTyp === "grundstueck") { parcelSetzen(draft); setDraft([]); setAreaTyp("footprint"); return; }
     onAreasChange?.([
       ...(complexData?.designated_areas || []),
-      { id: `poly_${Date.now()}`, type: areaTyp, points: draft.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) },
+      { id: `poly_${Date.now()}`, type: areaTyp, points: draft.map((p) => ({ x: r2(p.x), y: r2(p.y) })) },
     ]);
     setDraft([]);
   };
@@ -1025,7 +1223,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     if (areaTyp === "grundstueck") { parcelSetzen(cpts); setDraftGeo([]); setAreaTyp("footprint"); return; }
     onAreasChange?.([
       ...(complexData?.designated_areas || []),
-      { id: `poly_${Date.now()}`, type: areaTyp, points: cpts.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) },
+      { id: `poly_${Date.now()}`, type: areaTyp, points: cpts.map((p) => ({ x: r2(p.x), y: r2(p.y) })) },
     ]);
     setDraftGeo([]);
   };
@@ -1035,7 +1233,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     const next = (complexData?.designated_areas || []).map((a) => {
       if (a.id !== areaId || !Array.isArray(a.points)) return a;
       const p = a.points.slice();
-      p[idx] = { x: Math.round(pt.x), y: Math.round(pt.y) };
+      p[idx] = { x: r2(pt.x), y: r2(pt.y) };
       return { ...a, points: p };
     });
     onAreasChange?.(next);
@@ -1044,11 +1242,11 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   const handleSvgClick = (e) => {
     if (movedRef.current) { movedRef.current = false; return; } // ignore click after a drag
     if (mode === "auswahl") return; // 95-04: handled by the pointer handlers
-    const { x, y } = toView(e);
-    if (mode === "building") { addBuilding(x, y); return; }
+    if (mode === "building") { const v = toView(e); addBuilding(v.x, v.y); return; }
     // 101-04: second click of a double-click finishes an open bar (the first one set the last point)
     if (mode === "riegel" && e.detail >= 2) { riegelFertig(false); return; }
-    // polygon / bar mode
+    // polygon / bar mode — 104-05: the point snaps (object snap, polar from the previous point, grid; Alt = free)
+    const { x, y } = fangeView(toView(e), { basis: draft[draft.length - 1] || null, alt: e.altKey });
     if (!insideParcel(x, y)) return;
     if (draft.length >= 3) {
       const first = draft[0];
@@ -1085,16 +1283,21 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   const onPointerMove = (e) => {
     if (dragRef.current?.areaId === "__riegel__") {
       movedRef.current = true;
-      riegelPunkt(dragRef.current.rid, dragRef.current.idx, toView(e));
+      // 104-05: a dragged bar point snaps to everything except its own bar
+      const f = fangeView(toView(e), { ausser: [dragRef.current.rid], alt: e.altKey });
+      setFangSvg(f);
+      riegelPunkt(dragRef.current.rid, dragRef.current.idx, f);
       return;
     }
     if (dragRef.current?.areaId === "__grundstueck__" || dragRef.current?.areaId === "__kante__") {
       movedRef.current = true;
       const v = toView(e);
       const d = dragRef.current;
-      parcelSetzen(d.areaId === "__kante__"
-        ? kanteVerschieben(d.start, d.idx, { x: v.x - d.von.x, y: v.y - d.von.y })
-        : eckeVerschieben(pts, d.idx, v));
+      if (d.areaId === "__kante__") { parcelSetzen(kanteVerschieben(d.start, d.idx, { x: v.x - d.von.x, y: v.y - d.von.y })); return; }
+      // 104-05: a dragged plot corner snaps to the other outlines (not to the plot's own edges)
+      const f = fangeView(v, { ausser: [QUELLE_GRUNDSTUECK], alt: e.altKey });
+      setFangSvg(f);
+      parcelSetzen(eckeVerschieben(pts, d.idx, f));
       return;
     }
     if (mode === "auswahl") { bb.bewegen(zuMeter(e), { x: e.clientX, y: e.clientY }, tastenVon(e)); return; }
@@ -1105,14 +1308,21 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
       setZugSvg({ a: z.a, b: toView(e) });
       return;
     }
-    if (!dragRef.current) return;
+    if (!dragRef.current) {
+      // 104-05: hover glyph while drawing — where the next click goes
+      if (mode === "polygon" || mode === "riegel") setFangSvg(fangeView(toView(e), { basis: draft[draft.length - 1] || null, alt: e.altKey }));
+      return;
+    }
     movedRef.current = true;
-    const { x, y } = toView(e);
     const { areaId, idx } = dragRef.current;
+    // 104-05: a dragged area corner snaps to the other outlines (not to its own area)
+    const f = fangeView(toView(e), { ausser: [areaId], alt: e.altKey });
+    setFangSvg(f);
     const next = (complexData?.designated_areas || []).map((a) => {
       if (a.id !== areaId || !Array.isArray(a.points)) return a;
       const p = a.points.slice();
-      p[idx] = { x: Math.round(x), y: Math.round(y) };
+      // 104-05: 2 decimals (1/100 canvas unit) instead of whole units — a snapped corner must stay on its target
+      p[idx] = { x: r2(f.x), y: r2(f.y) };
       return { ...a, points: p };
     });
     onAreasChange?.(next);
@@ -1121,6 +1331,8 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   const endDrag = (e) => {
     // 101-02b: an edge handle released without movement inserts a corner on that edge.
     if (dragRef.current?.areaId === "__kante__" && !movedRef.current && e?.type === "pointerup") parcelSetzen(eckeEinfuegen(dragRef.current.start, dragRef.current.idx));
+    // 104-05: a drag's snap glyph ends with the drag; the hover glyph leaves with the pointer
+    if (dragRef.current || e?.type === "pointerleave") setFangSvg(null);
     dragRef.current = null;
     const z = zugRef.current;
     zugRef.current = null;
@@ -1188,6 +1400,9 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               <Button size="sm" variant="ghost" onClick={bb.wiederholen} disabled={!bb.kannVor} aria-label={t("Wiederholen")} title={t("Wiederholen") + " (Strg+Y)"} data-testid="sd-redo">
                 <Redo2 className="w-4 h-4" />
               </Button>
+              <Button size="sm" variant="ghost" onClick={lageplanDxf} aria-label={t("Lageplan als DXF exportieren")} title={t("Lageplan als DXF exportieren")} data-testid="sd-dxf">
+                <Download className="w-4 h-4 mr-1" /> DXF
+              </Button>
               {mode === "polygon" && (
                 <>
                   {/* 75-06 Task 3 (MSB-3): role of the drawn polygon — native
@@ -1226,6 +1441,9 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               )}
             </div>
           </div>
+          {dxfHinweis && (
+            <div className="pt-1 text-[11px] text-muted-foreground" data-testid="sd-dxf-hinweis" role="status">{dxfHinweis}</div>
+          )}
         </CardHeader>
         <CardContent className="p-0 ws:flex-1 ws:min-h-0" ref={planRef} data-testid="sd-plan" data-auswahl={bb.auswahl.join(",")}>
           {hatKarte ? (
@@ -1254,6 +1472,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               onParcelPunkte={onParcelChange && !parcelGeschaetzt ? parcelSetzen : null}
               parcelSichtbar={!parcelGeschaetzt}
               onKontext={(e, einpassen) => kontext.oeffnen(e, baufeldKontext(einpassen))}
+              fangen={fangeM}
             />
           ) : (
           <div className="relative w-full rounded-lg border overflow-hidden aspect-[3/2] ws:aspect-auto ws:h-full">
@@ -1304,7 +1523,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               const c = centroid(a.points);
               return (
                 <g key={a.id}>
-                  <polygon points={a.points.map((p) => `${p.x},${p.y}`).join(" ")}
+                  <polygon points={a.points.map((p) => `${p.x},${p.y}`).join(" ")} data-testid="sd-area" data-id={a.id}
                     fill="rgba(13,148,136,0.28)" stroke="#0d9488" strokeWidth="2.5" />
                   <text x={c.x} y={c.y} textAnchor="middle" dominantBaseline="middle" fontSize="22" fontWeight="bold" fill="#0f766e">
                     {polygonAreaM2(a.points, parcel).toLocaleString("de-DE")} m²
@@ -1390,6 +1609,11 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               <line x1={bb.griff.x / mSite} y1={bb.griff.y / mSite} x2={bb.griff.x / mSite} y2={bb.griff.y / mSite - GRIFF_PX * vjp}
                 stroke="#f59e0b" strokeWidth={1.5 * vjp} pointerEvents="none" />
             )}
+            {/* 104-05: snap glyph (hover while drawing, or the dragged corner) */}
+            {fangSvg?.r && (
+              <FangGlyphe x={fangSvg.x} y={fangSvg.y} s={vjp} art={fangSvg.r.art} testid="sd-objektfang"
+                strahl={fangSvg.r.strahl ? strahlEnden({ x: fangSvg.r.strahl.von.x / mSite, y: fangSvg.r.strahl.von.y / mSite }, fangSvg, 40 * vjp, fangSvg.r.strahl.winkel_grad) : null} />
+            )}
             {bb.griff && (
               <circle data-testid="sd-drehgriff" cx={bb.griff.x / mSite} cy={bb.griff.y / mSite - GRIFF_PX * vjp} r={8 * vjp} fill="#f59e0b" stroke="#fff" strokeWidth={2.5 * vjp} style={{ cursor: "grab" }}
                 onPointerDown={(e) => { e.stopPropagation(); try { svgRef.current.setPointerCapture?.(e.pointerId); } catch (_) { /* noop */ } bb.griffRunter(zuMeter(e)); }}>
@@ -1404,7 +1628,8 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
         {(() => {
           const b = baufeldAufforderung(/** @type {any} */ (mode), { entwurf: hatKarte ? draftGeo.length : draft.length, gewaehlt: bb.auswahl.length, karte: hatKarte });
           const meldung = bb.winkel != null ? `${bb.winkel}°` : bb.fangZiel ? `${t("Fang")}: ${fangText(bb.fangZiel, t)}` : "";
-          return <Befehlszeile befehl={t(b.befehl)} aufforderung={t(b.aufforderung)} meldung={meldung} meldungTestid="sd-fang" testid="sd-befehlszeile" />;
+          return <Befehlszeile befehl={t(b.befehl)} aufforderung={t(b.aufforderung)} meldung={meldung} meldungTestid="sd-fang" testid="sd-befehlszeile"
+            schalter={fangSchalter(fangEinst, t)} schalterTestid="sd-schalter" />;
         })()}
         <KontextmenueAnzeige menue={kontext.menue} schliessen={kontext.schliessen} testid="sd-kontextmenue" />
       </Card>
@@ -1511,10 +1736,10 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
             counts as a tsc legacy error in this file (night-run rule 22.09.),
             so the block mirrors the card look with Tailwind classes only. */}
         <div className="rounded-lg border bg-card p-4 space-y-2" data-testid="sd-geojson-block">
-          <div className="text-sm font-semibold">{t("Flurstücke (GeoJSON)")}</div>
+          <div className="text-sm font-semibold">{t("Flurstücke (GeoJSON/DXF)")}</div>
           <input
             type="file"
-            accept=".geojson,.json"
+            accept=".geojson,.json,.dxf"
             data-testid="sd-geojson"
             onChange={onGeojsonDatei}
             className="block w-full text-xs text-slate-600 file:mr-2 file:rounded file:border-0 file:bg-emerald-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-emerald-700 hover:file:bg-emerald-100"
@@ -1544,7 +1769,41 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               ))}
             </div>
           )}
-          <p className="text-[11px] text-slate-400">
+          {/* 101-03: layer choice of the last DXF — re-reads the same file with the ticked layers. */}
+          {dxfQuelle && (
+            <fieldset className="space-y-1 rounded border border-border px-2 py-1.5 text-xs" data-testid="sd-dxf-ebenen">
+              <legend className="px-1 text-[11px] text-muted-foreground">{t("DXF-Ebenen")}</legend>
+              {dxfQuelle.ebenen.map((e) => (
+                <label key={e.name} className="flex items-center gap-1.5">
+                  <input type="checkbox" data-testid="sd-dxf-ebene" value={e.name}
+                    checked={dxfQuelle.gewaehlt.some((g) => g.toUpperCase() === e.name.toUpperCase())}
+                    onChange={(ev) => setDxfQuelle({ ...dxfQuelle, gewaehlt: ev.target.checked
+                      ? [...dxfQuelle.gewaehlt, e.name] : dxfQuelle.gewaehlt.filter((g) => g.toUpperCase() !== e.name.toUpperCase()) })} />
+                  <span className="truncate">{e.name}</span>
+                  <span className="ml-auto text-muted-foreground">{e.anzahl}</span>
+                </label>
+              ))}
+              <button type="button" data-testid="sd-dxf-neu" disabled={!dxfQuelle.gewaehlt.length}
+                className="mt-1 rounded border border-border px-2 py-0.5 hover:bg-muted disabled:opacity-50"
+                onClick={() => dxfEinlesen(dxfQuelle.text, dxfQuelle.gewaehlt)}>
+                {t("Mit gewählten Ebenen neu einlesen")}
+              </button>
+            </fieldset>
+          )}
+          {grenzMeldung && (
+            <div data-testid="sd-grenze-meldung" data-ok={grenzMeldung.ok ? "1" : "0"}
+              className={`rounded border px-2 py-1.5 text-[11px] ${grenzMeldung.ok ? "border-erfolg-rand bg-erfolg-flaeche text-erfolg" : "border-warnung-rand bg-warnung-flaeche text-warnung"}`}>
+              {grenzMeldung.text}
+            </div>
+          )}
+          {flurstuecke.length > 0 && onParcelChange && (
+            <button type="button" data-testid="sd-flurstuecke-grenze" onClick={flurstueckeAlsGrundstueck}
+              title={t("Alle Flurstücke zu einer Grenze vereinigen und als gezeichnetes Grundstück setzen")}
+              className="rounded border border-border px-2 py-1 text-xs font-medium hover:bg-muted">
+              {t("Als Grundstück übernehmen")}
+            </button>
+          )}
+          <p className="text-[11px] text-muted-foreground">
             {t("Wird automatisch gespeichert, sobald Projektname und Standort gesetzt sind.")}
           </p>
         </div>

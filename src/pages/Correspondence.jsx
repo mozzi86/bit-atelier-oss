@@ -25,6 +25,7 @@ import { mitRueckmeldung } from "@core/lib/mitRueckmeldung.js";
 import { useProject } from "@core/lib/ProjectContext";
 import { cloudGesperrt, projekteNachZugriff } from "@core/lib/rechte.js";
 import { inhaltLaden } from "@core/lib/speicherOrt";
+import { inhaltPruefen } from "@core/lib/pfadRichtlinie.js";
 import { DATENQUELLE } from "@core/lib/umgebung";
 import { useBestaetigung } from "@core/lib/useBestaetigung";
 import { useBriefkopf } from "@core/lib/useBriefkopf";
@@ -186,7 +187,11 @@ export default function Correspondence() {
     const doc = await /** @type {any} */ (bitApi).entities.Document.get(id);
     const inhalt = await inhaltLaden(doc?.data ?? null, doc?.data_blob ?? null);
     if (!inhalt) throw new Error(t("Das Dokument enthält keine Datei."));
-    herunterladen(String(inhalt), doc?.name || name);
+    // 104-10: the stored value becomes an <a href download> — embedded content of any type (a TIFF scan),
+    // never javascript:, a web address or a path.
+    const pruefung = inhaltPruefen(inhalt, { nurHerunterladen: true });
+    if (!pruefung.ok) throw new Error(t(/** @type {import("@core/lib/pfadRichtlinie.js").PfadAbgewiesen} */ (pruefung).meldung));
+    herunterladen(pruefung.url, doc?.name || name);
   };
   const pdf = async (/** @type {Record<string, any>} */ s) => {
     await mitRueckmeldung(async () => {

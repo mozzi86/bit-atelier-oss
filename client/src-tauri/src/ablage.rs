@@ -199,6 +199,8 @@ pub fn ablage_pruefen(ordner: String) -> Result<OrdnerBefund, String> {
     if !p.is_absolute() {
         return Err(format!("Der Ablageort muss ein vollständiger Pfad sein: {ordner}"));
     }
+    // 104-10: a device path is not inspected at all (a share is, it may be the office NAS).
+    crate::datei::kein_geraetepfad(&p)?;
     Ok(befund(&p))
 }
 
@@ -218,7 +220,7 @@ pub fn ablage_standard(app: AppHandle) -> Result<String, String> {
 pub async fn ablage_waehlen(app: AppHandle, start: Option<String>) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
     let mut dialog = app.dialog().file().set_title("Ablageort wählen");
-    if let Some(s) = start.filter(|s| Path::new(s).is_dir()) {
+    if let Some(s) = start.filter(|s| crate::datei::kein_geraetepfad(Path::new(s)).is_ok() && Path::new(s).is_dir()) {
         dialog = dialog.set_directory(s);
     }
     match dialog.blocking_pick_folder() {
@@ -278,6 +280,7 @@ pub fn ablage_kopieren(app: AppHandle, zustand: State<AblageZustand>, ziel: Stri
     if !nach.is_absolute() {
         return Err(format!("Der Ablageort muss ein vollständiger Pfad sein: {ziel}"));
     }
+    crate::datei::kein_geraetepfad(&nach)?;
     if nach.starts_with(&von) || von.starts_with(&nach) {
         return Err("Der neue Ablageort darf nicht im alten liegen (und umgekehrt).".into());
     }

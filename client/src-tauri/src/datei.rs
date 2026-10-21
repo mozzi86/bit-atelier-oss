@@ -15,6 +15,11 @@
 // and the status query only accept absolute paths with the extension .bitproj
 // and no ".." component; writing either replaces an EXISTING file or creates a
 // NEW one (`neu`), never both by accident, and never leaves a .tmp behind.
+// 104-10 (path rule; @core/lib/pfadRichtlinie.js on the page side): only paths on
+// a local drive — a UNC share (\\server\share) or a verbatim/device path (\\?\,
+// \\.\) is refused before the file system is asked (datei_lesen, datei_stand,
+// datei_schreiben, and the command line), and a command-line file whose
+// real path turns out to be on a share (mapped network drive) is not queued.
 // The page is our own bundle under a strict CSP — this bounds what it may touch,
 // it does not replace that.
 //
@@ -25,7 +30,7 @@ use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path, PathBuf, Prefix};
 use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 use tauri::State;
@@ -84,8 +89,13 @@ fn anzeige(p: &Path) -> String {
 pub fn vormerken(zustand: &DateiZustand, pfade: Vec<PathBuf>) -> bool {
     let mut neu = false;
     for p in pfade {
+        // 104-10: never resolve a share path (Windows would contact the server); a
+        // mapped drive only shows up as UNC after canonicalize — checked again.
+        if lokales_laufwerk(&p, false).is_err() {
+            continue;
+        }
         let Ok(echt) = fs::canonicalize(&p) else { continue };
-        if !echt.is_file() || !ist_bitproj(&echt) {
+        if lokales_laufwerk(&echt, true).is_err() || !echt.is_file() || !ist_bitproj(&echt) {
             continue;
         }
         if let (Ok(mut a), Ok(mut e)) = (zustand.ausstehend.lock(), zustand.erlaubt.lock()) {
@@ -113,9 +123,42 @@ fn info(p: &Path) -> Result<DateiInfo, String> {
     })
 }
 
-/// Absolute, .bitproj, no "..".
+/// Plain-text reasons, same wording as PFAD_MELDUNGEN in pfadRichtlinie.js.
+const NETZWERK: &str = r"Netzwerkpfade (\\Server\Freigabe) werden nicht geöffnet — bitte die Datei auf ein lokales Laufwerk kopieren.";
+const GERAET: &str = r"Geräte- und Systempfade (\\?\, \\.\, /dev, /proc) werden nicht geöffnet.";
+
+/// 104-10: the path names a local drive (`C:\…`) or has no Windows prefix at
+/// all (POSIX). `verbatim` = also accept `\\?\C:\…`, the form fs::canonicalize
+/// returns on Windows — never accepted from the page.
+pub fn lokales_laufwerk(p: &Path, verbatim: bool) -> Result<(), String> {
+    match p.components().next() {
+        Some(Component::Prefix(pre)) => match pre.kind() {
+            Prefix::Disk(_) => Ok(()),
+            Prefix::VerbatimDisk(_) if verbatim => Ok(()),
+            Prefix::UNC(..) | Prefix::VerbatimUNC(..) => Err(NETZWERK.into()),
+            _ => Err(GERAET.into()),
+        },
+        _ => Ok(()),
+    }
+}
+
+/// 104-10: a folder the user configured (the storage location of ablage.rs and
+/// profil.rs): a local drive or a network share is fine — a NAS is a sensible
+/// place for it —, a verbatim or device path (`\\?\`, `\\.\`) is not.
+pub fn kein_geraetepfad(p: &Path) -> Result<(), String> {
+    match p.components().next() {
+        Some(Component::Prefix(pre)) => match pre.kind() {
+            Prefix::Disk(_) | Prefix::UNC(..) => Ok(()),
+            _ => Err(GERAET.into()),
+        },
+        _ => Ok(()),
+    }
+}
+
+/// Absolute, on a local drive (104-10), .bitproj, no "..".
 pub fn pfad_pruefen(pfad: &str) -> Result<PathBuf, String> {
     let p = PathBuf::from(pfad);
+    lokales_laufwerk(&p, false)?;
     if !p.is_absolute() || !ist_bitproj(&p) {
         return Err("Nur absolute Pfade zu .bitproj-Dateien sind erlaubt.".into());
     }
@@ -170,14 +213,24 @@ pub fn datei_ausstehend(zustand: State<DateiZustand>) -> Result<Option<DateiInfo
     info(&naechste).map(Some)
 }
 
-/// The bytes of a file the user opened through the shell in this session.
-#[tauri::command]
-pub fn datei_lesen(zustand: State<DateiZustand>, pfad: String) -> Result<tauri::ipc::Response, String> {
-    let echt = fs::canonicalize(&pfad).map_err(|_| "Die Datei wurde nicht gefunden.".to_string())?;
+/// The real path of a file the page may read: on a local drive (104-10) and opened
+/// through the shell in this session. The drive check runs BEFORE fs::canonicalize —
+/// resolving a UNC path would already open the SMB connection (and offer the Windows
+/// credentials) before the allow list could refuse it.
+pub fn lesen_erlaubt(zustand: &DateiZustand, pfad: &str) -> Result<PathBuf, String> {
+    lokales_laufwerk(Path::new(pfad), false)?;
+    let echt = fs::canonicalize(pfad).map_err(|_| "Die Datei wurde nicht gefunden.".to_string())?;
     let erlaubt = zustand.erlaubt.lock().map_err(|_| "Interner Fehler.")?.contains(&echt);
     if !erlaubt {
         return Err("Diese Datei wurde nicht über BIT-Atelier geöffnet.".into());
     }
+    Ok(echt)
+}
+
+/// The bytes of a file the user opened through the shell in this session.
+#[tauri::command]
+pub fn datei_lesen(zustand: State<DateiZustand>, pfad: String) -> Result<tauri::ipc::Response, String> {
+    let echt = lesen_erlaubt(&zustand, &pfad)?;
     if fs::metadata(&echt).map(|m| m.len()).unwrap_or(0) > MAX_BYTES {
         return Err("Die Datei ist zu groß (über 64 MB).".into());
     }
@@ -248,6 +301,33 @@ mod tests {
         assert!(pfad_pruefen(o.join("x.txt").to_str().unwrap()).is_err());
         assert!(pfad_pruefen(o.join("..").join("x.bitproj").to_str().unwrap()).is_err());
         assert!(pfad_pruefen(o.join("x.bitproj").to_str().unwrap()).is_ok());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn path_rule_104_10_local_drives_only() {
+        assert_eq!(pfad_pruefen(r"\\server\share\x.bitproj").unwrap_err(), NETZWERK);
+        assert_eq!(pfad_pruefen(r"\\?\UNC\server\share\x.bitproj").unwrap_err(), NETZWERK);
+        assert_eq!(pfad_pruefen(r"\\?\C:\x.bitproj").unwrap_err(), GERAET);
+        assert_eq!(pfad_pruefen(r"\\.\C:\x.bitproj").unwrap_err(), GERAET);
+        assert!(pfad_pruefen(r"C:\Projekte\x.bitproj").is_ok());
+        assert!(lokales_laufwerk(Path::new(r"\\?\C:\x.bitproj"), true).is_ok());
+        let z = DateiZustand::default();
+        assert!(!vormerken(&z, vec![PathBuf::from(r"\\server\share\x.bitproj")]));
+        // Reading refuses a share or device path before the file system is asked.
+        assert_eq!(lesen_erlaubt(&z, r"\\server.invalid\share\x.bitproj").unwrap_err(), NETZWERK);
+        assert_eq!(lesen_erlaubt(&z, r"\\?\UNC\server.invalid\share\x.bitproj").unwrap_err(), NETZWERK);
+        assert_eq!(lesen_erlaubt(&z, r"\\?\C:\x.bitproj").unwrap_err(), GERAET);
+        assert_eq!(lesen_erlaubt(&z, r"C:\gibt-es-nicht-10410\x.bitproj").unwrap_err(), "Die Datei wurde nicht gefunden.");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn path_rule_104_10_configured_folders() {
+        assert!(kein_geraetepfad(Path::new(r"C:\Ablage")).is_ok());
+        assert!(kein_geraetepfad(Path::new(r"\\nas\buero\Ablage")).is_ok());
+        assert_eq!(kein_geraetepfad(Path::new(r"\\?\C:\Ablage")).unwrap_err(), GERAET);
+        assert_eq!(kein_geraetepfad(Path::new(r"\\.\PhysicalDrive0")).unwrap_err(), GERAET);
     }
 
     #[test]

@@ -54,6 +54,8 @@ pub fn pruefen(profil: &Profil) -> Result<(), String> {
         if !Path::new(ort).is_absolute() {
             return Err(format!("Der Ablageort muss ein vollständiger Pfad sein: {ort}"));
         }
+        // 104-10: no verbatim/device path as storage location; a share stays allowed.
+        crate::datei::kein_geraetepfad(Path::new(ort))?;
     }
     Ok(())
 }
@@ -129,6 +131,14 @@ mod tests {
         assert!(pruefen(&profil("A", Some("relativ/ordner"))).is_err());
         let absolut = std::env::temp_dir();
         assert!(pruefen(&profil("A", absolut.to_str())).is_ok());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn storage_location_no_device_path_104_10() {
+        assert!(pruefen(&profil("A", Some(r"\\?\C:\Ablage"))).is_err());
+        assert!(pruefen(&profil("A", Some(r"\\.\C:\Ablage"))).is_err());
+        assert!(pruefen(&profil("A", Some(r"\\nas\buero\Ablage"))).is_ok());
     }
 
     #[test]

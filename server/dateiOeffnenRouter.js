@@ -24,8 +24,12 @@
 //     Origin or Sec-Fetch-Site — a web page in the browser can neither read the secret nor send a
 //     request without those headers;
 //   - the app's actions (apply, cancel, save back) need the app's own Origin (same rule as systemRouter);
-//   - paths: absolute, extension .bitproj, real path a regular file, ≤ 64 MB, unpacked ≤ 256 MB;
-//     saving back never takes a path from the request, only the one stored at import time;
+//   - paths: the path rule of 104-10 (@core/lib/pfadRichtlinie.js — local drive paths only, no UNC, device,
+//     URL, drive-relative or ".." paths), checked BEFORE the disk is touched and again on the real path
+//     (a symlink, junction or mapped network drive resolves to a refused path); extension .bitproj, real
+//     path a regular file, ≤ 64 MB, unpacked ≤ 256 MB;
+//     saving back never takes a path from the request, only the one stored at import time — and checks
+//     that one against the same rule (dateiquelle.json lives in the data folder, not in a trusted place);
 //   - tokens: 32 random bytes, 15 minutes, consumed on apply, at most 3 staged files at a time.
 //
 // Storage (D-93-10-03): the source path is NEVER written into db.json or an export (it names the user's
@@ -44,6 +48,7 @@ import {
   DATEI_ENDUNG, parseProjektDatei, serialisiereProjekt, entferneBereiche, mitBehaltenem,
   kopieAnfuegen, projekteIn, vorhandeneProjekte,
 } from '../packages/nova-core/src/api/projektDateiFormat.js';
+import { pfadRichtlinie } from '../packages/nova-core/src/lib/pfadRichtlinie.js';
 
 /** Largest .bitproj file read from disk, bytes (64 MB). [ASSUMED] — a full office backup is a few MB gzipped. */
 export const MAX_DATEI_BYTES = 64 * 1024 * 1024;
@@ -69,16 +74,33 @@ class DateiFehler extends Error {
   }
 }
 
+/** The notation of THIS machine for the path rule. */
+const PLATTFORM = process.platform === 'win32' ? 'win32' : 'posix';
+
 /**
- * Checks a path a launcher sent: absolute, `.bitproj`, a regular file within the size limit. Resolves
- * symlinks first and checks the extension of the real target too.
+ * 104-10: the path rule for a path that came from outside (launcher, dateiquelle.json) — throws the
+ * plain-text reason as a 400.
  * @param {unknown} pfad
- * @returns {Promise<string>} the real absolute path
- * @throws {DateiFehler} 400 (not a .bitproj path), 404 (missing), 413 (too large)
+ * @param {'win32'|'posix'} [plattform] notation (default: this machine; tests pass the other one)
+ * @returns {string} the normalised absolute path
+ * @throws {DateiFehler} 400 with the reason of pfadRichtlinie
  */
-export async function pfadPruefen(pfad) {
-  if (typeof pfad !== 'string' || !pfad || pfad.length > 4096 || pfad.includes('\0')) throw new DateiFehler(400, 'Kein gültiger Dateipfad.');
-  if (!path.isAbsolute(pfad)) throw new DateiFehler(400, 'Der Pfad muss absolut sein.');
+export function lokalerPfad(pfad, plattform = PLATTFORM) {
+  const e = pfadRichtlinie(pfad, { plattform });
+  if (!e.ok) throw new DateiFehler(400, e.meldung);
+  return e.pfad;
+}
+
+/**
+ * Checks a path a launcher sent: the path rule (104-10), `.bitproj`, a regular file within the size limit.
+ * Resolves symlinks first and checks the rule and the extension of the real target too.
+ * @param {unknown} eingabe
+ * @returns {Promise<string>} the real absolute path
+ * @throws {DateiFehler} 400 (refused by the path rule, not a .bitproj path), 404 (missing), 413 (too large)
+ */
+export async function pfadPruefen(eingabe) {
+  // Before any fs call: a UNC or device path must not even be looked up (Windows would contact the server).
+  const pfad = lokalerPfad(eingabe);
   if (path.extname(pfad).toLowerCase() !== DATEI_ENDUNG) throw new DateiFehler(400, `Nur ${DATEI_ENDUNG}-Dateien können geöffnet werden.`);
   let echt;
   try {
@@ -86,6 +108,7 @@ export async function pfadPruefen(pfad) {
   } catch {
     throw new DateiFehler(404, 'Die Datei wurde nicht gefunden.');
   }
+  lokalerPfad(echt);
   if (path.extname(echt).toLowerCase() !== DATEI_ENDUNG) throw new DateiFehler(400, `Nur ${DATEI_ENDUNG}-Dateien können geöffnet werden.`);
   const st = await fs.promises.stat(echt);
   if (!st.isFile()) throw new DateiFehler(400, 'Der Pfad ist keine Datei.');
@@ -377,13 +400,16 @@ export function dateiOeffnenRouter({ db, lokalGebunden, port, origins = [], anfr
   r.get('/datei/quelle', nurLokal, (_req, res) => {
     const q = quelleLesen();
     if (!q) return res.json({ quelle: null });
-    res.json({ quelle: { name: q.name, pfad: q.pfad, projektname: q.projektname, importiertAm: q.importiertAm, gespeichertAm: q.gespeichertAm }, vorhanden: fs.existsSync(q.pfad) });
+    // 104-10: a stored link that breaks the path rule is shown, but never looked up on disk.
+    const zulaessig = pfadRichtlinie(q.pfad, { plattform: PLATTFORM }).ok;
+    res.json({ quelle: { name: q.name, pfad: q.pfad, projektname: q.projektname, importiertAm: q.importiertAm, gespeichertAm: q.gespeichertAm }, vorhanden: zulaessig && fs.existsSync(q.pfad) });
   });
 
   r.post('/datei/zurueckschreiben', nurLokal, nurApp, async (req, res) => {
     try {
       const q = quelleLesen();
       if (!q?.pfad) throw new DateiFehler(404, 'Keine verknüpfte Projektdatei.');
+      lokalerPfad(q.pfad);
       if (path.extname(q.pfad).toLowerCase() !== DATEI_ENDUNG) throw new DateiFehler(400, 'Die verknüpfte Datei ist keine Projektdatei.');
       const entscheidung = req.body?.entscheidung;
       if (entscheidung != null && entscheidung !== 'ueberschreiben' && entscheidung !== 'kopie') throw new DateiFehler(400, 'Unbekannte Entscheidung.');

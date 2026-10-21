@@ -6,6 +6,9 @@
 // Only loaded behind inHuelle() (dynamic import), so the browser builds never carry it.
 // The source link (path, size, modification time at import) lives in localStorage of the shell — local
 // to this machine, never in the project data or an export (D-93-10-03).
+// 104-10: every path handed to the shell passes the path rule (@core/lib/pfadRichtlinie.js) first — the shell
+// (datei.rs pfad_pruefen) checks "absolute, .bitproj, no .." but accepted \servershare paths, and the link in
+// localStorage is not a trusted place.
 //
 // In:  the commands of the shell, the in-browser database (demoDb via projektDatei.js).
 // Out: importAdapterHuelle() and quelleAdapterHuelle() with the shape of src/lib/dateiOeffnenServer.js,
@@ -17,6 +20,19 @@ import { huelleAufrufen } from "./huelle.js";
 import { demoDbAuslesen, demoDbErsetzen } from "@core/api/demoDb";
 import { parseProjektDatei, uebernehmeProjekt, projektAlsBlob, kopieAnfuegen, vorhandeneProjekte, projekteIn } from "@core/api/projektDatei";
 import { anzahlenVon, kopieOptionen, zurueckOptionen } from "@/lib/dateiOeffnen.js";
+import { pfadRichtlinie } from "@core/lib/pfadRichtlinie.js";
+
+/**
+ * 104-10: the path rule for a path the page is about to hand to the shell.
+ * @param {unknown} pfad
+ * @returns {string} the path as given (the shell canonicalises it itself)
+ * @throws {Error} with the plain-text reason of the rule
+ */
+export function huellenPfad(pfad) {
+  const e = pfadRichtlinie(pfad);
+  if (!e.ok) throw new Error(/** @type {import("@core/lib/pfadRichtlinie.js").PfadAbgewiesen} */ (e).meldung);
+  return /** @type {string} */ (pfad);
+}
 
 /** localStorage key of the source link. */
 export const LINK_SCHLUESSEL = "bit-atelier.dateiquelle.v1";
@@ -60,7 +76,7 @@ export function beiNeuerDatei(fn) {
  */
 async function schreiben(pfad, bytes, neu) {
   try {
-    return await invoke("datei_schreiben", bytes, { headers: { pfad: hex(pfad), neu: neu ? "1" : "0" } });
+    return await invoke("datei_schreiben", bytes, { headers: { pfad: hex(huellenPfad(pfad)), neu: neu ? "1" : "0" } });
   } catch (e) {
     throw e instanceof Error ? e : new Error(String(e));
   }
@@ -79,7 +95,7 @@ export async function importAdapterHuelle() {
   if (!info) return null;
   return {
     async laden() {
-      const roh = /** @type {ArrayBuffer} */ (await huelleAufrufen("datei_lesen", { pfad: info.pfad }));
+      const roh = /** @type {ArrayBuffer} */ (await huelleAufrufen("datei_lesen", { pfad: huellenPfad(info.pfad) }));
       const obj = await parseProjektDatei(roh);
       const lokal = await demoDbAuslesen();
       return {
@@ -129,15 +145,17 @@ export function quelleAdapterHuelle() {
     async quelle() {
       const link = linkLesen();
       if (!link?.pfad) return null;
+      // A link that breaks the path rule is shown, but never looked up (no request to a share).
+      const zulaessig = pfadRichtlinie(link.pfad).ok;
       /** @type {DateiInfo|null} */
-      const stand = await huelleAufrufen("datei_stand", { pfad: link.pfad }).catch(() => null);
+      const stand = zulaessig ? await huelleAufrufen("datei_stand", { pfad: link.pfad }).catch(() => null) : null;
       return { name: link.name, pfad: link.pfad, importiertAm: link.importiertAm, gespeichertAm: link.gespeichertAm, vorhanden: !!stand };
     },
     async zurueck(entscheidung) {
       const link = linkLesen();
       if (!link?.pfad) throw new Error("Keine verknüpfte Projektdatei.");
       /** @type {DateiInfo|null} */
-      const stand = await huelleAufrufen("datei_stand", { pfad: link.pfad });
+      const stand = await huelleAufrufen("datei_stand", { pfad: huellenPfad(link.pfad) });
       const geaendert = !stand || stand.groesse !== link.groesse || stand.geaendert_ms !== link.geaendertMs;
       if (geaendert && !entscheidung) return { konflikt: stand ? "geaendert" : "fehlt" };
       const { blob } = await projektAlsBlob(link.projektname || undefined, {

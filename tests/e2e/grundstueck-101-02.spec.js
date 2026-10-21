@@ -28,6 +28,8 @@ test("101-02 Grundstück: Schätzung unsichtbar, zeichnen → gezeichnet, dann E
     // draw the plot: four clicks + close
     await page.getByTestId("sd-grundstueck-zeichnen").click();
     await expect(page.getByTestId("sd-area-typ")).toHaveValue("grundstueck");
+    // the map only takes clicks after its style loaded (104-05 review: a click before that went nowhere → 3 points)
+    await expect(plan.locator(".maplibregl-map[data-klick-bereit='1']")).toHaveCount(1, { timeout: 60000 });
     const canvas = plan.locator("canvas.maplibregl-canvas");
     await canvas.scrollIntoViewIfNeeded();
     const k = /** @type {any} */ (await canvas.boundingBox());

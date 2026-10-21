@@ -131,11 +131,12 @@ test.describe("75-06 — Flurstueck, Baufeld, Baukoerper (MS-06)", () => {
       // KPI Grundstueck nennt die Quelle "Flurstuecke" (MSB-2: Polygonbezug).
       const kpiGrund = page.getByTestId("ms-kpi-grundstueck");
       await expect(kpiGrund).toContainText("Flurstücke");
-      // Huelle 72.5 x 112.5 m = 8156 m² (Handrechnung, gerundet). de-DE
-      // thousand separator "." must go before Number().
+      // 0.001° lng × 111 320 m × cos 49.4521° = 72.39 m, 0.001° lat = 111.32 m → 8 058 m²
+      // (Handrechnung). 101-03: the import keeps 0.01 px; before, integer px made it
+      // 72.5 x 112.5 m = 8156 m². de-DE thousand separator "." must go before Number().
       const grundText = await kpiGrund.innerText();
       const grundZahl = Number((((grundText.match(/([\d.]+)\s*m²/) || [])[1] || "0").replace(/\./g, "")));
-      expect(Math.abs(grundZahl - 8156), `Grundstuecksflaeche ${grundZahl}`).toBeLessThan(50);
+      expect(Math.abs(grundZahl - 8058), `Grundstuecksflaeche ${grundZahl}`).toBeLessThan(20);
 
       // --- 3) Ebenen-Reiter: Griffe wandern --------------------------------
       await expect(page.locator("[data-baufeld]")).toHaveCount(1);

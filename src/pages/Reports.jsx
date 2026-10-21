@@ -31,6 +31,7 @@ import EmptyState from "@core/components/common/EmptyState";
 import { DRAWING_TYPES } from "@/components/reports/Drawings";
 import { exportElementToPdf, fileToDataUrl, fmtBytes } from "@core/lib/pdf";
 import { inhaltAblegen, inhaltLaden, blobIdNeu } from "@core/lib/speicherOrt";
+import { inhaltImFensterZeigen } from "@/lib/dokumentAnzeige.js";
 import { pfadText } from "@core/lib/ablage";
 import { fmtDate } from "@core/lib/projectModel";
 
@@ -165,8 +166,11 @@ export default function Reports() {
     const w = window.open(); // open synchronously (popup blocker), fill after the content is loaded
     if (!w) return;
     const data = await inhaltLaden(doc.data, doc.data_blob).catch(() => null);
-    if (data) w.document.write(`<iframe src="${data}" style="border:0;width:100%;height:100%"></iframe>`);
-    else w.document.write("Inhalt nicht gefunden.");
+    // 104-10: only embedded PDF/raster-image content is shown, built with DOM calls (no document.write of record
+    // values); other embedded types (an SVG drawing, a TIFF scan — the upload accepts image/*) are offered as a
+    // download instead of becoming unreachable.
+    if (data) inhaltImFensterZeigen(w, data, { name: doc.name, t, sonstHerunterladen: true });
+    else w.document.body.textContent = t("Inhalt nicht gefunden.");
   };
   const deleteDoc = async (id) => { await bitApi.entities.Document.delete(id); reload(projectId); };
 

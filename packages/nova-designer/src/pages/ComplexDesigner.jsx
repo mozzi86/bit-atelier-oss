@@ -6,9 +6,9 @@ import { toast } from "sonner";
 import { useBimModelSync } from "@core/lib/useBimModelSync";
 import { buildingProgram, useBuildingProgram } from "@core/lib/useBuildingProgram";
 import { footprintToMeters } from "@core/lib/buildingModel";
-import { polygonAreaM2, DEFAULT_METERS_PER_PIXEL, metersPerPixel } from "@core/lib/geo";
-// 75-06 Task 2: convex hull as the union approximation of imported parcels.
-import { konvexeHuelle } from "@core/lib/polygonInnen";
+import { polygonAreaM2, metersPerPixel } from "@core/lib/geo";
+// 101-03: true union of imported parcels (replaces the 75-06 convex-hull approximation).
+import { grundstueckAusFlurstuecken } from "@designer/lib/flurstueckImport";
 import { buildSiteParcel, parcelBbox, bboxIntersects, reanchorParcel, reanchorPoints } from "@designer/lib/siteParcel";
 import { istGeneriert } from "@designer/lib/apartments";
 // 72-02: Struktur der 30 Reiter als Daten — siehe config/designerNavigation.js.
@@ -96,6 +96,9 @@ export default function ComplexDesigner() {
     parking: { total_spaces: 0, parking_key: 1.0, barrier_free_spaces: 0, ev_charging_stations: 0 },
     energy_systems: [],
     topography: { elevation_points: [], slope_analysis: {}, drainage_plan: [] },
+    // 103-03: design flood levels typed in the flood tab, ADDITIVE ({ hq: [{ id, name, pegelNHN, quelle }] });
+    // marks on the water level slider of the 3D terrain view. Old records load with null.
+    hochwasser: null,
     cost_estimate: { construction_cost: 0, infrastructure_cost: 0, energy_system_cost: 0, site_preparation_cost: 0, total_cost: 0, cost_per_m2: 0 },
     interior_designs: [],
     // Raum-Möblierung: { [roomKey]: [{id, typ, x, y, rot}] } — siehe @designer/lib/moebel
@@ -454,8 +457,10 @@ export default function ComplexDesigner() {
   // @designer/lib/flurstueckImport, this handler owns the data-model write.
   // grundstueck.flurstuecke is ADDITIVE; site_parcel is only replaced when no
   // DRAWN parcel exists yet (a hand-drawn boundary wins over an import).
-  // Union approximation: the convex hull of all parcel points — NOT a true
-  // polygon union ([ASSUMED], needs a boolean library = new dependency).
+  // 101-03: the boundary is the true UNION of the parcels (own edge-cancellation
+  // union, @core/lib/polygonVereinigung) and counts as drawn (assumed:false). When
+  // the parcels do not form one simple area (gap, overlap, corner contact, hole)
+  // site_parcel stays as it is — SiteDesigner shows the reason (no convex-hull guess).
   const handleFlurstueckImport = (flurstuecke) => {
     if (!Array.isArray(flurstuecke)) return;
     setComplexData((prev) => {
@@ -467,23 +472,22 @@ export default function ComplexDesigner() {
       const next = { ...prev, grundstueck: { ...(prev.grundstueck || {}), flurstuecke } };
       const hatGezeichneteParzelle = prev.site_parcel?.source === "gezeichnet";
       if (!hatGezeichneteParzelle) {
-        // Derive the reference boundary from the imported parcels: convex hull
-        // of every point, area via polygonAreaM2 on the SAME canvas px.
-        const allePunkte = flurstuecke.flatMap((f) => f.polygon || []);
-        const huelle = konvexeHuelle(allePunkte);
-        if (huelle.length >= 3) {
-          const mPerPx = Number(prev.site_parcel?.m_per_px) || DEFAULT_METERS_PER_PIXEL;
+        // The parcels were projected with the scale of the current plot (SiteDesigner passes
+        // metersPerPixel(site_parcel)); keep exactly that scale so buildings and areas stay put.
+        const mPerPx = Number(flurstuecke[0]?.m_per_px) > 0 ? Number(flurstuecke[0].m_per_px) : metersPerPixel(prev.site_parcel);
+        const grenze = grundstueckAusFlurstuecken(flurstuecke, { mPerPx });
+        if (grenze.ok) {
+          const { geschaetzte_flaeche_m2: _g, ...alt } = prev.site_parcel || {};
           next.site_parcel = {
+            ...alt,
             id: prev.site_parcel?.id || "site_parcel_main",
             type: "site_boundary",
-            // Mehr als ein Flurstück → die Hülle ist eine Näherung der
-            // Vereinigung, deshalb assumed:true (sichtbar in den Panels).
-            assumed: flurstuecke.length > 1,
+            assumed: false,
             source: "flurstuecke",
             m_per_px: mPerPx,
-            points: huelle.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })),
+            points: grenze.punkte,
           };
-          next.site_area = Math.round(polygonAreaM2(huelle, { m_per_px: mPerPx }));
+          next.site_area = grenze.flaeche_m2;
         }
       }
       return next;
@@ -666,7 +670,7 @@ export default function ComplexDesigner() {
               </TabsContent>
 
               <TabsContent value="terrain" className="px-0 py-2">
-                <TerrainView3D />
+                <TerrainView3D complexData={complexData} />
               </TabsContent>
 
               <TabsContent value="bim" className="px-0 py-2 ws:flex-1 ws:min-h-0 ws:overflow-y-auto">
@@ -787,8 +791,9 @@ export default function ComplexDesigner() {
               </TabsContent>
               
               <TabsContent value="flood_risk" className="px-0 py-2">
-                <FloodRiskAnalyzer 
+                <FloodRiskAnalyzer
                   selectedProject={complexData}
+                  onHochwasserChange={(hw) => updateComplexData('hochwasser', hw)}
                 />
               </TabsContent>
               

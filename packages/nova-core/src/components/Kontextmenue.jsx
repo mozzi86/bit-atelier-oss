@@ -4,10 +4,12 @@
 //
 // In:  useKontextmenue() in the drawing component; oeffnen(event, eintraege) on "contextmenu".
 // Out: <KontextmenueAnzeige menue={…} schliessen={…} /> renders the open menu (fixed position, portal-free).
+// 104-05: an entry with `an` (boolean) is a switch — role "menuitemcheckbox" with aria-checked and a tick; `gruppe`
+// puts a small heading above the entry (e.g. "Fang").
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 /**
- * @typedef {{label: string, taste?: string, onClick: () => void, disabled?: boolean, gefahr?: boolean, trenner?: boolean}} Eintrag
+ * @typedef {{label: string, taste?: string, onClick: () => void, disabled?: boolean, gefahr?: boolean, trenner?: boolean, an?: boolean, gruppe?: string}} Eintrag
  * @typedef {{x: number, y: number, eintraege: Eintrag[]}|null} MenueZustand
  */
 
@@ -64,14 +66,18 @@ export function KontextmenueAnzeige({ menue, schliessen, testid = "kontextmenue"
       {menue.eintraege.map((e, i) => (
         <React.Fragment key={`${e.label}-${i}`}>
           {e.trenner && i > 0 && <div className="my-1 h-px bg-border" role="separator" />}
+          {e.gruppe && <div role="presentation" className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{e.gruppe}</div>}
           <button
             type="button"
-            role="menuitem"
+            role={typeof e.an === "boolean" ? "menuitemcheckbox" : "menuitem"}
+            aria-checked={typeof e.an === "boolean" ? e.an : undefined}
             disabled={e.disabled}
             onClick={() => { schliessen(); e.onClick(); }}
             className={`flex w-full items-center justify-between gap-6 rounded px-2 py-1.5 text-left hover:bg-muted focus:bg-muted focus:outline-none disabled:pointer-events-none disabled:opacity-40 ${e.gefahr ? "text-fehler" : ""}`}
           >
-            <span>{e.label}</span>
+            {typeof e.an === "boolean"
+              ? <span className="flex items-center gap-1.5"><span aria-hidden="true" className="inline-block w-3 text-center text-primary">{e.an ? "✓" : ""}</span>{e.label}</span>
+              : <span>{e.label}</span>}
             {e.taste && <span className="text-xs text-muted-foreground">{e.taste}</span>}
           </button>
         </React.Fragment>

@@ -10,7 +10,46 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
-## [1.8.0] - 2026-10-21
+## [1.9.0] - 2026-10-21
+
+### Neu
+
+- **PDF-Studio: „Im PDF speichern“:** Pins, Freihand und Texte werden als echte PDF-Anmerkungen in die Datei geschrieben — die Originaldatei bleibt Byte für Byte erhalten, die Änderung wird hinten angehängt (inkrementelle Aktualisierung). Jedes weitere Speichern hängt erneut an; der Knopf zeigt, wie viele Änderungen noch nicht im PDF sind. Daneben „PDF herunterladen“ für die gespeicherte Datei. Festgeschriebene Dokumente (versendete Schreiben, Honorarangebote, Auftragsbestätigungen mit Prüfsumme) bleiben unangetastet: Anmerkungen darauf sind möglich und lassen sich annotiert exportieren, „Im PDF speichern“ ist dort gesperrt und ein Hinweis erklärt warum.
+- **PDF-Studio: Wiederherstellen nach Absturz:** ein begonnener Kommentar und Anmerkungen, die der Server nicht angenommen hat, werden im Browser gesichert. Beim nächsten Öffnen derselben Datei bietet das Studio „Wiederherstellen“ oder „Verwerfen“ an.
+- **Gelände 3D zeigt das Grundstück von oben:** Die Kamera kreist schräg von Süden über dem Gelände und kommt nie mehr darunter; Grundstücksumriss und Baukörper stehen auf dem Gelände, dazu Nordpfeil, Maßstabsleiste, Höhenkoten (tiefster/höchster Punkt, Grundstücksmitte) und die Datenquelle. Ein Demo-Gelände ohne Höhendaten ist deutlich als „erfundene Höhen“ markiert.
+- **Überhöhung als Schieber** 1× (echt) bis 10× mit Anzeige „Überhöhung 3×“; der Startwert richtet sich nach dem Relief, die eigene Einstellung gilt. Ausschnitt 300 m oder 1 km umschaltbar.
+- **Wasserpegel-Studie** in „Gelände 3D“: Pegel in m ü. NHN per Schieber oder Zahl, halbtransparente Wasserfläche mit markierten überfluteten Bereichen, überflutete Grundstücksfläche in m² und %, Reihenfolge „Was überflutet zuerst“ (Grundstück, Baukörper, EG-Fußboden) mit Wassertiefe. Badewannen-Modell, kein Hochwassernachweis.
+- **Bemessungswasserstände (HQ)** im Reiter „Hochwasser“ eintragen (Bezeichnung, Wasserstand, Quelle) — sie erscheinen als Marken am Pegel-Schieber.
+- **Lageplan als DXF:** Knopf „DXF“ in der Baufeld-Planung (auch im Rechtsklick-Menü) speichert Grundstück, Flurstücke, Baufelder, Baukörper und Riegel als DXF R12 in Metern — der Ursprung ist der Projektstandort, jede CAD-Software öffnet die Datei.
+- **Grundriss als DXF:** „Aktuellen Plan als DXF“ im BIM-Studio (Mappe › Pläne / Output) — Wände, Stützen, Decken, Dächer und Raumtexte je auf eigener Ebene, geschnittene Wände gefüllt.
+- **Flurstücke aus DXF:** der Flurstück-Import liest jetzt auch DXF-Dateien (z. B. ALKIS-Auszug in ETRS89/UTM). Die passende Ebene wird vorgeschlagen und lässt sich umstellen; Flurstücksnummern werden aus den Texten übernommen.
+- **Mehrere Flurstücke werden eine Grundstücksgrenze:** benachbarte Flurstücke werden zu einem Grundstück vereinigt, das sofort als gezeichnet gilt und bearbeitbar ist. Liegen Lücken oder Überschneidungen vor, sagt die App das, statt eine Grenze zu erfinden. „Als Grundstück übernehmen“ ersetzt auf Wunsch auch ein bereits gezeichnetes Grundstück.
+- **Objektfang wie im CAD** im Massing-Studio und in der Baufeld-Planung (Karte und Plan ohne Karte): Punkte rasten auf Endpunkt, Mitte, Schnittpunkt und Lot ein, auf Wunsch auch auf den nächsten Punkt einer Kante; ein Symbol am Mauszeiger zeigt, was gefangen wird (Quadrat = Endpunkt, Dreieck = Mitte, X = Schnittpunkt, ⊥ = Lot). Polarfang zeigt eine Spurlinie mit Winkel (Standard 90°, z. B. „polar 15“), Ortho zwingt auf die Achsen, das Raster (Standard 0,25 m) lässt sich mit „raster 0,5“ ändern. Alt gedrückt = ohne Fang.
+- **Fang schalten:** F3 Objektfang, F8 Ortho, F9 Raster, F10 Polar, die Schalter FANG · ORTHO · POLAR · RASTER rechts in der Befehlszeile, die Gruppe „Fang“ im Rechtsklick-Menü (mit Häkchen) oder getippt: „fang“, „ortho“, „polar 45“, „raster 1m“. Einmal-Fang für den nächsten Klick über das Eingabefeld: „end“, „mit“, „sch“, „lot“, „nae“ (Esc oder ein Werkzeugwechsel heben ihn wieder auf). Die Einstellung gilt für beide Zeichenflächen und bleibt im Browser gespeichert.
+- In der Baufeld-Planung fangen auch die Ecken von Grundstück, Baufeldern und Riegeln beim Ziehen.
+- **Wohnungen als feste Objekte:** Werkplanung → „Wohnungen & Sonderwünsche“ übernimmt die Wohnungen aus der Wohnungs-Werkstatt oder den Riegeln mit festen Nummern (W-001 …). Bei einem neuen Zuschnitt gleicht „Mit dem Modell abgleichen“ ab statt neu zu nummerieren: geänderte Fläche, Typ oder Zimmerzahl wird gemeldet (Warnung bei verkauften/reservierten Wohnungen oder solchen mit Sonderwünschen), entfallene Wohnungen werden markiert, nie gelöscht. Wird eine Wohnung geteilt, behält die größere Hälfte die Nummer. Je Wohnung Verkaufsstand, Käufer und Bauabschnitt. Ein Doppelklick auf „Abgleich übernehmen“ oder „Speichern“ legt keine Nummer doppelt an.
+- **Sonderwünsche je Wohnung mit Freigabekette:** Ausstattungskatalog je Projekt (Standard und Optionen je Gewerk mit Mehr-/Minderpreis). Ein Wunsch läuft angefragt → geprüft → angeboten → freigegeben/abgelehnt → eingearbeitet → abgenommen; welche technische Prüfung nötig ist, richtet sich nach dem Eingriff (Ausstattung: Bauleitung; Grundriss/Installation: + Architektur; Wand, Decke, Durchbruch, Last: + Tragwerksplanung), Stichworte wie „Durchbruch“, „Wand … entfernen“, „Fenster vergrößern“ oder „Steckdose“ heben die Stufe an; ein freier Wunsch ohne Einstufung bekommt mindestens die Architektur. Preise dürfen mit Tausenderpunkt eingegeben werden („1.250“ = 1 250 €). Ein freigegebener Wunsch mit Produkt/Farbe wird als freigegebenes Muster der Wohnung gespeichert; Bemusterungsprotokoll je Wohnung als PDF. Liste und Protokoll im Reiter Bemusterung zeigen weiter nur die Projektmuster – Käufermuster und Käufernamen erscheinen dort nicht.
+- **Entscheidungsfrist aus dem Bauablauf:** spätester Freigabetermin je Wohnung und Gewerk = Beginn des Gewerks im Bauabschnitt minus 4 Wochen; Ampel im Wohnungsplan, in der Wunschliste und in einer Übersicht Wohnung × Gewerk. Wird ein Vorgang verschoben, wandert die Frist mit („verschoben um 14 Tage“); eine Freigabe nach Fristablauf wird als Nachtrag mit Rückbau-/Terminrisiko markiert.
+
+### Geändert
+
+- PDF-Studio: Kommt eine neue Anmerkung oder ein Löschen nicht beim Server an, geht es nicht mehr verloren, sondern bleibt im Browser gesichert (Hinweis über der Werkzeugleiste) und wird beim Speichern oder Wiederherstellen nachgetragen.
+- **Projektdateien nur noch von lokalen Laufwerken:** Doppelklick auf eine `.bitproj` im Netzwerk (`\\Server\Freigabe`), eine `file:`-Adresse mit Rechnernamen oder ein Gerätepfad wird mit einem Klartext-Grund abgewiesen („bitte die Datei auf ein lokales Laufwerk kopieren“) — Windows schickt sonst schon beim Nachsehen die Anmeldedaten an den fremden Rechner. Gilt auch für „Zurück in die Datei speichern“ und die Desktop-App.
+- Sicherungsordner, Datenordner und Ablageort der Desktop-App dürfen weiter auf einer Netzfreigabe (NAS) liegen; Gerätenamen wie `NUL` oder Pfade wie `\\?\…` werden dort abgewiesen.
+- Importierte Flurstücke werden auf etwa einen Zentimeter genau übernommen (vorher bis zu 60 cm Rundung) und im Maßstab des aktuellen Lageplans abgelegt.
+- Eine beschädigte oder nur teilweise lesbare DXF-Datei wird beim Flurstück-Import mit der Zeile gemeldet, ab der nichts mehr gelesen wurde; die Grundstücksgrenze erscheint dann als Warnung („kann zu klein sein“) statt als Erfolg. Sehr große Dateien mit vielen Eckpunkten brechen nicht mehr mit einem technischen Fehler ab, sondern melden das Flurstück-Limit im Klartext.
+- Baufeld-Ecken werden auf 1/100 Planeinheit genau gespeichert statt auf ganze Einheiten gerundet — eine eingerastete Ecke bleibt genau auf ihrem Ziel.
+
+### Behoben
+
+- **Dokumente öffnen sicher:** Berichte › Dokumente, die Beleg-Vorschau der Buchhaltung, der Download im Schriftverkehr und die Befundfotos zeigen nur eingebettete Dateien (PDF, Bild, bei Belegen XML). Ein Eintrag, der stattdessen einen Verweis oder ein Skript enthält, wird nicht ausgeführt; das Fenster nennt den Grund.
+- **Andere Dateitypen bleiben erreichbar:** Gespeicherte Dokumente, die der Browser aus Sicherheitsgründen nicht anzeigt (z. B. SVG-Zeichnungen, TIFF-Scans), bietet Berichte › Dokumente zum Herunterladen an, statt nur den Grund zu nennen.
+- Die Desktop-App fragt auch beim Lesen einer per Doppelklick geöffneten Datei kein Netzlaufwerk mehr an, bevor der Pfad geprüft ist.
+- Gelände 3D war von unten zu sehen und Nord-Süd gespiegelt; die Begehung startet jetzt wirklich am Südrand.
+- Die Fußzeile „Höhe 5× überhöht“ stimmte nicht — die automatische Streckung ist entfallen, die angezeigte Überhöhung ist die echte.
+- Die Reiter der Werkplanung sind wieder gut lesbar (Kontrast der nicht gewählten Reiter).
+
+## [1.8.0] - 2026-10-19
 
 ### Neu
 

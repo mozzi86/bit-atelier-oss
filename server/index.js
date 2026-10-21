@@ -44,6 +44,10 @@ import { personalRouter } from '../packages/nova-core/server/personalRouter.js';
 import { typesafeRouter } from '../packages/nova-core/server/typesafe.js';
 import { pricesRouter } from '../packages/nova-ausschreibung/server/routes.js';
 import { geoRouter } from '../packages/nova-designer/server/routes.js';
+import { ifcTestPfad } from './ifcTestDatei.js';
+
+/** Path notation of this machine for the path rule (104-10). */
+const PLATTFORM = process.platform === 'win32' ? 'win32' : 'posix';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -269,19 +273,10 @@ app.get('/api/ifc-files', async (_req, res) => {
 });
 
 app.get('/api/ifc-test-file', async (req, res) => {
-  const path = await import('path');
-  let p = process.env.IFC_TEST_FILE || '';
-  const name = req.query.name;
-  if (name != null && name !== '') {
-    const base = path.basename(String(name));
-    if (base !== String(name) || base.includes('..')) {
-      return res.status(400).json({ error: 'Ungültiger Dateiname (kein Pfad erlaubt)' });
-    }
-    const dir = await resolveIfcDir();
-    if (!dir) return res.status(404).json({ error: 'Kein IFC-Ordner ermittelbar (IFC_DIR oder IFC_TEST_FILE setzen)' });
-    p = path.join(dir, base);
-  }
-  if (!p || !p.endsWith('.ifc')) return res.status(404).json({ error: 'IFC_TEST_FILE nicht gesetzt (.ifc-Pfad)' });
+  // 104-10: name check and path rule in server/ifcTestDatei.js (pure, unit-tested).
+  const wahl = ifcTestPfad({ name: req.query.name, ifcDir: await resolveIfcDir(), testDatei: process.env.IFC_TEST_FILE || '', plattform: PLATTFORM });
+  if (!wahl.ok) return res.status(wahl.status).json({ error: wahl.error });
+  const p = wahl.pfad;
   try {
     const { createReadStream, statSync } = await import('fs');
     const size = statSync(p).size;

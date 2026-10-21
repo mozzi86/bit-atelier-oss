@@ -17,7 +17,7 @@ import path from 'node:path';
 
 const WURZEL = path.resolve(import.meta.dirname, '..', '..');
 const MIG = path.join(WURZEL, 'supabase', 'migrations');
-const NUMMERN = ['0006', '0007', '0008', '0009', '0010', '0011', '0012', '0013', '0014'];
+const NUMMERN = ['0006', '0007', '0008', '0009', '0010', '0011', '0012', '0013', '0014', '0015'];
 
 /** Migration text without SQL line comments. */
 function lies(nummer) {

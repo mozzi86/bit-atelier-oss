@@ -42,6 +42,7 @@ import { ersetzeAtomar } from '../packages/nova-core/server/atomarErsetzen.js';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { zipSync } from 'fflate';
+import { pfadRichtlinie } from '../packages/nova-core/src/lib/pfadRichtlinie.js';
 
 /** Entries of the data folder that ARE the user's data (datenPfad.js header). */
 export const DATEN_EINTRAEGE = Object.freeze(['db.json', 'personal.json', 'blobs', 'personal-blobs']);
@@ -126,10 +127,16 @@ export function datenLesen(datenOrdner) {
  * Side effects: flushes the given databases, creates the target folder, writes one zip (via .tmp + rename).
  * @param {{datenOrdner: string, zielOrdner: string, dbs?: Array<{flush: () => unknown}>, jetzt?: Date, version?: string}} o
  * @returns {{datei: string, name: string, zeit: string, bytes: number, dateien: number}} bytes = zip size in bytes
- * @throws {Error} when the target folder lies inside a data entry (the backup would back itself up)
+ * @throws {Error} when the target folder lies inside a data entry (the backup would back itself up) or breaks
+ *   the path rule of 104-10 (device name/path, "..", control characters; a network share is allowed)
  */
 export function sicherungAnlegen({ datenOrdner, zielOrdner, dbs = [], jetzt = new Date(), version = '' }) {
   const ziel = path.resolve(zielOrdner);
+  // 104-10: the target comes from BIT_SICHERUNG_ORDNER (operator configuration). A share (\\nas\backup) is a
+  // sensible backup target, so UNC is allowed here; a device name (NUL — the zip would vanish), a device
+  // path or ".." is not. Refused with the plain-text reason, which the status shows as letzterFehler.
+  const regel = pfadRichtlinie(ziel, { plattform: process.platform === 'win32' ? 'win32' : 'posix', netzwerkErlaubt: true });
+  if (!regel.ok) throw new Error(`Sicherungsordner ungültig: ${regel.meldung}`);
   for (const eintrag of DATEN_EINTRAEGE) {
     const e = path.join(path.resolve(datenOrdner), eintrag);
     if (ziel === e || ziel.startsWith(e + path.sep)) throw new Error(`Sicherungsordner liegt in den Daten selbst (${eintrag}) — bitte einen anderen Ordner wählen.`);

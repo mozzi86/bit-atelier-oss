@@ -1,5 +1,5 @@
 // WerkplanungReiter — the tab strip shared by the pages "Werkplanung" (/Werkplanung,
-// LP 5: plan list, openings, sampling, H&S, permits) and "Baustelle" (/Baustelle, LP 8:
+// LP 5: plan list, openings, sampling, apartments & special requests (99), H&S, permits) and "Baustelle" (/Baustelle, LP 8:
 // site diary). NAV-PLAN 2026-10-13, variant A: the former page "Werkplanung & Baustelle"
 // is split into two routes so that station 5 and station 8 of the office workflow each
 // have their own sidebar entry. The phase-88 tab components and their entities are
@@ -21,6 +21,10 @@ import SigeKarte from "./SigeKarte";
 import BautagebuchListe from "./BautagebuchListe";
 import GenehmigungListe from "./GenehmigungListe";
 import { REITER, ROUTE } from "@/lib/werkplanung/reiter.js";
+
+// 99-01…03: lazy — the apartment match pulls in the workshop solver (tesselierung), which
+// the other tabs of this page do not need.
+const SonderwunschReiter = React.lazy(() => import("./SonderwunschReiter"));
 
 /**
  * @param {{ bereich: import("@/lib/werkplanung/reiter.js").Bereich }} props
@@ -50,6 +54,11 @@ export default function WerkplanungReiter({ bereich }) {
     plaene: <PlanListe projectId={project.id} projektName={project.name} />,
     durchbrueche: <DurchbruchListe projectId={project.id} projektName={project.name} />,
     bemusterung: <BemusterungListe projectId={project.id} projekt={project} />,
+    sonderwuensche: (
+      <React.Suspense fallback={<p className="text-sm text-muted-foreground">{t("Wird geladen …")}</p>}>
+        <SonderwunschReiter projectId={project.id} projekt={project} />
+      </React.Suspense>
+    ),
     sige: <SigeKarte projekt={project} />,
     genehmigungen: <GenehmigungListe projectId={project.id} />,
     bautagebuch: <BautagebuchListe projectId={project.id} projekt={project} />,
@@ -57,8 +66,9 @@ export default function WerkplanungReiter({ bereich }) {
 
   return (
     <Tabs value={tab} onValueChange={wechseln}>
-      {/* Up to five tabs: wrap instead of a horizontal scroll on a phone (375 px). */}
-      <TabsList className="h-auto flex-wrap justify-start">
+      {/* Up to six tabs: wrap instead of a horizontal scroll on a phone (375 px). */}
+      {/* text-foreground: the muted default text on bg-muted fails WCAG AA contrast (axe 93-02), now six tabs */}
+      <TabsList className="h-auto flex-wrap justify-start text-foreground">
         {eigene.map((r) => <TabsTrigger key={r.key} value={r.key}>{t(r.label)}</TabsTrigger>)}
       </TabsList>
       {eigene.map((r) => (

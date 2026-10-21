@@ -10,9 +10,11 @@ import React from "react";
  * @param {{befehl: string, aufforderung: string, meldung?: string, meldungTestid?: string,
  *   eingabe?: {id: string, value: string, onChange: (v: string) => void, onSubmit: () => void, placeholder?: string,
  *     disabled?: boolean, testid?: string, label: string, vorschlaege?: string[]},
+ *   schalter?: Array<{id: string, label: string, an: boolean, titel?: string, onClick: () => void}>, schalterTestid?: string,
  *   testid?: string}} props
+ *   schalter (104-05): switch chips at the right end (FANG ORTHO POLAR RASTER, like a CAD status bar), aria-pressed
  */
-export default function Befehlszeile({ befehl, aufforderung, meldung = "", meldungTestid, eingabe, testid = "befehlszeile" }) {
+export default function Befehlszeile({ befehl, aufforderung, meldung = "", meldungTestid, eingabe, schalter = undefined, schalterTestid = "schalter", testid = "befehlszeile" }) {
   return (
     <div
       role="status"
@@ -45,6 +47,16 @@ export default function Befehlszeile({ befehl, aufforderung, meldung = "", meldu
         </form>
       )}
       <span className="opacity-80" data-testid={meldungTestid}>{meldung}</span>
+      {schalter?.length ? (
+        <span className="ml-auto flex items-center gap-1">
+          {schalter.map((s) => (
+            <button key={s.id} type="button" aria-pressed={s.an} title={s.titel} onClick={s.onClick} data-testid={`${schalterTestid}-${s.id}`}
+              className={`rounded border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${s.an ? "border-background bg-background text-foreground" : "border-background/40 text-background/70 hover:text-background"}`}>
+              {s.label}
+            </button>
+          ))}
+        </span>
+      ) : null}
     </div>
   );
 }

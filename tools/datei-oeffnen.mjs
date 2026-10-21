@@ -3,7 +3,7 @@
 // as the "open" command of .bitproj; tools/datei-oeffnen.cmd stays for a manual call.
 //
 // Steps:
-//   1. check the path (exists, .bitproj);
+//   1. check the path (path rule of 104-10 — local drives only —, exists, .bitproj);
 //   2. make sure BIT-Atelier answers (tools/app-start.mjs serverBereit: use a running one, else start it —
 //      visibly on a first start, hidden otherwise — one server only);
 //   3. POST the path to /api/datei/oeffnen with the one-time secret from the data folder
@@ -22,6 +22,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { anfrage, serverBereit, startBefehl } from './app-start.mjs';
 import { fensterOeffnen, envDateiLaden } from './app-fenster.mjs';
+import { pfadRichtlinie } from '../packages/nova-core/src/lib/pfadRichtlinie.js';
 
 // 93-11: the request helper and the visible start command moved to app-start.mjs; re-exported for callers.
 export { anfrage, startBefehl };
@@ -46,6 +47,23 @@ export function argumenteLesen(argv, env = process.env) {
     else if (!o.datei) o.datei = a;
   }
   return o;
+}
+
+/**
+ * 104-10: the file argument under the path rule (@core/lib/pfadRichtlinie.js) BEFORE the disk is touched —
+ * a UNC path, a file: URL with a host or a device path is refused with its plain-text reason instead of
+ * being looked up (Windows would contact the server). A plain relative name ("Plan.bitproj" from a manual
+ * call in a terminal) is resolved against the working folder first; anything with a drive letter, a scheme
+ * or a leading separator is checked as written, so "C:foo" and "\\server\share" keep their own reason.
+ * @param {string} roh the argument as given
+ * @param {{plattform?: 'win32'|'posix', aufloesen?: (p: string) => string}} [o] notation (default: this
+ *   machine) and the resolver for relative names (default path.resolve)
+ * @returns {{ok: true, pfad: string}|{ok: false, grund: string, meldung: string}}
+ */
+export function dateiAusArgument(roh, { plattform = process.platform === 'win32' ? 'win32' : 'posix', aufloesen = path.resolve } = {}) {
+  const schlicht = typeof roh === 'string' && roh !== '' && !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(roh) && !/^[\\/]/.test(roh);
+  const e = pfadRichtlinie(schlicht ? aufloesen(roh) : roh, { plattform });
+  return e.ok ? { ok: true, pfad: e.pfad } : e;
 }
 
 /**
@@ -97,7 +115,12 @@ async function main() {
     console.error('Aufruf / usage: datei-oeffnen <datei.bitproj>');
     return 1;
   }
-  const datei = path.resolve(o.datei);
+  const geprueft = dateiAusArgument(o.datei);
+  if (!geprueft.ok) {
+    console.error(`[BIT-Atelier] ${geprueft.meldung} (${o.datei})`);
+    return 1;
+  }
+  const datei = geprueft.pfad;
   if (path.extname(datei).toLowerCase() !== '.bitproj' || !fs.existsSync(datei)) {
     console.error(`[BIT-Atelier] Keine Projektdatei gefunden / not a project file: ${datei}`);
     return 1;

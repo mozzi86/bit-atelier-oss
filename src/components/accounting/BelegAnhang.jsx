@@ -11,6 +11,7 @@
 
 import React from "react";
 import { inhaltLaden } from "@core/lib/speicherOrt";
+import { inhaltImFensterZeigen, BELEG_TYPEN } from "@/lib/dokumentAnzeige.js";
 import { fmtBytes } from "@core/lib/pdf";
 import { buttonVariants } from "@core/components/ui/button";
 import { useI18n } from "@core/lib/i18n";
@@ -18,9 +19,10 @@ import { pruefeBeleg } from "@/lib/accounting/belege.js";
 import DateiKnopf from "./gemeinsam/DateiKnopf.jsx";
 
 /**
- * Opens a receipt's data URL in a new tab (Reports.jsx openDoc pattern):
- * an <iframe> for a PDF, an <img> for an image; XML has no useful preview,
- * so it only offers a download link.
+ * Opens a receipt's data URL in a new tab (Reports.jsx openDoc pattern, 104-10
+ * dokumentAnzeige.js): an <iframe> for a PDF, an <img> for an image; XML has no
+ * useful preview, so it only offers a download link. Anything else is refused
+ * with a plain-text reason.
  * @param {{mime: string, data: string|null, data_blob?: string|null, name: string}} beleg
  * @param {(k: string) => string} t
  */
@@ -29,14 +31,10 @@ async function vorschauOeffnen(beleg, t) {
   if (!fenster) return;
   // Storage rule: a large receipt lives in the object store (data_blob), a small one in the record.
   const data = await inhaltLaden(beleg.data, beleg.data_blob).catch(() => null);
-  if (!data) { fenster.document.write(t("Beleg nicht gefunden.")); return; }
-  if (beleg.mime === "application/pdf") {
-    fenster.document.write(`<iframe src="${data}" style="border:0;width:100%;height:100%" title="${beleg.name}"></iframe>`);
-  } else if (beleg.mime.startsWith("image/")) {
-    fenster.document.write(`<img src="${data}" style="max-width:100%" alt="${beleg.name}">`);
-  } else {
-    fenster.document.write(`<a href="${data}" download="${beleg.name}">${t("Herunterladen")}: ${beleg.name}</a>`);
-  }
+  if (!data) { fenster.document.body.textContent = t("Beleg nicht gefunden."); return; }
+  // 104-10: the media type of the content itself decides (not beleg.mime), name and data only become
+  // attributes/text through DOM calls — no document.write of record values.
+  inhaltImFensterZeigen(fenster, data, { name: beleg.name, t, typen: BELEG_TYPEN });
 }
 
 /**

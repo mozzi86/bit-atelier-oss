@@ -17,7 +17,8 @@
 // Security: absolute paths name the user's account folder, so every route answers only while the API is
 // bound to the loopback interface (no API_HOST LAN opt-out) — otherwise 403. Opening a folder is an action:
 // POST plus an Origin of the app itself (same rule as /api/update/installieren); the folder is always the
-// data folder, never a path from the request, and the opener runs without a shell.
+// data folder, never a path from the request, and the opener runs without a shell; since 104-10 it also
+// passes the path rule (@core/lib/pfadRichtlinie.js) before the opener starts.
 //
 // 93-03: also refused per request for a paired LAN device of the office mode (anfrageEntfernt) — the
 // server may bind 127.0.0.1 and still serve such a device through the extra LAN listeners.
@@ -31,14 +32,20 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { Router } from 'express';
 import { datenOrdner } from './datenPfad.js';
+import { pfadRichtlinie } from '../packages/nova-core/src/lib/pfadRichtlinie.js';
 
 /**
  * Open a folder in the desktop's file manager. Resolves once the opener process started.
+ * 104-10: the folder passes the path rule first (pfadRichtlinie, network shares allowed — the data folder
+ * is the operator's own BIT_DATA_DIR). explorer.exe / open / xdg-open also open URLs and treat a leading
+ * "/" or "-" as a switch, so nothing but an absolute local or share path ever reaches them.
  * @param {string} ordner absolute folder path
  * @param {NodeJS.Platform} [plattform]
- * @returns {Promise<void>}
+ * @returns {Promise<void>} rejects with the plain-text reason when the rule refuses the folder
  */
 export function ordnerOeffnen(ordner, plattform = process.platform) {
+  const regel = pfadRichtlinie(ordner, { plattform: plattform === 'win32' ? 'win32' : 'posix', netzwerkErlaubt: true });
+  if (!regel.ok) return Promise.reject(new Error(regel.meldung));
   const programm = plattform === 'win32' ? 'explorer.exe' : plattform === 'darwin' ? 'open' : 'xdg-open';
   return new Promise((resolve, reject) => {
     const kind = spawn(programm, [ordner], { detached: true, stdio: 'ignore', windowsHide: false });

@@ -50,6 +50,18 @@ export function useWerkstattAngemeldet() {
  * @returns {Array<object>} ·WT zones
  */
 export function werkstattZonenAusLayer(layer, s) {
+  return werkstattErgebnisAusLayer(layer, s).zonen;
+}
+
+/**
+ * 99-01: the full tesseliere() result (zones AND weListe) for a persisted layer — the same
+ * solver config as werkstattZonenAusLayer, so the stored apartments (Wohneinheit) are taken
+ * from exactly the units the workshop shows. Pure apart from the solver.
+ * @param {any} layer werkstatt_layer (or null → workshop defaults)
+ * @param {{footprintM: any, storeys?: number, storeyHeight?: number, achseM?: any}} s building programme state
+ * @returns {any} tesseliere() result ({ zonen, weListe, … })
+ */
+export function werkstattErgebnisAusLayer(layer, s) {
   const cfg = {
     ...WERKSTATT_DEFAULT,
     ...(layer || {}),
@@ -90,7 +102,7 @@ export function werkstattZonenAusLayer(layer, s) {
     okf_m: (Math.max(1, Math.round(s.storeys || 1)) - 1) * (s.storeyHeight || 3),
     // 86-05b: bar minimum of the applied proposal (same guard as the workshop; default 120).
     riegelMinFlaeche_m2: Number(layer?.riegelMinFlaeche_m2) > 0 ? Number(layer.riegelMinFlaeche_m2) : WERKSTATT_DEFAULT.riegelMinFlaeche_m2,
-  }).zonen;
+  });
 }
 
 /**

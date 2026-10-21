@@ -26,7 +26,12 @@ import { koordinateLesen, zielPunkt } from "@core/lib/massing/koordinaten.js";
 import { befehlsRegister } from "@core/lib/befehlsregister.js";
 import { starteSteuerungsBruecke } from "@core/lib/steuerungsBruecke.js";
 import Befehlszeile from "@core/components/Befehlszeile";
+import FangGlyphe, { strahlEnden } from "@core/components/FangGlyphe";
 import { befehlsAufforderung } from "@core/lib/befehlszeile";
+// 104-05: object snap (endpoint, midpoint, intersection, perpendicular, nearest, polar, ortho, grid) — one core
+// for the modeller and the site plan; settings shared through one store (F3/F8/F9/F10, command line, menu).
+import { fangIndex, fangPunkt, segmenteAusRingen } from "@core/lib/objektfang.js";
+import { useFangEinstellungen, useFangTasten, fangBefehleRegistrieren, fangBefehlLesen, fangEinstellungen, fangKontextEintraege, fangSchalter, FANG_LABEL } from "@core/lib/fangEinstellungen.js";
 import { loadBimModel, saveBimModel } from "@core/lib/useBimModelSync";
 
 /** Tools with their SketchUp shortcut. */
@@ -57,10 +62,12 @@ const LEERER_GRAPH = Object.freeze({ knoten: [], kanten: [] });
 /** Default cross-section of "Folge mir" (m) [ASSUMED: a 30 cm wall/bar]. */
 const FOLGE_BREITE_M = 0.3;
 
-/** Snap grid for drawing (m) [ASSUMED like BitBimStudio's 0.25 m]; axis lock within 5°; closing distance 0.4 m. */
-/** Body-corner snap distance (m) [ASSUMED], wins over grid and axis lock. */
-const RASTER_M = 0.25, ACHS_GRAD = 5, SCHLIESS_M = 0.4, PHI_FANG_M = 0.5, ECK_FANG_M = 0.4;
-const rnd = (v) => Math.round(v / RASTER_M) * RASTER_M;
+/** Closing distance 0.4 m; golden-ratio capture 0.5 m. */
+/** Object snap capture distance (m) [ASSUMED, the 98-02 body-corner snap], wins over grid and polar tracking.
+ *  104-05: grid (0.25 m) and axis lock (polar 90° ± 5°) now come from the shared snap settings (FANG_STANDARD). */
+const SCHLIESS_M = 0.4, PHI_FANG_M = 0.5, ECK_FANG_M = 0.4;
+/** Tools that take points — a one-shot snap ("end", "mit" …) applies to their next click. */
+const PUNKT_WERKZEUGE = Object.freeze(["linie", "folgemir", "riegel", "verschieben"]);
 
 /**
  * State and actions of the modeller (one instance per studio).
@@ -113,6 +120,17 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   // 98-09: parameters of the residential bar tool (new bars and the active one).
   const [rOpt, setROptRoh] = useState(() => ({ ...RIEGEL_STANDARD, geschossHoehe }));
   const [aktiverRiegel, setAktiverRiegel] = useState(/** @type {string|null} */ (null));
+  // 104-05: snap settings (shared store), Alt held = no snapping, armed one-shot snap.
+  const fangEinst = useFangEinstellungen();
+  useFangTasten();
+  const [fangAus, setFangAus] = useState(false);
+  const [einmalFang, setEinmalFang] = useState(/** @type {any} */ (null));
+  const EINMAL_PREFIX = "Einmal-Fang: ";
+  /** Drop the armed one-shot snap and its status line (the line stays if something else was reported since). */
+  const einmalLoesen = () => {
+    setEinmalFang(null);
+    setMeldung((m) => (typeof m === "string" && m.startsWith(EINMAL_PREFIX) ? "" : m));
+  };
 
   // Load once per project; an absent layer is an empty one (nothing migrates silently).
   useEffect(() => {
@@ -169,35 +187,43 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   };
   const treffer = (p) => [...aufgeloest].reverse().find((k) => punktInnen(k.profil, p))?.id || null;
 
-  const zuruecksetzen = () => { setPunkte([]); setStart(null); setEingabe(""); };
+  // 104-05: an armed one-shot snap belongs to the running command; Esc, a tool change or "off" drop it too.
+  const zuruecksetzen = () => { setPunkte([]); setStart(null); setEingabe(""); einmalLoesen(); };
   // 101-07: the last real command (not the selection) for "Letzten Befehl wiederholen".
   const letzterBefehl = useRef(/** @type {string|null} */ (null));
   const waehle = (id) => { zuruecksetzen(); setWerkzeug(id); setMeldung(""); if (id && id !== "auswahl") letzterBefehl.current = id; };
 
-  /** Snap: grid, axis lock against the previous point, golden-ratio suggestion for the 3rd point. */
-  /** Nearest body corner within ECK_FANG_M (SketchUp endpoint inference), or null. */
-  const eckeNahe = (roh) => {
-    let best = null, bestD = ECK_FANG_M;
-    for (const k of aufgeloest) for (const q of k.profil) { const d = Math.hypot(q.x - roh.x, q.y - roh.y); if (d < bestD) { best = q; bestD = d; } }
-    return best;
-  };
-  const fange = (roh, liste = punkte) => {
-    const ecke = eckeNahe(roh);
-    if (ecke) return { x: ecke.x, y: ecke.y, ecke: true };
-    let p = { x: rnd(roh.x), y: rnd(roh.y) };
-    const letzter = liste[liste.length - 1];
-    if (letzter) {
-      const w = (Math.atan2(roh.y - letzter.y, roh.x - letzter.x) * 180) / Math.PI;
-      if (Math.abs(((w + 360) % 180)) < ACHS_GRAD || Math.abs(((w + 360) % 180) - 180) < ACHS_GRAD) p = { x: p.x, y: letzter.y };
-      else if (Math.abs(((w + 360) % 180) - 90) < ACHS_GRAD) p = { x: letzter.x, y: p.y };
-    }
-    if (liste.length === 2) {
+  // 104-05: snap geometry = the outlines of all bodies (one index per model change, not per pointer move).
+  const fangIdx = useMemo(() => fangIndex(segmenteAusRingen(aufgeloest.map((k) => ({ punkte: k.profil, quelle: k.id })))), [aufgeloest]);
+
+  /**
+   * Snap (104-05: through the shared core objektfang.js). Object snaps (endpoint wins, as the old corner snap) come
+   * first; otherwise polar tracking from the previous point (default 90° ± 5° = the old axis lock) and the grid;
+   * then the golden-ratio suggestion for the 3rd point and closing at the first point (both as in 98-02).
+   * @param {{x:number,y:number}} roh raw point, site metres
+   * @param {Array<{x:number,y:number}>} [liste] points of the running chain (the last one is the polar base)
+   * @param {{basis?: {x:number,y:number}|null, ausser?: string[], aus?: boolean}} [o] base point other than the chain's
+   *   last one, body ids to ignore (corner drag), aus = Alt (no snapping)
+   * @returns {{x:number, y:number, ecke?: boolean, art?: string, quelle?: string, strahl?: {von: {x:number,y:number}, winkel_grad: number}}}
+   */
+  const fange = (roh, liste = punkte, o = {}) => {
+    const basis = o.basis !== undefined ? o.basis : liste[liste.length - 1] || null;
+    const aus = o.aus ?? fangAus;
+    const r = fangPunkt(roh, fangIdx, { toleranz_m: ECK_FANG_M, modi: fangEinst, basis, ausser: o.ausser || null, aus, einmal: einmalFang });
+    if (!r) return roh;
+    if (r.art === "endpunkt") return { x: r.punkt.x, y: r.punkt.y, ecke: true, art: r.art, quelle: r.quelle };
+    /** @type {{x:number, y:number, art?: string, quelle?: string, strahl?: any}} */
+    let p = { ...r.punkt, art: r.art, ...(r.quelle != null ? { quelle: r.quelle } : {}), ...(r.strahl ? { strahl: r.strahl } : {}) };
+    const objekt = ["schnitt", "mitte", "lot", "naechster"].includes(r.art);
+    if (liste.length === 2 && !aus && !objekt) {
       const v = goldenerSchnittVorschlag(liste[0], liste[1], roh);
-      if (v && Math.hypot(v.punkt.x - roh.x, v.punkt.y - roh.y) < PHI_FANG_M) p = v.punkt;
+      if (v && Math.hypot(v.punkt.x - roh.x, v.punkt.y - roh.y) < PHI_FANG_M) p = { ...v.punkt, art: "phi" };
     }
-    if (liste.length >= 3 && Math.hypot(liste[0].x - roh.x, liste[0].y - roh.y) < SCHLIESS_M) p = { ...liste[0] };
+    if (liste.length >= 3 && Math.hypot(liste[0].x - roh.x, liste[0].y - roh.y) < SCHLIESS_M) p = { ...liste[0], art: "schliessen" };
     return p;
   };
+  /** A click consumed the armed one-shot snap. */
+  const einmalVerbraucht = () => { if (einmalFang) einmalLoesen(); };
 
   const linieSetzen = (p) => {
     const neu = [...punkte, p];
@@ -236,10 +262,10 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   };
 
   /** Pointer down in the plan (site metres). */
-  const klick = (p, { strg = false, umschalt = false } = {}) => {
+  const klick = (p, { strg = false, umschalt = false, alt = false } = {}) => {
     if (werkzeug === "gelaende") return gelaendeKlick(p);
-    if (werkzeug === "linie") return linieSetzen(fange(p));
-    if (werkzeug === "folgemir" || werkzeug === "riegel") { setPunkte((a) => [...a, fange(p, a)]); return; }
+    if (werkzeug === "linie") { einmalVerbraucht(); return linieSetzen(fange(p, punkte, { aus: alt })); }
+    if (werkzeug === "folgemir" || werkzeug === "riegel") { einmalVerbraucht(); const q = fange(p, punkte, { aus: alt }); setPunkte((a) => [...a, q]); return; }
     const id = treffer(p);
     if (werkzeug === "auswahl" || werkzeug === "pushpull" || werkzeug === "drehen" || werkzeug === "skalieren") {
       if (!id) { setAuswahl([]); return; }
@@ -251,11 +277,14 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
         if (!id) return;
         const ids = auswahl.includes(id) ? auswahl : [id];
         setAuswahl(ids);
-        const s0 = eckeNahe(p) || { x: rnd(p.x), y: rnd(p.y) };
+        einmalVerbraucht();
+        const s0 = fange(p, [], { basis: null, aus: alt });
         setStart({ x: s0.x, y: s0.y });
         return;
       }
-      const ziel = eckeNahe(p) || { x: rnd(p.x), y: rnd(p.y) };
+      einmalVerbraucht();
+      // 104-05: the target snaps like a drawn point, with polar tracking from the base point
+      const ziel = fange(p, [], { basis: start, aus: alt });
       ziehen({ x: ziel.x - start.x, y: ziel.y - start.y }, strg);
     }
   };
@@ -303,12 +332,12 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
     hake("pushpull");
   };
 
-  /** Release after dragging a corner: snap (corners of OTHER bodies, grid) and apply. */
-  const eckeLoslassen = (p) => {
+  /** Release after dragging a corner: snap (outlines of OTHER bodies, grid — 104-05 shared core) and apply. */
+  const eckeLoslassen = (p, { alt = false } = {}) => {
     if (!eckeZieht) return;
-    const andere = aufgeloest.filter((k) => k.id !== eckeZieht.id).flatMap((k) => k.profil);
-    let ziel = { x: rnd(p.x), y: rnd(p.y) };
-    for (const q of andere) if (Math.hypot(q.x - p.x, q.y - p.y) < ECK_FANG_M) { ziel = { x: q.x, y: q.y }; break; }
+    einmalVerbraucht();
+    const f = fange(p, [], { basis: null, ausser: [eckeZieht.id], aus: alt });
+    const ziel = { x: f.x, y: f.y };
     const k = layer.koerper.find((x) => x.id === eckeZieht.id);
     setLayer(eckeVerschieben(layer, eckeZieht.id, eckeZieht.index, ziel));
     if (k?.gruppe != null) setMeldung(`Gruppe ${k.gruppe} geändert — alle Körper mit dieser Nummer folgen`);
@@ -345,6 +374,15 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
 
   /** Enter in the typed input (VCB). */
   const eingabeAnwenden = (text = eingabe, { strg = false } = {}) => {
+    // 104-05: snap commands work idle and inside a running command ("ortho", "polar 15", "raster 0,5", "end" …)
+    const fb = fangBefehlLesen(text);
+    if (fb) {
+      setEingabe("");
+      if ("fehler" in fb) { setMeldung(`${fb.fehler}: „${text}“`); return; }
+      const r = befehle.ausfuehren(fb.id, fb.wert != null ? { wert: fb.wert } : {});
+      if ("error" in r) setMeldung(r.error);
+      return;
+    }
     // 104-02: no command running — the typed text is a command name / short form ("l", "pp", "ver…")
     if (werkzeug == null) {
       setEingabe("");
@@ -435,6 +473,8 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
       // 104-02: idle — letters go to the command line, Enter runs it or repeats the last command
       if (werkzeug == null) {
         if (/^[a-zäöüß]$/i.test(e.key) && !e.ctrlKey && !e.metaKey) { e.preventDefault(); setEingabe((v) => v + e.key); return; }
+        // 104-05: a value after a typed command word ("polar 15", "raster 0,5")
+        if (eingabe && /^[0-9 .,]$/.test(e.key)) { e.preventDefault(); setEingabe((v) => v + e.key); return; }
         if (e.key === "Backspace" && eingabe) { e.preventDefault(); setEingabe((v) => v.slice(0, -1)); return; }
         if (e.key === "Escape" && eingabe) { e.preventDefault(); setEingabe(""); return; }
         if (e.key === "Enter") {
@@ -467,7 +507,9 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   // same records. The commands read the latest state through `aktuell` (the register is built once).
   const aktuell = useRef(/** @type {Record<string, any>} */ ({}));
   aktuell.current = { waehle, aus: () => { zuruecksetzen(); setWerkzeug(null); }, undo, redo, loeschen, eingabeAnwenden, setAuswahl,
-    kannUndo: stack.past.length > 0, kannRedo: stack.future.length > 0, auswahl, werkzeug, layer };
+    kannUndo: stack.past.length > 0, kannRedo: stack.future.length > 0, auswahl, werkzeug, layer, melden: setMeldung,
+    einmal: (/** @type {string} */ art) => { setEinmalFang(art); setMeldung(`${EINMAL_PREFIX}${/** @type {any} */ (FANG_LABEL)[art] || art}`); },
+    nimmtPunkte: PUNKT_WERKZEUGE.includes(werkzeug || "") || !!eckeZieht };
   const befehle = useMemo(() => {
     const reg = befehlsRegister();
     const a = () => aktuell.current;
@@ -483,6 +525,8 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
     // for agents / scripts: typed input of the running command ("@3;4", "5,40", "*3" …) and a read-out of the model
     reg.registrieren({ id: "eingabe", label: "Eingabe", menue: "Befehlszeile", parameter: { text: "text" }, aktiv: () => a().werkzeug != null,
       ausfuehren: (p) => { if (!p?.text) throw new Error("text fehlt"); a().eingabeAnwenden(String(p.text)); return true; } });
+    // 104-05: snap switches and one-shot snaps (fang, ortho, polar <Grad>, raster <Maß>, end/mit/sch/lot/nae)
+    fangBefehleRegistrieren(reg, { einmal: (art) => a().einmal(art), einmalAktiv: () => a().nimmtPunkte, melden: (text) => a().melden(text) });
     reg.registrieren({ id: "modell", label: "Modell lesen", menue: "Abfrage",
       ausfuehren: () => ({ werkzeug: a().werkzeug, auswahl: a().auswahl, koerper: (a().layer?.koerper || []).map((k) => ({ id: k.id, name: k.name, hoehe: k.hoehe, profil: k.profil, gruppe: k.gruppe })) }) });
     return reg;
@@ -498,7 +542,17 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
     };
   }, [befehle]);
 
-  return { befehle, merkeLeerZug: () => { leerZug.current = true; }, rOpt, setROpt, riegelAbgeleitet, aktiverRiegel, setAktiverRiegel, riegelLoeschen, pushPullAnwenden, eckeZieht, setEckeZieht, eckeLoslassen, erledigt, layer, aufgeloest, gelaende: layer.gelaende || null, gModus, setGModus, gRadius, setGRadius, gSchritt, setGSchritt,
+  // 104-05: ONE snap result per pointer position (the plan used to call fange 3–4 times per render).
+  const fangCursor = useMemo(() => {
+    if (!cursor || !werkzeug || werkzeug === "gelaende") return null;
+    if (eckeZieht) return fange(cursor, [], { basis: null, ausser: [eckeZieht.id] });
+    if (werkzeug === "verschieben") return fange(cursor, [], { basis: start });
+    return fange(cursor);
+    // fange closes over exactly these values
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursor, werkzeug, punkte, fangIdx, fangEinst, fangAus, einmalFang, start, eckeZieht]);
+
+  return { fangCursor, fangEinst, einmalFang, setFangAus, befehle, merkeLeerZug: () => { leerZug.current = true; }, rOpt, setROpt, riegelAbgeleitet, aktiverRiegel, setAktiverRiegel, riegelLoeschen, pushPullAnwenden, eckeZieht, setEckeZieht, eckeLoslassen, erledigt, layer, aufgeloest, gelaende: layer.gelaende || null, gModus, setGModus, gRadius, setGRadius, gSchritt, setGSchritt,
     gelaendeLoeschen: () => { const { gelaende: _g, ...rest } = layer; setLayer(/** @type {any} */ (rest)); }, graph, setGraph, ergebnis, vorschau, backen, beispiel: (mitteSite) => setGraph(beispielGraph(mitteSite)), werkzeug, waehle, aus: () => { zuruecksetzen(); setWerkzeug(null); }, punkte, cursor, setCursor, fange, auswahl, start,
     klick, eingabe, setEingabe, eingabeAnwenden, meldung, gruppe, eindeutig, loeschen, undo, redo,
     letzterBefehl: () => letzterBefehl.current, auswahlAufheben: () => setAuswahl([]),
@@ -625,7 +679,7 @@ export function ModellEbene({ m, mx, my, px, toSite, breite, hoehe, leertaste = 
         <path key={k.id} d={pfad(k.profil)} fill="#0f766e" fillOpacity={0.12} stroke="#0f766e" strokeDasharray={`${px(4)} ${px(3)}`} strokeWidth={px(1.2)} data-testid="mm-vorschau" style={{ pointerEvents: "none" }} />
       ))}
       {m.punkte.length > 0 && (
-        <polyline points={[...m.punkte, ...(m.cursor ? [m.fange(m.cursor)] : [])].map((p) => `${mx(p.x)},${my(p.y)}`).join(" ")}
+        <polyline points={[...m.punkte, ...(m.fangCursor ? [m.fangCursor] : [])].map((p) => `${mx(p.x)},${my(p.y)}`).join(" ")}
           fill="none" stroke="#0f766e" strokeWidth={px(1.5)} data-testid="mm-entwurf" />
       )}
       {m.punkte.map((p, i) => <circle key={i} cx={mx(p.x)} cy={my(p.y)} r={px(i === 0 ? 5 : 3)} fill={i === 0 ? "#f59e0b" : "#0f766e"} />)}
@@ -636,28 +690,29 @@ export function ModellEbene({ m, mx, my, px, toSite, breite, hoehe, leertaste = 
           <text x={mx(vorschlag.punkt.x) + px(6)} y={my(vorschlag.punkt.y)} fontSize={px(10)} fill="#b45309">{vorschlag.verhaeltnis}</text>
         </g>
       )}
-      {m.cursor && m.werkzeug && m.werkzeug !== "gelaende" && (() => {
-        // SketchUp-like inference marker: a green square when the cursor snaps to a body corner.
-        const f = m.fange(m.cursor);
-        return /** @type {any} */ (f).ecke ? <rect x={mx(f.x) - px(5)} y={my(f.y) - px(5)} width={px(10)} height={px(10)} fill="none" stroke="#16a34a" strokeWidth={px(2)} data-testid="mm-fang-ecke" style={{ pointerEvents: "none" }} /> : null;
+      {m.fangCursor && m.fangCursor.art && (() => {
+        // 104-05: snap glyph per kind (square = endpoint, as the 98-02 corner marker; triangle, X, ⊥, tracking ray …)
+        const f = m.fangCursor;
+        const st = f.strahl ? strahlEnden({ x: mx(f.strahl.von.x), y: my(f.strahl.von.y) }, { x: mx(f.x), y: my(f.y) }, px(40), f.strahl.winkel_grad) : null;
+        return <FangGlyphe x={mx(f.x)} y={my(f.y)} s={px(1)} art={f.art} strahl={st} testid="mm-fang" eckeTestid="mm-fang-ecke" />;
       })()}
       {m.werkzeug === "verschieben" && m.start && m.cursor && (
         <line x1={mx(m.start.x)} y1={my(m.start.y)} x2={mx(m.cursor.x)} y2={my(m.cursor.y)} stroke="#0f766e" strokeDasharray={`${px(5)} ${px(3)}`} strokeWidth={px(1.2)} />
       )}
       {letzter && m.cursor && (m.werkzeug === "linie" || m.werkzeug === "folgemir") && (
         <text x={mx(m.cursor.x) + px(8)} y={my(m.cursor.y) - px(8)} fontSize={px(10)} fill="#0f766e" style={{ pointerEvents: "none" }} data-testid="mm-laenge">
-          {Math.hypot(m.fange(m.cursor).x - letzter.x, m.fange(m.cursor).y - letzter.y).toFixed(2).replace(".", ",")} m
+          {Math.hypot((m.fangCursor || m.cursor).x - letzter.x, (m.fangCursor || m.cursor).y - letzter.y).toFixed(2).replace(".", ",")} m
         </text>
       )}
       {m.werkzeug && (
         <rect x={0} y={0} width={breite} height={hoehe} fill="transparent" style={{ cursor: "crosshair" }} data-testid="mm-flaeche"
-          onPointerMove={(e) => { const p = toSite(e); if (p) m.setCursor(p); }}
-          onPointerUp={(e) => { if (!m.eckeZieht) return; const p = toSite(e); if (p) m.eckeLoslassen(p); }}
+          onPointerMove={(e) => { const p = toSite(e); if (p) m.setCursor(p); m.setFangAus(e.altKey); }}
+          onPointerUp={(e) => { if (!m.eckeZieht) return; const p = toSite(e); if (p) m.eckeLoslassen(p, { alt: e.altKey }); }}
           onPointerDown={(e) => {
             // 95-03: space held = the plan pans (event goes on to the SVG); otherwise the tool clicks.
             if (e.button !== 0) return;
             if (leertaste?.()) { m.merkeLeerZug(); return; }
-            e.stopPropagation(); const p = toSite(e); if (p) m.klick(p, { strg: e.ctrlKey || e.metaKey, umschalt: e.shiftKey });
+            e.stopPropagation(); const p = toSite(e); if (p) m.klick(p, { strg: e.ctrlKey || e.metaKey, umschalt: e.shiftKey, alt: e.altKey });
           }} />
       )}
       {/* 98-05: corner handles of a single selected body (selection tool) — drag to reshape; a
@@ -671,7 +726,7 @@ export function ModellEbene({ m, mx, my, px, toSite, breite, hoehe, leertaste = 
             onPointerDown={(e) => { e.stopPropagation(); m.setEckeZieht({ id: k.id, index: i }); }} />
         ));
       })()}
-      {m.eckeZieht && m.cursor && <circle cx={mx(m.cursor.x)} cy={my(m.cursor.y)} r={px(5)} fill="#0f766e" fillOpacity={0.5} style={{ pointerEvents: "none" }} />}
+      {m.eckeZieht && m.cursor && <circle cx={mx((m.fangCursor || m.cursor).x)} cy={my((m.fangCursor || m.cursor).y)} r={px(5)} fill="#0f766e" fillOpacity={0.5} style={{ pointerEvents: "none" }} />}
     </g>
   );
 }
@@ -714,6 +769,8 @@ export function ModellBefehlszeile({ m, t }) {
   const { befehl, aufforderung } = befehlsAufforderung(m.werkzeug, { punkte: m.punkte, auswahl: m.auswahl, start: m.start });
   return (
     <Befehlszeile
+      schalter={fangSchalter(m.fangEinst, t)}
+      schalterTestid="mm-schalter"
       befehl={t(befehl)}
       aufforderung={t(aufforderung)}
       meldung={m.meldung ? t(m.meldung) : ""}
@@ -732,7 +789,7 @@ export function ModellBefehlszeile({ m, t }) {
  * @param {ReturnType<typeof useModellierer>} m
  * @param {(s: string) => string} t
  * @param {() => void} einpassen zoom extents of the plan
- * @returns {Array<{label: string, taste?: string, onClick: () => void, disabled?: boolean, gefahr?: boolean, trenner?: boolean}>}
+ * @returns {Array<{label: string, taste?: string, onClick: () => void, disabled?: boolean, gefahr?: boolean, trenner?: boolean, an?: boolean, gruppe?: string}>}
  */
 export function modellKontext(m, t, einpassen) {
   const letzter = m.letzterBefehl();
@@ -745,5 +802,7 @@ export function modellKontext(m, t, einpassen) {
     { label: t("Auswahl aufheben"), onClick: () => m.befehle.ausfuehren("auswahl-aufheben"), disabled: !m.auswahl.length, trenner: true },
     { label: t("Löschen"), taste: "Entf", onClick: () => m.befehle.ausfuehren("loeschen"), disabled: !m.auswahl.length, gefahr: true },
     { label: t("Alles einpassen"), taste: t("2× Mausrad"), onClick: einpassen, trenner: true },
+    // 104-05: snap switches (checkbox entries)
+    ...fangKontextEintraege(fangEinstellungen(), t),
   ];
 }

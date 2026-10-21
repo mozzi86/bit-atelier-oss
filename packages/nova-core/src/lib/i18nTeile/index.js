@@ -150,8 +150,19 @@ import { EN as STECKBRIEF_97 } from "./steckbrief-97.js";
 import { EN as MASSING_98 } from "./massing-98.js";
 import { EN as LAGEPLAN_95 } from "./lageplan-95.js";
 import { EN as BEFEHLSZEILE_101 } from "./befehlszeile-101.js";
+// Phase 99 (99-01…03): apartments, special requests, decision deadlines.
+import { EN as SONDERWUNSCH_99 } from "./sonderwunsch-99.js";
 import { EN as SPLATS_104 } from "./splats-104.js";
+// Plan 104-09: PDF studio — appending save (original bytes untouched) + crash recovery.
+import { EN as PDF_ANHANG_104 } from "./pdf-anhang-104.js";
+import { EN as PFAD_RICHTLINIE } from "./pfad-richtlinie.js";
+// Phase 103: 3D terrain study (orientation, exaggeration, water level) and design flood levels.
+import { EN as GELAENDE_103 } from "./gelaende-103.js";
+// Plan 104-06 + 101-03: DXF export (site plan, floor plan) and parcel import from DXF with union.
+import { EN as DXF_104 } from "./dxf-104.js";
 import { EN as KOSTENDRIFT_96 } from "./kostendrift-96.js";
+// Plan 104-05: object snap (switches, right-click group, command line chips).
+import { EN as OBJEKTFANG_104 } from "./objektfang-104.js";
 
 export const TEILE_EN = Object.freeze({
   ...BUCHHALTUNG_FUNDAMENT,
@@ -255,4 +266,10 @@ export const TEILE_EN = Object.freeze({
   ...LAGEPLAN_95,
   ...BEFEHLSZEILE_101,
   ...SPLATS_104,
+  ...PDF_ANHANG_104,
+  ...PFAD_RICHTLINIE,
+  ...GELAENDE_103,
+  ...DXF_104,
+  ...OBJEKTFANG_104,
+  ...SONDERWUNSCH_99,
 });

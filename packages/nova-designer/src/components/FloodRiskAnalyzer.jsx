@@ -7,10 +7,16 @@ import { Droplets, ShieldCheck, AlertTriangle, WifiOff, Info } from "lucide-reac
 import { useProject } from "@core/lib/ProjectContext";
 import { useSiteClimate } from "@designer/lib/useSiteClimate";
 import { topoProvenance } from "@designer/lib/useElevationGrid";
+import HochwasserHqListe from "@designer/components/HochwasserHqListe";
 
 // Grobe Ersteinschätzung aus Geländehöhe (Open-Meteo Elevation) + Klima-Niederschlag.
 // KEIN Ersatz für die amtlichen Hochwassergefahren- und -risikokarten der Länder.
-export default function FloodRiskAnalyzer({ selectedProject }) {
+// 103-03: onHochwasserChange stores the design flood levels (complexData.hochwasser, additive);
+// without the callback the HQ list is read only.
+/**
+ * @param {{ selectedProject?: any, onHochwasserChange?: (hw: any) => void }} props
+ */
+export default function FloodRiskAnalyzer({ selectedProject, onHochwasserChange }) {
   const { project } = useProject();
   const proj = project || selectedProject;
   const loc = proj?.location;
@@ -167,6 +173,8 @@ export default function FloodRiskAnalyzer({ selectedProject }) {
           </div>
         </CardContent>
       </Card>
+
+      <HochwasserHqListe hochwasser={selectedProject?.hochwasser} onChange={onHochwasserChange} />
     </div>
   );
 }

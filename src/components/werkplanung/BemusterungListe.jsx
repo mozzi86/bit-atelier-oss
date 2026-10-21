@@ -23,7 +23,7 @@ import { dateiAnbieten } from "@core/lib/tabellenExport";
 import { Plus } from "lucide-react";
 import {
   OBERFLAECHEN, bemusterungStatusLabel, bemusterungHinweise, vorlagePatch, entscheidungPatch,
-  neueBemusterung, vorschlaegeAusRaumbuch, bemusterungsProtokollPdf,
+  neueBemusterung, vorschlaegeAusRaumbuch, bemusterungsProtokollPdf, istProjektMuster,
 } from "@/lib/werkplanung/bemusterung";
 
 const LEER = { gegenstand: "", raum_bezug: "", position_ref: "", fabrikat: "", produkt: "", farbe_system: "RAL", farbe: "", oberflaeche: "" };
@@ -35,7 +35,9 @@ const fehlerText = (e) => (e instanceof Error ? e.message : String(e));
 export default function BemusterungListe({ projectId, projekt = null }) {
   const { t } = useI18n();
   const { user } = useAuth();
-  const [liste, setListe] = useState(/** @type {Array<any>} */ ([]));
+  // alleMuster = every sample of the project (number pool); liste = project samples shown here.
+  // Buyers' apartment samples (99-02) are shown in "Wohnungen & Sonderwünsche" only.
+  const [alleMuster, setAlleMuster] = useState(/** @type {Array<any>} */ ([]));
   const [raumItems, setRaumItems] = useState(/** @type {Array<any>} */ ([]));
   const [formular, setFormular] = useState(/** @type {null | Record<string, string>} */ (null));
   const [entscheidung, setEntscheidung] = useState(/** @type {null | {b: any, ergebnis: 'freigegeben'|'abgelehnt', von: string, bemerkung: string}} */ (null));
@@ -50,18 +52,20 @@ export default function BemusterungListe({ projectId, projekt = null }) {
       ]);
       const l = Array.isArray(r) ? r : [];
       l.sort((a, b) => String(a.nr || "").localeCompare(String(b.nr || ""), "de"));
-      setListe(l);
+      setAlleMuster(l);
       setRaumItems(Array.isArray(sp) && sp[0]?.items ? sp[0].items : []);
     } catch (e) { setFehler(`${t("Bemusterung konnte nicht geladen werden")}: ${fehlerText(e)}`); }
   }, [projectId, t]);
   useEffect(() => { laden(); }, [laden]);
 
+  const liste = alleMuster.filter(istProjektMuster);
+  const kaeuferMuster = alleMuster.length - liste.length;
   const vorschlaege = vorschlaegeAusRaumbuch(raumItems, liste);
 
   const anlegen = async (werteListe) => {
     setFehler(null);
     try {
-      let alle = [...liste];
+      let alle = [...alleMuster];
       for (const w of werteListe) {
         const rec = neueBemusterung(w, { projectId, alle });
         await bitApi.entities.Bemusterung.create({ ...rec, created_date: new Date().toISOString() });
@@ -132,6 +136,11 @@ export default function BemusterungListe({ projectId, projekt = null }) {
           <p className="text-xs text-slate-500">
             {t("Kein Raumbuch: im Raumprogramm Ausbau je Raumtyp erfassen, dann schlägt diese Liste Muster vor.")}{" "}
             <Link to="/ComplexDesigner?tab=program" className="text-blue-700 underline-offset-4 hover:underline">{t("Zum Raumprogramm")}</Link>
+          </p>
+        )}
+        {kaeuferMuster > 0 && (
+          <p className="text-xs text-muted-foreground" data-testid="bm-kaeufer-hinweis">
+            {t("{n} Muster aus Sonderwünschen der Käufer stehen unter Wohnungen & Sonderwünsche (nicht in dieser Liste und nicht im Protokoll).").replace("{n}", String(kaeuferMuster))}
           </p>
         )}
         {liste.length === 0 ? (

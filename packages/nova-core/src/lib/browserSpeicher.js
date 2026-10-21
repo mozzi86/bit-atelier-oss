@@ -48,6 +48,8 @@ const EINTRAEGE = [
   { schluessel: 'currentProjectId', speicher: 'localStorage', zweck: 'Kennung des zuletzt geöffneten Projekts', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: false },
   { schluessel: 'bit.erste-schritte', speicher: 'localStorage', zweck: 'Erledigte Schritte der Einführung im Massing-Studio', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: true },
   { schluessel: 'bit.brillen', speicher: 'localStorage', zweck: 'Gewählte Brille je Planansicht im Gebäudemodell', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: true },
+  // 104-05: object snap switches (F3/F8/F9/F10) — a device setting like the lens choice above.
+  { schluessel: 'bit.fang', speicher: 'localStorage', zweck: 'Fang-Einstellungen der Zeichenflächen (Objektfang, Ortho, Polar, Raster)', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: true },
   { schluessel: 'nc-bim-favs', speicher: 'localStorage', zweck: 'Favoriten im Gebäudemodell', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: true },
   { schluessel: 'bit-atelier.ifc.autoload.v1', speicher: 'localStorage', zweck: 'Einstellung „IFC automatisch laden“ (Dateiname)', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: true },
   // Drawing content is the visitor's own work, not a device setting — deleting

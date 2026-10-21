@@ -20,6 +20,9 @@ export const REITER = Object.freeze([
   { key: "plaene", label: "Planliste", bereich: "werkplanung" },
   { key: "durchbrueche", label: "Durchbrüche", bereich: "werkplanung" },
   { key: "bemusterung", label: "Bemusterung", bereich: "werkplanung" },
+  // 99-01…03: stored apartments, special requests of buyers and their deadlines; next to
+  // sampling because a released request ends as an apartment sample there.
+  { key: "sonderwuensche", label: "Wohnungen & Sonderwünsche", bereich: "werkplanung" },
   { key: "sige", label: "SiGe", bereich: "werkplanung" },
   { key: "genehmigungen", label: "Genehmigungen", bereich: "werkplanung" },
   { key: "bautagebuch", label: "Bautagebuch", bereich: "baustelle" },

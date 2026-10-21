@@ -32,9 +32,11 @@ describe("flurstueckeAusGeoJson", () => {
     assert.equal(res.flurstuecke.length, 1);
     assert.equal(res.flurstuecke[0].nummer, "1234/5");
     assert.equal(res.flurstuecke[0].gemarkung, "Nürnberg");
-    // Ring opened: 4 canvas points, rounded px.
+    // Ring opened: 4 canvas points, rounded to 0.01 px (101-03: integer px were up to 0.6 m off).
+    const hundertstel = (/** @type {number} */ v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6;
     assert.equal(res.flurstuecke[0].polygon.length, 4);
-    assert.ok(res.flurstuecke[0].polygon.every((p) => Number.isInteger(p.x) && Number.isInteger(p.y)));
+    assert.ok(res.flurstuecke[0].polygon.every((p) => hundertstel(p.x) && hundertstel(p.y)));
+    assert.equal(res.flurstuecke[0].m_per_px, 1.25);
   });
 
   it("FeatureCollection mit 3 Polygonen → 3 Flurstücke, Reihenfolge stabil", () => {

@@ -1,17 +1,68 @@
+// TerrainView3D — 3D terrain study of the project site (phase 103) plus earthworks.
+//
+// Phase 103 rebuilt the view part: the camera orbits around the site and never goes below the
+// terrain (before it sat ~35° BELOW the surface and the map was north–south mirrored), the plot
+// outline and the building bodies stand on the terrain, a north arrow, a scale bar, spot heights
+// and the data source sit on the view, the vertical exaggeration is a slider (1× = true scale)
+// instead of a hidden automatic stretch, and a water level slider floods the terrain
+// ("bathtub" study, 103-03). The maths lives in @designer/lib/gelaendeStudie (pure, tested),
+// the three.js objects in @designer/lib/gelaendeSzene.
+//
+// Scene axes: x = east, z = south, y = up, 1 unit = 1 m; heights y = (h − bezug) · exaggeration,
+// bezug = floor(lowest shown terrain point). The earthworks part (computeErdmassen …) is
+// unchanged on purpose — its sampling still uses the old mirrored convention, see
+// .planning/BEFUNDE-103.md B-103-01.
+//
+// In:  complexData (location, site_parcel, buildings, hochwasser) from ComplexDesigner, the
+//      shared building program (footprint, storey height), elevation grids (useElevationGrid).
+// Out: rendering only; nothing is saved from here.
 import React, { useRef, useEffect, useState, useMemo } from "react";
 import * as THREE from "three";
 import { Card, CardContent } from "@core/components/ui/card";
-import { Mountain, WifiOff, Footprints, Camera, Info } from "lucide-react";
+import { Mountain, Footprints, Camera, Info } from "lucide-react";
 import { useProject } from "@core/lib/ProjectContext";
+import { useI18n } from "@core/lib/i18n";
 import { useElevationGrid, DEM_RESOLUTION_M } from "@designer/lib/useElevationGrid";
-import { useBuildingProgram, polygonAreaM } from "@core/lib/useBuildingProgram";
+import { useBuildingProgram } from "@core/lib/useBuildingProgram";
 import { exportExposePng } from "@designer/components/MassingView3D";
 import SplatSteuerung from "@designer/components/SplatSteuerung";
+import GelaendeSteuerung from "@designer/components/GelaendeSteuerung";
 import { SplatWolke, beispielSplats } from "@designer/lib/splats/SplatWolke";
 import { splatsLesen, splatHuelle } from "@designer/lib/splats/splatLesen";
+import { nordpfeilWinkel } from "@designer/lib/isoKamera";
+import {
+  demRaster, hoeheAn, grundstueckM, baukoerperListe, startUeberhoehung, kameraPose, pitchKlemmen,
+  hoehenKoten, massstabsLeiste, mJePxBildmitte, flutKurve, ueberfluteteFlaeche, flutReihenfolge, pegelBereich,
+  hqMarken, minHoeheInPolygon, okffNHN, hoeheText, START_YAW, START_PITCH, AUGENHOEHE_M,
+} from "@designer/lib/gelaendeStudie";
+import {
+  terrainGeometrie, schuerzeGeometrie, terrainMaterial, wasserEbene, grundstuecksLinie, baukoerperMesh, gruppeLeeren,
+} from "@designer/lib/gelaendeSzene";
 
 /** [ASSUMED] largest scan file read in the browser (MB) — beyond that the tab may run out of memory. */
 const SPLAT_MAX_MB = 400;
+/** Vertical field of view of the orbit camera, degrees. */
+const FOV_GRAD = 50;
+/** Zoom range of the orbit camera as a multiple of the shown edge length [ASSUMED]. */
+const ABSTAND_MIN_FAKTOR = 0.15;
+const ABSTAND_MAX_FAKTOR = 4;
+/** Start distance as a multiple of the edge length — the whole cut-out fits at fov 50° [ASSUMED]. */
+const ABSTAND_START_FAKTOR = 1.15;
+/** Edge length of the calculation raster (flood figures, earthworks), km. */
+const SPAN_CALC = 0.3;
+/** Sky colour of the scene (three.js clear colour, not a UI colour). */
+const HIMMEL = 0xbcd8f2;
+/** Label placement of the spot heights relative to their dot (Tailwind offsets, CSS px). */
+const KOTE_LAGE = { tief: "right-2 top-1", hoch: "left-2 bottom-1", mitte: "bottom-2 left-1/2 -translate-x-1/2" };
+
+/**
+ * Scene height function for the current terrain: (h − bezug) · exaggeration.
+ * @param {any} tr three.current.terrain ({ r, bezug }) @param {number} ue exaggeration
+ * @returns {(x: number, z: number) => number}
+ */
+function hoeheSzene(tr, ue) {
+  return (x, z) => (hoeheAn(tr.r, x, z) - tr.bezug) * ue;
+}
 
 // Punkt-in-Polygon (Ray-Casting) gegen ein zentriertes Meter-Polygon [{x,z}].
 function pointInPoly(x, z, poly) {
@@ -21,27 +72,6 @@ function pointInPoly(x, z, poly) {
     if (((zi > z) !== (zj > z)) && (x < ((xj - xi) * (z - zi)) / (zj - zi) + xi)) inside = !inside;
   }
   return inside;
-}
-
-// Farbverlauf nach normierter Höhe (0..1): Grün → Ocker → Fels → Schnee.
-function heightColor(t) {
-  /** @type {Array<[number, [number, number, number]]>} */
-  const stops = [
-    [0.0, [34, 102, 51]],
-    [0.4, [120, 130, 60]],
-    [0.7, [150, 120, 90]],
-    [0.9, [130, 130, 135]],
-    [1.0, [240, 240, 245]],
-  ];
-  for (let i = 1; i < stops.length; i++) {
-    if (t <= stops[i][0]) {
-      const [t0, c0] = stops[i - 1];
-      const [t1, c1] = stops[i];
-      const f = (t - t0) / (t1 - t0 || 1);
-      return c0.map((c, k) => (c + (c1[k] - c) * f) / 255);
-    }
-  }
-  return [1, 1, 1];
 }
 
 // Geländehöhe an einer Stelle (zentrierte Meter) per bilinearer Interpolation.
@@ -165,51 +195,91 @@ function computeBaugrube(footprintM, depth, slopeDeg, workspace) {
   };
 }
 
-// Augenhöhe in Szenen-Einheiten: 1,7 m im (überhöhten) Höhenmaßstab des
-// Terrains, begrenzt, damit sehr flaches Gelände (kleine Höhen-Range → großer
-// Überhöhungsfaktor) die Kamera nicht unnatürlich hoch schiebt.
-function eyeUnits(tr) {
-  return Math.min(5, Math.max(0.6, 1.7 * (tr.RELIEF / tr.range)));
-}
-
-export default function TerrainView3D() {
+/**
+ * 3D terrain study with earthworks.
+ * @param {{ complexData?: any }} props complexData of ComplexDesigner (location, site_parcel, buildings, hochwasser)
+ */
+export default function TerrainView3D({ complexData = null }) {
   const { project } = useProject();
-  const { footprintM } = useBuildingProgram();
+  const { t } = useI18n();
+  const programm = /** @type {any} */ (useBuildingProgram());
+  const footprintM = programm.footprintM;
   const hasFootprint = Array.isArray(footprintM) && footprintM.length >= 3;
-  const spanKm = 1;
-  // Anzeige-Raster: 1 km Ausschnitt für die 3D-Ansicht (10×10 = 100 Punkte,
-  // das Maximum je Open-Meteo-Abfrage) ⇒ ~111 m Rasterweite.
-  const { grid, min, max, offline, loading } = useElevationGrid(project?.location, 10, spanKm);
-  // Rechen-Raster für Erdmassen/Planum: derselbe Punktvorrat, aber auf 300 m
-  // um den Standort konzentriert ⇒ ~33 m Rasterweite. Damit werden die real
-  // vorhandenen DEM-Zellen unter dem Baufeld tatsächlich abgetastet, statt
-  // innerhalb EINER 111-m-Zelle zu interpolieren. Feiner als DEM_RESOLUTION_M
-  // (~90 m) bringt keine zusätzliche Information — die Werte wiederholen sich.
-  const SPAN_CALC = 0.3;
-  const { grid: calcGrid, min: calcMin, max: calcMax, offline: calcOffline } =
-    useElevationGrid(project?.location, 10, SPAN_CALC);
-  const synthetic = offline || calcOffline;
+  // 103-01: the site plan's location wins (a project may carry none), else the project's.
+  const ort = complexData?.location ?? project?.location ?? null;
+  // Display rasters: 1 km (10×10 = 100 points, the maximum per Open-Meteo request ⇒ ~111 m spacing)
+  // and 300 m (~33 m spacing, the calculation raster). Finer than DEM_RESOLUTION_M (~90 m) adds no
+  // information — the values repeat — but it puts the real DEM cells under the plot.
+  const gross = useElevationGrid(ort, 10, 1);
+  const { grid: calcGrid, min: calcMin, max: calcMax, offline: calcOffline, loading: calcLaedt } = useElevationGrid(ort, 10, SPAN_CALC);
+  const synthetic = gross.offline || calcOffline;
   const calcCellM = (SPAN_CALC * 1000) / 9;
-  const mountRef = useRef(null);
+  const [ausschnitt, setAusschnitt] = useState(300); // m, shown edge length (103-03: default 300 m)
+  const spanKm = ausschnitt / 1000; // km, shown edge length (read by the data source note below)
+  const anzeigeGrid = ausschnitt === 300 ? calcGrid : gross.grid;
+  const rAnzeige = useMemo(() => demRaster(anzeigeGrid, ausschnitt), [anzeigeGrid, ausschnitt]);
+  const rCalc = useMemo(() => demRaster(calcGrid, SPAN_CALC * 1000), [calcGrid]);
+  const bezug = rAnzeige ? Math.floor(rAnzeige.minNHN) : 0;
+  const laedt = gross.loading || calcLaedt;
+
+  const mountRef = useRef(/** @type {HTMLDivElement|null} */ (null));
+  const ansichtRef = useRef(/** @type {HTMLDivElement|null} */ (null));
+  const nordRef = useRef(/** @type {HTMLDivElement|null} */ (null));
+  const massstabBalkenRef = useRef(/** @type {HTMLDivElement|null} */ (null));
+  const massstabTextRef = useRef(/** @type {HTMLSpanElement|null} */ (null));
+  const massstabRef = useRef(/** @type {HTMLDivElement|null} */ (null));
+  const kotenRefs = useRef(/** @type {Record<string, HTMLDivElement|null>} */ ({}));
   const three = useRef(/** @type {Record<string, any>} */ ({})); // three.js handles (87-09)
-  // rotX nahe der oberen Klammergrenze (-1.4) => Start in Vogelperspektive (steile Aufsicht).
-  const drag = useRef({ on: false, x: 0, y: 0, rotY: 0.6, rotX: -1.25 });
+  // Orbit camera (isoKamera convention): yaw clockwise from north, pitch above the horizon (degrees),
+  // abstand = distance to the target (scene metres, set when the terrain is built).
+  const kam = useRef({ yaw: START_YAW, pitch: START_PITCH, abstand: 0, ziehen: false, px: 0, py: 0 });
+  const [glFehler, setGlFehler] = useState(/** @type {string|null} */ (null));
+
+  // --- 103-02: vertical exaggeration — sensible start value, the user's value wins -----------
+  const [ueNutzer, setUeNutzer] = useState(/** @type {number|null} */ (null));
+  const ueStart = rAnzeige ? startUeberhoehung(rAnzeige.maxNHN - rAnzeige.minNHN, ausschnitt) : 1;
+  const ue = ueNutzer ?? ueStart;
+
+  // --- 103-01: plot, bodies, spot heights --------------------------------------------------------
+  const grundstueck = useMemo(() => grundstueckM(complexData), [complexData]);
+  // An estimated parcel (generic start square) is no boundary: not drawn, not counted (1.8.0 rule).
+  const plot = grundstueck && !grundstueck.geschaetzt ? grundstueck.poly : null;
+  const storeyHeight = Number(programm.storeyHeight) > 0 ? Number(programm.storeyHeight) : 3;
+  const koerper = useMemo(() => baukoerperListe(complexData, { storeyHeight }), [complexData, storeyHeight]);
+  const koten = useMemo(() => (rAnzeige ? hoehenKoten(rAnzeige, plot) : null), [rAnzeige, plot]);
+
+  // --- 103-03: water level ------------------------------------------------------------------------
+  const [wasserAn, setWasserAn] = useState(false);
+  const bereich = useMemo(() => {
+    const a = pegelBereich(rCalc), b = pegelBereich(rAnzeige);
+    return { min: Math.min(a.min, b.min), max: Math.max(a.max, b.max), schritt: a.schritt };
+  }, [rCalc, rAnzeige]);
+  const [pegelNutzer, setPegel] = useState(/** @type {number|null} */ (null));
+  // Default level = lowest terrain point of the calculation raster: nothing is wet yet.
+  const pegel = pegelNutzer ?? (rCalc ? Math.round(rCalc.minNHN * 20) / 20 : bereich.min);
+  const marken = useMemo(() => hqMarken(complexData?.hochwasser, bereich), [complexData?.hochwasser, bereich]);
+  // Flood figures always from the 300-m raster (finer than the 1-km display raster).
+  const kurve = useMemo(() => (rCalc && plot ? flutKurve(rCalc, plot) : null), [rCalc, plot]);
+  const flaeche = kurve ? ueberfluteteFlaeche(kurve, pegel) : null;
+  const reihenfolge = useMemo(
+    () => (rCalc ? flutReihenfolge(rCalc, { grundstueck: plot, baukoerper: koerper }) : []),
+    [rCalc, plot, koerper],
+  );
 
   // --- 104-16: drone scan as gaussian splats ----------------------------------------------------
-  // Own group in the scene (the terrain rebuild empties the terrain group); it copies the terrain
-  // group's rotation each frame. Scan units are taken as metres, scaled by `massstab`.
+  // Own group in the scene, OUTSIDE the height group: the scan keeps its true proportions and only
+  // its base follows the exaggerated terrain. Scan units are taken as metres, scaled by `massstab`.
   const [splatInfo, setSplatInfo] = useState(/** @type {{name: string, anzahl: number}|null} */ (null));
   const [splatLage, setSplatLage] = useState({ massstab: 1, drehung: 0, hoehe: 0, umkehren: false });
   const [splatFehler, setSplatFehler] = useState("");
   const [splatLaedt, setSplatLaedt] = useState(false);
   const splatDaten = useRef(/** @type {any} */ (null));
 
-  // --- Begehungs-Modus (Ego-Kamera, WASD + Maus-Drag) ------------------------
-  // Position in zentrierten Metern (xM/zM), Blick per yaw/pitch; saved = exakte
-  // Orbit-Pose für die Wiederherstellung beim Beenden. exitFn wird pro Render
-  // aktualisiert, damit der Esc-Handler (im Setup-Effect) immer aktuell ist.
+  // --- Walk mode (eye camera, WASD + mouse drag) -------------------------------------------------
+  // Position in plan metres (xM east, zM south), view by yaw/pitch (radians, yaw 0 = looking north);
+  // exitFn is refreshed every render so the Esc handler (setup effect) always sees the current one.
   const [walking, setWalking] = useState(false);
-  const walk = useRef({ active: false, on: false, px: 0, py: 0, yaw: 0, pitch: 0, keys: {}, xM: 0, zM: 0, eyeY: 0, saved: null, exitFn: null });
+  const walk = useRef({ active: false, on: false, px: 0, py: 0, yaw: 0, pitch: 0, keys: {}, xM: 0, zM: 0, eyeY: 0, exitFn: null });
 
   // Planum: Mittelwert der gesamten Geländehöhen als Standard (Rechen-Raster)
   const meanElev = useMemo(() => {
@@ -266,83 +336,124 @@ export default function TerrainView3D() {
     [footprintM, basementDepth, slopeAngle]
   );
 
+  // --- Scene setup ONCE: renderer, camera, lights, groups, render loop, input --------------------
   useEffect(() => {
     const mount = mountRef.current;
-    if (!mount) return;
+    if (!mount) return undefined;
     const W = mount.clientWidth || 600;
     const H = mount.clientHeight || 480;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: false });
+    } catch (err) {
+      console.warn("Gelände 3D: WebGL nicht verfügbar", err);
+      setGlFehler("kein-webgl");
+      return undefined;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(W, H);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
-    const SKY = 0xbcd8f2; // heller Tageshimmel statt dunklem Nebel
-    renderer.setClearColor(SKY, 1);
+    renderer.setClearColor(HIMMEL, 1);
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(SKY);
-    // sanfter, heller Dunst am Horizont (kein „dunkler Nebel" mehr)
-    scene.fog = new THREE.Fog(SKY, 700, 1700);
-    const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 2000);
-    camera.position.set(0, 180, 240);
-    camera.lookAt(0, 0, 0);
-
-    // Himmel-/Bodenlicht für eine natürliche, gut sichtbare Tagesszene
+    scene.background = new THREE.Color(HIMMEL);
+    scene.fog = new THREE.Fog(HIMMEL, 750, 1800); // set per cut-out in the terrain effect
+    const camera = new THREE.PerspectiveCamera(FOV_GRAD, W / H, 0.5, 20000);
     scene.add(new THREE.HemisphereLight(0xeaf4ff, 0x8a9a78, 1.0));
-    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-    const dir = new THREE.DirectionalLight(0xfff4e0, 1.25);
-    dir.position.set(120, 220, 80);
-    scene.add(dir);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const sonne = new THREE.DirectionalLight(0xfff4e0, 1.25);
+    sonne.position.set(-300, 600, 400); // from the south-west, high
+    scene.add(sonne);
 
-    const group = new THREE.Group();
-    scene.add(group);
+    // Height group: scale.y = vertical exaggeration (terrain, plot, bodies, water — all in real metres).
+    const hoehenGruppe = new THREE.Group();
+    scene.add(hoehenGruppe);
     const splatGruppe = new THREE.Group();
     scene.add(splatGruppe);
+    Object.assign(three.current, { renderer, scene, camera, hoehenGruppe, splatGruppe, ue: 1, W, H });
 
-    Object.assign(three.current, { renderer, scene, camera, group, splatGruppe });
+    const ziel = new THREE.Vector3();
+    const v = new THREE.Vector3();
+    const setzeData = (/** @type {string} */ k, /** @type {string} */ wert) => {
+      const el = ansichtRef.current;
+      if (el && el.dataset[k] !== wert) el.dataset[k] = wert;
+    };
 
     let raf;
     let lastT = performance.now();
     const tick = () => {
       const now = performance.now();
-      const dt = Math.min(0.1, (now - lastT) / 1000); // s, gekappt (Tab-Wechsel)
+      const dt = Math.min(0.1, (now - lastT) / 1000); // s, capped (tab switch)
       lastT = now;
+      const tt = three.current;
+      const tr = tt.terrain;
       const wk = walk.current;
-      const tr = three.current.terrain;
-      if (wk.active && tr) {
-        // --- Begehung: Gruppe unrotiert, Ego-Kamera folgt Gelände -----------
-        group.rotation.y = 0;
-        group.rotation.x = 0;
-        const fast = wk.keys.ShiftLeft || wk.keys.ShiftRight;
-        const speed = fast ? 8 : 4; // m/s
-        const fx = -Math.sin(wk.yaw), fz = -Math.cos(wk.yaw); // vorwärts (Yaw)
-        const rx = Math.cos(wk.yaw), rz = -Math.sin(wk.yaw);  // rechts
-        let mvx = 0, mvz = 0;
-        if (wk.keys.KeyW) { mvx += fx; mvz += fz; }
-        if (wk.keys.KeyS) { mvx -= fx; mvz -= fz; }
-        if (wk.keys.KeyA) { mvx -= rx; mvz -= rz; }
-        if (wk.keys.KeyD) { mvx += rx; mvz += rz; }
-        const len = Math.hypot(mvx, mvz);
-        if (len > 0) {
-          wk.xM = Math.max(-tr.limM, Math.min(tr.limM, wk.xM + (mvx / len) * speed * dt));
-          wk.zM = Math.max(-tr.limM, Math.min(tr.limM, wk.zM + (mvz / len) * speed * dt));
+      if (tr) {
+        const hs = hoeheSzene(tr, tt.ue);
+        let yawGrad, pitchGrad;
+        if (wk.active) {
+          // --- Walk: eye camera follows the (exaggerated) terrain at 1.7 m ---------------------
+          const fast = wk.keys.ShiftLeft || wk.keys.ShiftRight;
+          const speed = fast ? 8 : 4; // m/s
+          const fx = -Math.sin(wk.yaw), fz = -Math.cos(wk.yaw); // forward (yaw 0 = north = −z)
+          const rx = Math.cos(wk.yaw), rz = -Math.sin(wk.yaw);  // right
+          let mvx = 0, mvz = 0;
+          if (wk.keys.KeyW) { mvx += fx; mvz += fz; }
+          if (wk.keys.KeyS) { mvx -= fx; mvz -= fz; }
+          if (wk.keys.KeyA) { mvx -= rx; mvz -= rz; }
+          if (wk.keys.KeyD) { mvx += rx; mvz += rz; }
+          const len = Math.hypot(mvx, mvz);
+          if (len > 0) {
+            wk.xM = Math.max(-tr.limM, Math.min(tr.limM, wk.xM + (mvx / len) * speed * dt));
+            wk.zM = Math.max(-tr.limM, Math.min(tr.limM, wk.zM + (mvz / len) * speed * dt));
+          }
+          const zielY = hs(wk.xM, wk.zM) + AUGENHOEHE_M;
+          wk.eyeY += (zielY - wk.eyeY) * Math.min(1, dt * 8);
+          camera.position.set(wk.xM, wk.eyeY, wk.zM);
+          camera.rotation.order = "YXZ";
+          camera.rotation.set(wk.pitch, wk.yaw, 0);
+          yawGrad = (-wk.yaw * 180) / Math.PI;
+          pitchGrad = 60; // the arrow lies on the ground; a steep virtual pitch keeps it readable
+        } else {
+          // --- Orbit: the camera circles the target and is lifted above the terrain -------------
+          const k = kam.current;
+          ziel.set(0, hs(0, 0), 0);
+          const p = kameraPose({ yaw: k.yaw, pitch: k.pitch, abstand: k.abstand }, ziel, hs);
+          camera.position.set(p.x, p.y, p.z);
+          camera.rotation.order = "XYZ";
+          camera.lookAt(ziel);
+          yawGrad = k.yaw;
+          pitchGrad = k.pitch;
         }
-        // Boden folgt Gelände, geglättet (Augenhöhe ~1,7 m im Terrain-Maßstab)
-        const elev = sampleElev(tr.grid, tr.size, tr.cellM, wk.xM, wk.zM);
-        const targetY = ((elev - tr.min) / tr.range) * tr.RELIEF + eyeUnits(tr);
-        wk.eyeY += (targetY - wk.eyeY) * Math.min(1, dt * 8);
-        camera.position.set(wk.xM * tr.S, wk.eyeY, wk.zM * tr.S);
-        camera.rotation.order = "YXZ";
-        camera.rotation.set(wk.pitch, wk.yaw, 0);
-      } else {
-        group.rotation.y = drag.current.rotY;
-        group.rotation.x = drag.current.rotX;
-        if (!drag.current.on) drag.current.rotY += 0.0015; // sanftes Auto-Rotate
+        // Overlays (direct DOM writes — no React render per frame)
+        if (nordRef.current) nordRef.current.style.transform = `rotate(${nordpfeilWinkel(yawGrad, pitchGrad, 0).toFixed(1)}deg)`;
+        const leiste = wk.active ? null : massstabsLeiste(mJePxBildmitte(camera.position.distanceTo(ziel), FOV_GRAD, tt.H), 120);
+        if (massstabRef.current) massstabRef.current.style.visibility = leiste ? "visible" : "hidden";
+        if (leiste && massstabBalkenRef.current && massstabTextRef.current) {
+          massstabBalkenRef.current.style.width = `${leiste.px.toFixed(1)}px`;
+          const txt = `${leiste.m.toLocaleString("de-DE")} m`;
+          if (massstabTextRef.current.textContent !== txt) massstabTextRef.current.textContent = txt;
+        }
+        const kt = tt.koten;
+        for (const art of ["tief", "hoch", "mitte"]) {
+          const el = kotenRefs.current[art];
+          if (!el) continue;
+          const q = kt?.[art];
+          if (!q) { el.style.visibility = "hidden"; continue; }
+          v.set(q.x, (q.h - tr.bezug) * tt.ue, q.z).project(camera);
+          const sicht = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
+          el.style.visibility = sicht ? "visible" : "hidden";
+          el.style.transform = `translate(${(((v.x + 1) / 2) * tt.W).toFixed(1)}px, ${(((1 - v.y) / 2) * tt.H).toFixed(1)}px)`;
+        }
+        setzeData("kameraUeberGelaende", (camera.position.y - hs(camera.position.x, camera.position.z)).toFixed(2));
+        setzeData("pitch", pitchGrad.toFixed(1));
+        setzeData("yaw", (((yawGrad % 360) + 360) % 360).toFixed(1));
+        setzeData("kameraZ", camera.position.z.toFixed(1));
       }
-      splatGruppe.rotation.copy(group.rotation);
-      three.current.splat?.aktualisieren(camera, renderer);
+      tt.splat?.aktualisieren(camera, renderer);
       renderer.render(scene, camera);
       raf = requestAnimationFrame(tick);
     };
@@ -351,16 +462,16 @@ export default function TerrainView3D() {
     const el = renderer.domElement;
     el.style.touchAction = "none";
     el.style.cursor = "grab";
-    const down = (e) => {
-      if (walk.current.active) { // Begehung: Drag = Umsehen (Yaw/Pitch)
+    const down = (/** @type {PointerEvent} */ e) => {
+      if (walk.current.active) { // walk: drag = look around (yaw/pitch)
         walk.current.on = true;
         walk.current.px = e.clientX;
         walk.current.py = e.clientY;
         return;
       }
-      drag.current.on = true; drag.current.x = e.clientX; drag.current.y = e.clientY;
+      Object.assign(kam.current, { ziehen: true, px: e.clientX, py: e.clientY });
     };
-    const move = (e) => {
+    const move = (/** @type {PointerEvent} */ e) => {
       if (walk.current.active) {
         const wk = walk.current;
         if (!wk.on) return;
@@ -369,18 +480,31 @@ export default function TerrainView3D() {
         wk.px = e.clientX; wk.py = e.clientY;
         return;
       }
-      if (!drag.current.on) return;
-      drag.current.rotY += (e.clientX - drag.current.x) * 0.01;
-      drag.current.rotX = Math.max(-1.4, Math.min(-0.1, drag.current.rotX + (e.clientY - drag.current.y) * 0.005));
-      drag.current.x = e.clientX; drag.current.y = e.clientY;
+      const k = kam.current;
+      if (!k.ziehen) return;
+      // Drag right = the site turns right (camera walks left around it); drag down = view from higher up.
+      k.yaw = (k.yaw - (e.clientX - k.px) * 0.3 + 360) % 360;
+      k.pitch = pitchKlemmen(k.pitch + (e.clientY - k.py) * 0.25);
+      k.px = e.clientX; k.py = e.clientY;
     };
-    const up = () => { drag.current.on = false; walk.current.on = false; };
+    const up = () => { kam.current.ziehen = false; walk.current.on = false; };
+    const rad = (/** @type {WheelEvent} */ e) => {
+      if (walk.current.active) return;
+      e.preventDefault();
+      const tr = three.current.terrain;
+      const span = tr ? tr.spanM : 1000;
+      const k = kam.current;
+      k.abstand = Math.max(ABSTAND_MIN_FAKTOR * span, Math.min(ABSTAND_MAX_FAKTOR * span, k.abstand * Math.exp(e.deltaY * 0.001)));
+    };
     el.addEventListener("pointerdown", down);
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    el.addEventListener("wheel", rad, { passive: false });
+    const verloren = (/** @type {Event} */ e) => { e.preventDefault(); setGlFehler("verloren"); };
+    el.addEventListener("webglcontextlost", verloren);
 
-    // Begehung: WASD/Shift per e.code (layout-unabhängig), Esc beendet.
-    const onKeyDown = (e) => {
+    // Walk: WASD/Shift by e.code (layout-independent), Esc ends.
+    const onKeyDown = (/** @type {KeyboardEvent} */ e) => {
       if (!walk.current.active) return;
       if (e.code === "Escape") {
         if (typeof walk.current.exitFn === "function") walk.current.exitFn();
@@ -391,157 +515,152 @@ export default function TerrainView3D() {
         e.preventDefault();
       }
     };
-    const onKeyUp = (e) => { walk.current.keys[e.code] = false; };
+    const onKeyUp = (/** @type {KeyboardEvent} */ e) => { walk.current.keys[e.code] = false; };
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
 
-    const onResize = () => {
+    const groesse = () => {
       const nw = mount.clientWidth, nh = mount.clientHeight;
       if (!nw || !nh) return;
       camera.aspect = nw / nh; camera.updateProjectionMatrix(); renderer.setSize(nw, nh);
+      Object.assign(three.current, { W: nw, H: nh });
+      three.current.linie?.material?.resolution?.set(nw, nh);
     };
-    window.addEventListener("resize", onResize);
+    window.addEventListener("resize", groesse);
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(groesse) : null;
+    ro?.observe(mount);
 
     return () => {
       cancelAnimationFrame(raf);
       el.removeEventListener("pointerdown", down);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      el.removeEventListener("wheel", rad);
+      el.removeEventListener("webglcontextlost", verloren);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("resize", onResize);
+      window.removeEventListener("resize", groesse);
+      ro?.disconnect();
       three.current.splat?.entsorgen();
       three.current.splat = null;
+      three.current.terrain = null;
+      gruppeLeeren(hoehenGruppe);
       renderer.dispose();
       if (el.parentNode) el.parentNode.removeChild(el);
-      scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+      scene.traverse((/** @type {any} */ o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
     };
   }, []);
 
-  // (Re)build the terrain mesh whenever the grid changes.
+  // (Re)build terrain, skirt, water, plot line and bodies whenever the shown raster or the site changes.
   useEffect(() => {
-    const t = three.current;
-    if (!t.group || !grid || grid.length < 2) return;
-    while (t.group.children.length) {
-      const c = t.group.children.pop();
-      if (c.geometry) c.geometry.dispose();
-      if (c.material) c.material.dispose();
+    const tt = three.current;
+    if (!tt.hoehenGruppe || !rAnzeige) return;
+    gruppeLeeren(tt.hoehenGruppe);
+    const mat = terrainMaterial();
+    tt.hoehenGruppe.add(new THREE.Mesh(terrainGeometrie(rAnzeige, bezug), mat));
+    tt.hoehenGruppe.add(new THREE.Mesh(schuerzeGeometrie(rAnzeige, bezug), new THREE.MeshLambertMaterial({ color: 0x8a7a62 })));
+    const wasser = wasserEbene(ausschnitt);
+    tt.hoehenGruppe.add(wasser);
+    tt.linie = null;
+    if (plot) {
+      const linie = grundstuecksLinie(rAnzeige, plot, bezug, { farbe: 0xffffff, breitePx: 3 });
+      linie.material.resolution.set(tt.W || 600, tt.H || 480);
+      tt.hoehenGruppe.add(linie);
+      tt.linie = linie;
     }
-    const size = grid.length;
-    const PLANE = 220;
-    const RELIEF = 60;
-    const range = (max - min) || 1;
-    const geo = new THREE.PlaneGeometry(PLANE, PLANE, size - 1, size - 1);
-    const pos = geo.attributes.position;
-    const colors = [];
-    for (let i = 0; i < size; i++) {
-      for (let j = 0; j < size; j++) {
-        const idx = i * size + j;
-        const norm = (grid[i][j] - min) / range;
-        pos.setZ(idx, norm * RELIEF);
-        const [r, g, b] = heightColor(norm);
-        colors[idx * 3] = r; colors[idx * 3 + 1] = g; colors[idx * 3 + 2] = b;
-      }
+    for (const b of koerper) {
+      const tief = minHoeheInPolygon(rAnzeige, b.ecken);
+      const okff = okffNHN(rAnzeige, b.ecken);
+      if (tief == null || okff == null) continue;
+      // Base 0.5 m below the lowest terrain point so the body never floats on a slope.
+      tt.hoehenGruppe.add(baukoerperMesh(b.ecken, tief - 0.5, okff + b.geschosse * b.geschossHoeheM, bezug));
     }
-    geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-    geo.computeVertexNormals();
-    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, flatShading: false });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2; // Plane in XY → flach legen, Höhe nach oben
-    t.group.add(mesh);
-    // dünnes Drahtgitter für Lesbarkeit
-    const wire = new THREE.Mesh(geo.clone(), new THREE.MeshBasicMaterial({ color: 0x0d9488, wireframe: true, transparent: true, opacity: 0.12 }));
-    wire.rotation.x = -Math.PI / 2;
-    t.group.add(wire);
+    Object.assign(tt, { terrainMat: mat, wasser });
+    const neuerAusschnitt = !tt.terrain || tt.terrain.spanM !== ausschnitt;
+    tt.terrain = { r: rAnzeige, bezug, spanM: ausschnitt, limM: rAnzeige.halbM - 5 };
+    if (neuerAusschnitt) kam.current.abstand = ABSTAND_START_FAKTOR * ausschnitt;
+    tt.camera.far = 20 * ausschnitt;
+    tt.camera.updateProjectionMatrix();
+    tt.scene.fog.near = 2.5 * ausschnitt;
+    tt.scene.fog.far = 6 * ausschnitt;
+    tt.wasserStand = null; // force the water effect to re-apply
+    setWasserStand(tt, wasserAn, pegel, bezug);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rAnzeige, bezug, plot, koerper, ausschnitt]);
 
-    // Terrain-Parameter für die Begehung (Meter ↔ Szenen-Einheiten):
-    // S = Einheiten pro Meter (PLANE deckt spanKm·1000 m ab), limM = Laufgrenze.
-    t.terrain = {
-      grid, min, max, size, RELIEF,
-      range,
-      cellM: (spanKm * 1000) / (size - 1),
-      S: PLANE / (spanKm * 1000),
-      limM: spanKm * 500 - 20,
-    };
-  }, [grid, min, max]);
+  // Spot heights → read by the render loop.
+  useEffect(() => { three.current.koten = koten; }, [koten]);
 
-  // --- Begehung starten: Orbit-Pose exakt sichern, Ego-Kamera an den Rand ----
+  // 103-02: exaggeration = scale.y of the height group.
+  useEffect(() => {
+    const tt = three.current;
+    tt.ue = ue;
+    tt.hoehenGruppe?.scale.set(1, ue, 1);
+  }, [ue]);
+
+  // 103-03: water plane and flood tint.
+  useEffect(() => { setWasserStand(three.current, wasserAn, pegel, bezug); }, [wasserAn, pegel, bezug]);
+
+  // --- Walk start: eye camera at the SOUTH edge of the cut-out, looking north ------------------
   const enterWalk = () => {
-    const t = three.current;
-    const tr = t.terrain;
-    if (!t.camera || !tr) return;
-    walk.current.saved = {
-      rotY: drag.current.rotY,
-      rotX: drag.current.rotX,
-      pos: t.camera.position.clone(),
-      quat: t.camera.quaternion.clone(),
-    };
+    const tt = three.current;
+    const tr = tt.terrain;
+    if (!tt.camera || !tr) return;
     const wk = walk.current;
     wk.xM = 0;
-    wk.zM = Math.min(tr.limM, 350); // Start am südlichen Rand des Ausschnitts
-    wk.yaw = 0;                     // Blick Richtung Geländemitte (-z)
+    wk.zM = tr.limM; // +z = south
+    wk.yaw = 0;      // looking north (−z), towards the centre
     wk.pitch = 0;
     wk.keys = {};
-    const elev = sampleElev(tr.grid, tr.size, tr.cellM, wk.xM, wk.zM);
-    wk.eyeY = ((elev - tr.min) / tr.range) * tr.RELIEF + eyeUnits(tr);
+    wk.eyeY = hoeheSzene(tr, tt.ue)(wk.xM, wk.zM) + AUGENHOEHE_M;
     wk.active = true;
     setWalking(true);
   };
 
-  // --- Begehung beenden: gesicherte Orbit-Pose exakt wiederherstellen --------
+  // --- Walk end: the orbit camera takes over again (its yaw/pitch/distance were never touched) --
   const exitWalk = () => {
-    const t = three.current;
-    const s = walk.current.saved;
     walk.current.active = false;
     walk.current.on = false;
     walk.current.keys = {};
-    if (t.camera && s) {
-      drag.current.rotY = s.rotY;
-      drag.current.rotX = s.rotX;
-      t.camera.rotation.order = "XYZ";
-      t.camera.position.copy(s.pos);
-      t.camera.quaternion.copy(s.quat);
-    }
     setWalking(false);
   };
 
-  // Esc-Handler (Setup-Effect) soll immer die aktuelle exit-Funktion sehen.
-  // 104-16: (re)place the scan — new splat set, terrain or placement changed.
+  // 104-16: (re)place the scan — new splat set, terrain, exaggeration or placement changed.
   useEffect(() => {
-    const t = three.current;
-    if (!t.splatGruppe) return;
+    const tt = three.current;
+    if (!tt.splatGruppe) return;
     const d = splatDaten.current;
     if (!d || !splatInfo) return;
-    const S = t.terrain?.S ?? 1;
-    // sit on the terrain in the middle of the view (same mapping as the terrain mesh)
-    const boden = t.terrain ? ((sampleElev(t.terrain.grid, t.terrain.size, t.terrain.cellM, 0, 0) - t.terrain.min) / t.terrain.range) * t.terrain.RELIEF : 0;
+    // sits on the terrain in the middle of the view; the scan itself stays undistorted (outside the height group)
+    const boden = tt.terrain ? hoeheSzene(tt.terrain, ue)(0, 0) : 0;
     const { aussen, innen, wolke, huelle } = d;
-    aussen.position.set(0, boden + splatLage.hoehe * S, 0);
+    aussen.position.set(0, boden + splatLage.hoehe, 0);
     aussen.rotation.set(0, (splatLage.drehung * Math.PI) / 180, 0);
-    aussen.scale.setScalar(splatLage.massstab * S);
+    aussen.scale.setScalar(splatLage.massstab);
     innen.rotation.set(splatLage.umkehren ? Math.PI : 0, 0, 0);
     wolke.mesh.position.set(-huelle.mitte[0], -(splatLage.umkehren ? huelle.max[1] : huelle.min[1]), -huelle.mitte[2]);
-  }, [splatInfo, splatLage, grid, min, max]);
+  }, [splatInfo, splatLage, rAnzeige, bezug, ue]);
 
   const splatsZeigen = (/** @type {any} */ splats, /** @type {string} */ name, /** @type {number} */ massstab) => {
-    const t = three.current;
+    const tt = three.current;
+    if (!tt.splatGruppe) return;
     splatEntfernen();
     const wolke = new SplatWolke(splats);
     const innen = new THREE.Group();
     innen.add(wolke.mesh);
     const aussen = new THREE.Group();
     aussen.add(innen);
-    t.splatGruppe.add(aussen);
-    t.splat = wolke;
+    tt.splatGruppe.add(aussen);
+    tt.splat = wolke;
     splatDaten.current = { wolke, innen, aussen, huelle: splatHuelle(splats) };
     setSplatLage({ massstab, drehung: 0, hoehe: 0, umkehren: false });
     setSplatInfo({ name, anzahl: splats.anzahl });
   };
   const splatEntfernen = () => {
-    const t = three.current;
-    t.splat?.entsorgen();
-    t.splat = null;
-    if (splatDaten.current) t.splatGruppe?.remove(splatDaten.current.aussen);
+    const tt = three.current;
+    tt.splat?.entsorgen();
+    tt.splat = null;
+    if (splatDaten.current) tt.splatGruppe?.remove(splatDaten.current.aussen);
     splatDaten.current = null;
     setSplatInfo(null);
   };
@@ -558,51 +677,118 @@ export default function TerrainView3D() {
     }
   };
 
+  // Esc handler (setup effect) must always see the current exit function.
   useEffect(() => { walk.current.exitFn = exitWalk; });
 
+  const ueText = `${t("Überhöhung {n}×").replace("{n}", String(ue))}${ue === 1 ? ` ${t("(echt)")}` : ""}`;
+  const kotenTitel = { tief: t("tiefster Punkt"), hoch: t("höchster Punkt"), mitte: plot ? t("Grundstücksmitte") : t("Standort") };
+
   return (
-    <Card className="border-0 shadow-sm overflow-hidden">
+    <Card className="overflow-hidden border-0 shadow-sm">
       <CardContent className="p-0">
-        <div className="flex items-center justify-between px-4 py-2 border-b">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <Mountain className="w-4 h-4 text-emerald-600" /> Gelände 3D
-            {project?.location?.address && <span className="text-slate-400 font-normal">· {project.location.address}</span>}
+        <div className="flex items-center justify-between border-b border-border px-4 py-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Mountain className="h-4 w-4 text-erfolg" /> {t("Gelände 3D")}
+            {ort?.address && <span className="font-normal text-muted-foreground">· {ort.address}</span>}
           </div>
           <div className="flex items-center gap-2 text-xs">
-            {loading && <span className="text-slate-400">lädt…</span>}
-            {synthetic ? (
-              <span className="flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 font-medium text-amber-800">
-                <WifiOff className="w-3.5 h-3.5" /> Synthetisches Gelände — keine Mengen
-              </span>
-            ) : (
-              <span className="text-emerald-600">Open-Meteo Elevation</span>
-            )}
-            <span className="text-slate-500">{Math.round(min)}–{Math.round(max)} m ü. NN</span>
-            {/* Begehung: Ego-Kamera auf Augenhöhe (WASD + Maus-Drag) */}
+            {laedt && <span className="text-muted-foreground">{t("lädt…")}</span>}
+            {/* Walk: eye camera at eye level (WASD + mouse drag) */}
             <button
               type="button"
               onClick={() => (walking ? exitWalk() : enterWalk())}
-              disabled={!grid || grid.length < 2}
-              title={walking ? "Begehung beenden (Esc)" : "Begehung auf Augenhöhe starten"}
-              className={`flex items-center gap-1 rounded-md border px-2 py-1 transition-colors disabled:opacity-40 ${walking ? "bg-emerald-600 border-emerald-600 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+              disabled={!rAnzeige || !!glFehler}
+              title={walking ? t("Begehung beenden (Esc)") : t("Begehung auf Augenhöhe starten")}
+              data-testid="gelaende-begehung"
+              className={`flex items-center gap-1 rounded-md border px-2 py-1 transition-colors disabled:opacity-40 ${walking ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}
             >
-              <Footprints className="w-3.5 h-3.5" /> {walking ? "Begehung beenden" : "Begehung"}
+              <Footprints className="h-3.5 w-3.5" /> {walking ? t("Begehung beenden") : t("Begehung")}
             </button>
-            {/* Exposé-Bild: aktuelle Ansicht hochauflösend als PNG exportieren */}
+            {/* Exposé image: the current view as high-resolution PNG (without the HTML overlays) */}
             <button
               type="button"
               onClick={() => exportExposePng(three.current)}
-              title="Aktuelle Ansicht hochauflösend als PNG exportieren"
-              className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50 transition-colors"
+              title={t("Aktuelle Ansicht hochauflösend als PNG exportieren")}
+              className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-muted-foreground transition-colors hover:bg-muted"
             >
-              <Camera className="w-3.5 h-3.5" /> Exposé-Bild
+              <Camera className="h-3.5 w-3.5" /> {t("Exposé-Bild")}
             </button>
           </div>
         </div>
 
+        {/* Drawing first: the view leads, the controls follow in a narrow strip. */}
+        <div ref={ansichtRef} className="relative" data-testid="gelaende-ansicht"
+          data-ueberhoehung={ue} data-pegel={wasserAn ? pegel.toFixed(2) : ""} data-ausschnitt={ausschnitt}
+          style={{ height: "clamp(420px, 62vh, 760px)" }}>
+          <div ref={mountRef} className="h-full w-full" />
+          {glFehler && (
+            <div className="absolute inset-0 flex items-center justify-center bg-card p-6 text-center text-sm text-muted-foreground" data-testid="gelaende-glfehler">
+              {glFehler === "verloren"
+                ? t("Die 3D-Ansicht hat den Grafikkontext verloren — Seite neu laden.")
+                : t("3D-Ansicht nicht verfügbar — WebGL fehlt oder ist abgeschaltet. Höhen, Pegel und Erdmassen unten gelten trotzdem.")}
+            </div>
+          )}
+          {/* Data source: a demo terrain must never look like a terrain model */}
+          <div className="pointer-events-none absolute left-3 top-3 max-w-[70%]" data-testid="gelaende-quelle" data-synthetisch={synthetic ? "ja" : "nein"}>
+            {synthetic ? (
+              <div className="rounded-md border-2 border-warnung-rand bg-warnung-flaeche px-3 py-1.5 text-sm font-semibold text-warnung shadow">
+                {t("Demo-Gelände — erfundene Höhen")}
+                <div className="text-[11px] font-normal">{t("Keine Höhendaten für diesen Standort erreichbar — Form, Koten und Pegel sind Rechenbeispiele.")}</div>
+              </div>
+            ) : (
+              <div className="rounded-md border border-border bg-card/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm">
+                {t("Copernicus DEM GLO-90 (~90 m, Oberflächenmodell)")}
+                {rAnzeige && <> · {hoeheText(rAnzeige.minNHN)}–{hoeheText(rAnzeige.maxNHN)} {t("m ü. NHN (näherungsweise)")}</>}
+              </div>
+            )}
+          </div>
+          {/* North arrow */}
+          <div className="pointer-events-none absolute right-3 top-3 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-card/90 shadow-sm" aria-label={t("Nordpfeil")} role="img">
+            <div ref={nordRef} data-testid="gelaende-nord" className="flex flex-col items-center leading-none text-foreground">
+              <span className="text-[11px] font-bold">N</span>
+              <svg width="12" height="20" viewBox="0 0 12 20" aria-hidden="true"><path d="M6 0 L12 20 L6 15 L0 20 Z" fill="currentColor" /></svg>
+            </div>
+          </div>
+          {/* Scale bar (perspective: valid at the image centre) */}
+          <div ref={massstabRef} className="pointer-events-none absolute bottom-3 left-3 rounded-md border border-border bg-card/90 px-2 py-1 text-[11px] text-foreground shadow-sm" data-testid="gelaende-massstab">
+            <div ref={massstabBalkenRef} className="h-1.5 border-x-2 border-b-2 border-foreground" style={{ width: 100 }} />
+            <span ref={massstabTextRef}>—</span> <span className="text-muted-foreground">{t("≈ in Bildmitte")}</span>
+          </div>
+          {/* Exaggeration badge — always visible on the drawing */}
+          <div className="pointer-events-none absolute bottom-3 right-3 rounded-md border border-border bg-card/90 px-2 py-1 text-[11px] text-foreground shadow-sm" data-testid="gelaende-ueberhoehung-badge">
+            {ueText}
+          </div>
+          {/* Spot heights, positioned by the render loop */}
+          {/* A dot on the point, the label beside it (low: lower left, high: upper right, centre: above) —
+              so the labels do not cover the plot they describe. */}
+          {koten && ["tief", "hoch", "mitte"].map((art) => (
+            <div key={art} ref={(el) => { kotenRefs.current[art] = el; }} className="pointer-events-none absolute left-0 top-0 h-0 w-0" style={{ visibility: "hidden" }}>
+              <span className="absolute -left-1 -top-1 h-2 w-2 rounded-full border border-card bg-foreground" />
+              <div data-testid={`gelaende-kote-${art}`}
+                className={`absolute whitespace-nowrap rounded border border-border bg-card/90 px-1.5 py-0.5 text-[11px] leading-tight text-foreground shadow-sm ${KOTE_LAGE[art]}`}>
+                <span className="text-muted-foreground">{kotenTitel[art]} </span>{hoeheText(koten[art].h)} {t("m ü. NHN")}
+              </div>
+            </div>
+          ))}
+          {walking && (
+            <div className="pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 whitespace-nowrap rounded-full bg-foreground/80 px-3 py-1.5 text-[11px] text-background shadow-lg">
+              {t("WASD bewegen · Maus ziehen: umsehen · Shift: schnell · Esc: beenden")}
+            </div>
+          )}
+        </div>
+
+        <GelaendeSteuerung ueberhoehung={ue} onUeberhoehung={setUeNutzer} ausschnitt={ausschnitt} onAusschnitt={setAusschnitt}
+          wasserAn={wasserAn} onWasserAn={setWasserAn} pegel={pegel} onPegel={(p) => { setPegel(p); setWasserAn(true); }}
+          bereich={bereich} marken={marken} flaeche={flaeche} reihenfolge={reihenfolge} />
+
         <SplatSteuerung info={splatInfo} lage={splatLage} fehler={splatFehler} laedt={splatLaedt}
           onDatei={splatDatei} onBeispiel={() => { setSplatFehler(""); splatsZeigen(beispielSplats(), "Beispiel", 5); }}
           onEntfernen={splatEntfernen} onLage={setSplatLage} />
+        {splatInfo && ue !== 1 && (
+          <div className="border-b border-border px-4 py-1 text-[11px] text-muted-foreground" data-testid="splat-ueberhoehung-hinweis">
+            {t("Der Scan bleibt unverzerrt — nur das Gelände ist {n}× überhöht.").replace("{n}", String(ue))}
+          </div>
+        )}
 
         {/* Datengrundlage & Auflösung (KD-08) — steht ÜBER den Kubikmetern */}
         {calcGrid && calcGrid.length >= 2 && (
@@ -718,19 +904,36 @@ export default function TerrainView3D() {
           </div>
         )}
 
-        <div className="relative">
-          <div ref={mountRef} className="w-full" style={{ height: 480 }} />
-          {/* Begehung-Badge mit Kurzanleitung */}
-          {walking && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full bg-slate-900/80 px-3 py-1.5 text-[11px] text-white shadow-lg pointer-events-none whitespace-nowrap">
-              WASD bewegen · Maus ziehen: umsehen · Shift: schnell · Esc: beenden
-            </div>
-          )}
-        </div>
-        <div className="px-4 py-2 text-xs text-slate-400 border-t">
-          {walking ? "Begehung aktiv — Esc oder Button beendet und stellt die Orbit-Ansicht wieder her" : "Ziehen zum Drehen · Höhe 5× überhöht dargestellt"}
+        <div className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+          {walking
+            ? t("Begehung aktiv — Esc oder Button beendet und stellt die Orbit-Ansicht wieder her")
+            : `${t("Ziehen: drehen und neigen · Rad: zoomen")} · ${ueText}`}
         </div>
       </CardContent>
     </Card>
   );
+}
+
+/**
+ * Apply the water state to the scene: water plane height/visibility and the flood tint uniforms.
+ * Skips work when nothing changed (called from the terrain rebuild and the water effect).
+ * @param {Record<string, any>} tt three.current
+ * @param {boolean} an water on
+ * @param {number} pegel water level, m a.s.l.
+ * @param {number} bezug reference height, m a.s.l.
+ */
+function setWasserStand(tt, an, pegel, bezug) {
+  const schluessel = `${an}|${pegel}|${bezug}`;
+  if (tt.wasserStand === schluessel) return;
+  tt.wasserStand = schluessel;
+  const u = tt.terrainMat?.userData?.u;
+  if (u) {
+    u.uPegel.value = pegel;
+    u.uBezug.value = bezug;
+    u.uWasserAn.value = an ? 1 : 0;
+  }
+  if (tt.wasser) {
+    tt.wasser.visible = !!an;
+    tt.wasser.position.y = pegel - bezug;
+  }
 }

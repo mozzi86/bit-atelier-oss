@@ -61,6 +61,9 @@ import { brilleVon, sichtbarUnter, zeigtStatus, STANDARD_BRILLE } from "@core/li
 import BrillenLeiste from "@designer/components/BrillenLeiste";
 import FehlplanungHinweise from "@designer/components/FehlplanungHinweise";
 import { planGrafik, vektorPlanPdf } from "@designer/lib/vektorPlan";
+// 104-06: floor plan as DXF R12 (own writer, no dependency).
+import { grundrissDxfDaten, dxfDatei, dxfDateiname, DXF_MIME } from "@designer/lib/dxfPlaene";
+import { dateiAnbieten } from "@core/lib/tabellenExport";
 import { fehlplanungPruefen } from "@core/lib/bauteil/pruefregeln.js";
 import { bitApi } from "@core/api/bitApi";
 import { useElevationGrid } from "@designer/lib/useElevationGrid";
@@ -1281,6 +1284,29 @@ export default function BitBimStudio({ complexData }) {
   const deleteView = (id) => setViews((vs) => vs.filter((v) => v.id !== id));
 
   // ---- Plan-Output: aktuellen 2D-Plan als PDF ----
+  // One source for the vector PDF (97-09) and the DXF (104-06): the plan primitives of the
+  // current storey with the lens applied.
+  const aktuelleGrafik = () => {
+    const brille = brilleVon(brilleId);
+    const lvl = Math.min(planLevel, storeys - 1);
+    const grafik = planGrafik({ model, level: lvl, customWalls: sichtbarUnter(brille, customWalls), customColumns: sichtbarUnter(brille, customColumns),
+      customSlabs: sichtbarUnter(brille, customSlabs), customRoofs: sichtbarUnter(brille, customRoofs), customZones, brille,
+      huelleStatus: zeigtStatus(brille, attributeVon(attributLayer, "hull-wall")?.status) ? attributeVon(attributLayer, "hull-wall")?.status ?? null : null, massstab: scale, sw: swPlan });
+    return { grafik, brille, lvl };
+  };
+  // 104-06: the current floor plan as DXF R12 (layers A_WAND, A_STUETZE, A_DECKE …, metres).
+  const exportPlanDXF = () => {
+    if (view !== "grundriss") { setHint(tz("DXF nur aus dem Grundriss — bitte Ansicht Grundriss wählen.")); return; }
+    try {
+      const { grafik, lvl } = aktuelleGrafik();
+      const geschoss = model.storeys[lvl]?.name || `${lvl}`;
+      const daten = grundrissDxfDaten(grafik, { massstab: scale, geschoss, projekt: project?.name || "" });
+      if (daten.leer) { setHint(tz("Keine Zeichnung auf diesem Geschoss.")); return; }
+      const { bytes, uebersprungen } = dxfDatei(daten);
+      dateiAnbieten(bytes, dxfDateiname(project?.name || "", `Grundriss_${geschoss}`), DXF_MIME);
+      setHint(tz("Grundriss als DXF erstellt (R12, Meter, Ebenen je Bauteil).") + (uebersprungen ? ` ${uebersprungen} ${tz("Objekt(e) ohne gültige Koordinaten ausgelassen.")}` : ""));
+    } catch (e) { setHint(`${tz("DXF-Export fehlgeschlagen")}: ${e?.message || e}`); }
+  };
   const exportPlanPDF = async () => {
     if (view === "3d") { setHint("PDF-Plan nur aus Grundriss/Schnitt — bitte 2D-Ansicht wählen."); return; }
     // 97-09: the floor plan as VECTOR at true scale from the model data (lens applied, status
@@ -1288,11 +1314,7 @@ export default function BitBimStudio({ complexData }) {
     // the raster path below and says so ("nicht maßstäblich").
     if (view === "grundriss") {
       try {
-        const brille = brilleVon(brilleId);
-        const lvl = Math.min(planLevel, storeys - 1);
-        const grafik = planGrafik({ model, level: lvl, customWalls: sichtbarUnter(brille, customWalls), customColumns: sichtbarUnter(brille, customColumns),
-          customSlabs: sichtbarUnter(brille, customSlabs), customRoofs: sichtbarUnter(brille, customRoofs), customZones, brille,
-          huelleStatus: zeigtStatus(brille, attributeVon(attributLayer, "hull-wall")?.status) ? attributeVon(attributLayer, "hull-wall")?.status ?? null : null, massstab: scale, sw: swPlan });
+        const { grafik, brille, lvl } = aktuelleGrafik();
         const planinhalt = `Grundriss ${model.storeys[lvl]?.name || ""}`.trim();
         const { bytes, format } = await vektorPlanPdf(grafik, { massstab: scale, projekt: project?.name || "", planinhalt, brille, datum: new Date().toLocaleDateString("de-DE") });
         const url = URL.createObjectURL(new Blob([/** @type {any} */ (bytes)], { type: "application/pdf" }));
@@ -2605,6 +2627,7 @@ export default function BitBimStudio({ complexData }) {
               <div className="px-2 py-2 border-t">
                 <div className="text-[10px] uppercase text-slate-400 px-1 pb-1">Pläne / Output</div>
                 <button onClick={exportPlanPDF} className="w-full rounded-md bg-emerald-600 text-white px-2 py-1.5 hover:bg-emerald-700">Aktuellen Plan als PDF</button>
+                <button onClick={exportPlanDXF} data-testid="bim-plan-dxf" className="w-full mt-1 rounded-md border border-border text-muted-foreground px-2 py-1.5 hover:bg-muted">{tz("Aktuellen Plan als DXF")}</button>
                 <button onClick={downloadIFC} className="w-full mt-1 rounded-md border border-slate-300 text-slate-600 px-2 py-1.5 hover:bg-slate-50">Modell als IFC</button>
                 <div className="px-1 pt-1 text-[10px] text-slate-400">Grundriss: Vektor-PDF im gewählten Maßstab mit Plankopf und Brille (Blatt A3–A0 nach Größe). Schnitt: Bildschirmbild, nicht maßstäblich.</div>
               </div>

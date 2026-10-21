@@ -195,6 +195,7 @@ Wegwerf-Projekt grün ist und der Betreiber zugestimmt hat (74-01 Task 11).
 | `0012_freigabe_projektion.sql` | Freigabe als Projektion mit Feld-Whitelist (`TenderFreigabe`, `MengenFreigabe`, `ModellFreigabe`, `RueckfrageAntwort`) |
 | `0013_storage.sql` | `blobs` nur intern (Modelle mit `can_export_ifc`), neue Buckets `freigaben` und `gebote` |
 | `0014_grants_zugriff.sql` | Grant-Durchgang, Default-Privilegien zu, `grants_bericht()`, Selbstprüfung |
+| `0015_wohnung_sonderwunsch.sql` | Phase 99: Katalogzeilen `Wohneinheit`, `AusstattungsOption`, `Sonderwunsch` als `projekt`, nicht extern — ändert kein Verhalten (noch nicht eingespielt) |
 
 **Nachweis vor jedem Einspielen** (Wegwerf-Projekt mit 0001–0011, nie das Echtsystem):
 
@@ -205,7 +206,7 @@ psql "<Connection string Wegwerf-Projekt>" -v ON_ERROR_STOP=1 -v wegwerf=1 -f su
 Eine Transaktion, am Ende `ROLLBACK` — es bleibt nichts zurück. Grün endet mit
 `74-01 SQL: ALLE FAELLE PASS`. Danach `node --env-file=.env scripts/supabase-rls-check.mjs` (6/6).
 
-**Rückweg** (von Hand, in dieser Reihenfolge): `supabase/rueckweg/0014_down.sql` → `0013` → `0012` →
+**Rückweg** (von Hand, in dieser Reihenfolge): `supabase/rueckweg/0015_down.sql` → `0014` → `0013` → `0012` →
 `0011` (reiner Policy-Tausch; als Abbruchschritt beim Einspielen auch allein direkt nach 0011) →
 `0010` → `0009` → `0008` → `0007` → `0006`.
 Bewusst nicht unter `migrations/`, damit `db push` sie nie einspielt.

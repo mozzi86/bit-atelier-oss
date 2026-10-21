@@ -22,6 +22,7 @@ import { useI18n } from "@core/lib/i18n";
 import { useProject } from "@core/lib/ProjectContext";
 import { dokumentAblegen } from "@core/lib/ablage";
 import { inhaltAblegen, inhaltLaden, blobIdNeu } from "@core/lib/speicherOrt";
+import { inhaltPruefen } from "@core/lib/pfadRichtlinie.js";
 import { erfassungAnzeige } from "@core/lib/bimClassification";
 import { BEFUND_METHODEN, BEFUND_KATEGORIEN, befundAnlegen, befundEinfuegen, darfAnheben } from "@core/lib/bestandsBefund";
 import { elementErfassungSetzen } from "@core/lib/snapshotElemente";
@@ -92,7 +93,9 @@ export default function BestandsBefundKarte({ snapshot, elemente = [], onAngehob
   const fotoLaden = async (id) => {
     const d = await bitApi.entities.Document.filter({ id }).catch(() => []);
     const url = d?.[0] ? await inhaltLaden(d[0].data_url, d[0].data_blob).catch(() => null) : null;
-    setFotos((m) => ({ ...m, [id]: url || "" }));
+    // 104-10: only an embedded raster image becomes <img src> — never a web address, a path or SVG.
+    const bild = url ? inhaltPruefen(url, { typen: ["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"] }) : null;
+    setFotos((m) => ({ ...m, [id]: bild?.ok ? bild.url : "" }));
   };
 
   return (
