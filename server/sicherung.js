@@ -38,6 +38,7 @@
 //      sicherungsEinstellungen(), sicherungsDienst(). Only node: built-ins and fflate (already a dependency).
 
 import fs from 'node:fs';
+import { ersetzeAtomar } from '../packages/nova-core/server/atomarErsetzen.js';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { zipSync } from 'fflate';
@@ -146,7 +147,7 @@ export function sicherungAnlegen({ datenOrdner, zielOrdner, dbs = [], jetzt = ne
   const name = sicherungsName(jetzt);
   const datei = path.join(ziel, name);
   fs.writeFileSync(`${datei}.tmp`, zip);
-  fs.renameSync(`${datei}.tmp`, datei);
+  ersetzeAtomar(`${datei}.tmp`, datei);
   return { datei, name, zeit: jetzt.toISOString(), bytes: zip.length, dateien: inhalt.length };
 }
 

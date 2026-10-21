@@ -10,6 +10,30 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.8.0] - 2026-10-21
+
+### Neu
+
+- **Baukörper aufziehen:** In der Baufeld-Planung spannt Ziehen einen Baukörper in eigener Größe auf (Vorschau mit Maßen in m); ein einfacher Klick setzt weiter die Standardgröße. Beschriftung „3 Geschosse / 900 m² BGF“ statt „3G“.
+- **Riegel und Blockrand:** neues Werkzeug „Riegel“ — Pfad klicken, Enter oder Doppelklick ergibt einen Wohnriegel, Klick auf den Startpunkt einen Blockrand mit Hof; Wohnungsmix farbig, Eckpunkte nachträglich ziehbar, Geschosse/Erschließung/Mix in der Liste; Grundfläche und BGF zählen in GRZ/GFZ.
+- **Grundstück zeichnen:** „Grundstück zeichnen“ und die Ecken entlang der amtlichen Flurstücksgrenze klicken — danach gilt das Grundstück als gezeichnet und lässt sich bearbeiten.
+- **CAD-Koordinaten im Massing-Studio:** `#x;y` absolut, `@dx;dy` relativ, `@abstand<winkel` polar (Norden oben), eine Länge allein gilt in Zeigerrichtung.
+- **Befehle tippen:** ohne laufenden Befehl gehen Buchstaben in die Befehlszeile — „l“ = Linie, „pp“ = Push/Pull, Anfänge werden ergänzt, Vorschlagsliste; Enter wiederholt den letzten Befehl.
+- **Drohnenscans als Gaussian Splats** in „Gelände 3D“: `.ply` (3D Gaussian Splatting) oder `.splat` laden oder das Beispiel ansehen, Maßstab/Drehung/Höhe einstellen; eigener Renderer, keine zusätzliche Bibliothek.
+- **KI-Agenten steuern die Zeichenfläche:** ein lokaler Agent (z. B. über den MCP-Server: `zeichenflaeche_befehle`, `zeichenflaeche_ausfuehren`) kann die Befehle des geöffneten Massing-Studios ausführen — nur auf diesem Rechner, mit Token aus dem Datenordner.
+
+### Geändert
+
+- **Karte wie ein CAD-Plan:** Links-Ziehen verschiebt die Karte nicht mehr (es zeichnet, setzt oder wählt); verschoben wird mit gedrücktem Mausrad oder Leertaste + Ziehen.
+- Ein nur geschätztes Grundstück wird nicht mehr als grünes Quadrat gezeichnet und begrenzt nichts; seine Fläche bleibt als „geschätzt“ für die Kennzahlen.
+- Die Werkzeugleiste des Lageplans bricht um statt Knöpfe abzuschneiden.
+
+### Behoben
+
+- Im Lageplan ohne Karte brach das Verschieben eines Blocks nach einer Rahmenauswahl nach wenigen Pixeln ab.
+- Ein früher Rechtsklick auf die Karte zeigte kein Menü, solange die Karte noch lud.
+- Speichern übersteht kurze Dateisperren (Cloud-Synchronisierung, Virenscanner) — vorher konnte eine halbe Zwischendatei liegen bleiben.
+
 ## [1.7.2] - 2026-10-18
 
 ### Neu

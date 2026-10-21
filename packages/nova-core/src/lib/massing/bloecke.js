@@ -259,10 +259,11 @@ export function fangKorrektur(punkte, ziele, fang) {
  * Massing-Studio defaults. Overlapping footprints are NOT subtracted from the GRZ — they are
  * reported as a conflict instead.
  * @param {Block[]} bloecke
- * @param {{grenze?: P[]|null, faktor?: number, min?: number, geschossHoehe?: number}} [opt] grenze = plot polygon in metres
+ * @param {{grenze?: P[]|null, faktor?: number, min?: number, geschossHoehe?: number, zusatz?: {grundflaeche?: number, bgf?: number}|null}} [opt]
+ *   grenze = plot polygon in metres; zusatz = extra footprint / BGF in m² (bars of the site plan, 101-04)
  * @returns {{grundflaeche: number, bgf: number, grundstueck: number, grz: number, gfz: number, grzUeber: boolean, gfzHoch: boolean, je: Record<string, {streifen: Array<{pts: P[], conflict: boolean|null, depth: number}>, ausserhalb: boolean, grenzKonflikt: boolean, ueberlappt: string[], abstandZu: string[]}>, konflikte: number, pruefbar: boolean}}
  */
-export function pruefen(bloecke, { grenze = null, faktor = 0.4, min = 3, geschossHoehe = GESCHOSS_HOEHE_M } = {}) {
+export function pruefen(bloecke, { grenze = null, faktor = 0.4, min = 3, geschossHoehe = GESCHOSS_HOEHE_M, zusatz = null } = {}) {
   const pruefbar = Array.isArray(grenze) && grenze.length >= 3;
   const poly = Object.fromEntries(bloecke.map((k) => [k.id, ecken(k)]));
   const streifen = Object.fromEntries(bloecke.map((k) => [k.id, abstandsStreifen(poly[k.id], k.geschosse * geschossHoehe, { faktor, min, grenze: pruefbar ? grenze : null })]));
@@ -282,8 +283,9 @@ export function pruefen(bloecke, { grenze = null, faktor = 0.4, min = 3, geschos
     if (ausserhalb || grenzKonflikt || ueberlappt.length || abstandZu.length) konflikte++;
     je[k.id] = { streifen: streifen[k.id], ausserhalb, grenzKonflikt, ueberlappt, abstandZu };
   }
-  const grundflaeche = bloecke.reduce((s, k) => s + k.breite * k.tiefe, 0);
-  const bgf = bloecke.reduce((s, k) => s + k.breite * k.tiefe * k.geschosse, 0);
+  // 101-04: bars / perimeter blocks of the site plan count into GRZ/GFZ (no setback check for them yet).
+  const grundflaeche = bloecke.reduce((s, k) => s + k.breite * k.tiefe, 0) + (Number(zusatz?.grundflaeche) || 0);
+  const bgf = bloecke.reduce((s, k) => s + k.breite * k.tiefe * k.geschosse, 0) + (Number(zusatz?.bgf) || 0);
   const grundstueck = pruefbar ? polyFlaeche(/** @type {P[]} */ (grenze)) : 0;
   return { grundflaeche, bgf, grundstueck, ...dichte(grundflaeche, bgf, grundstueck), je, konflikte, pruefbar };
 }

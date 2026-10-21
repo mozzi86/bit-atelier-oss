@@ -17,7 +17,9 @@
 // In:  JSON-RPC requests on stdin. Out: JSON-RPC responses on stdout.
 // Methods: initialize, notifications/initialized, ping, tools/list, tools/call.
 // Tools: bit_status, list_entity_types, list_projects, get_project, list_records,
-//        get_record; with write permission also create_record, update_record.
+//        get_record, zeichenflaeche_befehle; with write permission also create_record,
+//        update_record, zeichenflaeche_ausfuehren (104-04: drive the open drawing surface —
+//        token read from <data folder>/steuerung.token, the folder from /api/system/datenordner).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -105,6 +107,42 @@ async function api(methode, pfad, body) {
   if (json === null && text) {
     throw new ApiFehler(`Antwort von ${API_URL}${pfad} ist kein JSON — läuft unter BIT_API_URL wirklich BIT-Atelier?`);
   }
+  return json;
+}
+
+// --- Drawing surface control (104-04) ------------------------------------------------
+
+/** Token of the local control channel: BIT_STEUERUNG_TOKEN or <data folder>/steuerung.token. */
+async function steuerungsToken() {
+  if (process.env.BIT_STEUERUNG_TOKEN) return process.env.BIT_STEUERUNG_TOKEN.trim();
+  const { ordner } = await api('GET', '/system/datenordner');
+  const datei = path.join(String(ordner || ''), 'steuerung.token');
+  try {
+    return fs.readFileSync(datei, 'utf8').trim();
+  } catch {
+    throw new ApiFehler(`Steuerungs-Token nicht gefunden (${datei}) — BIT-Atelier ab Fassung 1.8 starten.`);
+  }
+}
+
+/**
+ * One request of the control channel; answers of the open app are passed through as they are
+ * (also ok:false with status "not-run" / "may-have-run" — the model must see the difference).
+ * @param {{id: any, method: string, params?: object}} anfrage
+ */
+async function steuerung(anfrage) {
+  const token = await steuerungsToken();
+  let res;
+  try {
+    res = await fetch(`${API_URL}/steuerung`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-bit-steuerung': token },
+      body: JSON.stringify(anfrage), signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw new NichtErreichbar(`${NICHT_ERREICHBAR}. Erwartet unter ${API_URL} (${err?.cause?.code || err?.name || 'Netzwerkfehler'}).`);
+  }
+  const json = await res.json().catch(() => null);
+  if (res.status === 401) throw new ApiFehler('Steuerungs-Token passt nicht — wurde BIT-Atelier neu gestartet? Dann gilt das neue Token automatisch beim nächsten Aufruf.');
+  if (!json) throw new ApiFehler(`Steuerung → HTTP ${res.status} ohne JSON`);
   return json;
 }
 
@@ -313,6 +351,34 @@ const WERKZEUGE = [
     annotations: NUR_LESEN,
     async ausfuehren(args) {
       return api('GET', `/entities/${entitaetAus(args)}/${encodeURIComponent(idAus(args))}`);
+    },
+  },
+  {
+    name: 'zeichenflaeche_befehle',
+    title: 'Drawing surface commands',
+    description: 'Listet die Befehle der in BIT-Atelier geöffneten Zeichenfläche (Massing-Studio) mit Tastenkürzel und ob sie gerade möglich sind. Antwort status "not-run" = keine Zeichenfläche offen. / Lists the commands of the drawing surface open in BIT-Atelier (Massing studio), with keys and whether each is possible now.',
+    inputSchema: { type: 'object', properties: {} },
+    annotations: NUR_LESEN,
+    async ausfuehren() {
+      return steuerung({ id: Date.now(), method: 'befehle' });
+    },
+  },
+  {
+    name: 'zeichenflaeche_ausfuehren',
+    title: 'Run drawing surface command',
+    description: 'Führt einen Befehl der geöffneten Zeichenfläche aus, z. B. {"befehl":"linie"}, dann {"befehl":"eingabe","params":{"text":"@8;0"}} (Koordinaten: #x;y absolut, @dx;dy relativ, @abstand<winkel polar, Norden oben), {"befehl":"modell"} liest das Modell. status "not-run" = darf wiederholt werden, "may-have-run" = erst mit "modell" prüfen (nur mit Schreibrecht). / Runs a command of the open drawing surface (write permission only).',
+    inputSchema: {
+      type: 'object',
+      properties: { befehl: { type: 'string', description: 'Befehls-id aus zeichenflaeche_befehle' }, params: { type: 'object', description: 'Parameter, z. B. {"text":"@3;4"}' } },
+      required: ['befehl'],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    schreibt: true,
+    async ausfuehren(args) {
+      const befehl = String(args.befehl ?? '');
+      if (!/^[a-z0-9-]{1,40}$/.test(befehl)) throw new EingabeFehler(`Ungültiger Befehl ${JSON.stringify(args.befehl)} — zeichenflaeche_befehle nennt alle.`);
+      const params = args.params && typeof args.params === 'object' && !Array.isArray(args.params) ? args.params : {};
+      return steuerung({ id: Date.now(), method: 'ausfuehren', params: { befehl, params } });
     },
   },
   {

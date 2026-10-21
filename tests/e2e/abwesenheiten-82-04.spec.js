@@ -89,7 +89,10 @@ test("Abwesenheiten: Teamkalender ohne Gründe, Antrag mit Konflikt, Genehmigung
     await expect(page.getByTestId("team-kalender")).toBeVisible({ timeout: 20000 });
     if (w1.slice(5, 7) !== heute.slice(5, 7)) await page.getByRole("button", { name: "Nächster Monat" }).click();
     await expect(page.locator(`[data-person="${A}"] [data-datum="${w1}"]`)).toHaveAttribute("data-zustand", "abwesend", { timeout: 20000 });
-    await expect(page.locator(`[data-person="${B}"] [data-datum="${plus(w1, 9)}"]`)).toHaveAttribute("data-zustand", /beantragt|^$/);
+    // B's request runs w1+2 … w1+9; the calendar shows only w1's month — check a request day inside it
+    // (w1+9 fell into the next month on 19.10.2026 and the cell did not exist).
+    const bTag = [2, 3, 4, 5, 6, 7, 8, 9].map((d) => plus(w1, d)).find((d) => d.slice(0, 7) === w1.slice(0, 7));
+    if (bTag) await expect(page.locator(`[data-person="${B}"] [data-datum="${bTag}"]`)).toHaveAttribute("data-zustand", /beantragt|^$/);
     expect(await teamText(page)).not.toMatch(GRUND);
 
     // 2. Requests: conflict warning, approval at the record, no audit row.

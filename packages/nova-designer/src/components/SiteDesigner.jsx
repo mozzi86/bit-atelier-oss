@@ -3,17 +3,19 @@ import * as maplibregl from "maplibre-gl";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Button } from "@core/components/ui/button";
 import { Badge } from "@core/components/ui/badge";
-import { Building, Trash2, MousePointerClick, MousePointer2, PenTool, Check, Undo2, Redo2 } from "lucide-react";
+import { Building, Trash2, MousePointerClick, MousePointer2, PenTool, Check, Undo2, Redo2, Route } from "lucide-react";
 import { polygonAreaM2, centroid, pxAreaToM2, pxToM, mToPx, pointInPolygon, metersPerPixel } from "@core/lib/geo";
 // 95-04…06: blocks as objects in metres — selection, move/copy/rotate, snapping, checks.
 import { alsBlock, ecken } from "@core/lib/massing/bloecke";
+import { riegelLayout, WOHNUNGSTYPEN, MIX_VORLAGEN, RIEGEL_STANDARD } from "@core/lib/massing/riegel";
 import { useBlockBearbeitung } from "@designer/lib/useBlockBearbeitung";
 import Befehlszeile from "@core/components/Befehlszeile";
+import { eckeVerschieben, eckeEinfuegen, eckeLoeschen, kanteVerschieben, kantenMitten } from "@core/lib/polygonBearbeiten";
 import { useKontextmenue, KontextmenueAnzeige } from "@core/components/Kontextmenue";
 import { baufeldAufforderung } from "@core/lib/befehlszeile";
 import { mittelklickZaehler } from "@core/lib/mittelklick";
 import { useI18n } from "@core/lib/i18n";
-import { baukoerperDefaults } from "@designer/lib/siteParcel";
+import { baukoerperDefaults, baukoerperAusZug, baukoerperKennwerte } from "@designer/lib/siteParcel";
 // 75-06 Task 2 (D-P75-04): GeoJSON parcel import — pure parse, no dependency.
 import { flurstueckeAusGeoJson } from "@designer/lib/flurstueckImport";
 import {
@@ -63,9 +65,36 @@ function vertexElement({ filled = false, cursor = "grab" } = {}) {
   return el;
 }
 
+/**
+ * 101-04: building label on the site plan, two lines: "3 Geschosse" / "900 m² BGF" (was "3G").
+ * @param {any} b building (canvas units)
+ * @param {any} parcel site_parcel (scale)
+ * @param {(s: string) => string} t i18n
+ */
+function baukoerperText(b, parcel, t) {
+  const k = baukoerperKennwerte(b, parcel);
+  return `${k.geschosse} ${t(k.geschosse === 1 ? "Geschoss" : "Geschosse")}\n${k.bgfM2.toLocaleString("de-DE")} m² ${t("BGF")}`;
+}
+
+/**
+ * 101-04: label of a bar / perimeter block, two lines: "Blockrand · 5 Geschosse" / "48 WE · 3.450 m² BGF".
+ * @param {{geschlossen?: boolean}} r stored bar
+ * @param {{geschosse: number, wohnungen: number, bgf: number}} k key figures of riegelLayout
+ * @param {(s: string) => string} t i18n
+ */
+function riegelText(r, k, t) {
+  return `${t(r.geschlossen ? "Blockrand" : "Riegel")} · ${k.geschosse} ${t("Geschosse")}\n${k.wohnungen} ${t("WE")} · ${Math.round(k.bgf).toLocaleString("de-DE")} m² ${t("BGF")}`;
+}
+
+/** Mean of the path points (label position; for a ring the middle of the courtyard). */
+function punktMitte(/** @type {Array<{x:number,y:number}>} */ pts) {
+  return { x: pts.reduce((a, q) => a + q.x, 0) / pts.length, y: pts.reduce((a, q) => a + q.y, 0) / pts.length };
+}
+
 // Interaktiver Lageplan auf der echten Karte (Phase 36, KARTE-03): Zeichnen,
-// Vertex-Drag und Baukörper-Setzen laufen direkt in Karten-Koordinaten,
-// Pan/Zoom bleibt dabei frei (MapLibre feuert "click" nur ohne Drag).
+// Vertex-Drag und Baukörper-Setzen laufen direkt in Karten-Koordinaten.
+// 101-04: CAD navigation — the left button only draws/places/selects; pressed wheel or
+// space + drag pans, the wheel zooms.
 // Persistiert wird unverändert das Canvas-Px-Bestandsformat — Übersetzung
 // über canvasPointToLngLat/lngLatToCanvasPoint je Interaktion.
 function LageplanKarte({
@@ -87,8 +116,14 @@ function LageplanKarte({
   zeigeHoehen = false,
   onKontext = null,
   zeigeKataster = false,
-  onParcelVertex = null,
+  onParcelPunkte = null,
+  onAufziehen = null,
+  riegelGeo = null,
+  onRiegelPunkt = null,
+  onRiegelFertig = null,
+  parcelSichtbar = true,
 }) {
+  const { t } = useI18n();
   const onKontextRef = useRef(onKontext);
   onKontextRef.current = onKontext;
   // 95-02: metres per canvas unit of THIS parcel (generic parcels have their own scale).
@@ -113,7 +148,7 @@ function LageplanKarte({
     // 101-02: official parcel boundaries (Bavaria) under everything we draw.
     map.addSource("sd-kataster", { type: "raster", tiles: [KATASTER_BY_URL], tileSize: 256, attribution: KATASTER_BY_QUELLE, maxzoom: 20 });
     map.addLayer({ id: "sd-kataster", type: "raster", source: "sd-kataster", minzoom: 14, layout: { visibility: zeigeKataster ? "visible" : "none" }, paint: { "raster-opacity": 0.85 } });
-    ["sd-parcel", "sd-elev", "sd-areas", "sd-draft", "sd-abstand", "sd-buildings"].forEach(addSrc);
+    ["sd-parcel", "sd-elev", "sd-areas", "sd-draft", "sd-abstand", "sd-riegel", "sd-buildings"].forEach(addSrc);
     map.addLayer({ id: "sd-parcel-fill", type: "fill", source: "sd-parcel", paint: { "fill-color": "#10b981", "fill-opacity": 0.06 } });
     map.addLayer({ id: "sd-parcel-line", type: "line", source: "sd-parcel", paint: { "line-color": "#10b981", "line-width": 3, "line-dasharray": [2, 1.5] } });
     map.addLayer({ id: "sd-elev-circle", type: "circle", source: "sd-elev", paint: { "circle-radius": 5, "circle-color": ["get", "color"], "circle-opacity": 0.8 } });
@@ -123,6 +158,9 @@ function LageplanKarte({
     // 95-06: setback strips (study) under the blocks — green = fine, red = conflict.
     map.addLayer({ id: "sd-abstand-fill", type: "fill", source: "sd-abstand", paint: { "fill-color": ["case", ["get", "konflikt"], "#ef4444", "#22c55e"], "fill-opacity": 0.16 } });
     map.addLayer({ id: "sd-abstand-line", type: "line", source: "sd-abstand", paint: { "line-color": ["case", ["get", "konflikt"], "#dc2626", "#16a34a"], "line-width": 1, "line-dasharray": [2, 2] } });
+    // 101-04: bars / perimeter blocks — units coloured by type (WOHNUNGSTYPEN), corridor grey.
+    map.addLayer({ id: "sd-riegel-fill", type: "fill", source: "sd-riegel", paint: { "fill-color": ["get", "farbe"], "fill-opacity": 0.85 } });
+    map.addLayer({ id: "sd-riegel-line", type: "line", source: "sd-riegel", paint: { "line-color": "#334155", "line-width": 0.6 } });
     // 95-04: selected blocks amber outline, blocks with a conflict red fill.
     map.addLayer({ id: "sd-buildings-fill", type: "fill", source: "sd-buildings", paint: { "fill-color": ["case", ["get", "konflikt"], "#ef4444", "#3b82f6"], "fill-opacity": 0.75 } });
     map.addLayer({ id: "sd-buildings-line", type: "line", source: "sd-buildings", paint: { "line-color": ["case", ["get", "sel"], "#f59e0b", "#1e3a8a"], "line-width": ["case", ["get", "sel"], 4, 2] } });
@@ -137,8 +175,9 @@ function LageplanKarte({
   // --- Daten → Sources -----------------------------------------------------
   useEffect(() => {
     const map = getMap();
-    map?.getSource("sd-parcel")?.setData(footprintToGeoJson(parcel.points, loc.lat, loc.lng, mpp));
-  }, [mapReady, parcel, loc.lat, loc.lng]);
+    // Nutzer 19.10.: the estimated start square is not drawn ("Quadrat weg") — only a drawn / imported plot.
+    map?.getSource("sd-parcel")?.setData(parcelSichtbar ? footprintToGeoJson(parcel.points, loc.lat, loc.lng, mpp) : { type: "FeatureCollection", features: [] });
+  }, [mapReady, parcel, loc.lat, loc.lng, parcelSichtbar]);
 
   useEffect(() => {
     const map = getMap();
@@ -183,9 +222,94 @@ function LageplanKarte({
     map?.getSource("sd-abstand")?.setData({ type: "FeatureCollection", features });
   }, [mapReady, mode, pruefJe, loc.lat, loc.lng, mpp, mSite]);
 
+  // --- 101-04: bars / perimeter blocks: areas → source, path points as draggable markers ----------
+  const riegelMarkerRef = useRef(/** @type {any[]} */ ([]));
+  const onRiegelPunktRef = useRef(onRiegelPunkt);
+  onRiegelPunktRef.current = onRiegelPunkt;
+  const onRiegelFertigRef = useRef(onRiegelFertig);
+  onRiegelFertigRef.current = onRiegelFertig;
+  useEffect(() => {
+    const map = getMap();
+    const features = (riegelGeo?.flaechen || []).map((f) => {
+      const g = footprintToGeoJson(f.pts, loc.lat, loc.lng, mpp).features[0];
+      return g ? { ...g, properties: { farbe: f.farbe } } : null;
+    }).filter(Boolean);
+    map?.getSource("sd-riegel")?.setData({ type: "FeatureCollection", features });
+  }, [mapReady, riegelGeo, loc.lat, loc.lng, mpp]);
+  useEffect(() => {
+    const map = getMap();
+    if (!map || !mapReady || !onRiegelPunktRef.current) return undefined;
+    clearMarkers(riegelMarkerRef);
+    for (const q of riegelGeo?.punkte || []) {
+      const el = vertexElement();
+      el.style.borderColor = "#7c3aed";
+      el.dataset.testid = "sd-riegel-punkt";
+      el.title = "Punkt ziehen";
+      const m = new maplibregl.Marker({ element: el, draggable: true })
+        .setLngLat(/** @type {[number, number]} */ (canvasPointToLngLat(q.p, loc.lat, loc.lng, mpp))).addTo(map);
+      m.on("dragend", () => {
+        const ll = m.getLngLat();
+        onRiegelPunktRef.current?.(q.id, q.idx, lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng, mpp));
+      });
+      riegelMarkerRef.current.push(m);
+    }
+    return () => clearMarkers(riegelMarkerRef);
+  }, [mapReady, riegelGeo, loc.lat, loc.lng, mpp]);
+
+  // --- 101-04: CAD navigation in every tool ------------------------------------------------
+  // The left button never pans (it draws, places or selects). Pressed wheel + drag = pan,
+  // space held + drag = pan (as in the 2D plans), wheel = zoom. User 18.10.2026: "Pan über
+  // gedrücktes Mausrad".
+  const leerRef = useRef(false);
+  useEffect(() => {
+    const map = getMap();
+    if (!map || !mapReady) return undefined;
+    map.dragPan.disable();
+    map.boxZoom.disable();
+    const canvas = map.getCanvas();
+    const zeiger = () => { canvas.style.cursor = leerRef.current ? "grab" : mode === "auswahl" ? "default" : "crosshair"; };
+    zeiger();
+    const el = map.getCanvasContainer();
+    let mitte = /** @type {{x:number,y:number}|null} */ (null);
+    const runter = (/** @type {MouseEvent} */ e) => {
+      if (e.button !== 1) return;
+      e.preventDefault(); // no browser auto-scroll
+      mitte = { x: e.clientX, y: e.clientY };
+      canvas.style.cursor = "grabbing";
+    };
+    const bewegen = (/** @type {MouseEvent} */ e) => {
+      if (!mitte) return;
+      map.panBy([mitte.x - e.clientX, mitte.y - e.clientY], { duration: 0 });
+      mitte = { x: e.clientX, y: e.clientY };
+    };
+    const hoch = (/** @type {MouseEvent} */ e) => { if (mitte && e.button === 1) { mitte = null; zeiger(); } };
+    const taste = (/** @type {KeyboardEvent} */ e) => {
+      if (e.code !== "Space" || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(/** @type {any} */ (e.target)?.tagName || "")) return;
+      const an = e.type === "keydown";
+      if (an) e.preventDefault();
+      if (an === leerRef.current) return;
+      leerRef.current = an;
+      if (an) map.dragPan.enable(); else map.dragPan.disable();
+      zeiger();
+    };
+    el.addEventListener("mousedown", runter);
+    window.addEventListener("mousemove", bewegen);
+    window.addEventListener("mouseup", hoch);
+    window.addEventListener("keydown", taste);
+    window.addEventListener("keyup", taste);
+    return () => {
+      el.removeEventListener("mousedown", runter);
+      window.removeEventListener("mousemove", bewegen);
+      window.removeEventListener("mouseup", hoch);
+      window.removeEventListener("keydown", taste);
+      window.removeEventListener("keyup", taste);
+      leerRef.current = false;
+    };
+  }, [mapReady, mode]);
+
   // --- 95-04/05: selection tool on the map ---------------------------------------------
-  // Map pan is off while selecting (a drag draws a frame or moves blocks); space held = pan,
-  // wheel zoom stays. Points: map → canvas units → site metres (× mSite).
+  // A drag draws a frame or moves blocks (navigation: see above). Points: map → canvas units →
+  // site metres (× mSite).
   const altRef = useRef(false);
   // The controller object changes on every render; the map listeners read it through this ref so
   // they are not re-subscribed mid-drag (which reset the "button down" state).
@@ -195,10 +319,7 @@ function LageplanKarte({
   useEffect(() => {
     const map = getMap();
     if (!map || !mapReady) return undefined;
-    const auswahl = mode === "auswahl" && hatBb;
-    if (auswahl) { map.dragPan.disable(); map.boxZoom.disable(); map.getCanvas().style.cursor = "default"; }
-    else { map.dragPan.enable(); map.boxZoom.enable(); map.getCanvas().style.cursor = ""; }
-    if (!auswahl) return undefined;
+    if (mode !== "auswahl" || !hatBb) return undefined;
     const zuM = (/** @type {any} */ lngLat) => {
       const c = lngLatToCanvasPoint([lngLat.lng, lngLat.lat], loc.lat, loc.lng, mpp);
       return { x: c.x * mSite, y: c.y * mSite };
@@ -208,21 +329,16 @@ function LageplanKarte({
       return Math.hypot(b.x - a.x, b.y - a.y) / 10;
     };
     const tasten = (/** @type {any} */ e) => ({ umschalt: e.shiftKey, strg: e.ctrlKey || e.metaKey, alt: e.altKey });
-    let leer = false, gedrueckt = false;
+    let gedrueckt = false;
     const down = (/** @type {any} */ e) => {
       const oe = e.originalEvent;
-      if (leer || oe.button !== 0) return;
+      if (leerRef.current || oe.button !== 0) return;
       gedrueckt = true;
       bbRef.current?.runter(zuM(e.lngLat), { x: e.point.x, y: e.point.y }, tasten(oe), mProPx(e.point));
     };
     const move = (/** @type {any} */ e) => { if (gedrueckt) bbRef.current?.bewegen(zuM(e.lngLat), { x: e.point.x, y: e.point.y }, tasten(e.originalEvent)); };
     const up = (/** @type {any} */ e) => { if (!gedrueckt) return; gedrueckt = false; bbRef.current?.hoch(tasten(e)); };
-    const taste = (/** @type {KeyboardEvent} */ e) => {
-      altRef.current = e.altKey;
-      if (e.code !== "Space" || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(/** @type {any} */ (e.target)?.tagName || "")) return;
-      leer = e.type === "keydown";
-      if (leer) { map.dragPan.enable(); e.preventDefault(); } else map.dragPan.disable();
-    };
+    const taste = (/** @type {KeyboardEvent} */ e) => { altRef.current = e.altKey; };
     map.on("mousedown", down);
     map.on("mousemove", move);
     window.addEventListener("mouseup", up);
@@ -266,7 +382,64 @@ function LageplanKarte({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapReady, griff?.x, griff?.y, hatBb, loc.lat, loc.lng, mpp, mSite]);
 
-  // --- Klick zeichnet / platziert (Pan/Zoom bleibt frei) --------------------
+  // --- 101-04: building tool — a drag pulls a building open --------------------------------
+  // A plain click keeps the standard size (click handler below): MapLibre fires "click" only
+  // below its click tolerance of 3 px, the drag here only from 3 px on — never both.
+  const aufziehenRef = useRef(/** @type {HTMLDivElement|null} */ (null));
+  const onAufziehenRef = useRef(onAufziehen);
+  onAufziehenRef.current = onAufziehen;
+  const insideRef = useRef(insideParcel);
+  insideRef.current = insideParcel;
+  useEffect(() => {
+    const map = getMap();
+    if (!map || !mapReady || mode !== "building") return undefined;
+    const zuCanvas = (/** @type {any} */ ll) => lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng, mpp);
+    const punkt = (/** @type {MouseEvent} */ e) => {
+      const rect = map.getCanvas().getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    };
+    let start = /** @type {{c:{x:number,y:number}, p:{x:number,y:number}}|null} */ (null);
+    const down = (/** @type {any} */ e) => {
+      const oe = e.originalEvent;
+      if (leerRef.current || oe.button !== 0 || oe.target !== map.getCanvas()) return;
+      const c = zuCanvas(e.lngLat);
+      if (!insideRef.current(c.x, c.y)) return;
+      start = { c, p: { x: e.point.x, y: e.point.y } };
+    };
+    const move = (/** @type {MouseEvent} */ e) => {
+      const box = aufziehenRef.current;
+      if (!start || !box) return;
+      const p = punkt(e);
+      const dx = p.x - start.p.x, dy = p.y - start.p.y;
+      if (Math.hypot(dx, dy) < 3) { box.style.display = "none"; return; }
+      const c = zuCanvas(map.unproject([p.x, p.y]));
+      const m = (/** @type {number} */ v) => (Math.abs(v) * mSite).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      Object.assign(box.style, {
+        display: "flex", left: `${Math.min(p.x, start.p.x)}px`, top: `${Math.min(p.y, start.p.y)}px`,
+        width: `${Math.abs(dx)}px`, height: `${Math.abs(dy)}px`,
+      });
+      box.textContent = `${m(c.x - start.c.x)} × ${m(c.y - start.c.y)} m`;
+    };
+    const up = (/** @type {MouseEvent} */ e) => {
+      if (!start) return;
+      const s0 = start;
+      start = null;
+      if (aufziehenRef.current) aufziehenRef.current.style.display = "none";
+      const p = punkt(e);
+      if (Math.hypot(p.x - s0.p.x, p.y - s0.p.y) < 3) return; // a click: standard size via the click handler
+      onAufziehenRef.current?.(s0.c, zuCanvas(map.unproject([p.x, p.y])));
+    };
+    map.on("mousedown", down);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => {
+      map.off("mousedown", down);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+  }, [mapReady, mode, loc.lat, loc.lng, mpp, mSite]);
+
+  // --- Klick zeichnet / platziert ------------------------------------------------
   useEffect(() => {
     const map = getMap();
     if (!map || !mapReady) return undefined;
@@ -277,8 +450,8 @@ function LageplanKarte({
       if (mode === "auswahl") return; // 95-04: the selection tool handles mousedown/up itself
       const lngLat = [e.lngLat.lng, e.lngLat.lat];
       const cpt = lngLatToCanvasPoint(lngLat, loc.lat, loc.lng, mpp);
-      if (mode === "polygon") {
-        // Klick nahe am Startpunkt (Screen-Px) schließt das Polygon.
+      if (mode === "polygon" || mode === "riegel") {
+        // Klick nahe am Startpunkt (Screen-Px) schließt das Polygon (101-04: beim Riegel = Blockrand).
         if (draftGeo.length >= 3) {
           const p0 = map.project(draftGeo[0]);
           if (Math.hypot(p0.x - e.point.x, p0.y - e.point.y) < 14) {
@@ -293,8 +466,11 @@ function LageplanKarte({
         onAddBuilding(cpt.x, cpt.y);
       }
     };
+    // 101-04: a double-click finishes an open bar (its first click already set the last point).
+    const onDoppel = () => { if (mode === "riegel") onRiegelFertigRef.current?.(false); };
     map.on("click", onClick);
-    return () => map.off("click", onClick);
+    map.on("dblclick", onDoppel);
+    return () => { map.off("click", onClick); map.off("dblclick", onDoppel); };
   }, [mapReady, mode, draftGeo, insideParcel, onAddBuilding, onCloseDraft, setDraftGeo, loc.lat, loc.lng, mpp]);
 
   // 101-01: two/three clicks on the mouse wheel = zoom extents (whole parcel), CAD convention.
@@ -311,10 +487,7 @@ function LageplanKarte({
       if (bounds) map.fitBounds(bounds, { padding: 60, duration: 300, maxZoom: 19 });
     };
     el.addEventListener("mousedown", onMitte);
-    // 101-07: own menu instead of the browser menu (onKontext from the site plan)
-    const ohneMenue = (/** @type {MouseEvent} */ e) => { e.preventDefault(); onKontextRef.current?.(e, () => { const ring = footprintToGeoJson(parcel.points, loc.lat, loc.lng, mpp).features[0]?.geometry?.coordinates?.[0]; const b = ringBounds(ring); if (b) map.fitBounds(b, { padding: 60, duration: 300, maxZoom: 19 }); }); };
-    el.addEventListener("contextmenu", ohneMenue);
-    return () => { el.removeEventListener("mousedown", onMitte); el.removeEventListener("contextmenu", ohneMenue); };
+    return () => el.removeEventListener("mousedown", onMitte);
   }, [mapReady, parcel, loc.lat, loc.lng, mpp]);
 
   // Der Lageplan ist eine Zeichenfläche: Doppelklick-Zoom bleibt in BEIDEN
@@ -344,33 +517,51 @@ function LageplanKarte({
   }, [mapReady, zeigeKataster]);
 
   // 101-02: the plot boundary is editable — one draggable handle per corner (live preview, commit on drop).
+  // 101-02(b): the plot boundary is fully editable — corners (drag = move, double-click = delete) and edge
+  // handles "+" (click = insert a corner, drag = move the edge parallel). Live preview, commit on drop.
   const parcelMarkerRef = useRef(/** @type {any[]} */ ([]));
   // Latest callback through a ref: the markers are rebuilt only when the plot changes, not on every render
   // (a rebuild during a drag would drop the grabbed handle).
-  const onParcelVertexRef = useRef(onParcelVertex);
-  onParcelVertexRef.current = onParcelVertex;
-  const parcelEditierbar = !!onParcelVertex;
+  const onParcelPunkteRef = useRef(onParcelPunkte);
+  onParcelPunkteRef.current = onParcelPunkte;
+  const parcelEditierbar = !!onParcelPunkte;
   useEffect(() => {
     const map = getMap();
     if (!map || !mapReady || !parcelEditierbar) return undefined;
     clearMarkers(parcelMarkerRef);
-    parcel.points.forEach((p, idx) => {
+    const pts = parcel.points;
+    const zuLl = (/** @type {{x:number,y:number}} */ q) => /** @type {[number, number]} */ (canvasPointToLngLat(q, loc.lat, loc.lng, mpp));
+    const zuCanvas = (/** @type {any} */ ll) => lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng, mpp);
+    const vorschau = (/** @type {Array<{x:number,y:number}>} */ neu) => map.getSource("sd-parcel")?.setData(footprintToGeoJson(neu, loc.lat, loc.lng, mpp));
+    const setzen = (/** @type {Array<{x:number,y:number}>} */ neu) => onParcelPunkteRef.current?.(neu);
+    pts.forEach((p, idx) => {
       const el = vertexElement();
       el.style.borderColor = "#059669";
-      el.title = "Ecke der Grundstücksgrenze ziehen";
+      el.title = "Ecke ziehen · Doppelklick löscht";
       el.dataset.testid = "sd-parcel-ecke";
-      const m = new maplibregl.Marker({ element: el, draggable: true })
-        .setLngLat(/** @type {[number, number]} */ (canvasPointToLngLat(p, loc.lat, loc.lng, mpp)))
-        .addTo(map);
-      m.on("drag", () => {
-        const ll = m.getLngLat();
-        const moved = lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng, mpp);
-        const live = parcel.points.map((q, i) => (i === idx ? moved : q));
-        map.getSource("sd-parcel")?.setData(footprintToGeoJson(live, loc.lat, loc.lng, mpp));
-      });
-      m.on("dragend", () => {
-        const ll = m.getLngLat();
-        onParcelVertexRef.current?.(idx, lngLatToCanvasPoint([ll.lng, ll.lat], loc.lat, loc.lng, mpp));
+      el.addEventListener("dblclick", (ev) => { ev.stopPropagation(); ev.preventDefault(); setzen(eckeLoeschen(pts, idx)); });
+      const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(zuLl(p)).addTo(map);
+      m.on("drag", () => vorschau(eckeVerschieben(pts, idx, zuCanvas(m.getLngLat()))));
+      m.on("dragend", () => setzen(eckeVerschieben(pts, idx, zuCanvas(m.getLngLat()))));
+      parcelMarkerRef.current.push(m);
+    });
+    kantenMitten(pts).forEach((mitte, idx) => {
+      const el = document.createElement("div");
+      el.textContent = "+";
+      el.title = "Klick: Ecke einfügen · Ziehen: Kante verschieben";
+      el.dataset.testid = "sd-parcel-kante";
+      el.style.cssText = "width:16px;height:16px;border-radius:4px;background:#ecfdf5;border:2px solid #059669;color:#047857;"
+        + "font:700 13px/12px system-ui;text-align:center;cursor:move;box-sizing:border-box;user-select:none;";
+      const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(zuLl(mitte)).addTo(map);
+      let gezogen = false;
+      m.on("dragstart", () => { gezogen = true; });
+      const delta = () => { const c = zuCanvas(m.getLngLat()); return { x: c.x - mitte.x, y: c.y - mitte.y }; };
+      m.on("drag", () => vorschau(kanteVerschieben(pts, idx, delta())));
+      m.on("dragend", () => setzen(kanteVerschieben(pts, idx, delta())));
+      el.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        if (gezogen) { gezogen = false; return; } // the browser still fires a click after a drag
+        setzen(eckeEinfuegen(pts, idx));
       });
       parcelMarkerRef.current.push(m);
     });
@@ -455,7 +646,7 @@ function LageplanKarte({
     const addLabel = (lngLat, text, css) => {
       const el = document.createElement("div");
       el.textContent = text;
-      el.style.cssText = `${css}pointer-events:none;white-space:nowrap;`;
+      el.style.cssText = `pointer-events:none;white-space:nowrap;${css}`;
       labelMarkersRef.current.push(
         new maplibregl.Marker({ element: el }).setLngLat(lngLat).addTo(map)
       );
@@ -485,12 +676,16 @@ function LageplanKarte({
           loc.lng,
           mpp
         ),
-        `${b.floors || 1}G`,
-        "font:700 12px system-ui;color:#fff;text-shadow:0 0 3px #1e3a8a,0 0 5px #1e3a8a;"
+        baukoerperText(b, parcel, t),
+        "font:700 11px/1.2 system-ui;color:#fff;text-align:center;white-space:pre;text-shadow:0 0 3px #1e3a8a,0 0 5px #1e3a8a;"
       );
     }
+    for (const l of riegelGeo?.labels || []) {
+      addLabel(canvasPointToLngLat(l.p, loc.lat, loc.lng, mpp), l.text,
+        "font:700 11px/1.2 system-ui;color:#4c1d95;text-align:center;white-space:pre;text-shadow:0 0 3px #fff,0 0 6px #fff;");
+    }
     return () => clearMarkers(labelMarkersRef);
-  }, [mapReady, areas, buildings, draftGeo, parcel, loc.lat, loc.lng, mpp]);
+  }, [mapReady, areas, buildings, draftGeo, parcel, loc.lat, loc.lng, mpp, t, riegelGeo]);
 
   return (
     <div
@@ -501,6 +696,16 @@ function LageplanKarte({
       // floor (review sec.3 A-1: "feste Höhe").
       // 101-05: fills the remaining height of the work surface (lg up); below lg a fixed 560 px.
       style={{ minHeight: 360 }}
+      // 101-07: own menu instead of the browser menu — on the frame, so it works from the first frame
+      // on (a listener on the map container only existed after the style had loaded; an early
+      // right-click then showed nothing, seen in E2E).
+      onContextMenu={(e) => {
+        e.preventDefault();
+        const map = getMap();
+        const ring = footprintToGeoJson(parcel.points, loc.lat, loc.lng, mpp).features[0]?.geometry?.coordinates?.[0];
+        const b = ringBounds(ring);
+        onKontextRef.current?.(e, map && b ? () => map.fitBounds(b, { padding: 60, duration: 300, maxZoom: 19 }) : null);
+      }}
     >
       {/* 72-01 A-1 rework: the map container gets h-full w-full, NOT
           "absolute inset-0" - maplibre-gl.css sets position:relative on
@@ -517,6 +722,9 @@ function LageplanKarte({
         onLayersReady={onLayersReady}
         className="h-full w-full"
       />
+      {/* 101-04: rectangle while a building is pulled open (positioned by the drag handler) */}
+      <div ref={aufziehenRef} data-testid="sd-aufziehen" style={{ display: "none" }}
+        className="pointer-events-none absolute items-end justify-end border-2 border-primary bg-primary/10 p-0.5 font-mono text-[11px] text-primary" />
       {bb?.rahmen && (
         <div
           data-testid="sd-rahmen"
@@ -534,11 +742,11 @@ function LageplanKarte({
   );
 }
 
-// Interactive 2D site plan. Modus "Baukörper" (Klick setzt Rechteck) oder
+// Interactive 2D site plan. Modus "Baukörper" (Klick setzt Standard-Rechteck, Ziehen spannt es auf — 101-04) oder
 // "Polygon" (frei zeichnen, Eckpunkte ziehen, Live-Fläche in m²).
 // Mit Standort (Phase 36, KARTE-03): direkt auf der MapLibre-Karte; ohne
 // Standort bleibt der bisherige SVG-Canvas als Fallback.
-export default function SiteDesigner({ complexData, onBuildingsChange, onAreasChange, onSiteAreaChange, projektTyp = null, onReestimateParcel = null, onFlurstueckImport = null, onParcelChange = null }) {
+export default function SiteDesigner({ complexData, onBuildingsChange, onAreasChange, onSiteAreaChange, projektTyp = null, onReestimateParcel = null, onFlurstueckImport = null, onParcelChange = null, onRiegelChange = null }) {
   const { t } = useI18n();
   const svgRef = useRef(null);
   const dragRef = useRef(null);   // { areaId, idx }
@@ -579,14 +787,59 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   // so no migration is needed. MUST sit above the !parcel early return
   // (rules of hooks).
   const [areaTyp, setAreaTyp] = useState("footprint");
+  // 101-04: building pulled open in the SVG fallback (start point + screen position; preview rectangle).
+  const zugRef = useRef(/** @type {{a:{x:number,y:number}, sx:number, sy:number}|null} */ (null));
+  const [zugSvg, setZugSvg] = useState(/** @type {{a:{x:number,y:number}, b:{x:number,y:number}}|null} */ (null));
   // 95-04…06: blocks in metres. mSite = metres per canvas unit (same scale as every area
   // figure here); the plot and the "baufeld" envelopes in metres are the snap targets and the
   // basis of the checks. Hooks above the !parcel early return (rules of hooks).
   const planRef = useRef(null);
   const mSite = metersPerPixel(parcel);
+  // 101-04: bars / perimeter blocks — stored path in canvas units (like every site drawing), laid out in
+  // site metres with the core of the Massing modeller (riegelLayout, one engine for both editors).
+  const riegelDaten = complexData?.riegel;
+  const riegelLayouts = useMemo(() => (Array.isArray(riegelDaten) ? riegelDaten : [])
+    .filter((x) => Array.isArray(x?.punkte) && x.punkte.length >= 2)
+    .map((x) => {
+      try {
+        return { r: x, l: riegelLayout(x.punkte.map((q) => ({ x: q.x * mSite, y: q.y * mSite })), { ...x.opt, geschlossen: !!x.geschlossen }) };
+      } catch { return null; } // e.g. a ring with < 3 points: not drawn, kept in the data
+    })
+    .filter(Boolean), [riegelDaten, mSite]);
+  const riegelSumme = useMemo(() => riegelLayouts.reduce((a, { l }) => ({
+    grundflaeche: a.grundflaeche + l.kennzahlen.grundflaeche, bgf: a.bgf + l.kennzahlen.bgf, wohnungen: a.wohnungen + l.kennzahlen.wohnungen,
+  }), { grundflaeche: 0, bgf: 0, wohnungen: 0 }), [riegelLayouts]);
+  const riegelGeo = useMemo(() => {
+    /** @type {Array<{pts: Array<{x:number,y:number}>, farbe: string}>} */
+    const flaechen = [];
+    /** @type {Array<{id: string, idx: number, p: {x:number,y:number}}>} */
+    const punkte = [];
+    /** @type {Array<{p: {x:number,y:number}, text: string}>} */
+    const labels = [];
+    const zuC = (/** @type {{x:number,y:number}} */ q) => ({ x: q.x / mSite, y: q.y / mSite });
+    for (const { r, l } of riegelLayouts) {
+      for (const f of l.flur) flaechen.push({ pts: f.map(zuC), farbe: "#cbd5e1" });
+      for (const e of l.einheiten) flaechen.push({ pts: e.profil.map(zuC), farbe: WOHNUNGSTYPEN[e.typ]?.farbe || "#94a3b8" });
+      r.punkte.forEach((q, idx) => punkte.push({ id: r.id, idx, p: q }));
+      labels.push({ p: punktMitte(r.punkte), text: riegelText(r, l.kennzahlen, t) });
+    }
+    return { flaechen, punkte, labels };
+  }, [riegelLayouts, mSite, t]);
+  // Enter / Esc of the bar tool — the handler is set after the early return below (needs the draft helpers).
+  const riegelTasteRef = useRef(/** @type {((e: KeyboardEvent) => void)|null} */ (null));
+  useEffect(() => {
+    const h = (/** @type {KeyboardEvent} */ e) => riegelTasteRef.current?.(e);
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+  // Nutzer 19.10.2026 ("Quadrat weg"): an estimated plot (assumed: true, the generic start square) is not drawn,
+  // not editable, does not limit where things go and is no basis of the plot checks — its area only feeds the
+  // estimates elsewhere (site_area, marked "geschätzt"). The real plot is drawn with the polygon tool, role
+  // "Grundstück", on the official parcel map.
+  const parcelGeschaetzt = parcel?.assumed === true;
   const grenzeM = useMemo(
-    () => (Array.isArray(parcel?.points) && parcel.points.length >= 3 ? parcel.points.map((q) => ({ x: q.x * mSite, y: q.y * mSite })) : null),
-    [parcel?.points, mSite],
+    () => (!parcelGeschaetzt && Array.isArray(parcel?.points) && parcel.points.length >= 3 ? parcel.points.map((q) => ({ x: q.x * mSite, y: q.y * mSite })) : null),
+    [parcel?.points, mSite, parcelGeschaetzt],
   );
   const baufelderM = useMemo(
     () => areas.filter((a) => a.type === "baufeld").map((a) => a.points.map((q) => ({ x: q.x * mSite, y: q.y * mSite }))),
@@ -594,12 +847,14 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   );
   const bb = useBlockBearbeitung({
     buildings, mpp: mSite, onChange: (next) => onBuildingsChange?.(next), aktiv: mode === "auswahl",
-    grenzeM, baufelderM, containerRef: planRef,
+    grenzeM, baufelderM, containerRef: planRef, zusatzDichte: riegelSumme,
   });
   const nummer = useMemo(() => Object.fromEntries(buildings.map((b, i) => [b.id, i + 1])), [buildings]);
   // 101-07: right-click menu of the site plan (CAD-like).
   const kontext = useKontextmenue();
   const baufeldKontext = (/** @type {(() => void)|null} */ einpassen) => [
+    mode === "riegel" && { label: t("Riegel fertig"), taste: "Enter", onClick: () => riegelFertig(false) },
+    mode === "riegel" && { label: t("Blockrand schließen"), onClick: () => riegelFertig(true), trenner: true },
     { label: t("Befehl beenden"), taste: "Esc", onClick: () => { setDraft([]); setDraftGeo([]); bb.abbrechen(); setMode("auswahl"); } },
     { label: t("Rückgängig"), taste: "Strg+Z", onClick: bb.rueckgaengig, disabled: !bb.kannZurueck, trenner: true },
     { label: t("Wiederholen"), taste: "Strg+Y", onClick: bb.wiederholen, disabled: !bb.kannVor },
@@ -671,7 +926,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   // Echter Punkt-im-Polygon-Test (Review-Fix 36-02): der frühere Bbox-Check
   // ließ bei gezeichneten (nicht-rechteckigen) Parzellen Punkte/Baukörper
   // außerhalb des Grundstücks zu. Beim generischen Quadrat identisch.
-  const insideParcel = (x, y) => pointInPolygon(pts, x, y);
+  const insideParcel = (x, y) => parcelGeschaetzt || pointInPolygon(pts, x, y);
 
   const hatKarte = loc?.lat != null && loc?.lng != null;
   const mapCtx = complexData?.map_context;
@@ -708,20 +963,53 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     ]);
   };
 
+  // 101-04: building pulled open on the plan (two opposite corners, canvas units); storeys from the
+  // project type as for the click. Too small (< 3 m a side) = ignored.
+  const addBuildingZug = (/** @type {{x:number,y:number}} */ a, /** @type {{x:number,y:number}} */ b) => {
+    const r = baukoerperAusZug(a, b, parcel, baukoerperDefaults(projektTyp).geschosse);
+    if (r) bb.commit([...buildings, { id: `bld_${Date.now()}`, ...r }]);
+  };
+
+  // 101-04: bars / perimeter blocks. Open path ≥ 2 points = bar, closed ring ≥ 3 points = perimeter block.
+  // Parameters start at the Massing-modeller defaults (RIEGEL_STANDARD); edits go straight to the data
+  // (no undo history yet — that is phase 102).
+  const riegelListe = Array.isArray(complexData?.riegel) ? complexData.riegel : [];
+  const r2 = (/** @type {number} */ v) => Math.round(v * 100) / 100;
+  const riegelFertig = (/** @type {boolean} */ geschlossen) => {
+    const punkte = hatKarte ? draftGeo.map((q) => lngLatToCanvasPoint(q, loc.lat, loc.lng, mpp)) : draft;
+    if (!onRiegelChange || punkte.length < (geschlossen ? 3 : 2)) return;
+    const { geschosse, tiefe, flur, art, mix } = RIEGEL_STANDARD;
+    onRiegelChange([...riegelListe, {
+      id: `riegel_${Date.now()}`, punkte: punkte.map((q) => ({ x: r2(q.x), y: r2(q.y) })), geschlossen,
+      opt: { geschosse, tiefe, flur, art, mix },
+    }]);
+    setDraft([]);
+    setDraftGeo([]);
+  };
+  const riegelAendern = (/** @type {string} */ id, /** @type {(r: any) => any} */ f) => onRiegelChange?.(riegelListe.map((x) => (x.id === id ? f(x) : x)));
+  const riegelPunkt = (/** @type {string} */ id, /** @type {number} */ idx, /** @type {{x:number,y:number}} */ p) =>
+    riegelAendern(id, (x) => ({ ...x, punkte: x.punkte.map((q, i) => (i === idx ? { x: r2(p.x), y: r2(p.y) } : q)) }));
+  const riegelLoeschen = (/** @type {string} */ id) => onRiegelChange?.(riegelListe.filter((x) => x.id !== id));
+  riegelTasteRef.current = (e) => {
+    if (mode !== "riegel" || /^(INPUT|TEXTAREA|SELECT)$/.test(/** @type {any} */ (e.target)?.tagName || "")) return;
+    if (e.key === "Enter") { e.preventDefault(); riegelFertig(false); }
+    else if (e.key === "Escape") { setDraft([]); setDraftGeo([]); }
+  };
+
   // 95-05: every building edit is one undo step (bb.commit).
   const removeBuilding = (id) => bb.commit(buildings.filter((b) => b.id !== id));
-  // 101-02: a moved corner makes the plot a drawn one (no longer the estimated start square).
-  const parcelEcke = (idx, pt) => {
-    if (!onParcelChange || !parcel) return;
-    const points = parcel.points.map((q, i) => (i === idx ? { x: Math.round(pt.x * 100) / 100, y: Math.round(pt.y * 100) / 100 } : q));
+  // 101-02: every edit makes the plot a drawn one (no longer the estimated start square).
+  const parcelSetzen = (/** @type {Array<{x:number,y:number}>} */ points) => {
+    if (!onParcelChange || !parcel || points.length < 3) return;
     const { geschaetzte_flaeche_m2: _g, ...rest } = parcel;
-    onParcelChange({ ...rest, points, assumed: false, source: "gezeichnet" });
+    onParcelChange({ ...rest, points: points.map((q) => ({ x: Math.round(q.x * 100) / 100, y: Math.round(q.y * 100) / 100 })), assumed: false, source: "gezeichnet" });
   };
 
   const removeArea = (id) => onAreasChange?.((complexData?.designated_areas || []).filter((a) => a.id !== id));
 
   const closeDraft = () => {
     if (draft.length < 3) return;
+    if (areaTyp === "grundstueck") { parcelSetzen(draft); setDraft([]); setAreaTyp("footprint"); return; }
     onAreasChange?.([
       ...(complexData?.designated_areas || []),
       { id: `poly_${Date.now()}`, type: areaTyp, points: draft.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) },
@@ -734,6 +1022,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     if (draftGeo.length < 3) return;
     const cpts = geoJsonToFootprint(draftGeo, loc.lat, loc.lng, mpp);
     if (!cpts) return;
+    if (areaTyp === "grundstueck") { parcelSetzen(cpts); setDraftGeo([]); setAreaTyp("footprint"); return; }
     onAreasChange?.([
       ...(complexData?.designated_areas || []),
       { id: `poly_${Date.now()}`, type: areaTyp, points: cpts.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) },
@@ -757,12 +1046,14 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     if (mode === "auswahl") return; // 95-04: handled by the pointer handlers
     const { x, y } = toView(e);
     if (mode === "building") { addBuilding(x, y); return; }
-    // polygon mode
+    // 101-04: second click of a double-click finishes an open bar (the first one set the last point)
+    if (mode === "riegel" && e.detail >= 2) { riegelFertig(false); return; }
+    // polygon / bar mode
     if (!insideParcel(x, y)) return;
     if (draft.length >= 3) {
       const first = draft[0];
       const near = Math.hypot(first.x - x, first.y - y) < 20;
-      if (near) { closeDraft(); return; }
+      if (near) { if (mode === "riegel") riegelFertig(true); else closeDraft(); return; }
     }
     setDraft((d) => [...d, { x, y }]);
   };
@@ -777,20 +1068,43 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   // 95-04/05: selection tool in the SVG fallback — view units × mSite = site metres.
   const tastenVon = (e) => ({ umschalt: e.shiftKey, strg: e.ctrlKey || e.metaKey, alt: e.altKey });
   const zuMeter = (e) => { const v = toView(e); return { x: v.x * mSite, y: v.y * mSite }; };
+  // 101-04: building tool in the SVG fallback — drag pulls a building open (3 px threshold like the map).
   const onSvgPointerDown = (e) => {
+    if (mode === "building" && e.button === 0) {
+      const a = toView(e);
+      if (!insideParcel(a.x, a.y)) return;
+      zugRef.current = { a, sx: e.clientX, sy: e.clientY };
+      try { svgRef.current.setPointerCapture?.(e.pointerId); } catch (_) { /* noop */ }
+      return;
+    }
     if (mode !== "auswahl" || e.button !== 0) return;
     try { svgRef.current.setPointerCapture?.(e.pointerId); } catch (_) { /* noop */ }
     bb.runter(zuMeter(e), { x: e.clientX, y: e.clientY }, tastenVon(e), einheitJePx() * mSite);
   };
 
   const onPointerMove = (e) => {
-    if (dragRef.current?.areaId === "__grundstueck__") {
+    if (dragRef.current?.areaId === "__riegel__") {
+      movedRef.current = true;
+      riegelPunkt(dragRef.current.rid, dragRef.current.idx, toView(e));
+      return;
+    }
+    if (dragRef.current?.areaId === "__grundstueck__" || dragRef.current?.areaId === "__kante__") {
       movedRef.current = true;
       const v = toView(e);
-      parcelEcke(dragRef.current.idx, v);
+      const d = dragRef.current;
+      parcelSetzen(d.areaId === "__kante__"
+        ? kanteVerschieben(d.start, d.idx, { x: v.x - d.von.x, y: v.y - d.von.y })
+        : eckeVerschieben(pts, d.idx, v));
       return;
     }
     if (mode === "auswahl") { bb.bewegen(zuMeter(e), { x: e.clientX, y: e.clientY }, tastenVon(e)); return; }
+    const z = zugRef.current;
+    if (z) {
+      if (Math.hypot(e.clientX - z.sx, e.clientY - z.sy) < 3) return;
+      movedRef.current = true; // suppresses the click (standard size) after the drag
+      setZugSvg({ a: z.a, b: toView(e) });
+      return;
+    }
     if (!dragRef.current) return;
     movedRef.current = true;
     const { x, y } = toView(e);
@@ -805,7 +1119,15 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   };
 
   const endDrag = (e) => {
+    // 101-02b: an edge handle released without movement inserts a corner on that edge.
+    if (dragRef.current?.areaId === "__kante__" && !movedRef.current && e?.type === "pointerup") parcelSetzen(eckeEinfuegen(dragRef.current.start, dragRef.current.idx));
     dragRef.current = null;
+    const z = zugRef.current;
+    zugRef.current = null;
+    if (z) {
+      setZugSvg(null);
+      if (movedRef.current && e?.type === "pointerup") addBuildingZug(z.a, toView(e));
+    }
     if (mode === "auswahl" && e?.type === "pointerup") bb.hoch(tastenVon(e));
   };
 
@@ -841,7 +1163,8 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
             <CardTitle className="flex items-center gap-2 text-base">
               <Building className="w-4 h-4" /> Lageplan
             </CardTitle>
-            <div className="flex items-center gap-1">
+            {/* flex-wrap: with the polygon / bar extras the tools no longer fit at 1280 px — wrap, never clip */}
+            <div className="flex flex-wrap items-center gap-1">
               <Button size="sm" variant={mode === "building" ? "default" : "outline"}
                 onClick={() => { setMode("building"); setDraft([]); setDraftGeo([]); }} aria-label="Baukörper-Modus">
                 <Building className="w-4 h-4 mr-1" /> Baukörper
@@ -849,6 +1172,11 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               <Button size="sm" variant={mode === "polygon" ? "default" : "outline"}
                 onClick={() => setMode("polygon")} aria-label="Polygon-Zeichenmodus">
                 <PenTool className="w-4 h-4 mr-1" /> Polygon
+              </Button>
+              <Button size="sm" variant={mode === "riegel" ? "default" : "outline"} data-testid="sd-modus-riegel"
+                onClick={() => { setMode("riegel"); setDraft([]); setDraftGeo([]); }} aria-label={t("Riegel-Modus")}
+                title={t("Pfad klicken: offen = Riegel, Startpunkt = Blockrand mit Hof")}>
+                <Route className="w-4 h-4 mr-1" /> {t("Riegel")}
               </Button>
               <Button size="sm" variant={mode === "auswahl" ? "default" : "outline"} data-testid="sd-modus-auswahl"
                 onClick={() => { setMode("auswahl"); setDraft([]); setDraftGeo([]); }} aria-label={t("Auswahl-Modus")}>
@@ -873,12 +1201,26 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
                   >
                     <option value="footprint">{t("Baukörper")}</option>
                     <option value="baufeld">{t("Baufeld")}</option>
+                    {onParcelChange && <option value="grundstueck">{t("Grundstück")}</option>}
                   </select>
                   <Button size="sm" variant="ghost" onClick={undoDraftPoint} disabled={!draftLen} aria-label="Letzten Punkt entfernen">
                     <Undo2 className="w-4 h-4" />
                   </Button>
                   <Button size="sm" variant="ghost" className="text-emerald-700" onClick={doCloseDraft} disabled={draftLen < 3} aria-label="Polygon schließen">
                     <Check className="w-4 h-4 mr-1" /> Schließen
+                  </Button>
+                </>
+              )}
+              {mode === "riegel" && (
+                <>
+                  <Button size="sm" variant="ghost" onClick={undoDraftPoint} disabled={!draftLen} aria-label={t("Letzten Punkt entfernen")}>
+                    <Undo2 className="w-4 h-4" />
+                  </Button>
+                  <Button size="sm" variant="ghost" className="text-erfolg" onClick={() => riegelFertig(false)} disabled={draftLen < 2} data-testid="sd-riegel-fertig">
+                    <Check className="w-4 h-4 mr-1" /> {t("Riegel fertig")}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => riegelFertig(true)} disabled={draftLen < 3} data-testid="sd-riegel-blockrand">
+                    {t("Blockrand schließen")}
                   </Button>
                 </>
               )}
@@ -899,13 +1241,18 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               setDraftGeo={setDraftGeo}
               insideParcel={insideParcel}
               onAddBuilding={addBuilding}
-              onCloseDraft={closeDraftGeo}
+              onAufziehen={addBuildingZug}
+              onCloseDraft={mode === "riegel" ? () => riegelFertig(true) : closeDraftGeo}
+              riegelGeo={riegelGeo}
+              onRiegelPunkt={onRiegelChange ? riegelPunkt : null}
+              onRiegelFertig={riegelFertig}
               onVertexCommit={commitVertex}
               bb={bb}
               mSite={mSite}
               zeigeHoehen={zeigeHoehen}
               zeigeKataster={zeigeKataster}
-              onParcelVertex={onParcelChange ? parcelEcke : null}
+              onParcelPunkte={onParcelChange && !parcelGeschaetzt ? parcelSetzen : null}
+              parcelSichtbar={!parcelGeschaetzt}
               onKontext={(e, einpassen) => kontext.oeffnen(e, baufeldKontext(einpassen))}
             />
           ) : (
@@ -913,7 +1260,10 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
           <svg
             ref={svgRef}
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-            className={`absolute inset-0 w-full h-full bg-slate-50 ${mode === "auswahl" ? "cursor-default" : "cursor-crosshair"}`}
+            // select-none + no native drag: a frame drag selected the labels, the next block drag then started
+            // the browser's drag-and-drop and the pointer was cancelled mid-move (pointercancel, 101-04).
+            className={`absolute inset-0 w-full h-full select-none touch-none bg-slate-50 ${mode === "auswahl" ? "cursor-default" : "cursor-crosshair"}`}
+            onDragStart={(e) => e.preventDefault()}
             onClick={handleSvgClick}
             onPointerDown={onSvgPointerDown}
             onContextMenu={(e) => kontext.oeffnen(e, baufeldKontext(null))}
@@ -921,16 +1271,27 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
             onPointerUp={endDrag}
             onPointerLeave={endDrag}
           >
-            <polygon
-              points={pts.map((p) => `${p.x},${p.y}`).join(" ")}
-              fill="rgba(16,185,129,0.06)" stroke="#10b981" strokeWidth="3" strokeDasharray="8 6"
-            />
+            {!parcelGeschaetzt && (
+              <polygon
+                points={pts.map((p) => `${p.x},${p.y}`).join(" ")}
+                fill="rgba(16,185,129,0.06)" stroke="#10b981" strokeWidth="3" strokeDasharray="8 6"
+              />
+            )}
             {/* 101-02: corners of the plot boundary are draggable */}
-            {onParcelChange && pts.map((p, idx) => (
+            {onParcelChange && !parcelGeschaetzt && pts.map((p, idx) => (
               <circle key={`gr-${idx}`} data-testid="sd-parcel-ecke" cx={p.x} cy={p.y} r={7 * vjp} fill="#ffffff" stroke="#059669" strokeWidth={3 * vjp}
-                style={{ cursor: "grab" }} onPointerDown={(e) => startDrag(e, "__grundstueck__", idx)}>
-                <title>{t("Ecke der Grundstücksgrenze ziehen")}</title>
+                style={{ cursor: "grab" }} onPointerDown={(e) => startDrag(e, "__grundstueck__", idx)}
+                onDoubleClick={(e) => { e.stopPropagation(); parcelSetzen(eckeLoeschen(pts, idx)); }}>
+                <title>{t("Ecke ziehen · Doppelklick löscht")}</title>
               </circle>
+            ))}
+            {onParcelChange && !parcelGeschaetzt && kantenMitten(pts).map((m, idx) => (
+              <g key={`kante-${idx}`} data-testid="sd-parcel-kante" style={{ cursor: "move" }}
+                onPointerDown={(e) => { startDrag(e, "__kante__", idx); dragRef.current = { areaId: "__kante__", idx, start: pts, von: toView(e) }; }}>
+                <rect x={m.x - 7 * vjp} y={m.y - 7 * vjp} width={14 * vjp} height={14 * vjp} rx={3 * vjp} fill="#ecfdf5" stroke="#059669" strokeWidth={2 * vjp} />
+                <text x={m.x} y={m.y} textAnchor="middle" dominantBaseline="central" fontSize={12 * vjp} fontWeight="700" fill="#047857" pointerEvents="none">+</text>
+                <title>{t("Klick: Ecke einfügen · Ziehen: Kante verschieben")}</title>
+              </g>
             ))}
             {zeigeHoehen && elevation.map((e) => (
               <circle key={e.id} cx={e.x} cy={e.y} r="6" fill={elevColorSvg(e.elevation)} opacity="0.8">
@@ -961,7 +1322,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
               <g>
                 <polyline points={draft.map((p) => `${p.x},${p.y}`).join(" ")}
                   fill="none" stroke="#14b8a6" strokeWidth="2.5" strokeDasharray="6 4" />
-                {draft.length >= 3 && (
+                {draft.length >= 3 && mode === "polygon" && (
                   <text x={centroid(draft).x} y={centroid(draft).y} textAnchor="middle" dominantBaseline="middle" fontSize="20" fontWeight="bold" fill="#0d9488">
                     {draftM2.toLocaleString("de-DE")} m²
                   </text>
@@ -978,6 +1339,23 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
                 fill={st.conflict ? "rgba(239,68,68,0.16)" : "rgba(34,197,94,0.14)"} stroke={st.conflict ? "#dc2626" : "#16a34a"} strokeWidth="1" strokeDasharray="4 4" pointerEvents="none" />
             )))}
 
+            {/* 101-04: bars / perimeter blocks — units coloured by type, corridor grey; path points draggable */}
+            {riegelGeo.flaechen.map((f, i) => (
+              <polygon key={`rg-${i}`} data-testid="sd-riegel-flaeche" points={f.pts.map((q) => `${q.x},${q.y}`).join(" ")}
+                fill={f.farbe} fillOpacity="0.85" stroke="#334155" strokeWidth={0.6 * vjp} pointerEvents="none" />
+            ))}
+            {riegelGeo.labels.map((l, i) => (
+              <text key={`rl-${i}`} data-testid="sd-riegel-label" x={l.p.x} y={l.p.y} textAnchor="middle" fontSize={11 * vjp} fontWeight="700" fill="#4c1d95" pointerEvents="none">
+                {l.text.split("\n").map((zeile, k) => <tspan key={k} x={l.p.x} dy={k === 0 ? "-0.2em" : "1.2em"}>{zeile}</tspan>)}
+              </text>
+            ))}
+            {onRiegelChange && riegelGeo.punkte.map((q) => (
+              <circle key={`rp-${q.id}-${q.idx}`} data-testid="sd-riegel-punkt" cx={q.p.x} cy={q.p.y} r={6 * vjp} fill="#ffffff" stroke="#7c3aed" strokeWidth={2.5 * vjp}
+                style={{ cursor: "grab" }} onPointerDown={(e) => { startDrag(e, "__riegel__", q.idx); dragRef.current = { areaId: "__riegel__", idx: q.idx, rid: q.id }; }}>
+                <title>{t("Punkt ziehen")}</title>
+              </circle>
+            ))}
+
             {/* placed buildings — 95-04: rotated polygons, selection amber, conflict red */}
             {bb.anzeige.filter((b) => b.width > 0 && b.height > 0).map((b) => {
               const k = alsBlock(b, mSite);
@@ -988,12 +1366,19 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
                 <g key={b.id} data-testid="sd-block" data-id={b.id} data-sel={sel ? "1" : "0"} data-mitte={`${k.cx.toFixed(2)},${k.cy.toFixed(2)}`} data-drehung={Math.round(k.drehung)}>
                   <polygon points={ecken(k).map((q) => `${q.x / mSite},${q.y / mSite}`).join(" ")}
                     fill={konflikt ? "#ef4444" : "#3b82f6"} fillOpacity="0.75" stroke={sel ? "#f59e0b" : "#1e3a8a"} strokeWidth={sel ? 4 : 2} />
-                  <text x={k.cx / mSite} y={k.cy / mSite} textAnchor="middle" dominantBaseline="middle" fontSize="20" fill="white" pointerEvents="none">
-                    {b.floors}G
+                  <text x={k.cx / mSite} y={k.cy / mSite} textAnchor="middle" fontSize={11 * vjp} fontWeight="700" fill="white" pointerEvents="none">
+                    {baukoerperText(b, parcel, t).split("\n").map((zeile, i) => (
+                      <tspan key={i} x={k.cx / mSite} dy={i === 0 ? "-0.2em" : "1.2em"}>{zeile}</tspan>
+                    ))}
                   </text>
                 </g>
               );
             })}
+            {zugSvg && (
+              <rect data-testid="sd-aufziehen" x={Math.min(zugSvg.a.x, zugSvg.b.x)} y={Math.min(zugSvg.a.y, zugSvg.b.y)}
+                width={Math.abs(zugSvg.b.x - zugSvg.a.x)} height={Math.abs(zugSvg.b.y - zugSvg.a.y)}
+                fill="rgba(59,130,246,0.15)" stroke="#2563eb" strokeWidth={2 * vjp} pointerEvents="none" />
+            )}
             {bb.rahmen && (
               <rect data-testid="sd-rahmen" data-modus={bb.rahmen.modus}
                 x={Math.min(bb.rahmen.a.x, bb.rahmen.b.x) / mSite} y={Math.min(bb.rahmen.a.y, bb.rahmen.b.y) / mSite}
@@ -1042,6 +1427,11 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
             <div className="text-sm text-slate-600">Footprint-Polygone: <b>{areas.length}</b></div>
             <div className="text-sm text-slate-600">Polygon-Fläche gesamt: <b>{polyTotalM2.toLocaleString("de-DE")} m²</b></div>
             <div className="text-sm text-slate-600">≈ BGF (Baukörper): <b>{Math.round(gfaApprox).toLocaleString("de-DE")} m²</b></div>
+            {riegelLayouts.length > 0 && (
+              <div className="text-sm text-muted-foreground" data-testid="sd-riegel-summe">
+                ≈ BGF ({t("Riegel/Blockrand")}): <b>{Math.round(riegelSumme.bgf).toLocaleString("de-DE")} m²</b> · {riegelSumme.wohnungen} {t("WE")}
+              </div>
+            )}
             {hatKarte && (
               <label className="flex items-center gap-2 text-xs text-muted-foreground" title={KATASTER_BY_QUELLE}>
                 <input type="checkbox" checked={zeigeKataster} onChange={(e) => setZeigeKataster(e.target.checked)} data-testid="sd-kataster" />
@@ -1083,8 +1473,15 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
                           Neu schätzen
                         </button>
                       )}.</>}
-                {onParcelChange ? ` ${t("Ziehe die grünen Ecken an die Grundstücksgrenze (amtliche Flurstücke als Hintergrund) — dann gilt das Grundstück als gezeichnet.")}`
+                {onParcelChange ? ` ${t("Im Plan nicht gezeichnet. „Grundstück zeichnen“ und die Ecken entlang der Flurstücksgrenze klicken — danach gilt das Grundstück als gezeichnet und lässt sich bearbeiten.")}`
                   : hatKarte && ' Im Tab „Standort & Karte" kannst du die echte Parzelle zeichnen.'}
+                {onParcelChange && (
+                  <button type="button" data-testid="sd-grundstueck-zeichnen"
+                    className="mt-1.5 block rounded border border-warnung-rand bg-warnung-flaeche px-2 py-1 text-xs font-medium text-warnung hover:opacity-90"
+                    onClick={() => { setMode("polygon"); setAreaTyp("grundstueck"); setDraft([]); setDraftGeo([]); }}>
+                    {t("Grundstück zeichnen")}
+                  </button>
+                )}
               </div>
             )}
           </CardContent>
@@ -1151,6 +1548,39 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
             {t("Wird automatisch gespeichert, sobald Projektname und Standort gesetzt sind.")}
           </p>
         </div>
+
+        {riegelLayouts.length > 0 && (
+          <div className="rounded-lg border bg-card p-4 space-y-2" data-testid="sd-riegel-liste">
+            <div className="text-sm font-semibold">{t("Riegel und Blockränder")}</div>
+            {riegelLayouts.map(({ r, l }, i) => (
+              <div key={r.id} className="space-y-1 rounded border px-2 py-1.5 text-xs" data-testid="sd-riegel-eintrag">
+                <div className="flex items-center justify-between gap-2">
+                  <span><b>{t(r.geschlossen ? "Blockrand" : "Riegel")} {i + 1}</b> · {l.kennzahlen.wohnungen} {t("WE")} · {Math.round(l.kennzahlen.bgf).toLocaleString("de-DE")} m² {t("BGF")}</span>
+                  <button type="button" className="p-1 text-fehler hover:opacity-80" onClick={() => riegelLoeschen(r.id)} aria-label={t("Riegel löschen")} data-testid="sd-riegel-loeschen">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <label className="flex items-center gap-1">
+                    {t("Geschosse")}
+                    <input type="number" min={1} max={30} value={r.opt?.geschosse ?? RIEGEL_STANDARD.geschosse} data-testid="sd-riegel-geschosse"
+                      onChange={(e) => { const g = Math.max(1, Math.min(30, Math.round(Number(e.target.value) || 1))); riegelAendern(r.id, (x) => ({ ...x, opt: { ...x.opt, geschosse: g } })); }}
+                      className="w-12 rounded border bg-background px-1 py-0.5" />
+                  </label>
+                  <select value={r.opt?.art ?? RIEGEL_STANDARD.art} aria-label={t("Erschließung")} className="rounded border bg-background px-1 py-0.5"
+                    onChange={(e) => riegelAendern(r.id, (x) => ({ ...x, opt: { ...x.opt, art: e.target.value } }))}>
+                    <option value="mittelflur">{t("Mittelflur (zweibündig)")}</option>
+                    <option value="einhueftig">{t("einhüftig")}</option>
+                  </select>
+                  <select value={typeof r.opt?.mix === "string" ? r.opt.mix : RIEGEL_STANDARD.mix} aria-label={t("Wohnungsmix")} className="rounded border bg-background px-1 py-0.5"
+                    onChange={(e) => riegelAendern(r.id, (x) => ({ ...x, opt: { ...x.opt, mix: e.target.value } }))}>
+                    {Object.keys(MIX_VORLAGEN).map((k) => <option key={k} value={k}>{t(`Mix ${k}`)}</option>)}
+                  </select>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">Baukörper</CardTitle></CardHeader>

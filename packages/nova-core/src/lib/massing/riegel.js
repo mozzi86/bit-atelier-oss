@@ -12,6 +12,10 @@
 // ≥ 1.50 m, DIN 18040-2), widths 1-Zi 4.5 m, 2-Zi 6.0 m, 3-Zi 7.5 m, 4-Zi 9.0 m; remainder
 // < 3 m is added to the previous unit.
 //
+// Closed path (phase 101-04, user video 18.10.2026 "Pfad → Blockrand mit Hof"): the ring is read
+// as a perimeter block — every point is a joint, including the closing one, so the block runs
+// round the courtyard without a gap.
+//
 // In: path (site metres), parameters. Out: { flur: polygons, einheiten: [{profil, typ, seite}],
 //     kennzahlen }.
 
@@ -62,12 +66,15 @@ function naechsterTyp(ziel, zaehler) {
 /**
  * The bar along a path.
  * @param {Array<{x: number, y: number}>} pfad ≥ 2 points, site metres
- * @param {{tiefe?: number, flur?: number, geschosse?: number, geschossHoehe?: number, art?: 'mittelflur'|'einhueftig', mix?: string|Record<string, number>}} [opt]
- * @returns {{flur: Array<Array<{x:number,y:number}>>, einheiten: Array<{profil: Array<{x:number,y:number}>, typ: string, seite: number}>, kennzahlen: {jeTyp: Record<string, number>, wohnungen: number, wohnflaecheGeschoss: number, bgf: number, geschosse: number}}}
+ * @param {{tiefe?: number, flur?: number, geschosse?: number, geschossHoehe?: number, art?: 'mittelflur'|'einhueftig', mix?: string|Record<string, number>, geschlossen?: boolean}} [opt]
+ *   geschlossen: the path is a ring (last point NOT repeated, ≥ 3 points) → perimeter block with courtyard
+ * @returns {{flur: Array<Array<{x:number,y:number}>>, einheiten: Array<{profil: Array<{x:number,y:number}>, typ: string, seite: number}>, kennzahlen: {jeTyp: Record<string, number>, wohnungen: number, wohnflaecheGeschoss: number, grundflaeche: number, bgf: number, geschosse: number}}}
+ *   grundflaeche = units + corridor of one storey (m², footprint for GRZ), bgf = grundflaeche × storeys (m²)
  */
 export function riegelLayout(pfad, opt = {}) {
   const o = { ...RIEGEL_STANDARD, ...opt };
   if (!Array.isArray(pfad) || pfad.length < 2) throw new Error("Pfad braucht mindestens 2 Punkte");
+  if (o.geschlossen && pfad.length < 3) throw new Error("Blockrand braucht mindestens 3 Punkte");
   if (!(o.tiefe > 0 && o.flur >= 0)) throw new Error("Tiefe muss > 0 sein");
   const ziel = typeof o.mix === "string" ? MIX_VORLAGEN[o.mix] || MIX_VORLAGEN.ausgewogen : o.mix;
   const seiten = o.art === "einhueftig" ? [1] : [1, -1];
@@ -77,14 +84,19 @@ export function riegelLayout(pfad, opt = {}) {
   const flur = [];
   /** @type {Record<string, number>} */
   const zaehler = {};
-  const n = pfad.length;
+  // Closed: walk the ring once more back to the start; then every segment has a joint at both ends.
+  const zu = !!o.geschlossen;
+  const P = zu ? [...pfad, pfad[0]] : pfad;
+  const n = P.length;
+  const jointAnfang = (/** @type {number} */ i) => i > 0 || zu;
+  const jointEnde = (/** @type {number} */ i) => i < n - 2 || zu;
   for (let i = 0; i < n - 1; i++) {
-    const a = pfad[i], b = pfad[i + 1];
+    const a = P[i], b = P[i + 1];
     const len = Math.hypot(b.x - a.x, b.y - a.y);
     if (len < 1e-6) continue;
     const d = { x: (b.x - a.x) / len, y: (b.y - a.y) / len }, nrm = { x: -d.y, y: d.x };
     // Trim at inner joints: the corner square (aussen × aussen) belongs to the joint.
-    const anfang = i > 0 ? aussen : 0, ende = i < n - 2 ? aussen : 0;
+    const anfang = jointAnfang(i) ? aussen : 0, ende = jointEnde(i) ? aussen : 0;
     const nutz = len - anfang - ende;
     if (nutz > 0.01 && o.flur > 0) {
       const p0 = add(a, d, anfang), p1 = add(a, d, len - ende);
@@ -105,18 +117,18 @@ export function riegelLayout(pfad, opt = {}) {
     }
     // Corridor through the joint: this segment's corridor runs on to the far edge of the next
     // corridor (+halb), the next segment's corridor starts at −halb — the corner square is walkable.
-    if (i < n - 2 && o.flur > 0) {
-      const c = pfad[i + 1];
+    if (jointEnde(i) && o.flur > 0) {
+      const c = P[i + 1];
       const q0 = add(c, d, -aussen), q1 = add(c, d, halb);
       flur.push([add(q0, nrm, halb), add(q1, nrm, halb), add(q1, nrm, -halb), add(q0, nrm, -halb)]);
     }
-    if (i > 0 && o.flur > 0) {
+    if (jointAnfang(i) && o.flur > 0) {
       const q0 = add(a, d, -halb), q1 = add(a, d, aussen);
       flur.push([add(q0, nrm, halb), add(q1, nrm, halb), add(q1, nrm, -halb), add(q0, nrm, -halb)]);
     }
     // Corner unit at the joint after this segment (on every side the bar has).
-    if (i < n - 2) {
-      const c = pfad[i + 1];
+    if (jointEnde(i)) {
+      const c = P[i + 1];
       for (const s of seiten) {
         const e = { x: c.x, y: c.y };
         einheiten.push({ typ: "Ecke", seite: s, profil: [add(add(e, d, -aussen), nrm, s * halb), add(add(e, d, 0), nrm, s * halb), add(add(e, d, 0), nrm, s * aussen), add(add(e, d, -aussen), nrm, s * aussen)] });
@@ -129,6 +141,6 @@ export function riegelLayout(pfad, opt = {}) {
   const jeTyp = Object.fromEntries(Object.entries(zaehler).map(([k, v]) => [k, v * o.geschosse]));
   return {
     flur, einheiten,
-    kennzahlen: { jeTyp, wohnungen: einheiten.length * o.geschosse, wohnflaecheGeschoss: r3(wohnflaecheGeschoss), bgf: r3((wohnflaecheGeschoss + flurFl) * o.geschosse), geschosse: o.geschosse },
+    kennzahlen: { jeTyp, wohnungen: einheiten.length * o.geschosse, wohnflaecheGeschoss: r3(wohnflaecheGeschoss), grundflaeche: r3(wohnflaecheGeschoss + flurFl), bgf: r3((wohnflaecheGeschoss + flurFl) * o.geschosse), geschosse: o.geschosse },
   };
 }

@@ -19,6 +19,7 @@
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { ersetzeAtomar } from '../packages/nova-core/server/atomarErsetzen.js';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -188,7 +189,7 @@ export function createBuero({
     fs.mkdirSync(path.dirname(datei), { recursive: true });
     const tmp = `${datei}.tmp`;
     fs.writeFileSync(tmp, `${JSON.stringify({ aktiv: zustand.aktiv, geraete: zustand.geraete }, null, 2)}\n`, { mode: 0o600 });
-    fs.renameSync(tmp, datei);
+    ersetzeAtomar(tmp, datei);
   }
 
   /** Drop expired devices; true when something was dropped. */

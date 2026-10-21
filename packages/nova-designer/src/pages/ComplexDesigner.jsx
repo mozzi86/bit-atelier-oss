@@ -90,6 +90,8 @@ export default function ComplexDesigner() {
     context_buildings: [],
     designated_areas: [],
     buildings: [],
+    // 101-04: bars / perimeter blocks of the site plan: [{ id, punkte (canvas px), geschlossen, opt }]
+    riegel: [],
     unit_types: [],
     parking: { total_spaces: 0, parking_key: 1.0, barrier_free_spaces: 0, ev_charging_stations: 0 },
     energy_systems: [],
@@ -243,6 +245,7 @@ export default function ComplexDesigner() {
       // lie far outside - discard them like on a location change.
       designated_areas: [],
       buildings: [],
+      riegel: [],
     }));
     toast.success("Parzelle neu geschätzt (Gebäudefläche × 3 [ASSUMED]).");
   };
@@ -305,9 +308,10 @@ export default function ComplexDesigner() {
       let nextParcel;
       let nextAreas = prev.designated_areas || [];
       let nextBuildings = prev.buildings || [];
+      let nextRiegel = Array.isArray(prev.riegel) ? prev.riegel : [];
       if (parcelDrawn || !prev.site_parcel) {
         nextParcel = siteParcel;
-        if (coordsChanged) nextAreas = [];
+        if (coordsChanged) { nextAreas = []; nextRiegel = []; }
       } else if (!coordsChanged) {
         nextParcel = prev.site_parcel;
       } else {
@@ -322,6 +326,10 @@ export default function ComplexDesigner() {
             if (!Array.isArray(a?.points) || a.points.length < 3) return a;
             const moved = reanchorPoints(a.points, prev.location, location);
             return moved ? { ...a, points: moved } : a;
+          });
+          nextRiegel = nextRiegel.map((x) => {
+            const moved = Array.isArray(x?.punkte) ? reanchorPoints(x.punkte, prev.location, location) : null;
+            return moved ? { ...x, punkte: moved } : x;
           });
           // 95-04: the metre mirror (mitte_m) moves by the same offset, otherwise it would
           // contradict x/y after the re-anchor.
@@ -341,6 +349,7 @@ export default function ComplexDesigner() {
         } else {
           nextParcel = siteParcel;
           nextAreas = [];
+          nextRiegel = [];
         }
       }
       const parcelChanged = nextParcel !== prev.site_parcel;
@@ -356,6 +365,7 @@ export default function ComplexDesigner() {
             a.points.length < 3 ||
             bboxIntersects(parcelBbox(a.points), pBB)
         );
+        nextRiegel = nextRiegel.filter((x) => !Array.isArray(x?.punkte) || x.punkte.length < 2 || bboxIntersects(parcelBbox(x.punkte), pBB));
         nextBuildings = nextBuildings.filter((b) =>
           bboxIntersects(
             {
@@ -388,6 +398,7 @@ export default function ComplexDesigner() {
             : prev.topography,
         designated_areas: nextAreas,
         buildings: nextBuildings,
+        riegel: nextRiegel,
         map_context: { center: [location.lat, location.lng], zoom: zoom, style: style } // Save map context
       };
     });
@@ -650,6 +661,7 @@ export default function ComplexDesigner() {
                   onBuildingsChange={(buildings) => updateComplexData('buildings', buildings)}
                   onFlurstueckImport={handleFlurstueckImport}
                   onParcelChange={(parcel) => updateComplexData('site_parcel', parcel)}
+                  onRiegelChange={(riegel) => updateComplexData('riegel', riegel)}
                 />
               </TabsContent>
 

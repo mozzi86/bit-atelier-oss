@@ -17,6 +17,7 @@
 // In:  app root folder, fetch (injectable for tests). Out: pure helpers + async steps; no Express here.
 
 import fs from 'node:fs';
+import { ersetzeAtomar } from '../packages/nova-core/server/atomarErsetzen.js';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { unzipSync } from 'fflate';
@@ -288,7 +289,7 @@ export function einstellungenSchreiben(datei, werte) {
   fs.mkdirSync(path.dirname(datei), { recursive: true });
   const tmp = `${datei}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(neu, null, 2)}\n`);
-  fs.renameSync(tmp, datei);
+  ersetzeAtomar(tmp, datei);
   return neu;
 }
 

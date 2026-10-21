@@ -63,7 +63,7 @@ export function befehlsAufforderung(werkzeug, zustand = {}) {
 
 /**
  * 101-06: command line of the site plan (Baufeld-Planung).
- * @param {'building'|'polygon'|'auswahl'} modus tool of the site plan
+ * @param {'building'|'polygon'|'auswahl'|'riegel'} modus tool of the site plan
  * @param {{entwurf?: number, gewaehlt?: number, karte?: boolean}} [zustand] points of the polygon draft,
  *   number of selected blocks, whether the map (not the SVG fallback) is shown
  * @returns {{befehl: string, aufforderung: string}}
@@ -74,11 +74,41 @@ export function baufeldAufforderung(modus, zustand = {}) {
     return { befehl: "Polygon", aufforderung: n === 0 ? "Ersten Stützpunkt klicken"
       : n < 3 ? "Nächsten Stützpunkt klicken" : "Nächsten Stützpunkt klicken oder Startpunkt = Polygon schließen" };
   }
+  if (modus === "riegel") {
+    // 101-04: path → bar (open) or perimeter block with courtyard (closed at the start point)
+    return { befehl: "Riegel", aufforderung: n === 0 ? "Ersten Punkt des Riegels klicken"
+      : n === 1 ? "Nächsten Punkt klicken"
+        : n === 2 ? "Nächsten Punkt klicken · Enter oder Doppelklick = Riegel fertig"
+          : "Nächsten Punkt klicken · Enter oder Doppelklick = Riegel fertig · Startpunkt = Blockrand mit Hof" };
+  }
   if (modus === "auswahl") {
     return { befehl: "Auswahl", aufforderung: zustand.gewaehlt
       ? "Ziehen verschiebt (Strg = Kopie, Alt = ohne Fang) · oranger Griff dreht · Pfeile 0,1 m · Entf löscht"
       : zustand.karte ? "Block anklicken oder Rahmen ziehen (nach rechts = ganz drin, nach links = berührt) · Leertaste + Ziehen verschiebt die Karte"
         : "Block anklicken oder Rahmen ziehen (nach rechts = ganz drin, nach links = berührt)" };
   }
-  return { befehl: "Baukörper", aufforderung: "In die Parzelle klicken = Baukörper setzen" };
+  // 101-04: click = standard size, drag = pulled open; the map pans with the pressed wheel.
+  return { befehl: "Baukörper", aufforderung: zustand.karte
+    ? "Klick = Baukörper in Standardgröße · Ziehen = Baukörper aufziehen · Mausrad gedrückt oder Leertaste + Ziehen verschiebt die Karte"
+    : "Klick = Baukörper in Standardgröße · Ziehen = Baukörper aufziehen" };
+}
+
+/**
+ * 104-02: typed command → tool (CAD convention: short form, full name or a unique prefix).
+ * Case and umlaut spelling do not matter ("Gelände" = "gelaende").
+ * @param {string} text typed text
+ * @param {Array<{id: string, label: string, kurz?: string[]}>} befehle known commands (label = UI name)
+ * @returns {{id: string} | {kandidaten: string[]} | null} the command, several candidates (ids) or nothing
+ */
+export function befehlFinden(text, befehle) {
+  const norm = (/** @type {string} */ v) => String(v || "").trim().toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[\s/_-]+/g, "");
+  const t = norm(text);
+  if (!t) return null;
+  const namen = befehle.map((b) => ({ id: b.id, alle: [b.id, b.label, ...(b.kurz || [])].map(norm) }));
+  const genau = namen.find((b) => b.alle.includes(t));
+  if (genau) return { id: genau.id };
+  const praefix = namen.filter((b) => b.alle.some((n) => n.startsWith(t)));
+  if (praefix.length === 1) return { id: praefix[0].id };
+  return praefix.length ? { kandidaten: praefix.map((b) => b.id) } : null;
 }

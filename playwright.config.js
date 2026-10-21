@@ -35,5 +35,8 @@ export default defineConfig({
     url: BASIS,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    // 19.10.2026: server output in the test log — a server that stops mid-run ("Stopped via …",
+    // "[db] Persist fehlgeschlagen …") was invisible before (only stderr was shown).
+    stdout: "pipe",
   },
 });

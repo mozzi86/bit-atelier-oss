@@ -4,7 +4,7 @@
 // 72-01 A-2 (Befund N-02): das generische Quadrat ist kein 1-km²-Werkzeugwert
 // mehr — es leitet seine Kantenlänge aus der Gebäudefläche des Projekts ab.
 
-import { SITE_EDGE_PX, DEFAULT_METERS_PER_PIXEL } from "@core/lib/geo";
+import { SITE_EDGE_PX, DEFAULT_METERS_PER_PIXEL, mToPx, pxToM, pxAreaToM2 } from "@core/lib/geo";
 import {
   geoJsonToFootprint,
   canvasPointToLngLat,
@@ -64,6 +64,43 @@ export function baukoerperDefaults(projektTyp) {
     tiefeM: BAUKOERPER_TIEFE_M,
     geschosse: GESCHOSSE_JE_TYP[projektTyp] ?? 3,
   };
+}
+
+// 101-04: smallest side of a building pulled open on the site plan, in metres [ASSUMED] —
+// below that the drag is treated as a slip of the hand, not as an intended size.
+export const BAUKOERPER_MIN_M = 3;
+
+/**
+ * 101-04: building rectangle from a drag on the site plan (two opposite corners, canvas units).
+ * @param {{x:number,y:number}} a drag start (canvas units)
+ * @param {{x:number,y:number}} b drag end (canvas units)
+ * @param {any} parcel site_parcel (scale m_per_px)
+ * @param {number} geschosse number of storeys
+ * @returns {{x:number,y:number,width:number,height:number,floors:number}|null} rectangle in canvas units,
+ *   null when a side is shorter than BAUKOERPER_MIN_M
+ */
+export function baukoerperAusZug(a, b, parcel, geschosse) {
+  const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+  const width = Math.abs(b.x - a.x), height = Math.abs(b.y - a.y);
+  const min = mToPx(BAUKOERPER_MIN_M, parcel);
+  if (width < min || height < min) return null;
+  const r2 = (/** @type {number} */ v) => Math.round(v * 100) / 100;
+  return { x: r2(x), y: r2(y), width: r2(width), height: r2(height), floors: geschosse };
+}
+
+/**
+ * 101-04: label values of a building on the site plan ("3 Geschosse · 900 m² BGF" instead of "3G").
+ * BGF = footprint × storeys (same approximation as the site plan total).
+ * @param {{width?:number,height?:number,floors?:number}} b building (canvas units)
+ * @param {any} parcel site_parcel (scale)
+ * @returns {{geschosse:number, bgfM2:number, breiteM:number, tiefeM:number}} storeys, BGF in m² (rounded),
+ *   side lengths in m (one decimal)
+ */
+export function baukoerperKennwerte(b, parcel) {
+  const geschosse = Math.max(1, Number(b?.floors) || 1);
+  const grund = pxAreaToM2((Number(b?.width) || 0) * (Number(b?.height) || 0), parcel);
+  const r1 = (/** @type {number} */ v) => Math.round(v * 10) / 10;
+  return { geschosse, bgfM2: Math.round(grund * geschosse), breiteM: r1(pxToM(b?.width, parcel)), tiefeM: r1(pxToM(b?.height, parcel)) };
 }
 
 /**

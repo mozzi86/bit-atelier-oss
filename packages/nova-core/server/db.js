@@ -12,6 +12,7 @@
 // encryption are read and re-written encrypted once (migration, incl. .bak).
 import fs from 'fs';
 import { KLARTEXT_CODEC, istVerschluesselt } from './ruheVerschluesselung.js';
+import { ersetzeAtomar } from './atomarErsetzen.js';
 
 /**
  * @param {string} dbPath JSON file of the store
@@ -86,7 +87,7 @@ export function createDb(dbPath, { codec = KLARTEXT_CODEC } = {}) {
       } catch { /* Backup best-effort */ }
       const tmp = DB_PATH + '.tmp';
       fs.writeFileSync(tmp, codec.encode(JSON.stringify(cache, null, 2)), 'utf-8');
-      fs.renameSync(tmp, DB_PATH);
+      ersetzeAtomar(tmp, DB_PATH); // retries short Windows / sync-tool locks
     } catch (e) {
       console.error('[db] Persist fehlgeschlagen (Daten bleiben im Speicher):', e?.message || e);
     }

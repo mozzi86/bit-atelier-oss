@@ -9,7 +9,7 @@ import React from "react";
 /**
  * @param {{befehl: string, aufforderung: string, meldung?: string, meldungTestid?: string,
  *   eingabe?: {id: string, value: string, onChange: (v: string) => void, onSubmit: () => void, placeholder?: string,
- *     disabled?: boolean, testid?: string, label: string},
+ *     disabled?: boolean, testid?: string, label: string, vorschlaege?: string[]},
  *   testid?: string}} props
  */
 export default function Befehlszeile({ befehl, aufforderung, meldung = "", meldungTestid, eingabe, testid = "befehlszeile" }) {
@@ -32,9 +32,16 @@ export default function Befehlszeile({ befehl, aufforderung, meldung = "", meldu
             value={eingabe.value}
             onChange={(e) => eingabe.onChange(e.target.value)}
             placeholder={eingabe.placeholder}
+            list={eingabe.vorschlaege?.length ? `${eingabe.id}-vorschlaege` : undefined}
             data-testid={eingabe.testid}
             className="w-28 rounded border border-background/40 bg-background px-1.5 py-0.5 text-right text-foreground tabular-nums disabled:opacity-50"
           />
+          {/* 104-02: autocomplete of command names while no command runs */}
+          {eingabe.vorschlaege?.length ? (
+            <datalist id={`${eingabe.id}-vorschlaege`}>
+              {eingabe.vorschlaege.map((v) => <option key={v} value={v} />)}
+            </datalist>
+          ) : null}
         </form>
       )}
       <span className="opacity-80" data-testid={meldungTestid}>{meldung}</span>

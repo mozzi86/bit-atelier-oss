@@ -24,6 +24,8 @@ import { updateCheckAus } from './selbstUpdate.js';
 import { systemRouter } from './systemRouter.js';
 import { dateiOeffnenRouter } from './dateiOeffnenRouter.js';
 import { programmRouter } from './programmRouter.js';
+import { steuerungRouter, steuerungsToken } from './steuerungRouter.js';
+import { schreibeAtomar } from '../packages/nova-core/server/atomarErsetzen.js';
 import { sicherungsDienst } from './sicherung.js';
 import { appAusliefern, istAppModus } from './appAuslieferung.js';
 import { createBuero } from './bueroModus.js';
@@ -186,6 +188,17 @@ app.use('/api', systemRouter({ personalSchluessel: PERSONAL_SCHLUESSEL, root: pa
 app.use('/api', kiLokalRouter({ db, root: path.join(__dirname, '..'), lokalGebunden, origins: ERLAUBTE_ORIGINS, port: PORT, harness }));
 // --- Double-click on a .bitproj file (93-10): launcher → staged import → preview in the app; save back ---
 app.use('/api', dateiOeffnenRouter({ db, lokalGebunden, port: PORT, origins: ERLAUBTE_ORIGINS, anfrageEntfernt }));
+
+// --- Agent control (104-04): local agents drive the open drawing surface through its command register. The
+// random token goes to <data folder>/steuerung.token (0600) — an agent on this machine reads it, a web page cannot.
+const STEUERUNG_TOKEN = steuerungsToken();
+try {
+  schreibeAtomar(datenPfad('steuerung.token'), `${STEUERUNG_TOKEN}
+`, { mode: 0o600 });
+} catch (e) {
+  console.error(`[steuerung] Token-Datei nicht geschrieben: ${e?.message || e}`);
+}
+app.use('/api', steuerungRouter({ lokalGebunden, anfrageEntfernt, token: STEUERUNG_TOKEN }));
 
 // --- "Programm beenden" (93-11): the hidden server has no console to press Ctrl+C in ---
 app.use('/api', programmRouter({

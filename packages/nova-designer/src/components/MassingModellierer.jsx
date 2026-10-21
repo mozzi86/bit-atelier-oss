@@ -22,6 +22,9 @@ import { punktInnen } from "@core/lib/polygonInnen";
 import { auswerten, beispielGraph } from "@core/lib/massing/knoten.js";
 import { leeresGelaende, formen, glaetten, stempeln } from "@core/lib/massing/gelaende.js";
 import { riegelLayout, WOHNUNGSTYPEN, MIX_VORLAGEN, RIEGEL_STANDARD } from "@core/lib/massing/riegel.js";
+import { koordinateLesen, zielPunkt } from "@core/lib/massing/koordinaten.js";
+import { befehlsRegister } from "@core/lib/befehlsregister.js";
+import { starteSteuerungsBruecke } from "@core/lib/steuerungsBruecke.js";
 import Befehlszeile from "@core/components/Befehlszeile";
 import { befehlsAufforderung } from "@core/lib/befehlszeile";
 import { loadBimModel, saveBimModel } from "@core/lib/useBimModelSync";
@@ -38,6 +41,12 @@ export const WERKZEUGE = Object.freeze([
   { id: "gelaende", taste: "g", label: "Gelände", hilfe: "Sandbox: anheben, absenken, glätten oder Körper stempeln — Klick in den Plan" },
   { id: "riegel", taste: "r", label: "Riegel", hilfe: "Pfad klicken, Enter = Wohnriegel mit Mittelflur und Wohnungsmix; Werte in der Zeile darunter" },
 ]);
+
+/** 104-02: typed short forms of the tools (besides the key and the full name), CAD convention. */
+const KURZFORMEN = Object.freeze({
+  auswahl: ["a", "au"], linie: ["l", "li"], pushpull: ["p", "pp"], verschieben: ["m", "v", "ve"],
+  drehen: ["q", "dr", "ro"], skalieren: ["s", "sk", "sc"], folgemir: ["f", "fm"], gelaende: ["g", "ge"], riegel: ["r", "ri"],
+});
 
 /** Sandbox modes. */
 export const GELAENDE_MODI = Object.freeze([["anheben", "Anheben"], ["absenken", "Absenken"], ["glaetten", "Glätten"], ["stempeln", "Körper stempeln"]]);
@@ -336,8 +345,28 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
 
   /** Enter in the typed input (VCB). */
   const eingabeAnwenden = (text = eingabe, { strg = false } = {}) => {
+    // 104-02: no command running — the typed text is a command name / short form ("l", "pp", "ver…")
+    if (werkzeug == null) {
+      setEingabe("");
+      const b = befehle.finden(text);
+      if (b && "id" in b) { befehle.ausfuehren(b.id); return; }
+      if (b && "kandidaten" in b) { setMeldung(`Mehrdeutig: ${b.kandidaten.map((id) => befehle.holen(id)?.label).join(", ")}`); return; }
+      setMeldung(`Befehl unbekannt: „${text}“`);
+      return;
+    }
     if (werkzeug === "folgemir" && !String(text).trim()) return folgeFertig();
     if (werkzeug === "riegel" && !String(text).trim()) return riegelFertig();
+    // 104-02: CAD coordinates — "@dx;dy" relative, "@d<winkel" polar, "#x;y" absolute (north up)
+    if (/^\s*[@#]/.test(String(text))) {
+      setEingabe("");
+      const ziel = zielPunkt(koordinateLesen(text), { letzter: werkzeug === "verschieben" ? start : punkte[punkte.length - 1] || null, cursor });
+      if ("fehler" in ziel) { setMeldung(`${ziel.fehler}: „${text}“`); return; }
+      if (werkzeug === "linie") return linieSetzen(ziel.punkt);
+      if (werkzeug === "folgemir" || werkzeug === "riegel") { setPunkte([...punkte, ziel.punkt]); return; }
+      if (werkzeug === "verschieben" && start) return ziehen({ x: ziel.punkt.x - start.x, y: ziel.punkt.y - start.y }, false);
+      setMeldung("Koordinaten passen nicht zum Werkzeug");
+      return;
+    }
     const e = eingabeLesen(text);
     setEingabe("");
     if (!e) { setMeldung(`Eingabe nicht verstanden: „${text}“`); return; }
@@ -403,8 +432,18 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName || "") || e.altKey) return;
       if ((e.ctrlKey || e.metaKey) && e.key !== "Enter") return;
       const w = WERKZEUGE.find((x) => x.taste === e.key.toLowerCase());
-      if (werkzeug == null) return;
-      if (/^[0-9.,;*/xX-]$/.test(e.key) || (e.key.toLowerCase() === "c" && eingabe) || (e.key.toLowerCase() === "m" && /[\dcm]$/.test(eingabe))) { e.preventDefault(); setEingabe((v) => v + e.key); return; }
+      // 104-02: idle — letters go to the command line, Enter runs it or repeats the last command
+      if (werkzeug == null) {
+        if (/^[a-zäöüß]$/i.test(e.key) && !e.ctrlKey && !e.metaKey) { e.preventDefault(); setEingabe((v) => v + e.key); return; }
+        if (e.key === "Backspace" && eingabe) { e.preventDefault(); setEingabe((v) => v.slice(0, -1)); return; }
+        if (e.key === "Escape" && eingabe) { e.preventDefault(); setEingabe(""); return; }
+        if (e.key === "Enter") {
+          if (eingabe) { e.preventDefault(); eingabeAnwenden(eingabe); return; }
+          if (letzterBefehl.current) { e.preventDefault(); waehle(letzterBefehl.current); }
+        }
+        return;
+      }
+      if (/^[0-9.,;*/xX@#<-]$/.test(e.key) || (e.key.toLowerCase() === "c" && eingabe) || (e.key.toLowerCase() === "m" && /[\dcm]$/.test(eingabe))) { e.preventDefault(); setEingabe((v) => v + e.key); return; }
       if (e.key === "Backspace" && eingabe) { e.preventDefault(); setEingabe((v) => v.slice(0, -1)); return; }
       if (e.key === "Enter" && (eingabe || ((werkzeug === "folgemir" || werkzeug === "riegel") && punkte.length >= 2))) { e.preventDefault(); eingabeAnwenden(eingabe, { strg: e.ctrlKey || e.metaKey }); return; }
       if (e.key === "Escape") { e.preventDefault(); zuruecksetzen(); return; }
@@ -424,7 +463,42 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
     return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKeyUp); };
   });
 
-  return { merkeLeerZug: () => { leerZug.current = true; }, rOpt, setROpt, riegelAbgeleitet, aktiverRiegel, setAktiverRiegel, riegelLoeschen, pushPullAnwenden, eckeZieht, setEckeZieht, eckeLoslassen, erledigt, layer, aufgeloest, gelaende: layer.gelaende || null, gModus, setGModus, gRadius, setGRadius, gSchritt, setGSchritt,
+  // 104-03: ONE command register for this surface — command line, keys, right-click menu and agents call the
+  // same records. The commands read the latest state through `aktuell` (the register is built once).
+  const aktuell = useRef(/** @type {Record<string, any>} */ ({}));
+  aktuell.current = { waehle, aus: () => { zuruecksetzen(); setWerkzeug(null); }, undo, redo, loeschen, eingabeAnwenden, setAuswahl,
+    kannUndo: stack.past.length > 0, kannRedo: stack.future.length > 0, auswahl, werkzeug, layer };
+  const befehle = useMemo(() => {
+    const reg = befehlsRegister();
+    const a = () => aktuell.current;
+    for (const w of WERKZEUGE) {
+      reg.registrieren({ id: w.id, label: w.label, menue: "Werkzeuge", taste: w.taste === " " ? "Leertaste" : w.taste.toUpperCase(), kurz: KURZFORMEN[w.id] || [],
+        ausfuehren: () => { a().waehle(w.id); return w.id; } });
+    }
+    reg.registrieren({ id: "beenden", label: "Befehl beenden", menue: "Bearbeiten", taste: "Esc", aktiv: () => a().werkzeug != null, ausfuehren: () => a().aus() });
+    reg.registrieren({ id: "rueckgaengig", label: "Rückgängig", menue: "Bearbeiten", taste: "Strg+Z", aktiv: () => a().kannUndo, ausfuehren: () => a().undo() });
+    reg.registrieren({ id: "wiederholen", label: "Wiederholen", menue: "Bearbeiten", taste: "Strg+Y", aktiv: () => a().kannRedo, ausfuehren: () => a().redo() });
+    reg.registrieren({ id: "loeschen", label: "Löschen", menue: "Bearbeiten", taste: "Entf", aktiv: () => a().auswahl.length > 0, ausfuehren: () => a().loeschen() });
+    reg.registrieren({ id: "auswahl-aufheben", label: "Auswahl aufheben", menue: "Bearbeiten", aktiv: () => a().auswahl.length > 0, ausfuehren: () => a().setAuswahl([]) });
+    // for agents / scripts: typed input of the running command ("@3;4", "5,40", "*3" …) and a read-out of the model
+    reg.registrieren({ id: "eingabe", label: "Eingabe", menue: "Befehlszeile", parameter: { text: "text" }, aktiv: () => a().werkzeug != null,
+      ausfuehren: (p) => { if (!p?.text) throw new Error("text fehlt"); a().eingabeAnwenden(String(p.text)); return true; } });
+    reg.registrieren({ id: "modell", label: "Modell lesen", menue: "Abfrage",
+      ausfuehren: () => ({ werkzeug: a().werkzeug, auswahl: a().auswahl, koerper: (a().layer?.koerper || []).map((k) => ({ id: k.id, name: k.name, hoehe: k.hoehe, profil: k.profil, gruppe: k.gruppe })) }) });
+    return reg;
+  }, []);
+  // reachable for local agents / tests while the modeller is open (window.__bitBefehle.zeileBearbeiten('{"method":"befehle"}'))
+  // 104-04: and through the local control channel (server/steuerungRouter.js) while the studio is open.
+  useEffect(() => {
+    /** @type {any} */ (window).__bitBefehle = befehle;
+    const stopp = starteSteuerungsBruecke(befehle);
+    return () => {
+      stopp();
+      if (/** @type {any} */ (window).__bitBefehle === befehle) delete /** @type {any} */ (window).__bitBefehle;
+    };
+  }, [befehle]);
+
+  return { befehle, merkeLeerZug: () => { leerZug.current = true; }, rOpt, setROpt, riegelAbgeleitet, aktiverRiegel, setAktiverRiegel, riegelLoeschen, pushPullAnwenden, eckeZieht, setEckeZieht, eckeLoslassen, erledigt, layer, aufgeloest, gelaende: layer.gelaende || null, gModus, setGModus, gRadius, setGRadius, gSchritt, setGSchritt,
     gelaendeLoeschen: () => { const { gelaende: _g, ...rest } = layer; setLayer(/** @type {any} */ (rest)); }, graph, setGraph, ergebnis, vorschau, backen, beispiel: (mitteSite) => setGraph(beispielGraph(mitteSite)), werkzeug, waehle, aus: () => { zuruecksetzen(); setWerkzeug(null); }, punkte, cursor, setCursor, fange, auswahl, start,
     klick, eingabe, setEingabe, eingabeAnwenden, meldung, gruppe, eindeutig, loeschen, undo, redo,
     letzterBefehl: () => letzterBefehl.current, auswahlAufheben: () => setAuswahl([]),
@@ -645,7 +719,10 @@ export function ModellBefehlszeile({ m, t }) {
       meldung={m.meldung ? t(m.meldung) : ""}
       meldungTestid="mm-meldung"
       eingabe={{ id: "mm-eingabe", testid: "mm-eingabe", label: t("Eingabe"), value: m.eingabe, onChange: m.setEingabe,
-        onSubmit: m.eingabeAnwenden, placeholder: "5,40 · *3 · /3", disabled: !m.werkzeug }}
+        onSubmit: m.eingabeAnwenden,
+        // 104-02: idle = command input with autocomplete; while a command runs = measures / coordinates
+        placeholder: m.werkzeug ? "5,40 · @3;4 · @10<30 · #x;y · *3" : t("Befehl, z. B. L = Linie"),
+        vorschlaege: m.werkzeug ? undefined : WERKZEUGE.map((w) => t(w.label)) }}
     />
   );
 }
@@ -661,12 +738,12 @@ export function modellKontext(m, t, einpassen) {
   const letzter = m.letzterBefehl();
   const name = WERKZEUGE.find((w) => w.id === letzter)?.label;
   return [
-    { label: t("Befehl beenden"), taste: "Esc", onClick: m.aus, disabled: !m.werkzeug },
+    { label: t("Befehl beenden"), taste: "Esc", onClick: () => m.befehle.ausfuehren("beenden"), disabled: !m.werkzeug },
     { label: name ? `${t("Wiederholen:")} ${t(name)}` : t("Letzten Befehl wiederholen"), taste: "Enter", onClick: () => letzter && m.waehle(letzter), disabled: !letzter },
-    { label: t("Rückgängig"), taste: "Strg+Z", onClick: m.undo, disabled: !m.kannUndo, trenner: true },
-    { label: t("Wiederholen"), taste: "Strg+Y", onClick: m.redo, disabled: !m.kannRedo },
-    { label: t("Auswahl aufheben"), onClick: m.auswahlAufheben, disabled: !m.auswahl.length, trenner: true },
-    { label: t("Löschen"), taste: "Entf", onClick: m.loeschen, disabled: !m.auswahl.length, gefahr: true },
+    { label: t("Rückgängig"), taste: "Strg+Z", onClick: () => m.befehle.ausfuehren("rueckgaengig"), disabled: !m.kannUndo, trenner: true },
+    { label: t("Wiederholen"), taste: "Strg+Y", onClick: () => m.befehle.ausfuehren("wiederholen"), disabled: !m.kannRedo },
+    { label: t("Auswahl aufheben"), onClick: () => m.befehle.ausfuehren("auswahl-aufheben"), disabled: !m.auswahl.length, trenner: true },
+    { label: t("Löschen"), taste: "Entf", onClick: () => m.befehle.ausfuehren("loeschen"), disabled: !m.auswahl.length, gefahr: true },
     { label: t("Alles einpassen"), taste: t("2× Mausrad"), onClick: einpassen, trenner: true },
   ];
 }

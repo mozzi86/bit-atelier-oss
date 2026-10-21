@@ -32,10 +32,12 @@ const KLICK_PX = 4;
 
 /**
  * @param {{buildings: any[], mpp: number, onChange: (b: any[]) => void, aktiv: boolean,
- *   grenzeM?: P[]|null, baufelderM?: P[][], containerRef?: {current: HTMLElement|null}}} opt
- *   grenzeM = plot polygon in site metres, baufelderM = building envelopes in site metres
+ *   grenzeM?: P[]|null, baufelderM?: P[][], containerRef?: {current: HTMLElement|null},
+ *   zusatzDichte?: {grundflaeche: number, bgf: number}|null}} opt
+ *   grenzeM = plot polygon in site metres, baufelderM = building envelopes in site metres,
+ *   zusatzDichte = footprint/BGF (m²) of bars and perimeter blocks, counted into GRZ/GFZ (101-04)
  */
-export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM = null, baufelderM = [], containerRef }) {
+export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM = null, baufelderM = [], containerRef, zusatzDichte = null }) {
   const [auswahl, setAuswahl] = useState(/** @type {string[]} */ ([]));
   const [live, setLive] = useState(/** @type {any[]|null} */ (null));
   const [rahmen, setRahmen] = useState(/** @type {{a: P, b: P, sa: P, sb: P, modus: 'fenster'|'kreuzen'}|null} */ (null));
@@ -50,7 +52,7 @@ export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM =
 
   const anzeige = live || buildings;
   const bloecke = useMemo(() => anzeige.filter((b) => Number(b?.width) > 0 && Number(b?.height) > 0).map((b) => alsBlock(b, mpp)), [anzeige, mpp]);
-  const pruefung = useMemo(() => pruefen(bloecke, { grenze: grenzeM }), [bloecke, grenzeM]);
+  const pruefung = useMemo(() => pruefen(bloecke, { grenze: grenzeM, zusatz: zusatzDichte }), [bloecke, grenzeM, zusatzDichte]);
   // Selection of ids that no longer exist (deleted elsewhere, undo) is dropped silently.
   const gueltig = useMemo(() => auswahl.filter((id) => bloecke.some((k) => k.id === id)), [auswahl, bloecke]);
 

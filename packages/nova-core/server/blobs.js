@@ -14,6 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { KLARTEXT_CODEC, istVerschluesselt } from './ruheVerschluesselung.js';
+import { ersetzeAtomar } from './atomarErsetzen.js';
 
 // Exported for reuse (57-03): scripts/supabase-import.mjs validates blob ids
 // against the SAME whitelist before uploading to Supabase Storage. One truth —
@@ -53,7 +54,7 @@ export function createBlobStore(dir, { codec = KLARTEXT_CODEC } = {}) {
       const text = JSON.stringify(json);
       const tmp = `${p}.tmp`;
       fs.writeFileSync(tmp, codec.encode(text), 'utf-8');
-      fs.renameSync(tmp, p);
+      ersetzeAtomar(tmp, p);
       return Buffer.byteLength(text, 'utf8');
     },
 
@@ -88,7 +89,7 @@ export function createBlobStore(dir, { codec = KLARTEXT_CODEC } = {}) {
         if (istVerschluesselt(text)) continue;
         const tmp = `${p}.tmp`;
         fs.writeFileSync(tmp, codec.encode(text), 'utf-8');
-        fs.renameSync(tmp, p);
+        ersetzeAtomar(tmp, p);
         n += 1;
       }
       return n;

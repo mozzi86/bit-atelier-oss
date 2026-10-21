@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import os from 'node:os';
 
 const WURZEL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SKRIPT = path.join(WURZEL, 'tools', 'mcp-server.mjs');
@@ -22,6 +23,10 @@ const PROJEKTE = [
   { id: 'p2', name: 'Schule Süd', client: 'Stadt', status: 'construction', updated_date: '2026-10-01' },
   { id: 'p3', name: 'Halle', status: 'feasibility', updated_date: '2026-09-01' },
 ];
+
+// 104-04: data folder with the control token for the fake API
+const DATEN = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-daten-'));
+fs.writeFileSync(path.join(DATEN, 'steuerung.token'), 'geheim\n');
 
 /** Fake API: records every request; answers like server/index.js + routes.js. */
 function fakeApi() {
@@ -43,6 +48,14 @@ function fakeApi() {
       }
       if (req.method === 'GET' && url.pathname === '/api/entities/Gross') {
         return json(200, Array.from({ length: 150 }, (_, i) => ({ id: `g${i}`, text: 'x'.repeat(1000) })));
+      }
+      if (req.method === 'GET' && url.pathname === '/api/system/datenordner') return json(200, { ordner: DATEN });
+      if (req.method === 'POST' && url.pathname === '/api/steuerung') {
+        if (req.headers['x-bit-steuerung'] !== 'geheim') return json(401, { ok: false, error: 'Token' });
+        const a = JSON.parse(body);
+        if (a.method === 'befehle') return json(200, { id: a.id, ok: true, result: [{ id: 'linie', label: 'Linie', aktiv: true }] });
+        if (a.params?.befehl === 'weg') return json(504, { id: a.id, ok: false, status: 'not-run', error: 'keine Zeichenfläche' });
+        return json(200, { id: a.id, ok: true, result: a.params });
       }
       if (req.method === 'POST' && url.pathname === '/api/entities/Notiz') return json(201, { id: 'n1', ...JSON.parse(body) });
       if (req.method === 'PUT' && url.pathname === '/api/entities/Notiz/n1') return json(200, { id: 'n1', ...JSON.parse(body) });
@@ -135,10 +148,10 @@ describe('MCP server — protocol', () => {
     assert.equal(mcp.zeilen[vorher].error.code, -32700);
   });
 
-  it('tools/list ohne Schreibrecht: sechs Lesewerkzeuge, nichts zum Schreiben', async () => {
+  it('tools/list ohne Schreibrecht: sieben Lesewerkzeuge, nichts zum Schreiben', async () => {
     const r = await mcp.rpc('tools/list');
     const namen = r.result.tools.map((w) => w.name);
-    assert.deepEqual(namen, ['bit_status', 'list_entity_types', 'list_projects', 'get_project', 'list_records', 'get_record']);
+    assert.deepEqual(namen, ['bit_status', 'list_entity_types', 'list_projects', 'get_project', 'list_records', 'get_record', 'zeichenflaeche_befehle']);
     for (const w of r.result.tools) {
       assert.equal(w.inputSchema.type, 'object', w.name);
       assert.ok(w.description.includes(' / '), `${w.name}: description DE / EN`);
@@ -231,6 +244,11 @@ describe('MCP server — write permission', () => {
         assert.deepEqual(api.anfragen.filter((a) => a.methode !== 'GET').map((a) => `${a.methode} ${a.url}`), ['POST /api/entities/Notiz', 'PUT /api/entities/Notiz/n1']);
         const ohneDaten = await mcp.werkzeug('create_record', { entity: 'Notiz', data: 'kein objekt' });
         assert.equal(ohneDaten.isError, true);
+        // 104-04: drawing surface — token from the data folder, answers passed through
+        assert.deepEqual((await mcp.werkzeug('zeichenflaeche_befehle', {})).json.result[0].id, 'linie');
+        assert.deepEqual((await mcp.werkzeug('zeichenflaeche_ausfuehren', { befehl: 'eingabe', params: { text: '@3;4' } })).json.result, { befehl: 'eingabe', params: { text: '@3;4' } });
+        assert.equal((await mcp.werkzeug('zeichenflaeche_ausfuehren', { befehl: 'weg' })).json.status, 'not-run');
+        assert.equal((await mcp.werkzeug('zeichenflaeche_ausfuehren', { befehl: 'Böse Sache!' })).isError, true);
       } finally {
         await mcp.ende();
         api.server.close();

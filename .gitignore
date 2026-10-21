@@ -142,3 +142,6 @@ server/vor-import/
 
 # Manual acceptance (Station 3, 17.10.2026): own data folder of the test instance
 abnahme-daten/
+
+# 104-04: local agent control token (written at server start, never commit)
+steuerung.token

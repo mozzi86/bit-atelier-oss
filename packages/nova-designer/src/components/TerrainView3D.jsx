@@ -6,6 +6,12 @@ import { useProject } from "@core/lib/ProjectContext";
 import { useElevationGrid, DEM_RESOLUTION_M } from "@designer/lib/useElevationGrid";
 import { useBuildingProgram, polygonAreaM } from "@core/lib/useBuildingProgram";
 import { exportExposePng } from "@designer/components/MassingView3D";
+import SplatSteuerung from "@designer/components/SplatSteuerung";
+import { SplatWolke, beispielSplats } from "@designer/lib/splats/SplatWolke";
+import { splatsLesen, splatHuelle } from "@designer/lib/splats/splatLesen";
+
+/** [ASSUMED] largest scan file read in the browser (MB) — beyond that the tab may run out of memory. */
+const SPLAT_MAX_MB = 400;
 
 // Punkt-in-Polygon (Ray-Casting) gegen ein zentriertes Meter-Polygon [{x,z}].
 function pointInPoly(x, z, poly) {
@@ -189,6 +195,15 @@ export default function TerrainView3D() {
   // rotX nahe der oberen Klammergrenze (-1.4) => Start in Vogelperspektive (steile Aufsicht).
   const drag = useRef({ on: false, x: 0, y: 0, rotY: 0.6, rotX: -1.25 });
 
+  // --- 104-16: drone scan as gaussian splats ----------------------------------------------------
+  // Own group in the scene (the terrain rebuild empties the terrain group); it copies the terrain
+  // group's rotation each frame. Scan units are taken as metres, scaled by `massstab`.
+  const [splatInfo, setSplatInfo] = useState(/** @type {{name: string, anzahl: number}|null} */ (null));
+  const [splatLage, setSplatLage] = useState({ massstab: 1, drehung: 0, hoehe: 0, umkehren: false });
+  const [splatFehler, setSplatFehler] = useState("");
+  const [splatLaedt, setSplatLaedt] = useState(false);
+  const splatDaten = useRef(/** @type {any} */ (null));
+
   // --- Begehungs-Modus (Ego-Kamera, WASD + Maus-Drag) ------------------------
   // Position in zentrierten Metern (xM/zM), Blick per yaw/pitch; saved = exakte
   // Orbit-Pose für die Wiederherstellung beim Beenden. exitFn wird pro Render
@@ -283,8 +298,10 @@ export default function TerrainView3D() {
 
     const group = new THREE.Group();
     scene.add(group);
+    const splatGruppe = new THREE.Group();
+    scene.add(splatGruppe);
 
-    Object.assign(three.current, { renderer, scene, camera, group });
+    Object.assign(three.current, { renderer, scene, camera, group, splatGruppe });
 
     let raf;
     let lastT = performance.now();
@@ -324,6 +341,8 @@ export default function TerrainView3D() {
         group.rotation.x = drag.current.rotX;
         if (!drag.current.on) drag.current.rotY += 0.0015; // sanftes Auto-Rotate
       }
+      splatGruppe.rotation.copy(group.rotation);
+      three.current.splat?.aktualisieren(camera, renderer);
       renderer.render(scene, camera);
       raf = requestAnimationFrame(tick);
     };
@@ -391,6 +410,8 @@ export default function TerrainView3D() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("resize", onResize);
+      three.current.splat?.entsorgen();
+      three.current.splat = null;
       renderer.dispose();
       if (el.parentNode) el.parentNode.removeChild(el);
       scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
@@ -485,6 +506,58 @@ export default function TerrainView3D() {
   };
 
   // Esc-Handler (Setup-Effect) soll immer die aktuelle exit-Funktion sehen.
+  // 104-16: (re)place the scan — new splat set, terrain or placement changed.
+  useEffect(() => {
+    const t = three.current;
+    if (!t.splatGruppe) return;
+    const d = splatDaten.current;
+    if (!d || !splatInfo) return;
+    const S = t.terrain?.S ?? 1;
+    // sit on the terrain in the middle of the view (same mapping as the terrain mesh)
+    const boden = t.terrain ? ((sampleElev(t.terrain.grid, t.terrain.size, t.terrain.cellM, 0, 0) - t.terrain.min) / t.terrain.range) * t.terrain.RELIEF : 0;
+    const { aussen, innen, wolke, huelle } = d;
+    aussen.position.set(0, boden + splatLage.hoehe * S, 0);
+    aussen.rotation.set(0, (splatLage.drehung * Math.PI) / 180, 0);
+    aussen.scale.setScalar(splatLage.massstab * S);
+    innen.rotation.set(splatLage.umkehren ? Math.PI : 0, 0, 0);
+    wolke.mesh.position.set(-huelle.mitte[0], -(splatLage.umkehren ? huelle.max[1] : huelle.min[1]), -huelle.mitte[2]);
+  }, [splatInfo, splatLage, grid, min, max]);
+
+  const splatsZeigen = (/** @type {any} */ splats, /** @type {string} */ name, /** @type {number} */ massstab) => {
+    const t = three.current;
+    splatEntfernen();
+    const wolke = new SplatWolke(splats);
+    const innen = new THREE.Group();
+    innen.add(wolke.mesh);
+    const aussen = new THREE.Group();
+    aussen.add(innen);
+    t.splatGruppe.add(aussen);
+    t.splat = wolke;
+    splatDaten.current = { wolke, innen, aussen, huelle: splatHuelle(splats) };
+    setSplatLage({ massstab, drehung: 0, hoehe: 0, umkehren: false });
+    setSplatInfo({ name, anzahl: splats.anzahl });
+  };
+  const splatEntfernen = () => {
+    const t = three.current;
+    t.splat?.entsorgen();
+    t.splat = null;
+    if (splatDaten.current) t.splatGruppe?.remove(splatDaten.current.aussen);
+    splatDaten.current = null;
+    setSplatInfo(null);
+  };
+  const splatDatei = async (/** @type {File} */ f) => {
+    setSplatFehler("");
+    if (f.size > SPLAT_MAX_MB * 1024 * 1024) { setSplatFehler(`Datei zu groß (${Math.round(f.size / 1048576)} MB, höchstens ${SPLAT_MAX_MB} MB) — Scan vorher ausdünnen`); return; }
+    setSplatLaedt(true);
+    try {
+      splatsZeigen(splatsLesen(await f.arrayBuffer(), f.name), f.name, 1);
+    } catch (err) {
+      setSplatFehler(`Scan nicht lesbar: ${err?.message || err}`);
+    } finally {
+      setSplatLaedt(false);
+    }
+  };
+
   useEffect(() => { walk.current.exitFn = exitWalk; });
 
   return (
@@ -526,6 +599,10 @@ export default function TerrainView3D() {
             </button>
           </div>
         </div>
+
+        <SplatSteuerung info={splatInfo} lage={splatLage} fehler={splatFehler} laedt={splatLaedt}
+          onDatei={splatDatei} onBeispiel={() => { setSplatFehler(""); splatsZeigen(beispielSplats(), "Beispiel", 5); }}
+          onEntfernen={splatEntfernen} onLage={setSplatLage} />
 
         {/* Datengrundlage & Auflösung (KD-08) — steht ÜBER den Kubikmetern */}
         {calcGrid && calcGrid.length >= 2 && (
