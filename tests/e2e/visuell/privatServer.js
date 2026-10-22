@@ -76,6 +76,10 @@ export async function apiUmleiten(page, basis) {
     const url = new URL(route.request().url());
     if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) return route.abort();
     if (!url.pathname.startsWith("/api/")) return route.continue();
+    // Neighbour buildings come from Overpass on the internet through the server: whether that answered
+    // or timed out decided if the "OSM offline" chip was in the screenshot (designer at 768 px flaky,
+    // 22.10.2026). A fixed empty, valid answer makes the shot independent of the network.
+    if (url.pathname === "/api/osm-buildings") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ buildings: [] }) });
     for (let versuch = 0; ; versuch++) {
       try {
         const antwort = await route.fetch({ url: `${basis}${url.pathname}${url.search}` });

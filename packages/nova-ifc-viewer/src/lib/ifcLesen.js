@@ -47,15 +47,26 @@ export function ifcLesen(buffer, was, onProgress) {
   const nonce = ++naechsteNonce;
   return new Promise((resolve, reject) => {
     let gemeldet = false;
+    // The worker sends parsed.elements and geo.elemente in parts before the final message (one
+    // short deserialisation task each instead of one long one, see ifcLesen.worker.js).
+    /** @type {{elements: any[], elemente: any[]}} */
+    const teile = { elements: [], elemente: [] };
     const ende = () => worker.terminate();
     worker.onmessage = (ev) => {
       const d = ev.data || {};
       if (d.nonce !== nonce) return;
       gemeldet = true;
       if (typeof d.fortschritt === "string") { fortschritt(d.fortschritt); return; }
+      if (d.teil) {
+        const ziel = teile[d.teil.art];
+        if (ziel) for (const x of d.teil.liste) ziel.push(x);
+        return;
+      }
       ende();
-      if (d.fehler) reject(new Error(d.fehler));
-      else resolve({ parsed: d.parsed ?? null, parseFehler: d.parseFehler ?? null, geo: d.geo ?? null, imWorker: true });
+      if (d.fehler) { reject(new Error(d.fehler)); return; }
+      const parsed = d.parsed ? { ...d.parsed, elements: teile.elements } : null;
+      const geo = d.geo ? { ...d.geo, elemente: teile.elemente } : null;
+      resolve({ parsed, parseFehler: d.parseFehler ?? null, geo, imWorker: true });
     };
     // A worker that dies before its first message could not load (module worker or WASM blocked):
     // read on the main thread instead. A failure after it started is a real reading error.

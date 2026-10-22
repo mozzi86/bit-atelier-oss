@@ -75,7 +75,9 @@ test.describe("72-03 Kernpfad nur mit der Tastatur", () => {
     // --- Station 1: create a project --------------------------------------------------
     await page.goto("/Projects");
     const neu = page.getByRole("button", { name: "Neues Projekt" }).first();
-    await expect(neu).toBeVisible();
+    // This file sorts first in a full run: the page chunk is still being transformed by the cold Vite
+    // dev server (spinner after 5 s in the run of 22.10.2026), so the first view gets the cold-start time.
+    await expect(neu).toBeVisible({ timeout: 60000 });
     await tabBis(page, neu);
     expect(await fokusSichtbar(page), "„Neues Projekt“: Fokus sichtbar").toBe(true);
     await page.keyboard.press("Enter");

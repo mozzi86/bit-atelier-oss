@@ -16,7 +16,7 @@ import { seitenWurzel } from "@core/lib/utils";
 //   buildBcfZip(topics, {autor, modellName, datum}) → Uint8Array; newTopicGuid()
 //   exportElementToPdf(el, filename) — jsPDF+html2canvas (Briefkopf-Muster der Berichte-Seite)
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, startTransition } from "react";
 import { motion } from "framer-motion";
 import { bitApi } from "@core/api/bitApi";
 import { useSearchParams, useLocation } from "react-router-dom";
@@ -120,6 +120,34 @@ const safeFileName = (s) => String(s || "modell").replace(/[^\wäöüÄÖÜß-]+
 /** MIME type of an .xlsx download (66-14). */
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+/**
+ * Progress text of the IFC reading as a small external store (69-21, 22.10.2026). The worker reports
+ * every 25 meshes; as page state every report re-rendered this whole page (40–50 ms each in dev), and
+ * back-to-back reports blocked the main thread for 90–135 ms. Now only StatusZeile re-renders.
+ * @returns {{setzen: (text: string) => void, lesen: () => string, abonnieren: (fn: () => void) => () => void}}
+ */
+function statusQuelleErzeugen() {
+  let text = "";
+  const hoerer = new Set();
+  return {
+    setzen(neu) {
+      text = String(neu ?? "");
+      for (const fn of hoerer) fn();
+    },
+    lesen: () => text,
+    abonnieren(fn) {
+      hoerer.add(fn);
+      return () => hoerer.delete(fn);
+    },
+  };
+}
+
+/** The busy line's text, subscribed to the status store. */
+function StatusZeile({ quelle }) {
+  const text = useSyncExternalStore(quelle.abonnieren, quelle.lesen);
+  return <span>{text || "Verarbeite IFC-Datei…"}</span>;
+}
+
 export default function ModelCheck() {
   const { project } = useProject();
   const { t } = useI18n();
@@ -132,7 +160,8 @@ export default function ModelCheck() {
   const ifc2InputRef = useRef(null);
   const [suchParams] = useSearchParams();
   const [busy, setBusy] = useState(false);
-  const [statusText, setStatusText] = useState("");
+  const [statusQuelle] = useState(statusQuelleErzeugen);
+  const setStatusText = statusQuelle.setzen;
   const [fehler, setFehler] = useState("");
   const [modell, setModell] = useState(null); // { fileName, parsed|null, geo, buffer }
   // Vergleichsmodell (71-02 Task 3): zweites IFC für die BAP-Matrix-Prüfung
@@ -233,7 +262,11 @@ export default function ModelCheck() {
       }
       // buffer bleibt im State: kommt später ein Vergleichsmodell dazu, wird
       // die Geometrie unzentriert neu gelesen, ohne die Datei neu zu wählen.
-      setModell({ fileName: dateiname, parsed, geo, quelle, buffer });
+      // 69-21: the first mount of the result view (model card, delivery package, IDS editor, BCF)
+      // was one synchronous render of ~100 ms in dev right after the worker finished; as a
+      // transition React renders it in slices and the page stays responsive. setBusy(false) runs
+      // in the same transition (finally) so no empty "no model" frame shows in between.
+      startTransition(() => setModell({ fileName: dateiname, parsed, geo, quelle, buffer }));
       return true;
     } catch (err) {
       // Der Nutzer bekommt einen lesbaren Satz, die Konsole den echten Fehler —
@@ -242,7 +275,7 @@ export default function ModelCheck() {
       setFehler(err?.message || "Die IFC-Datei konnte nicht gelesen werden.");
       return false;
     } finally {
-      setBusy(false);
+      startTransition(() => setBusy(false));
       if (ifcInputRef.current) ifcInputRef.current.value = "";
     }
   };
@@ -1186,7 +1219,7 @@ export default function ModelCheck() {
             {busy && (
               <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
                 <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                <span>{statusText || "Verarbeite IFC-Datei…"}</span>
+                <StatusZeile quelle={statusQuelle} />
               </div>
             )}
 

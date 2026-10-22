@@ -10,6 +10,13 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.9.2] - 2026-10-22
+
+### Behoben
+
+- **Große IFC-Modelle in der Prüf-Suite:** Beim Laden eines großen Modells stockte die Seite kurz (bis ~0,1 s am Stück), weil das Ergebnis in einem Stück übergeben und die ganze Seite bei jeder Fortschrittsmeldung neu aufgebaut wurde. Das Ergebnis kommt jetzt in Paketen, die Fortschrittszeile aktualisiert sich allein, und die Ergebnisansicht baut sich stückweise auf — die Seite bleibt bedienbar.
+- **Cloud-Anmeldung:** Die Anmeldeseite der Cloud-Fassung zeigte „Rechte konnten nicht geladen werden: Anmeldung abgelaufen“, weil die Büro-Rechte schon vor der Anmeldung abgefragt wurden. Sie werden jetzt erst nach der Anmeldung geladen; externe Rollen (Bieter, Bauherr …) fragen sie gar nicht mehr ab.
+
 ## [1.9.1] - 2026-10-22
 
 ### Neu

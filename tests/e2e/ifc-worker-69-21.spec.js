@@ -43,6 +43,9 @@ async function laengsteAb(page, ab) {
 }
 
 test.describe("69-21 IFC-Lesen im Web Worker", () => {
+  // The page waits up to 60 s for the sample button (cold dev server); the default 30-s test limit cut
+  // that short when this file ran first after a server start (22.10.2026).
+  test.setTimeout(120000);
   test("Musterprojekt: Worker liest, Hauptthread nie ≥ 100 ms blockiert", async ({ page }) => {
     await langeAufgabenMessen(page);
     const workerUrls = [];

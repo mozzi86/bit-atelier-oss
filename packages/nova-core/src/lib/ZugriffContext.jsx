@@ -89,6 +89,9 @@ export function ZugriffProvider({ children, wert = null, lade = null }) {
   const serverRolle = user ? { role: user.role, buero_rolle: user.buero_rolle } : null;
   const neuLaden = useCallback(async () => {
     if (!lade) return;
+    // Cloud build: without a session there is nothing to load — the call ran on the sign-in page and
+    // ended in 401 ("Rechte konnten nicht geladen werden: Anmeldung abgelaufen", bieterportal-74-01).
+    if (DATENQUELLE === "supabase" && !user) { setDaten(null); setLadeFehler(null); return; }
     try {
       const heute = new Date();
       const stichtagIso = `${heute.getFullYear()}-${String(heute.getMonth() + 1).padStart(2, "0")}-${String(heute.getDate()).padStart(2, "0")}`;
@@ -99,7 +102,7 @@ export function ZugriffProvider({ children, wert = null, lade = null }) {
       console.error(`Rechte konnten nicht geladen werden: ${text}`);
       setLadeFehler(text);
     }
-  }, [lade, user?.role]);
+  }, [lade, user, user?.role]);
 
   useEffect(() => {
     if (!lade) return undefined;

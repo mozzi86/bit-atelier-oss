@@ -16,6 +16,7 @@ import { bitApi } from "@core/api/bitApi";
 import { bueroEntitaet, verfuegbar } from "@/lib/bueroOrga/speicher.js";
 import { RECHTE_SETTING_KEY } from "@/lib/bueroOrga/entitaeten.js";
 import { ladeZuordnungsProjektion } from "@/lib/people/bueroOrgaPersonal.js";
+import { ROLLEN_EXTERN, rolleNormalisieren } from "@core/lib/rollen";
 
 /**
  * @param {{datenquelle: string, rolle: string|null, stichtagIso: string}} kontext
@@ -24,6 +25,11 @@ import { ladeZuordnungsProjektion } from "@/lib/people/bueroOrgaPersonal.js";
  * @throws {Error} plain text when users or the setting cannot be read (the provider shows it)
  */
 export async function ladeZugriffsdaten({ datenquelle, rolle, stichtagIso }, { api = bitApi } = {}) {
+  // An external account (bidder, investor, guest) works in its portal and has no office rights: the
+  // office users, the rights setting and the project assignments are not its business, and the database
+  // refuses them (403 → "Anmeldung abgelaufen" in the header, found by bieterportal-74-01, 22.10.2026).
+  // Only the NAMED external roles — null/unknown (local build without sign-in) still loads.
+  if (rolle && ROLLEN_EXTERN.includes(rolleNormalisieren(rolle))) return { nutzer: [], einstellung: null, zuordnungen: [] };
   const a = /** @type {any} */ (api);
   const [nutzer, einstellungen, zuordnungen] = await Promise.all([
     verfuegbar(datenquelle) ? bueroEntitaet(a, "Nutzer", { datenquelle }).list() : Promise.resolve([]),
