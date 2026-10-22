@@ -170,6 +170,21 @@ export function driftBezug(vertrag, nachtraege) {
 }
 
 /**
+ * 100-06 (Argon review 18.10.2026): driftBezug also takes DRAFT amendments as reference, so the drift
+ * banner stays silent while a draft lies around — the user may think the drift is settled although
+ * nothing has reached the client. This finds that draft so the contract can say so.
+ * @param {Record<string, any>} vertrag Honorarvertrag
+ * @param {ReadonlyArray<Record<string, any>>} nachtraege all amendments
+ * @returns {Record<string, any>|null} the newest draft amendment carrying `kosten_drift`, or null
+ */
+export function driftNachtragImEntwurf(vertrag, nachtraege) {
+  if (!vertrag?.id) return null;
+  return (nachtraege || [])
+    .filter((n) => n?.honorarvertrag_id === vertrag.id && (n.status || "entwurf") === "entwurf" && n.kosten_drift?.aktuell)
+    .sort((a, b) => (Number(b.nr) || 0) - (Number(a.nr) || 0))[0] || null;
+}
+
+/**
  * 96-03: a draft fee amendment for an LV drift of the anrechenbare Kosten —
  * § 10 Abs. 1 HOAI: a changed scope that changes the anrechenbare Kosten
  * adjusts the fee by agreement (in text form). The flat amount is the fee

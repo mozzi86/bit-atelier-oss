@@ -13,7 +13,7 @@ import { STATUS_STYLE } from "@designer/lib/compliance";
 import {
   LOAD_CATEGORIES, BETON_GRADES,
   deckenstaerke, gesamtlast, gebaeudelast, gruendungslast,
-  betonFcd, stuetzenVordim, bewehrungMasse, betonvolumenDecken, vorbemessungChecks,
+  betonFcd, stuetzenVordim, bewehrungMasse, betonvolumenDecken, vorbemessungChecks, schneelastDach, SK_MINDEST_JE_ZONE,
 } from "@designer/lib/statics";
 import { useBuildingProgram, programMetrics, footprintWD } from "@core/lib/useBuildingProgram";
 import ErdbebenSimulation from "@designer/components/ErdbebenSimulation";
@@ -90,15 +90,16 @@ export default function StaticsPlanner() {
   const kpi = useMemo(() => {
     const dicke = deckenstaerke(spannweite, deckensystem === "holz" || deckensystem === "clt" ? "holz" : "flachdecke", false);
     const gPro = gesamtlast({ gk, dg, qk, footArea: pm.footArea });
-    const N = gebaeudelast(gPro, pm.storeys);
+    const schnee = schneelastDach({ sk, footArea: pm.footArea }); // kN, once on the roof (LO-01)
+    const N = gebaeudelast(gPro, pm.storeys, schnee);
     const sigma = gruendungslast({ N, footArea: pm.footArea });
     const fcd = betonFcd(betonguete);
-    const Ac = stuetzenVordim({ gesamtlastProGeschoss: gPro, storeys: pm.storeys, footArea: pm.footArea, einzugA: spannweite * spannweite, fcd });
+    const Ac = stuetzenVordim({ gesamtlastProGeschoss: gPro, storeys: pm.storeys, footArea: pm.footArea, einzugA: spannweite * spannweite, fcd, zusatzKn: schnee });
     const vol = betonvolumenDecken(dicke, pm.bgf);
     const bewehr = bewehrungMasse(vol, "decke");
     const checks = vorbemessungChecks({ sigma, zulSohldruck, gesamtlastProGeschoss: gPro, storeys: pm.storeys, footArea: pm.footArea });
-    return { dicke, gPro, N, sigma, Ac, vol, bewehr, checks };
-  }, [spannweite, deckensystem, gk, dg, qk, betonguete, zulSohldruck, pm.footArea, pm.storeys, pm.bgf]);
+    return { dicke, gPro, schnee, N, sigma, Ac, vol, bewehr, checks };
+  }, [spannweite, deckensystem, gk, dg, qk, betonguete, zulSohldruck, sk, pm.footArea, pm.storeys, pm.bgf]);
 
   const sohl = kpi.checks.items.find((i) => i.key === "sohldruck");
   const sohlStyle = STATUS_STYLE[sohl?.status || "warn"];
@@ -183,14 +184,14 @@ export default function StaticsPlanner() {
               <NumberField label="Ausbaulast Δg (kN/m²)" value={dg} min={0} onChange={setDg} />
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">Schneelastzone</label>
-                <Select value={schneezone} onValueChange={setSchneezone}>
+                <Select value={schneezone} onValueChange={(z) => { setSchneezone(z); if (SK_MINDEST_JE_ZONE[z] != null) setSk(SK_MINDEST_JE_ZONE[z]); }}>
                   <SelectTrigger aria-label={t("Schneelastzone")}><SelectValue /></SelectTrigger>
                   <SelectContent>{["1", "2", "3"].map((o) => <SelectItem key={o} value={o}>Zone {o}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <NumberField label="sk Schneelast (kN/m²)" value={sk} min={0} onChange={setSk} />
               <div className="space-y-1">
-                <label className="text-xs text-slate-500">Windzone</label>
+                <label className="text-xs text-slate-500">{t("Windzone (informativ, ohne Rechenwirkung)")}</label>
                 <Select value={windzone} onValueChange={setWindzone}>
                   <SelectTrigger aria-label={t("Windzone")}><SelectValue /></SelectTrigger>
                   <SelectContent>{["1", "2", "3", "4"].map((o) => <SelectItem key={o} value={o}>WZ {o}</SelectItem>)}</SelectContent>
@@ -263,6 +264,7 @@ export default function StaticsPlanner() {
           <div className="grid grid-cols-2 gap-3">
             <Stat label="Deckenstärke (Richtwert)" value={`${de(kpi.dicke)} cm`} accent="text-blue-600" />
             <Stat label="Gesamtlast/Geschoss (Richtwert)" value={`${de(kpi.gPro)} kN`} accent="text-slate-800" />
+            <Stat label="Schnee auf Dach (μ1 0,8 · sk)" value={`${de(kpi.schnee)} kN`} accent="text-slate-800" />
             <Stat label="Vertikale Gebäudelast (Richtwert)" value={`${de(kpi.N)} kN`} accent="text-slate-800" />
             <Stat label="Gründungslast σ (Richtwert)" value={`${de(kpi.sigma)} kN/m²`} accent="text-violet-600" />
             <Stat label="Stützenquerschnitt A_c (Richtwert)" value={`${de(kpi.Ac)} cm²`} accent="text-amber-600" />

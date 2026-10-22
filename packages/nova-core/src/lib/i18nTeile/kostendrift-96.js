@@ -16,4 +16,14 @@ export const EN = {
   "Als Honorarnachtrag übernehmen": "Take over as fee amendment",
   "Anrechenbare Kosten fortgeschrieben (LV-Stand {datum})": "Eligible costs updated (bill of quantities as of {datum})",
   "LV konnte für den Kostenvergleich nicht geladen werden": "Could not load the bill of quantities for the cost comparison",
+  // 100-06 (Argon review 18.10.): draft amendment hint
+  "Honorarnachtrag Nr. {nr} im Entwurf — noch nicht beim Bauherrn. Die Kostenänderung ist erst mit Angebot und Beauftragung vereinbart.":
+    "Fee amendment no. {nr} is a draft — not yet with the client. The cost change is only agreed once offered and commissioned.",
+  // 100-05 (Argon review 18.10.): office catalogue update
+  "Katalog-Update übernehmen?": "Apply the catalogue update?",
+  "Büro-Katalog veraltet: Abbruch gehört zu LB 084 (nicht 040, das ist Wärmeversorgung), KG 212 Abbruchmaßnahmen fehlt.":
+    "Office catalogue outdated: demolition belongs to LB 084 (not 040, which is heating), KG 212 demolition is missing.",
+  "Katalog-Update: LB 084 (Abbruch), KG 212 ergänzen": "Catalogue update: add LB 084 (demolition), KG 212",
+  "Hinweis: Ein Abbruch-Eintrag steht noch unter LB 040 — LB 084 ist vorhanden; den alten Eintrag bei Bedarf selbst löschen.":
+    "Note: a demolition entry is still filed under LB 040 — LB 084 exists; delete the old entry yourself if needed.",
 };

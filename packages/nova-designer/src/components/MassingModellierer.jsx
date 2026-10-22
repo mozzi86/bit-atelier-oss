@@ -135,6 +135,9 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   // Load once per project; an absent layer is an empty one (nothing migrates silently).
   useEffect(() => {
     geladen.current = false;
+    // F1 (102): the undo history belongs to one project — after a switch an undo would bring the
+    // previous project's bodies into this one and the autosave below would store them there.
+    setStack(leererStack());
     if (!projectId) { setLayerRoh(leererLayer()); return undefined; }
     let aktiv = true;
     loadBimModel(projectId)

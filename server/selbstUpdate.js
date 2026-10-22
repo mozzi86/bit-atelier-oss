@@ -79,7 +79,8 @@ export async function neuesteVersion({ fetchFn = fetch, repo = UPDATE_REPO } = {
   const zip = asset(ZIP_NAME), sha = asset(SHA_NAME);
   return {
     version: String(j.tag_name || '').replace(/^v/i, ''), tag: String(j.tag_name || ''), datum: j.published_at || null,
-    notizen: String(j.body || '').slice(0, 4000), seite: typeof j.html_url === 'string' ? j.html_url : null,
+    notizen: String(j.body || '').slice(0, 4000), // B-104-10-11: only a github.com https page becomes a link; anything else is dropped.
+    seite: typeof j.html_url === 'string' && /^https:\/\/github\.com\//.test(j.html_url) ? j.html_url : null,
     zip: zip ? { url: zip.browser_download_url, groesse: Number(zip.size) || 0 } : null,
     sha: sha ? { url: sha.browser_download_url } : null,
   };

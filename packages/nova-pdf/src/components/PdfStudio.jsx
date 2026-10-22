@@ -851,6 +851,9 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
                     className="absolute inset-0 touch-none"
                     style={{ cursor: tool === "select" ? "default" : "crosshair" }}
                     onPointerDown={onPointerDown}
+                    // B-104-09-01: the mousedown after the pointerdown would move focus to this overlay
+                    // and blur the freshly auto-focused text field (empty → closed at once).
+                    onMouseDown={(e) => { if ((tool === "text" || tool === "pin") && !/** @type {HTMLElement} */ (e.target).closest("input,textarea,button")) e.preventDefault(); }}
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
                     onPointerCancel={onPointerUp}>

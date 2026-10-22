@@ -54,13 +54,20 @@ const POCHE = "#3f3f46";
 
 /**
  * Plan primitives in metres for one storey.
- * @param {{model: any, level: number, customWalls?: any[], customColumns?: any[], customSlabs?: any[], customRoofs?: any[], customZones?: any[], brille?: any, huelleStatus?: string|null, massstab?: number, sw?: boolean}} e
+ * @param {{model: any, level: number, customWalls?: any[], customColumns?: any[], customSlabs?: any[], customRoofs?: any[], customZones?: any[], brille?: any, huelleStatus?: string|null, massstab?: number, sw?: boolean, layerVis?: Record<string, boolean>|null, werkstattWaende?: any[]|null}} e
+ * layerVis: the plan's layer switches (BitBimStudio DEFAULT_LAYERS ids; missing = visible) — the
+ * export prints what the screen shows (before 22.10.2026 a hidden layer was printed anyway).
+ * werkstattWaende: workshop walls ({a, b, dicke_m, level, huelle, status}); drawn like on screen
+ * (BimPlan2D) — only those with a decided status, never the hull.
  * Every element carries `ebene` (104-06, additive): the drawing layer it belongs to —
  * "wand" | "stuetze" | "decke" | "dach" | "schraffur" | "raum_text" — read by the DXF export.
  * @returns {{elemente: Array<{art: 'poly', pts: Array<{x: number, z: number}>, fill: string|null, stroke: string, breite_mm: number, dash?: string, deckkraft?: number, offen?: boolean, ebene?: string} | {art: 'text', x: number, z: number, text: string, groesse_mm: number, ebene?: string}>, bbox: {x0: number, z0: number, x1: number, z1: number}|null}}
  */
-export function planGrafik({ model, level, customWalls = [], customColumns = [], customSlabs = [], customRoofs = [], customZones = [], brille = null, huelleStatus = null, massstab = 100, sw = false }) {
+export function planGrafik({ model, level, customWalls = [], customColumns = [], customSlabs = [], customRoofs = [], customZones = [], brille = null, huelleStatus = null, massstab = 100, sw = false, layerVis = null, werkstattWaende = null }) {
   const lg = linienGruppe(massstab);
+  // Same layer mapping as BimPlan2D: shell = hull walls + slabs, attika = roofs, walls = drawn and
+  // workshop walls, columns, zones = room labels.
+  const zeige = (/** @type {string} */ id) => !layerVis || layerVis[id] !== false;
   /** @type {any[]} */
   const el = [];
   const auf = (arr) => (Array.isArray(arr) ? arr : []).filter((x) => (x.level || 0) === level);
@@ -70,15 +77,21 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
     // 97-04b: S/W new build — 45° hatch, 2 mm apart on paper [ASSUMED usual spacing].
     if (lk?.schraffur) for (const [p, q] of schraffur45(pts, (2 * massstab) / 1000)) el.push({ art: "poly", pts: [p, q], fill: null, stroke: "#18181b", breite_mm: lg.duenn, offen: true, ebene: "schraffur" });
   };
-  for (const s of auf(customSlabs)) if (s.points?.length >= 3) el.push({ art: "poly", pts: s.points, fill: null, stroke: "#71717a", breite_mm: lg.duenn, dash: "4 2", ebene: "decke" });
-  for (const r of auf(customRoofs)) if (r.points?.length >= 3) el.push({ art: "poly", pts: r.points, fill: null, stroke: "#71717a", breite_mm: lg.duenn, dash: "6 2 1 2", ebene: "dach" });
-  for (const w of (model?.walls || []).filter((w) => w.level === level)) poly(wandPolygon(w), huelleStatus);
-  for (const w of auf(customWalls)) if (w.a && w.b) poly(wandPolygon(w), w.status);
-  for (const c of auf(customColumns)) {
+  if (zeige("shell")) for (const s of auf(customSlabs)) if (s.points?.length >= 3) el.push({ art: "poly", pts: s.points, fill: null, stroke: "#71717a", breite_mm: lg.duenn, dash: "4 2", ebene: "decke" });
+  if (zeige("attika")) for (const r of auf(customRoofs)) if (r.points?.length >= 3) el.push({ art: "poly", pts: r.points, fill: null, stroke: "#71717a", breite_mm: lg.duenn, dash: "6 2 1 2", ebene: "dach" });
+  if (zeige("shell")) for (const w of (model?.walls || []).filter((w) => w.level === level)) poly(wandPolygon(w), huelleStatus);
+  if (zeige("walls")) {
+    for (const w of auf(customWalls)) if (w.a && w.b) poly(wandPolygon(w), w.status);
+    for (const w of auf(werkstattWaende)) {
+      if (w.huelle || !w.a || !w.b || !planDarstellung(brille, w.status, { sw })) continue;
+      poly(wandPolygon({ ...w, thickness: w.dicke_m }), w.status);
+    }
+  }
+  if (zeige("columns")) for (const c of auf(customColumns)) {
     const h = (c.size || 0.4) / 2;
     poly([{ x: c.x - h, z: c.z - h }, { x: c.x + h, z: c.z - h }, { x: c.x + h, z: c.z + h }, { x: c.x - h, z: c.z + h }], c.status, { ebene: "stuetze" });
   }
-  for (const z of auf(customZones)) {
+  if (zeige("zones")) for (const z of auf(customZones)) {
     if (!(z.points?.length >= 3)) continue;
     const cx = z.points.reduce((s, p) => s + p.x, 0) / z.points.length, cz = z.points.reduce((s, p) => s + p.z, 0) / z.points.length;
     const a = Math.abs(z.points.reduce((s, p, i) => { const q = z.points[(i + 1) % z.points.length]; return s + (p.x * q.z - q.x * p.z); }, 0) / 2);

@@ -9,9 +9,9 @@
 // the three.js objects in @designer/lib/gelaendeSzene.
 //
 // Scene axes: x = east, z = south, y = up, 1 unit = 1 m; heights y = (h − bezug) · exaggeration,
-// bezug = floor(lowest shown terrain point). The earthworks part (computeErdmassen …) is
-// unchanged on purpose — its sampling still uses the old mirrored convention, see
-// .planning/BEFUNDE-103.md B-103-01.
+// bezug = floor(lowest shown terrain point). Earthworks sample the same raster through
+// gelaendeStudie (erdmassen, mittlereHoeheUnter) with the footprint at its real place
+// (footprintAmOrt) — B-103-01 fixed.
 //
 // In:  complexData (location, site_parcel, buildings, hochwasser) from ComplexDesigner, the
 //      shared building program (footprint, storey height), elevation grids (useElevationGrid).
@@ -25,13 +25,14 @@ import { useI18n } from "@core/lib/i18n";
 import { useElevationGrid, DEM_RESOLUTION_M } from "@designer/lib/useElevationGrid";
 import { useBuildingProgram } from "@core/lib/useBuildingProgram";
 import { exportExposePng } from "@designer/components/MassingView3D";
+import { objektFreigeben } from "@core/lib/threeFreigeben";
 import SplatSteuerung from "@designer/components/SplatSteuerung";
 import GelaendeSteuerung from "@designer/components/GelaendeSteuerung";
 import { SplatWolke, beispielSplats } from "@designer/lib/splats/SplatWolke";
 import { splatsLesen, splatHuelle } from "@designer/lib/splats/splatLesen";
 import { nordpfeilWinkel } from "@designer/lib/isoKamera";
 import {
-  demRaster, hoeheAn, grundstueckM, baukoerperListe, startUeberhoehung, kameraPose, pitchKlemmen,
+  demRaster, hoeheAn, footprintAmOrt, erdmassen as erdmassenRechnen, mittlereHoeheUnter, grundstueckM, baukoerperListe, startUeberhoehung, kameraPose, pitchKlemmen,
   hoehenKoten, massstabsLeiste, mJePxBildmitte, flutKurve, ueberfluteteFlaeche, flutReihenfolge, pegelBereich,
   hqMarken, minHoeheInPolygon, okffNHN, hoeheText, START_YAW, START_PITCH, AUGENHOEHE_M,
 } from "@designer/lib/gelaendeStudie";
@@ -64,105 +65,10 @@ function hoeheSzene(tr, ue) {
   return (x, z) => (hoeheAn(tr.r, x, z) - tr.bezug) * ue;
 }
 
-// Punkt-in-Polygon (Ray-Casting) gegen ein zentriertes Meter-Polygon [{x,z}].
-function pointInPoly(x, z, poly) {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const xi = poly[i].x, zi = poly[i].z, xj = poly[j].x, zj = poly[j].z;
-    if (((zi > z) !== (zj > z)) && (x < ((xj - xi) * (z - zi)) / (zj - zi) + xi)) inside = !inside;
-  }
-  return inside;
-}
-
-// Geländehöhe an einer Stelle (zentrierte Meter) per bilinearer Interpolation.
-// Das Raster ist size×size über spanKm·1000 m, um den Ursprung zentriert.
-function sampleElev(grid, size, cellM, x, z) {
-  const gi = z / cellM + (size - 1) / 2; // Zeilen-Index (z)
-  const gj = x / cellM + (size - 1) / 2; // Spalten-Index (x)
-  const ci = Math.max(0, Math.min(size - 1, gi));
-  const cj = Math.max(0, Math.min(size - 1, gj));
-  const i0 = Math.floor(ci), j0 = Math.floor(cj);
-  const i1 = Math.min(size - 1, i0 + 1), j1 = Math.min(size - 1, j0 + 1);
-  const fi = ci - i0, fj = cj - j0;
-  const top = grid[i0][j0] + (grid[i0][j1] - grid[i0][j0]) * fj;
-  const bot = grid[i1][j0] + (grid[i1][j1] - grid[i1][j0]) * fj;
-  return top + (bot - top) * fi;
-}
-
 // Bounding-Box (zentrierte Meter) eines Footprint-Polygons.
 function bboxOf(poly) {
   const xs = poly.map((p) => p.x), zs = poly.map((p) => p.z);
   return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
-}
-
-// Erdmassen-Berechnung für ein Planum auf dem Geländemodell.
-// Begrenzt auf das Baufeld (Footprint-Polygon in zentrierten Metern). Da das
-// Baufeld i.d.R. kleiner als eine Rasterzelle ist, wird die Geländehöhe über ein
-// FEINES Teilraster über der Footprint-Bounding-Box bilinear abgetastet (statt
-// roher Rasterzellen). Ohne Footprint: gesamter Geländeausschnitt (rasterbasiert).
-// Gibt { cut, fill, net, area } in m³ bzw. m² zurück (gerundet auf ganze Zahlen).
-function computeErdmassen(grid, planum, spanKm, footprintM) {
-  if (!grid || grid.length < 2) return { cut: 0, fill: 0, net: 0, area: 0 };
-  const size = grid.length;
-  const cellM = (spanKm * 1000) / (size - 1);
-  const hasFootprint = Array.isArray(footprintM) && footprintM.length >= 3;
-  let cut = 0, fill = 0;
-
-  if (hasFootprint) {
-    const bb = bboxOf(footprintM);
-    const N = 48; // Teilraster-Auflösung über die Footprint-BBox
-    const stepX = (bb.maxX - bb.minX) / N, stepZ = (bb.maxZ - bb.minZ) / N;
-    const subArea = stepX * stepZ;
-    let inside = 0;
-    for (let a = 0; a < N; a++) {
-      for (let b = 0; b < N; b++) {
-        const x = bb.minX + (a + 0.5) * stepX;
-        const z = bb.minZ + (b + 0.5) * stepZ;
-        if (!pointInPoly(x, z, footprintM)) continue;
-        inside++;
-        const diff = sampleElev(grid, size, cellM, x, z) - planum;
-        if (diff > 0) cut += diff * subArea;
-        else fill += (-diff) * subArea;
-      }
-    }
-    const area = inside * subArea;
-    return { cut: Math.round(cut), fill: Math.round(fill), net: Math.round(fill - cut), area: Math.round(area) };
-  }
-
-  const cellArea = cellM * cellM;
-  let cells = 0;
-  for (let i = 0; i < size; i++) {
-    for (let j = 0; j < size; j++) {
-      cells++;
-      const diff = grid[i][j] - planum;
-      if (diff > 0) cut += diff * cellArea;
-      else fill += (-diff) * cellArea;
-    }
-  }
-  return { cut: Math.round(cut), fill: Math.round(fill), net: Math.round(fill - cut), area: Math.round(cells * cellArea) };
-}
-
-// Mittleres Geländeniveau UNTER dem Footprint (bilinear über Teilraster) — als
-// ausgeglichenes Standard-Planum. Liefert null, wenn kein Footprint vorliegt.
-function footprintMeanElev(grid, spanKm, footprintM) {
-  if (!grid || grid.length < 2) return null;
-  if (!Array.isArray(footprintM) || footprintM.length < 3) return null;
-  const size = grid.length;
-  const cellM = (spanKm * 1000) / (size - 1);
-  const bb = bboxOf(footprintM);
-  const N = 48;
-  const stepX = (bb.maxX - bb.minX) / N, stepZ = (bb.maxZ - bb.minZ) / N;
-  let sum = 0, count = 0;
-  for (let a = 0; a < N; a++) {
-    for (let b = 0; b < N; b++) {
-      const x = bb.minX + (a + 0.5) * stepX;
-      const z = bb.minZ + (b + 0.5) * stepZ;
-      if (!pointInPoly(x, z, footprintM)) continue;
-      sum += sampleElev(grid, size, cellM, x, z);
-      count++;
-    }
-  }
-  return count > 0 ? Math.round((sum / count) * 10) / 10 : null;
 }
 
 // Baugruben-Berechnung (Aushub unter Planum) mit Arbeitsraum und Böschung.
@@ -204,6 +110,8 @@ export default function TerrainView3D({ complexData = null }) {
   const { t } = useI18n();
   const programm = /** @type {any} */ (useBuildingProgram());
   const footprintM = programm.footprintM;
+  // B-103-01: the footprint is centred on its own centroid — move it to its real place on the site.
+  const footprintOrt = useMemo(() => footprintAmOrt(footprintM, complexData), [footprintM, complexData]);
   const hasFootprint = Array.isArray(footprintM) && footprintM.length >= 3;
   // 103-01: the site plan's location wins (a project may carry none), else the project's.
   const ort = complexData?.location ?? project?.location ?? null;
@@ -294,9 +202,9 @@ export default function TerrainView3D({ complexData = null }) {
   // ACHTUNG: Ein ausgeglichenes Planum erzeugt zwangsläufig Abtrag ≈ Auftrag —
   // das ist eine Setzung, kein Ergebnis. Deshalb unten so gekennzeichnet.
   const defaultPlanum = useMemo(() => {
-    const fpMean = footprintMeanElev(calcGrid, SPAN_CALC, footprintM);
+    const fpMean = mittlereHoeheUnter(rCalc, footprintOrt.poly);
     return fpMean !== null ? fpMean : meanElev;
-  }, [calcGrid, footprintM, meanElev]);
+  }, [rCalc, footprintOrt, meanElev]);
 
   // --- Auflösung ehrlich ausweisen (KD-08) -----------------------------------
   // „Echte Stützstellen" = Anzahl unterscheidbarer DEM-Zellen (~90 m) unter der
@@ -322,8 +230,8 @@ export default function TerrainView3D({ complexData = null }) {
   }, [defaultPlanum]);
 
   const erdmassen = useMemo(
-    () => computeErdmassen(calcGrid, planumVal, SPAN_CALC, footprintM),
-    [calcGrid, planumVal, footprintM]
+    () => erdmassenRechnen(rCalc, planumVal, footprintOrt.poly),
+    [rCalc, planumVal, footprintOrt]
   );
 
   // Baugrube: Aushubtiefe unter Planum, Arbeitsraum umlaufend, Böschungswinkel
@@ -547,7 +455,7 @@ export default function TerrainView3D({ complexData = null }) {
       gruppeLeeren(hoehenGruppe);
       renderer.dispose();
       if (el.parentNode) el.parentNode.removeChild(el);
-      scene.traverse((/** @type {any} */ o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+      scene.traverse(objektFreigeben);
     };
   }, []);
 
@@ -704,10 +612,15 @@ export default function TerrainView3D({ complexData = null }) {
             >
               <Footprints className="h-3.5 w-3.5" /> {walking ? t("Begehung beenden") : t("Begehung")}
             </button>
-            {/* Exposé image: the current view as high-resolution PNG (without the HTML overlays) */}
+            {/* Exposé image: the current view as high-resolution PNG; B-103-04: source, exaggeration and
+                scale go into a footer of the image (the HTML overlays are not part of the canvas). */}
             <button
               type="button"
-              onClick={() => exportExposePng(three.current)}
+              onClick={() => exportExposePng(three.current, { fusszeile: [
+                synthetic ? t("Demo-Gelände — erfundene Höhen") : `${t("Copernicus DEM GLO-90 (~90 m, Oberflächenmodell)")}${rAnzeige ? ` · ${hoeheText(rAnzeige.minNHN)}–${hoeheText(rAnzeige.maxNHN)} ${t("m ü. NHN (näherungsweise)")}` : ""}`,
+                `${ueText} · ${t("Maßstab")} ${massstabTextRef.current?.textContent || "—"} ${t("≈ in Bildmitte")}`,
+                [complexData?.name || project?.name, new Date().toLocaleDateString("de-DE")].filter(Boolean).join(" · "),
+              ] })}
               title={t("Aktuelle Ansicht hochauflösend als PNG exportieren")}
               className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-muted-foreground transition-colors hover:bg-muted"
             >
@@ -790,63 +703,56 @@ export default function TerrainView3D({ complexData = null }) {
           </div>
         )}
 
-        {/* Datengrundlage & Auflösung (KD-08) — steht ÜBER den Kubikmetern */}
+        {/* Datengrundlage & Auflösung (KD-08) — steht ÜBER den Kubikmetern. B-103-03: colour tokens + i18n. */}
         {calcGrid && calcGrid.length >= 2 && (
           <div
             className={`flex gap-2 px-4 py-2 border-b text-[11px] leading-snug ${
-              synthetic ? "bg-amber-50 text-amber-900 border-amber-200" : "bg-slate-50 text-slate-500"
+              synthetic ? "bg-warnung-flaeche text-warnung border-warnung-rand" : "bg-muted text-muted-foreground border-border"
             }`}
           >
-            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden="true" />
             <div className="space-y-0.5">
               {synthetic && (
                 <div>
-                  <strong>Synthetisches Gelände (Offline-Fallback).</strong> Die Höhen sind aus dem
-                  Standort errechnet — eine glatte Fläche mit fester Neigung, kein Geländemodell. Die
-                  folgenden Kubikmeter sind ein Rechenbeispiel und <strong>keine Mengen</strong>.
+                  <strong>{t("Synthetisches Gelände (Offline-Fallback).")}</strong>{" "}
+                  {t("Die Höhen sind aus dem Standort errechnet — eine glatte Fläche mit fester Neigung, kein Geländemodell. Die folgenden Kubikmeter sind ein Rechenbeispiel und keine Mengen.")}
                 </div>
               )}
               <div>
-                Rechen-Raster {Math.round(calcCellM)} m über {Math.round(SPAN_CALC * 1000)} m
-                {" · "}Anzeige-Raster {Math.round((spanKm * 1000) / 9)} m über {spanKm * 1000} m
-                {!synthetic && ` · Quelle Copernicus DEM GLO-90 (~${DEM_RESOLUTION_M} m native Rasterweite)`}
+                {t("Rechen-Raster {a} m über {b} m").replace("{a}", String(Math.round(calcCellM))).replace("{b}", String(Math.round(SPAN_CALC * 1000)))}
+                {" · "}{t("Anzeige-Raster {a} m über {b} m").replace("{a}", String(Math.round((spanKm * 1000) / 9))).replace("{b}", String(spanKm * 1000))}
+                {!synthetic && ` · ${t("Quelle Copernicus DEM GLO-90 (~{n} m native Rasterweite)").replace("{n}", String(DEM_RESOLUTION_M))}`}
                 {resolution
-                  ? ` · unterscheidbare Stützstellen unter dem Baufeld (${Math.round(resolution.w)}×${Math.round(resolution.d)} m): ${resolution.support}`
-                  : " · kein Baufeld — ganzer Geländeausschnitt"}
+                  ? ` · ${t("unterscheidbare Stützstellen unter dem Baufeld ({w}×{d} m): {n}").replace("{w}", String(Math.round(resolution.w))).replace("{d}", String(Math.round(resolution.d))).replace("{n}", String(resolution.support))}`
+                  : ` · ${t("kein Baufeld — ganzer Geländeausschnitt")}`}
+                {hasFootprint && !footprintOrt.amOrt && ` · ${t("Baufeld ohne gezeichnete Lage — am Projektstandort abgetastet")}`}
               </div>
               {roughOnly && (
-                <div>
-                  Damit sind die Volumen nur eine <strong>Größenordnung</strong>: Das Baufeld ist
-                  kleiner als das Höhenraster, die Geländeform darunter ist interpoliert. Für
-                  Aushubmengen ist eine Vermessung bzw. ein amtliches DGM erforderlich.
-                </div>
+                <div>{t("Damit sind die Volumen nur eine Größenordnung: Das Baufeld ist kleiner als das Höhenraster, die Geländeform darunter ist interpoliert. Für Aushubmengen ist eine Vermessung bzw. ein amtliches DGM erforderlich.")}</div>
               )}
-              <div>
-                Standard-Planum = mittlere Geländehöhe unter dem Baufeld. Abtrag ≈ Auftrag ist dann
-                rechnerisch vorgegeben und keine Aussage über den Standort.
-              </div>
+              <div>{t("Standard-Planum = mittlere Geländehöhe unter dem Baufeld. Abtrag ≈ Auftrag ist dann rechnerisch vorgegeben und keine Aussage über den Standort.")}</div>
             </div>
           </div>
         )}
 
         {/* Erdmassen-Panel */}
         {calcGrid && calcGrid.length >= 2 && (
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 border-b bg-slate-50 text-xs text-slate-600">
-            <span className="font-semibold text-slate-700">Erdmassen{roughOnly ? " (Größenordnung)" : ""}</span>
-            <span className="text-slate-400">{hasFootprint ? "auf Baufeld begrenzt" : "ganzer Geländeausschnitt"}</span>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 border-b border-border bg-muted text-xs text-muted-foreground" data-testid="gelaende-erdmassen">
+            <span className="font-semibold text-foreground">{t("Erdmassen")}{roughOnly ? ` (${t("Größenordnung")})` : ""}</span>
+            <span>{hasFootprint ? t("auf Baufeld begrenzt") : t("ganzer Geländeausschnitt")}</span>
             {hasFootprint && (
-              <span>Baufeld: <strong className="text-emerald-700">{erdmassen.area.toLocaleString("de-DE")} m²</strong></span>
+              <span>{t("Baufeld")}: <strong className="text-foreground">{erdmassen.area.toLocaleString("de-DE")} m²</strong></span>
             )}
-            <span>Abtrag: <strong className={roughOnly ? "text-slate-600" : "text-orange-600"}>{m3(erdmassen.cut)}</strong></span>
-            <span>Auftrag: <strong className={roughOnly ? "text-slate-600" : "text-sky-600"}>{m3(erdmassen.fill)}</strong></span>
+            <span>{t("Abtrag")}: <strong className="text-foreground" data-testid="gelaende-abtrag">{m3(erdmassen.cut)}</strong></span>
+            <span>{t("Auftrag")}: <strong className="text-foreground" data-testid="gelaende-auftrag">{m3(erdmassen.fill)}</strong></span>
             <span>
-              Netto:{" "}
-              <strong className={roughOnly ? "text-slate-600" : erdmassen.net > 0 ? "text-sky-600" : erdmassen.net < 0 ? "text-orange-600" : "text-slate-500"}>
+              {t("Netto")}:{" "}
+              <strong className="text-foreground">
                 {roughOnly ? "≈ " : ""}{erdmassen.net > 0 ? "+" : ""}{Math.round(erdmassen.net).toLocaleString("de-DE")} m³
               </strong>
             </span>
             <span className="flex items-center gap-2 ml-auto">
-              <span className="text-slate-500">Planum {planumVal.toFixed(1)} m ü. NN</span>
+              <span>{t("Planum {n} m ü. NHN").replace("{n}", planumVal.toFixed(1).replace(".", ","))}</span>
               <input
                 type="range"
                 min={calcMin}
@@ -854,8 +760,9 @@ export default function TerrainView3D({ complexData = null }) {
                 step={0.1}
                 value={planumVal}
                 onChange={(e) => setPlanum(parseFloat(e.target.value))}
-                className="w-28 accent-emerald-600"
-                title="Planum-Höhe anpassen"
+                className="w-28 accent-primary"
+                aria-label={t("Planum-Höhe anpassen")}
+                title={t("Planum-Höhe anpassen")}
               />
             </span>
           </div>
@@ -863,10 +770,10 @@ export default function TerrainView3D({ complexData = null }) {
 
         {/* Baugruben-Panel (nur mit Baufeld) */}
         {calcGrid && calcGrid.length >= 2 && hasFootprint && (
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 border-b bg-slate-50 text-xs text-slate-600">
-            <span className="font-semibold text-slate-700">Baugrube{roughOnly ? " (Größenordnung)" : ""}</span>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 border-b border-border bg-muted text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">{t("Baugrube")}{roughOnly ? ` (${t("Größenordnung")})` : ""}</span>
             <span className="flex items-center gap-2">
-              <span className="text-slate-500">Tiefe {basementDepth.toLocaleString("de-DE")} m</span>
+              <span>{t("Tiefe {n} m").replace("{n}", basementDepth.toLocaleString("de-DE"))}</span>
               <input
                 type="range"
                 min={0}
@@ -874,12 +781,13 @@ export default function TerrainView3D({ complexData = null }) {
                 step={0.5}
                 value={basementDepth}
                 onChange={(e) => setBasementDepth(parseFloat(e.target.value))}
-                className="w-24 accent-orange-600"
-                title="Aushubtiefe unter Planum"
+                className="w-24 accent-primary"
+                aria-label={t("Aushubtiefe unter Planum")}
+                title={t("Aushubtiefe unter Planum")}
               />
             </span>
             <span className="flex items-center gap-2">
-              <span className="text-slate-500">Böschung {slopeAngle}°</span>
+              <span>{t("Böschung {n}°").replace("{n}", String(slopeAngle))}</span>
               <input
                 type="range"
                 min={30}
@@ -887,18 +795,19 @@ export default function TerrainView3D({ complexData = null }) {
                 step={5}
                 value={slopeAngle}
                 onChange={(e) => setSlopeAngle(parseInt(e.target.value, 10))}
-                className="w-24 accent-orange-600"
-                title="Böschungswinkel"
+                className="w-24 accent-primary"
+                aria-label={t("Böschungswinkel")}
+                title={t("Böschungswinkel")}
               />
             </span>
-            <span>Aushub: <strong className={roughOnly ? "text-slate-600" : "text-orange-600"}>{m3(baugrube.volume)}</strong></span>
-            <span>Sohle: <strong className="text-slate-700">{baugrube.bottomArea.toLocaleString("de-DE")} m²</strong></span>
-            <span>Krone: <strong className="text-slate-700">{baugrube.topArea.toLocaleString("de-DE")} m²</strong></span>
-            <span className="text-slate-400">Arbeitsraum 0,5 m</span>
+            <span>{t("Aushub")}: <strong className="text-foreground">{m3(baugrube.volume)}</strong></span>
+            <span>{t("Sohle")}: <strong className="text-foreground">{baugrube.bottomArea.toLocaleString("de-DE")} m²</strong></span>
+            <span>{t("Krone")}: <strong className="text-foreground">{baugrube.topArea.toLocaleString("de-DE")} m²</strong></span>
+            <span>{t("Arbeitsraum 0,5 m")}</span>
             <span className="ml-auto">
-              Gesamt:{" "}
-              <strong className={roughOnly ? "text-slate-700" : "text-orange-700"}>
-                {m3(erdmassen.cut + baugrube.volume)} Abtrag
+              {t("Gesamt")}:{" "}
+              <strong className="text-foreground">
+                {m3(erdmassen.cut + baugrube.volume)} {t("Abtrag")}
               </strong>
             </span>
           </div>

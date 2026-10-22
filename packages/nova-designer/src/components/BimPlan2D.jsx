@@ -997,7 +997,7 @@ export default function BimPlan2D({ model, mode, level = 0, storeyHeight = 3, ed
     : edit;
   const maxSvgH = Math.max(120, height - 60); // 60 px Luft für Zoom-/Koordinaten-Chrome
   return (
-    <div className="w-full bg-slate-50 flex items-center justify-center overflow-hidden" style={{ height }}>
+    <div className="w-full bg-slate-50 flex items-center justify-center overflow-hidden" style={{ height }} data-bim-plan2d>
       {mode === "schnitt"
         ? <Schnitt model={model} storeyHeight={storeyHeight} layerVis={layerVis} unit={unit} maxSvgH={maxSvgH} brille={brille} huelleStatus={huelleStatus} sw={sw} />
         : <Grundriss model={model} level={lvl} edit={editEff} layerVis={layerVis} envOpenings={envOpenings} customZones={customZones} customSlabs={customSlabs} customRoofs={customRoofs} unit={unit} focus={focus} overlay={overlay} overlayBounds={overlayBounds} maxSvgH={maxSvgH} readOnly={readOnly} massstab={massstab} fuellen={fuellen} brille={brille} huelleStatus={huelleStatus} sw={sw} werkstattWaende={werkstattWaende} />}

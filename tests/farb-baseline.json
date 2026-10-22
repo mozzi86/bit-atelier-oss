@@ -1,5 +1,5 @@
 {
-  "farben": 10752,
+  "farben": 10718,
   "verlaeufe": 123,
   "stand": "2026-10-21",
   "hinweis": "Fest eingetragene Farbklassen und Verläufe; dürfen nie steigen (scripts/farb-baseline.mjs). Senken, wenn auf Tokens umgestellt wurde.",
@@ -104,7 +104,6 @@
     "src/components/settings/DatenschutzBereich.jsx": 34,
     "src/components/site/GanttSchedule.jsx": 34,
     "packages/nova-ausschreibung/src/components/VhbFormularDialog.jsx": 35,
-    "packages/nova-designer/src/components/TerrainView3D.jsx": 34,
     "packages/nova-designer/src/components/TiefgaragenPlaner.jsx": 34,
     "packages/nova-ifc-viewer/src/components/CollaborationPanel.jsx": 34,
     "src/components/accounting/AnlagenReiter.jsx": 33,

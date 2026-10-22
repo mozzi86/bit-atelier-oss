@@ -605,6 +605,8 @@ export default function MassingStudio({
   const undoSync = () => setUndoStand({ p: undoRef.current.past.length, f: undoRef.current.future.length });
   const merkePoly = (snap) => { undoRef.current = merke(undoRef.current, snap); undoSync(); };
   const undo = () => { const r = zurueck(undoRef.current, polyNow.current); if (!r) return; undoRef.current = r.stack; setPoly(r.snapshot); undoSync(); };
+  // F1 (102): a project switch starts a fresh history (no undo into the previous project's outline).
+  useEffect(() => { undoRef.current = leererStack(); undoSync(); }, [project?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const redo = () => { const r = vor(undoRef.current, polyNow.current); if (!r) return; undoRef.current = r.stack; setPoly(r.snapshot); undoSync(); };
   const merkeDragEnde = () => {
     const start = dragStartRef.current;

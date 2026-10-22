@@ -16,7 +16,7 @@ import {
   DEFAULT_TRINKWASSER_LPD, DEFAULT_WW_ANTEIL_PCT, DEFAULT_SANITAER_JE_WE,
   DEFAULT_VA_M2, DEFAULT_KW_JE_WE, DEFAULT_GZF, DEFAULT_PV_KWP_M2, DEFAULT_PV_ERTRAG,
   heizlastKW, jahresHeizwaermebedarf, waermepumpeStrombedarf, lueftungVolumenstrom,
-  trinkwasserBedarf, warmwasserBedarf, trinkwasserJahrM3, elektroAnschlusswert,
+  trinkwasserBedarf, warmwasserBedarf, trinkwasserJahrM3, elektroAnschlusswert, ladeleistung, LADE_GZF,
   pvPotenzial, tgaChecks,
 } from "@designer/lib/hvac";
 import { useBuildingProgram, programMetrics } from "@core/lib/useBuildingProgram";
@@ -25,6 +25,7 @@ import { useI18n } from "@core/lib/i18n";
 import TgaNetzEditor from "./TgaNetzEditor";
 // Phase 63-03: drainage sub-tab (ENTW-01…05) — its own layer, its own cards.
 import EntwaesserungPlanner from "./EntwaesserungPlanner";
+import { schmutzwasser } from "@designer/lib/entwaesserung";
 
 const de = (n) => Math.round(Number(n) || 0).toLocaleString("de-DE");
 const de1 = (n) => (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 1 });
@@ -135,15 +136,18 @@ export default function HaustechnikPlanner({ complexData = null } = {}) {
     const tw = trinkwasserBedarf(personen, trinkwasser);
     const ww = warmwasserBedarf(tw, wwAnteil);
     const twJahr = trinkwasserJahrM3(tw);
-    const anschluss = elektroAnschlusswert({ basis: elBasis, vaM2, bezugsflaeche: beheizteFlaeche, kwJeWe, we, gzf });
+    // LO-01: charge points and sanitary objects now have an effect (connected load, sewage flow).
+    const lade = ladeleistung({ ladepunkte });
+    const anschluss = elektroAnschlusswert({ basis: elBasis, vaM2, bezugsflaeche: beheizteFlaeche, kwJeWe, we, gzf }) + lade;
+    const sw = schmutzwasser({ we, sanitaerJeWe });
     const pv = pvNutzen === "ja" ? pvPotenzial({ dachflaeche, kwpJeM2, ertrag: pvErtrag }) : null;
     const checks = tgaChecks({ standard, qHeizlast, erzeuger, lueftungssystem, beheizteFlaeche, we });
-    return { heizlast, bedarf, wpStrom, volumenstrom, tw, ww, twJahr, anschluss, pv, checks };
+    return { heizlast, bedarf, wpStrom, volumenstrom, tw, ww, twJahr, anschluss, lade, sw, pv, checks };
   }, [
     standard, qHeizlast, qBedarf, beheizteFlaeche, erzeuger, jaz, istWP,
     lueftungssystem, lueftBasis, luftwechsel, luftvolumen, aussenluft,
     personen, we, trinkwasser, wwAnteil,
-    elBasis, vaM2, kwJeWe, gzf, pvNutzen, dachflaeche, kwpJeM2, pvErtrag,
+    elBasis, vaM2, kwJeWe, gzf, pvNutzen, dachflaeche, kwpJeM2, pvErtrag, ladepunkte, sanitaerJeWe,
   ]);
 
   return (
@@ -266,7 +270,7 @@ export default function HaustechnikPlanner({ complexData = null } = {}) {
               <NumberField label="Trinkwasserbedarf" value={trinkwasser} step={5} suffix="l/(P·d)" min={0} onChange={setTrinkwasser} />
               <NumberField label="Warmwasseranteil" value={wwAnteil} step={5} suffix="%" min={0} onChange={setWwAnteil} />
               <NumberField label="Sanitärobjekte je WE" value={sanitaerJeWe} suffix="Obj." min={0} onChange={setSanitaerJeWe} />
-              <Stat label="Entwässerung" value="DN-Konzept — Fachplanung" accent="text-slate-700" />
+              <Stat label="Schmutzwasser (Richtwert)" value={`${de1(kpi.sw.qww_ls)} l/s · DN ${kpi.sw.dn}`} accent="text-slate-700" />
             </CardContent>
           </Card>
 
@@ -310,7 +314,7 @@ export default function HaustechnikPlanner({ complexData = null } = {}) {
                 <NumberField label="Spez. PV-Ertrag" value={pvErtrag} step={25} suffix="kWh/(kWp·a)" min={0} onChange={setPvErtrag} />
               )}
               <NumberField label="Ladepunkte E-Mobilität" value={ladepunkte} suffix="Stk." min={0} onChange={setLadepunkte} />
-              <Stat label="E-Mobilität" value="GEIG-Leitungsinfrastruktur prüfen" accent="text-slate-700" />
+              <Stat label="E-Mobilität (im Anschlusswert)" value={`${de1(kpi.lade)} kW (GZF ${String(LADE_GZF).replace(".", ",")})`} accent="text-slate-700" />
             </CardContent>
           </Card>
         </div>

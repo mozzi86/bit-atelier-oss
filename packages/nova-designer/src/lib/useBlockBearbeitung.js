@@ -33,11 +33,12 @@ const KLICK_PX = 4;
 /**
  * @param {{buildings: any[], mpp: number, onChange: (b: any[]) => void, aktiv: boolean,
  *   grenzeM?: P[]|null, baufelderM?: P[][], containerRef?: {current: HTMLElement|null},
- *   zusatzDichte?: {grundflaeche: number, bgf: number}|null}} opt
+ *   zusatzDichte?: {grundflaeche: number, bgf: number}|null, schluessel?: string|null}} opt
  *   grenzeM = plot polygon in site metres, baufelderM = building envelopes in site metres,
- *   zusatzDichte = footprint/BGF (m²) of bars and perimeter blocks, counted into GRZ/GFZ (101-04)
+ *   zusatzDichte = footprint/BGF (m²) of bars and perimeter blocks, counted into GRZ/GFZ (101-04),
+ *   schluessel = id of the record being edited (site plan); a change clears undo/redo (F1, 102)
  */
-export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM = null, baufelderM = [], containerRef, zusatzDichte = null }) {
+export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM = null, baufelderM = [], containerRef, zusatzDichte = null, schluessel = null }) {
   const [auswahl, setAuswahl] = useState(/** @type {string[]} */ ([]));
   const [live, setLive] = useState(/** @type {any[]|null} */ (null));
   const [rahmen, setRahmen] = useState(/** @type {{a: P, b: P, sa: P, sb: P, modus: 'fenster'|'kreuzen'}|null} */ (null));
@@ -49,6 +50,8 @@ export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM =
   const ablageRef = useRef(/** @type {any[]} */ ([]));
   const cursorRef = useRef(/** @type {P|null} */ (null));
   const [, setVerlaufStand] = useState(0); // re-render after undo stack changes (button states)
+  // F1 (102): undo/redo belong to one site plan — a project switch must not undo into the old one.
+  useEffect(() => { undoRef.current = []; redoRef.current = []; setVerlaufStand((v) => v + 1); }, [schluessel]);
 
   const anzeige = live || buildings;
   const bloecke = useMemo(() => anzeige.filter((b) => Number(b?.width) > 0 && Number(b?.height) > 0).map((b) => alsBlock(b, mpp)), [anzeige, mpp]);

@@ -48,9 +48,22 @@ export function gesamtlast({ gk = 0, dg = 0, qk = 0, footArea = 0 }) {
   return ((Number(gk) || 0) + (Number(dg) || 0) + (Number(qk) || 0)) * flaeche;
 }
 
-// Vertikale Gesamt-Gebäudelast (kN) = Last je Geschoss · Geschossanzahl.
-export function gebaeudelast(gesamtlastProGeschoss, storeys) {
-  return (Number(gesamtlastProGeschoss) || 0) * Math.max(0, Number(storeys) || 0);
+// Schnee auf dem Dach (LO-01, 22.10.2026: sk was an input without effect).
+// Shape coefficient for flat roofs (pitch 0°–30°) after DIN EN 1991-1-3, Tab. 5.2: μ1 = 0,8.
+export const MU_FLACHDACH = 0.8;
+// Minimum characteristic snow load sk (kN/m²) per snow zone after DIN EN 1991-1-3/NA, Bild NA.1 —
+// [ASSUMED] lowest values (Sockelbetrag); the altitude term of the NA is NOT applied, the user
+// overrides sk for higher sites.
+export const SK_MINDEST_JE_ZONE = Object.freeze({ "1": 0.65, "1a": 0.81, "2": 0.85, "2a": 1.06, "3": 1.10 });
+
+// Schneelast auf dem Dach (kN) = μ1 · sk · Dachgrundfläche (≈ Footprint, Flachdach).
+export function schneelastDach({ sk = 0, footArea = 0, mu = MU_FLACHDACH } = {}) {
+  return Math.max(0, Number(sk) || 0) * Math.max(0, Number(mu) || 0) * Math.max(0, Number(footArea) || 0);
+}
+
+// Vertikale Gesamt-Gebäudelast (kN) = Last je Geschoss · Geschossanzahl (+ Dachlast einmal, z. B. Schnee).
+export function gebaeudelast(gesamtlastProGeschoss, storeys, zusatzKn = 0) {
+  return (Number(gesamtlastProGeschoss) || 0) * Math.max(0, Number(storeys) || 0) + Math.max(0, Number(zusatzKn) || 0);
 }
 
 // Gründungs-/Sohldruck σ (kN/m²) = vertikale Last N / Gründungs-/Grundfläche.
@@ -74,11 +87,11 @@ export function betonFcd(betonguete = "C25/30") {
 // A_c [m²] ≈ N_Stütze / (0,5 · fcd); → cm² (·10000). [ASSUMED A5]
 // Grundfläche und fcd fachlich zwingend > 0: fehlen sie, ist A_c NICHT berechenbar
 // ⇒ null (kein massiv überhöhter Falschwert durch safeDiv-Klemmen).
-export function stuetzenVordim({ gesamtlastProGeschoss = 0, storeys = 0, footArea = 0, einzugA = 0, fcd = 0 }) {
+export function stuetzenVordim({ gesamtlastProGeschoss = 0, storeys = 0, footArea = 0, einzugA = 0, fcd = 0, zusatzKn = 0 }) {
   const A = Number(footArea) || 0;
   const f = Number(fcd) || 0;
   if (A <= 0 || f <= 0) return null;
-  const nGesamt = (Number(gesamtlastProGeschoss) || 0) * Math.max(0, Number(storeys) || 0);
+  const nGesamt = gebaeudelast(gesamtlastProGeschoss, storeys, zusatzKn);
   const nStuetze = (nGesamt * Math.max(0, Number(einzugA) || 0)) / A;
   const acM2 = nStuetze / (0.5 * f); // m²
   return acM2 * 10000; // cm²

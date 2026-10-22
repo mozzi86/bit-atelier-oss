@@ -15,8 +15,8 @@ import { ANBIETER } from "@core/lib/anbieter";
 const SUPPORT_MAIL = ANBIETER.email;
 
 const FAQ = [
-  { q: "Wie generiere ich automatisch ein Grundstück?", a: 'Im Tab „Site & Map" einen Standort wählen und „Standort übernehmen" klicken — Grundstück, Topografie und Umgebung werden erzeugt (Topografie und Nachbargebäude sind dabei synthetisch und als solche gekennzeichnet).' },
-  { q: "Wie setze ich Baukörper?", a: 'Im Tab „Massing" in den Lageplan klicken. Jeder Klick platziert einen Baukörper, den du im Tab „Buildings" konfigurierst.' },
+  { q: "Wie generiere ich automatisch ein Grundstück?", a: 'Im Reiter „Standort & Karte" einen Standort wählen und „Standort übernehmen" klicken — Grundstück, Topografie und Umgebung werden erzeugt (Topografie und Nachbargebäude sind dabei synthetisch und als solche gekennzeichnet).' },
+  { q: "Wie setze ich Baukörper?", a: 'In der „Baufeld-Planung" in den Lageplan klicken (Ziehen spannt die Größe auf). Jeder Klick platziert einen Baukörper, den du unter „Gebäude & Nutzung" konfigurierst.' },
   { q: "Woher kommen die Kostenkennwerte?", a: "Der Kostenrechner nutzt editierbare €/m²- und €/kW-Sätze nach DIN 276 und rechnet live aus BGF und Energiesystemen." },
   { q: "Brauche ich einen KI-Schlüssel?", a: "Nein. Ohne Schlüssel laufen die KI-Module im Offline-Modus. Mit ANTHROPIC_API_KEY/OPENAI_API_KEY gibt es echte Antworten." },
 ];

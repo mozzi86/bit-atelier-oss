@@ -158,6 +158,8 @@ import { EN as PDF_ANHANG_104 } from "./pdf-anhang-104.js";
 import { EN as PFAD_RICHTLINIE } from "./pfad-richtlinie.js";
 // Phase 103: 3D terrain study (orientation, exaggeration, water level) and design flood levels.
 import { EN as GELAENDE_103 } from "./gelaende-103.js";
+// B-103-03: earthworks / pit panels of the terrain view.
+import { EN as ERDMASSEN_103 } from "./erdmassen-103.js";
 // Plan 104-06 + 101-03: DXF export (site plan, floor plan) and parcel import from DXF with union.
 import { EN as DXF_104 } from "./dxf-104.js";
 import { EN as KOSTENDRIFT_96 } from "./kostendrift-96.js";
@@ -269,6 +271,7 @@ export const TEILE_EN = Object.freeze({
   ...PDF_ANHANG_104,
   ...PFAD_RICHTLINIE,
   ...GELAENDE_103,
+  ...ERDMASSEN_103,
   ...DXF_104,
   ...OBJEKTFANG_104,
   ...SONDERWUNSCH_99,

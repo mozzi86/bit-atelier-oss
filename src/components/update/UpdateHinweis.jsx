@@ -150,7 +150,7 @@ export default function UpdateHinweis() {
               {zeilen.map((z, i) => (z.art === "kopf"
                 ? <p key={i} className="pt-1 font-semibold">{z.text}</p>
                 : <p key={i} className={z.art === "punkt" ? "pl-3 -indent-3 before:mr-1 before:content-['•']" : ""}>{z.text}</p>))}
-              {info.seite && (
+              {/^https:\/\/github\.com\//.test(String(info.seite || "")) && (
                 <p className="pt-1"><a href={info.seite} target="_blank" rel="noopener noreferrer" className="underline">{t("Release-Seite öffnen")}</a></p>
               )}
             </div>

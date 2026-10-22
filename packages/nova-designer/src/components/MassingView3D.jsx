@@ -78,28 +78,63 @@ function bboxMitte(poly, siteW, siteD) {
 // Exposé-Export: aktuellen WebGL-Canvas hochauflösend (2×) als PNG herunterladen.
 // toDataURL MUSS direkt nach dem synchronen render() gelesen werden (kein
 // preserveDrawingBuffer nötig); danach Pixel-Ratio zurücksetzen + neu rendern.
-export function exportExposePng(three) {
+// B-103-04: the HTML overlays (source, exaggeration, scale) are not part of the WebGL canvas —
+// `fusszeile` lines are burnt into a white footer so an exported image says what it shows.
+/**
+ * @param {Record<string, any>} three three.js handles (renderer, scene, camera)
+ * @param {{fusszeile?: string[]}} [opt] footer lines (already translated); none = plain image
+ */
+export function exportExposePng(three, { fusszeile = [] } = {}) {
   const t = three || {};
   if (!t.renderer || !t.scene || !t.camera) return;
   const prev = t.renderer.getPixelRatio();
+  let url = null;
   try {
     t.renderer.setPixelRatio(2);
     t.renderer.render(t.scene, t.camera);
-    const url = t.renderer.domElement.toDataURL("image/png");
-    const d = new Date();
-    const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Expose_${stamp}.png`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    url = t.renderer.domElement.toDataURL("image/png");
   } catch (err) {
     console.error("Exposé-Export fehlgeschlagen:", err);
   } finally {
     t.renderer.setPixelRatio(prev);
     t.renderer.render(t.scene, t.camera);
   }
+  if (!url) return;
+  const d = new Date();
+  const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  const laden = (/** @type {string} */ href) => {
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = `Expose_${stamp}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+  const zeilen = (Array.isArray(fusszeile) ? fusszeile : []).filter(Boolean);
+  if (!zeilen.length) { laden(url); return; }
+  const bild = new Image();
+  bild.onload = () => {
+    try {
+      const zh = Math.max(18, Math.round(bild.width / 70)); // line height, px [ASSUMED readable at 2×]
+      const c = document.createElement("canvas");
+      c.width = bild.width;
+      c.height = bild.height + zeilen.length * zh + Math.round(zh * 0.8);
+      const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext("2d"));
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(bild, 0, 0);
+      ctx.fillStyle = "#18181b";
+      ctx.font = `${Math.round(zh * 0.62)}px sans-serif`;
+      ctx.textBaseline = "middle";
+      zeilen.forEach((z, i) => ctx.fillText(z, Math.round(zh * 0.6), bild.height + Math.round(zh * 0.4) + zh * i + zh / 2));
+      laden(c.toDataURL("image/png"));
+    } catch (err) {
+      console.error("Exposé-Fußzeile fehlgeschlagen:", err);
+      laden(url);
+    }
+  };
+  bild.onerror = () => laden(url);
+  bild.src = url;
 }
 
 // Gruppe vollstaendig leeren und Ressourcen freigeben (wie Terrain-Rebuild).

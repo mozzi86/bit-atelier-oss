@@ -213,13 +213,13 @@ describe("landscape.js — Entwässerung", () => {
 describe("landscape.js — aussenanlagenChecks() Invarianten", () => {
   const BASIS = {
     erfKfz: 40, vorhandenKfz: 40, erfBarrierefrei: 2, barrierefreiVorh: 2,
-    versiegelung: 0.543, gruen: 0.286, volumen: 34, fwBreite: 3.5, plot: 3500,
+    versiegelung: 0.543, gruen: 0.286, volumen: 34, fwBreite: 3.5, plot: 3500, fwZufahrt: 3.0,
   };
 
-  it("Basisfall: 7 Items, 0 Hinweise, Score 100, Verdict plausibel", () => {
+  it("Basisfall: 8 Items (LO-01: + Feuerwehr-Zufahrt), 0 Hinweise, Score 100, Verdict plausibel", () => {
     const c = aussenanlagenChecks(BASIS);
-    assert.equal(c.items.length, 7);
-    assert.deepEqual(c.items.map((i) => i.key), ["kfz", "barrierefrei", "versiegelung", "gruen", "retention", "feuerwehr", "plot"]);
+    assert.equal(c.items.length, 8);
+    assert.deepEqual(c.items.map((i) => i.key), ["kfz", "barrierefrei", "versiegelung", "gruen", "retention", "feuerwehr", "feuerwehr-zufahrt", "plot"]);
     assert.equal(c.warns, 0);
     assert.equal(c.score, 100);
     assert.equal(c.verdict, "Konzept plausibel");
@@ -279,9 +279,9 @@ describe("landscape.js — aussenanlagenChecks() Invarianten", () => {
     }
   });
 
-  it("Härtung: leerer Aufruf liefert 7 Items ohne NaN-Texte", () => {
+  it("Härtung: leerer Aufruf liefert 8 Items ohne NaN-Texte", () => {
     for (const c of [aussenanlagenChecks(), aussenanlagenChecks({})]) {
-      assert.equal(c.items.length, 7);
+      assert.equal(c.items.length, 8);
       assert.ok(Number.isFinite(c.score));
       for (const i of c.items) {
         assert.ok(!/NaN|Infinity|undefined/.test(i.detail), `Platzhalter in ${i.key}: ${i.detail}`);

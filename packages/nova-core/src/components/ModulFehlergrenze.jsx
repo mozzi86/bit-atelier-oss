@@ -14,7 +14,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "@core/lib/i18n";
-import { istLadefehler, meldungVon, fehlerBerichtText } from "@core/lib/fehlerbericht";
+import { istLadefehler, meldungVon, fehlerBerichtText, automatischNeuLaden } from "@core/lib/fehlerbericht";
 
 /**
  * Card shown in place of a crashed page. Function component so it can use t().
@@ -98,6 +98,13 @@ export class ModulFehlergrenze extends React.Component {
   componentDidCatch(fehler, info) {
     // Plain text in the console, never swallowed (CLAUDE.md: errors in clear text).
     console.error(`[Fehlergrenze ${this.props.pfad}]`, fehler, info?.componentStack || "");
+    let speicher = null;
+    try { speicher = window.sessionStorage; } catch { speicher = null; }
+    if (automatischNeuLaden({ fehler, pfad: this.props.pfad, speicher })) {
+      // Info, not a warning: the failure itself is already logged above as an error; this line only says it recovers.
+      console.info(`[Fehlergrenze ${this.props.pfad}] Modul nicht geladen — einmal automatisch neu laden.`);
+      window.location.reload();
+    }
   }
 
   render() {

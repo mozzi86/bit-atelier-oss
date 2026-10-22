@@ -350,7 +350,7 @@ export default function TgaNetzEditor() {
                           <polyline points={pts} fill="none" stroke={farbe} strokeWidth="2.2" strokeDasharray={offen ? "5 3" : undefined} strokeLinejoin="round" strokeLinecap="round" />
                           {e.dn != null && (
                             <text x={tf.X(mid.x) + 4} y={tf.Z(mid.z) - 3} fontSize="7" fill={farbe} fontWeight="600" style={{ pointerEvents: "none" }}>
-                              {e.gewerk === "elektro" ? `${de1(e.dn)} mm²` : `DN ${e.dn}`}
+                              {`${GEWERKE_TGA[e.gewerk].kuerzel} `}{e.gewerk === "elektro" ? `${de1(e.dn)} mm²` : `DN ${e.dn}`}
                             </text>
                           )}
                         </g>
@@ -390,7 +390,7 @@ export default function TgaNetzEditor() {
                       {GEWERK_KEYS.filter((g) => kantenHier.some((e) => e.gewerk === g) || knotenHier.some((k) => k.gewerk === g)).map((g, i) => (
                         <g key={g}>
                           <line x1={14} y1={14 + i * 10} x2={30} y2={14 + i * 10} stroke={GEWERKE_TGA[g].farbe} strokeWidth="2.2" />
-                          <text x={34} y={14 + i * 10} fontSize="7" dominantBaseline="central" fill="#475569">{GEWERKE_TGA[g].label}</text>
+                          <text x={34} y={14 + i * 10} fontSize="7" dominantBaseline="central" fill="#475569">{`${GEWERKE_TGA[g].kuerzel} · ${GEWERKE_TGA[g].label}`}</text>
                         </g>
                       ))}
                     </g>

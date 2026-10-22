@@ -229,7 +229,34 @@ export function schichtFromComposite(compositeId) {
 }
 
 // [ASSUMED A1] Elementart → Kostengruppe (DIN-276-Orientierung, nicht normverbindlich).
+// TGA kinds from IFC distribution classes (ifcImport.kindOf: "IfcDuctSegment" → "ductsegment").
+// Before 22.10.2026 they all fell through to KG 390 / "Rohbau" — building services in the shell
+// sums. DIN 276:2018-12 KG 400: 410 Abwasser/Wasser/Gas, 420 Wärme, 430 Raumluft, 440 Elektro.
+// Pipes, pipe fittings, valves and pumps carry no trade without their IfcDistributionSystem
+// (not read yet), so they get the honest group 400 instead of a guess. The trade is "TGA" for
+// all of them — the GEWERKE catalogue has no sub-trades; the cost group carries the distinction.
+/** @type {Readonly<Record<string, {kg: string, gewerk: string}>>} */
+const TGA_KIND = Object.freeze({
+  ductsegment: { kg: "430", gewerk: "TGA" }, ductfitting: { kg: "430", gewerk: "TGA" },
+  ductsilencer: { kg: "430", gewerk: "TGA" }, airterminal: { kg: "430", gewerk: "TGA" },
+  airterminalbox: { kg: "430", gewerk: "TGA" }, damper: { kg: "430", gewerk: "TGA" },
+  fan: { kg: "430", gewerk: "TGA" }, airtoairheatrecovery: { kg: "430", gewerk: "TGA" },
+  cablesegment: { kg: "440", gewerk: "TGA" }, cablefitting: { kg: "440", gewerk: "TGA" },
+  cablecarriersegment: { kg: "440", gewerk: "TGA" }, cablecarrierfitting: { kg: "440", gewerk: "TGA" },
+  lightfixture: { kg: "440", gewerk: "TGA" }, outlet: { kg: "440", gewerk: "TGA" },
+  switchingdevice: { kg: "440", gewerk: "TGA" }, electricdistributionboard: { kg: "440", gewerk: "TGA" },
+  electricappliance: { kg: "440", gewerk: "TGA" }, protectivedevice: { kg: "440", gewerk: "TGA" },
+  spaceheater: { kg: "420", gewerk: "TGA" }, boiler: { kg: "420", gewerk: "TGA" },
+  burner: { kg: "420", gewerk: "TGA" }, heatexchanger: { kg: "420", gewerk: "TGA" },
+  sanitaryterminal: { kg: "410", gewerk: "TGA" }, wasteterminal: { kg: "410", gewerk: "TGA" },
+  pipesegment: { kg: "400", gewerk: "TGA" }, pipefitting: { kg: "400", gewerk: "TGA" },
+  valve: { kg: "400", gewerk: "TGA" }, pump: { kg: "400", gewerk: "TGA" },
+  flowterminal: { kg: "400", gewerk: "TGA" }, flowsegment: { kg: "400", gewerk: "TGA" },
+  flowfitting: { kg: "400", gewerk: "TGA" }, tank: { kg: "400", gewerk: "TGA" },
+});
+
 export function kgFromKind(kind) {
+  if (TGA_KIND[kind]) return TGA_KIND[kind].kg;
   const map = {
     "wall-inner": "340",
     "wall-hull": "330",
@@ -246,6 +273,7 @@ export function kgFromKind(kind) {
 
 // [ASSUMED A2] Elementart → Gewerk (Projekt-Default, im Editor überschreibbar).
 export function gewerkFromKind(kind) {
+  if (TGA_KIND[kind]) return TGA_KIND[kind].gewerk;
   const map = {
     "wall-inner": "Ausbau",
     "wall-hull": "Rohbau",

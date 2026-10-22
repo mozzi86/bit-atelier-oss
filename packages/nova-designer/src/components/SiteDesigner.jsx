@@ -949,7 +949,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   );
   const bb = useBlockBearbeitung({
     buildings, mpp: mSite, onChange: (next) => onBuildingsChange?.(next), aktiv: mode === "auswahl",
-    grenzeM, baufelderM, containerRef: planRef, zusatzDichte: riegelSumme,
+    grenzeM, baufelderM, containerRef: planRef, zusatzDichte: riegelSumme, schluessel: complexData?.id ?? null,
   });
   const nummer = useMemo(() => Object.fromEntries(buildings.map((b, i) => [b.id, i + 1])), [buildings]);
   // 104-06: the site plan as DXF R12 (metres around the project location, y north; the

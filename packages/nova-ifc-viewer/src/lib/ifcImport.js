@@ -36,6 +36,7 @@ import {
   SCHICHTEN,
   normalizeStatus,
 } from "@core/lib/bimClassification";
+import { vonUtm } from "@core/lib/utmEtrs89";
 import { IFC_QUANTITY_KEYS, mengenAusQty } from "@core/lib/bimElements";
 
 // --- Helfer ------------------------------------------------------------------------------
@@ -113,6 +114,20 @@ export const STATUS_PROP_KEYS = ["Renovation Status", "Umbau-Status", "Status"];
 // private and run synchronously inside it).
 /** @type {null|{relationen:number, properties:number, quantities:number, definitionen:number, elemente:number, sonstige:number, beispiele:Array<{art:string, id:number|null, grund:string}>}} */
 let uebersprungenZaehler = null;
+
+// Units (gap found 21.10.2026): BaseQuantities and layer thicknesses are stored in the PROJECT
+// units of the file (IfcUnitAssignment). A millimetre project delivered lengths 1000× too large
+// and areas 10⁶× too large into the takeoff. The factors below convert to m / m² / m³; for the
+// usual metre files they are exactly 1 and the values stay bit-identical (oracle parity, L4).
+/** IfcSIPrefix → power of ten. */
+const SI_PRAEFIX = { EXA: 18, PETA: 15, TERA: 12, GIGA: 9, MEGA: 6, KILO: 3, HECTO: 2, DECA: 1, DECI: -1, CENTI: -2, MILLI: -3, MICRO: -6, NANO: -9, PICO: -12, FEMTO: -15, ATTO: -18 };
+/** Dimension exponent per unit type (a MILLI SQUARE_METRE is 10^(−3·2) m²). */
+const EINHEIT_EXPONENT = { LENGTHUNIT: 1, AREAUNIT: 2, VOLUMEUNIT: 3 };
+/**
+ * Factors of the extraction that is running (module state like uebersprungenZaehler).
+ * @type {{laenge: number, flaeche: number, volumen: number, namen?: {laenge: string, flaeche: string, volumen: string}}}
+ */
+let einheitenAktiv = { laenge: 1, flaeche: 1, volumen: 1 };
 const UEBERSPRUNGEN_FELD = { Relation: "relationen", Property: "properties", Quantity: "quantities", Definition: "definitionen", Element: "elemente" };
 function neuerUebersprungenZaehler() {
   return { relationen: 0, properties: 0, quantities: 0, definitionen: 0, elemente: 0, sonstige: 0, beispiele: [] };
@@ -198,6 +213,104 @@ function buildAggregateIndex(api, modelID) {
 // L3: `qty` trägt die 15 BENANNTEN BaseQuantities. Die drei Kübel area/volume/length
 // gab es nur, weil niemand die Namen brauchte — `NetFloorArea` matchte keinen der drei
 // Regexe und wurde ersatzlos verworfen.
+/**
+ * Project units of the model: factors to SI base units for length, area and volume, read from
+ * every IfcUnitAssignment (IfcSIUnit with prefix, IfcConversionBasedUnit via its
+ * IfcMeasureWithUnit). Unknown or unreadable units keep factor 1 and are counted as skipped.
+ * @param {any} api web-ifc IfcAPI
+ * @param {number} modelID
+ * @returns {{laenge: number, flaeche: number, volumen: number, namen: {laenge: string, flaeche: string, volumen: string}}}
+ *   laenge in m per file unit, flaeche in m² per file unit, volumen in m³ per file unit
+ */
+export function einheitenAusModell(api, modelID) {
+  const faktor = { LENGTHUNIT: 1, AREAUNIT: 1, VOLUMEUNIT: 1 };
+  const namen = { LENGTHUNIT: "METRE", AREAUNIT: "SQUARE_METRE", VOLUMEUNIT: "CUBIC_METRE" };
+  const lies = (id, tiefe) => {
+    const u = api.GetLine(modelID, id);
+    const typ = String(val(u?.UnitType) ?? "");
+    if (u?.ConversionFactor?.value != null && tiefe < 3) {
+      const mw = api.GetLine(modelID, u.ConversionFactor.value);
+      const basis = mw?.UnitComponent?.value != null ? lies(mw.UnitComponent.value, tiefe + 1).faktor : 1;
+      return { typ, faktor: Number(val(mw?.ValueComponent)) * basis, name: String(val(u?.Name) ?? typ) };
+    }
+    const praefix = val(u?.Prefix);
+    const p = praefix != null ? SI_PRAEFIX[String(praefix)] ?? 0 : 0;
+    return { typ, faktor: 10 ** (p * (EINHEIT_EXPONENT[typ] || 1)), name: `${praefix ? `${praefix} ` : ""}${val(u?.Name) ?? ""}`.trim() };
+  };
+  for (const uaId of vecToArray(api.GetLineIDsWithType(modelID, WebIFC.IFCUNITASSIGNMENT))) {
+    let ua;
+    try { ua = api.GetLine(modelID, uaId); } catch (e) { notiereUebersprungen("Einheit", uaId, e); continue; }
+    for (const h of ua?.Units || []) {
+      try {
+        const r = lies(h.value, 0);
+        if (r.typ in faktor && Number.isFinite(r.faktor) && r.faktor > 0) { faktor[r.typ] = r.faktor; namen[r.typ] = r.name; }
+      } catch (e) { notiereUebersprungen("Einheit", h?.value, e); }
+    }
+  }
+  return {
+    laenge: faktor.LENGTHUNIT, flaeche: faktor.AREAUNIT, volumen: faktor.VOLUMEUNIT,
+    namen: { laenge: namen.LENGTHUNIT, flaeche: namen.AREAUNIT, volumen: namen.VOLUMEUNIT },
+  };
+}
+
+/**
+ * Georeference of the model (gap found 21.10.2026: the import ignored it, so an IFC never landed at the
+ * project location). IFC4 IfcMapConversion (+ IfcProjectedCRS) wins; else IfcSite RefLatitude /
+ * RefLongitude (IfcCompoundPlaneAngleMeasure: degrees, minutes, seconds, millionths of a second).
+ * ETRS89/UTM (EPSG 258NN) and WGS84/UTM (EPSG 326NN) are converted to degrees with the own vonUtm;
+ * other systems (e.g. Gauss-Krueger) keep easting/northing only and say so.
+ * @param {any} api web-ifc IfcAPI
+ * @param {number} modelID
+ * @returns {{art: "mapconversion"|"site"|null, crs: string|null, ost: number|null, nord: number|null, hoehe: number|null,
+ *   drehung_grad: number|null, lat: number|null, lng: number|null, hinweis: string|null}}
+ *   ost/nord/hoehe in metres (map units of the CRS), drehung_grad = angle of the model x axis from grid east,
+ *   counter-clockwise; lat/lng in degrees (WGS84/ETRS89)
+ */
+export function georefAusModell(api, modelID) {
+  const leer = { art: null, crs: null, ost: null, nord: null, hoehe: null, drehung_grad: null, lat: null, lng: null, hinweis: null };
+  const zahl = (x) => { const n = Number(val(x)); return Number.isFinite(n) ? n : null; };
+  const ids = (typ) => { try { return typ == null ? [] : vecToArray(api.GetLineIDsWithType(modelID, typ)); } catch { return []; } };
+  for (const id of ids(WebIFC.IFCMAPCONVERSION)) {
+    try {
+      const m = api.GetLine(modelID, id);
+      let ost = zahl(m?.Eastings), nord = zahl(m?.Northings);
+      if (ost == null || nord == null) continue;
+      const ax = zahl(m?.XAxisAbscissa), ay = zahl(m?.XAxisOrdinate);
+      let crs = null;
+      if (m?.TargetCRS?.value != null) { try { crs = str(api.GetLine(modelID, m.TargetCRS.value)?.Name); } catch (e) { notiereUebersprungen("Georeferenz", m.TargetCRS.value, e); } }
+      const epsg = /(?:EPSG:)?(258|326)(\d{2})(?!\d)/.exec(String(crs || ""));
+      const zone = epsg ? Number(epsg[2]) : null;
+      // Some exporters write the zone in front of the easting (32 690 000 for zone 32).
+      if (zone && ost >= 1e6 && Math.floor(ost / 1e6) === zone) ost -= zone * 1e6;
+      const ll = zone ? vonUtm(ost, nord, zone) : null;
+      return {
+        art: "mapconversion", crs, ost, nord, hoehe: zahl(m?.OrthogonalHeight),
+        drehung_grad: ax != null && ay != null && (ax !== 0 || ay !== 0) ? (Math.atan2(ay, ax) * 180) / Math.PI : 0,
+        lat: ll ? ll.lat : null, lng: ll ? ll.lng : null,
+        hinweis: zone ? null : `Koordinatensystem ${crs || "unbekannt"} wird nicht in Grad umgerechnet — nur Ost-/Nordwert übernommen.`,
+      };
+    } catch (e) { notiereUebersprungen("Georeferenz", id, e); }
+  }
+  const grad = (wert) => {
+    const t = Array.isArray(wert) ? wert.map((x) => Number(val(x))) : null;
+    if (!t || t.length < 3 || t.some((x) => !Number.isFinite(x))) return null;
+    const v = Math.abs(t[0]) + Math.abs(t[1]) / 60 + (Math.abs(t[2]) + Math.abs(t[3] || 0) / 1e6) / 3600;
+    return t[0] < 0 || t[1] < 0 || t[2] < 0 ? -v : v;
+  };
+  for (const id of ids(WebIFC.IFCSITE)) {
+    try {
+      const site = api.GetLine(modelID, id);
+      const lat = grad(site?.RefLatitude), lng = grad(site?.RefLongitude);
+      if (lat == null || lng == null || (lat === 0 && lng === 0)) continue;
+      return { ...leer, art: "site", lat, lng, hoehe: zahl(site?.RefElevation) };
+    } catch (e) { notiereUebersprungen("Georeferenz", id, e); }
+  }
+  return leer;
+}
+
+/** Quantity value in SI units: factor 1 keeps the original path (bit-identical rounding). */
+const inSi = (x, f) => (f === 1 ? x : Number(val(x)) * f);
+
 function buildPsetIndex(api, modelID) {
   const psetsByElement = new Map(); // expressId → { psetName: { prop: value } }
   const qtyByElement = new Map(); // expressId → { NetVolume: 1.4, … }
@@ -227,9 +340,12 @@ function buildPsetIndex(api, modelID) {
             const line = api.GetLine(modelID, h.value);
             const qName = str(line?.Name);
             if (!qName || !IFC_QUANTITY_KEYS.includes(qName)) continue;
+            const e = einheitenAktiv;
             const v = qtyNum(
-              line?.AreaValue ?? line?.VolumeValue ?? line?.LengthValue ??
-              line?.CountValue ?? line?.WeightValue ?? line?.TimeValue,
+              line?.AreaValue != null ? inSi(line.AreaValue, e.flaeche)
+                : line?.VolumeValue != null ? inSi(line.VolumeValue, e.volumen)
+                  : line?.LengthValue != null ? inSi(line.LengthValue, e.laenge)
+                    : line?.CountValue ?? line?.WeightValue ?? line?.TimeValue,
             );
             if (v != null) q[qName] = v;
           } catch (e) { notiereUebersprungen("Quantity", h?.value, e); }
@@ -348,7 +464,7 @@ function resolveMaterial(api, modelID, matId, depth = 0) {
             const mat = api.GetLine(modelID, layer.Material.value);
             name = str(mat?.Name);
           }
-          layers.push({ name, dicke: qtyNum(layer?.LayerThickness) });
+          layers.push({ name, dicke: qtyNum(inSi(layer?.LayerThickness, einheitenAktiv.laenge)) });
           if (name) names.push(name);
         } catch (e) { notiereUebersprungen("Material", h?.value, e); }
       }
@@ -481,9 +597,11 @@ export function extractFromModel(api, modelID, opt = {}) {
   // 87-02: one counter per extraction (see notiereUebersprungen), reset even on a throw.
   uebersprungenZaehler = neuerUebersprungenZaehler();
   try {
+    einheitenAktiv = einheitenAusModell(api, modelID);
     return extractFromModelKern(api, modelID, progress, katalogSnapshot);
   } finally {
     uebersprungenZaehler = null;
+    einheitenAktiv = { laenge: 1, flaeche: 1, volumen: 1 };
   }
 }
 
@@ -642,6 +760,15 @@ function extractFromModelKern(api, modelID, progress, katalogSnapshot) {
     warnungen.push(`${uebersprungen.gesamt} Einträge beim Import übersprungen (${teile.join(", ")}) — Mengen und Zuordnungen können unvollständig sein; Beispiele: ${beispiele}.`);
   }
 
+  const georef = georefAusModell(api, modelID);
+  if (!georef.art) warnungen.push("Keine Georeferenz im Modell (weder IfcMapConversion noch IfcSite-Koordinaten) — die Lage zum Projektstandort ist unbekannt.");
+  else if (georef.hinweis) warnungen.push(georef.hinweis);
+  const einheiten = { ...einheitenAktiv };
+  if (einheiten.laenge !== 1 || einheiten.flaeche !== 1 || einheiten.volumen !== 1) {
+    const n = einheiten.namen || { laenge: "?", flaeche: "?", volumen: "?" };
+    warnungen.push(`Projekteinheiten der Datei: Länge ${n.laenge}, Fläche ${n.flaeche}, Volumen ${n.volumen} — Mengen und Schichtdicken in m, m² und m³ umgerechnet.`);
+  }
+
   // L10: Kennzahlen für BimSnapshot — der Import ist erst dann geprüft, wenn jemand die
   // Zahlen sieht (6.038 Bauteile, 355 ohne Status …).
   const kennzahlen = {
@@ -654,6 +781,8 @@ function extractFromModelKern(api, modelID, progress, katalogSnapshot) {
     mehrfach_klassifiziert: elements.filter((e) => (e.classifications || []).length >= 2).length,
     warnungen_anzahl: warnungen.length,
     uebersprungen,
+    einheiten,
+    georef,
     bekannte_abweichung: [
       {
         ort: "qty (L4)",

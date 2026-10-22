@@ -80,7 +80,14 @@ test("PDF-Studio 104-09: anhängend speichern (Original unverändert) + Wiederhe
     await aufSeite(0.3, 0.2);
     await page.getByPlaceholder("Kommentar eingeben...").fill("Maß prüfen");
     await page.getByPlaceholder("Kommentar eingeben...").press("Enter");
-    // Freehand stroke (the text tool loses its field on a mouse click — finding B-104-09-01, not this plan).
+    // Text tool by mouse click (B-104-09-01: the field used to vanish at once — the overlay's mousedown
+    // took the focus and the empty blur closed it).
+    await page.getByRole("button", { name: "Text", exact: true }).click();
+    await aufSeite(0.6, 0.3);
+    await expect(page.getByPlaceholder("Text...")).toBeFocused();
+    await page.getByPlaceholder("Text...").fill("Notiz per Klick");
+    await page.getByPlaceholder("Text...").press("Enter");
+    // Freehand stroke.
     await page.getByRole("button", { name: "Freihand" }).click();
     await canvas.evaluate((c) => c.scrollIntoView({ block: "center" }));
     const box = await canvas.boundingBox();
@@ -89,13 +96,13 @@ test("PDF-Studio 104-09: anhängend speichern (Original unverändert) + Wiederhe
     await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.65, { steps: 6 });
     await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.75, { steps: 6 });
     await page.mouse.up();
-    await expect(speichernKnopf).toHaveAttribute("data-offen", "2", { timeout: 15000 });
+    await expect(speichernKnopf).toHaveAttribute("data-offen", "3", { timeout: 15000 });
     await speichernKnopf.click();
     await expect(page.getByText(/Im PDF gespeichert/)).toBeVisible({ timeout: 30000 });
     await expect(speichernKnopf).toHaveAttribute("data-offen", "0", { timeout: 30000 });
 
     const gespeichert = (await (await request.get(`${API}/Document/${dokId}`)).json());
-    expect(Object.keys(gespeichert.pdf_anmerkungen || {}).length).toBe(2);
+    expect(Object.keys(gespeichert.pdf_anmerkungen || {}).length).toBe(3);
     expect(gespeichert.original_bytes).toBe(original.length);
     const datei = Buffer.from(String(gespeichert.data).split(",")[1], "base64");
     expect(datei.length).toBeGreaterThan(original.length);
@@ -106,7 +113,7 @@ test("PDF-Studio 104-09: anhängend speichern (Original unverändert) + Wiederhe
       const nm = d instanceof PDFDict ? d.get(PDFName.of("NM")) : null;
       return nm instanceof PDFHexString || nm instanceof PDFString ? nm.decodeText() : "";
     }) || [];
-    expect(namen.length, "Pin + Freihand auf Seite 1").toBe(2);
+    expect(namen.length, "Pin + Text + Freihand auf Seite 1").toBe(3);
     expect(namen.every((n) => n.startsWith("bit-atelier:"))).toBe(true);
     expect(wieder.getPageCount()).toBe(2);
 
@@ -140,7 +147,7 @@ test("PDF-Studio 104-09: anhängend speichern (Original unverändert) + Wiederhe
     await expect.poll(async () => {
       const anns = await (await request.get(`${API}/PdfAnnotation?document_id=${dokId}`)).json();
       return (Array.isArray(anns) ? anns : []).map((a) => a.text).sort();
-    }, { timeout: 15000 }).toEqual(["", "Maß prüfen", "Offline-Pin"]);
+    }, { timeout: 15000 }).toEqual(["", "Maß prüfen", "Notiz per Klick", "Offline-Pin"]);
     await expect(page.getByTestId("pdf-lokal-gesichert")).toHaveCount(0);
     await expect(speichernKnopf).toHaveAttribute("data-offen", "1");
     await expect.poll(() => journalText(page), { timeout: 15000 }).toBe("");

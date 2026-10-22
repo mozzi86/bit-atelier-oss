@@ -10,6 +10,34 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.9.1] - 2026-10-22
+
+### Neu
+
+- **Büro-Katalog-Update:** Kataloge aus älteren Installationen führen Abbruch noch unter LB 040 (das ist Wärmeversorgung) und ohne KG 212 — der Katalog-Editor zeigt das und bringt den Katalog nach Bestätigung auf LB 084 / KG 212; nichts wird still überschrieben.
+- **Honorarnachtrag im Entwurf:** Der Vertrag sagt jetzt, wenn ein Nachtrag zur Kostenänderung nur als Entwurf vorliegt und noch nicht beim Bauherrn ist (vorher schwieg der Hinweis zur Kostenänderung dann ganz).
+
+### Geändert
+
+- **Farben für Farbsehschwache:** Die Leitungsfarben der Haustechnik (Heizung, Lüftung, Trinkwasser, Abwasser, Elektro) sind neu gewählt, sodass sie auch bei Rot-Grün- und Blau-Gelb-Schwäche unterscheidbar bleiben; an jeder Leitung und in der Legende steht zusätzlich das Kürzel (HZ, LÜ, TW, AW, EL). Die Ampelfarben der Oberfläche (Warnung, Fehler, Erfolg, Hinweis) sind im hellen und dunklen Modus so angepasst, dass keine zwei verwechselbar sind.
+
+### Behoben
+
+- **Erdmassen und Standard-Planum** in „Gelände 3D“ tasten das Gelände jetzt an der echten Lage des Baufelds ab und nicht mehr Nord-Süd gespiegelt am Projektstandort — am Hang konnten Abtrag und Auftrag vorher vertauscht sein.
+- **IFC-Import liest die Projekteinheiten:** Mengen und Schichtdicken aus Modellen in Millimetern (oder anderen Einheiten) werden in m, m² und m³ umgerechnet; vorher waren sie 1000-fach (Längen) bzw. millionenfach (Flächen) zu groß. Eine Meldung nennt die Einheit der Datei.
+- Kann ein Modul nicht geladen werden (z. B. direkt nach einem Update), lädt die Seite einmal selbst neu, statt sofort die Fehlerkarte zu zeigen.
+- Hilfetexte nennen die heutigen Reiter („Standort & Karte“, „Baufeld-Planung“, „Gebäude & Nutzung“).
+- **IFC-Import liest die Georeferenz** (Kartenprojektion oder Grundstückskoordinaten) und rechnet UTM-Werte in Grad um; fehlt sie, sagt der Import das.
+- **Haustechnik aus IFC** (Kanäle, Kabel, Heizkörper, Sanitärobjekte, Rohre) zählt jetzt zur Kostengruppe 400 und zum Gewerk TGA statt zu KG 390 / Rohbau.
+- **Rückgängig nach Projektwechsel:** Wer oben das Projekt wechselt, bekommt einen leeren Verlauf — vorher holte Strg+Z den Stand des vorigen Projekts zurück und das automatische Speichern legte ihn im neuen ab (Massing-Studio, Umriss, Baufeld-Planung).
+- **Plan als PDF/DXF druckt, was zu sehen ist:** ausgeblendete Ebenen werden nicht mehr mitgedruckt, Wände aus der Wohnungs-Werkstatt (mit Status) sind im Plan enthalten.
+- **PDF-Studio:** Das Textfeld bleibt nach dem Klick auf die Seite offen (vorher verschwand es sofort).
+- **Gelände 3D:** Riegel und Blockränder stehen auf dem Gelände und zählen bei „Was überflutet zuerst“; die Erdmassen-Angaben sind übersetzt; das Exposé-Bild nennt in einer Fußzeile Datenquelle, Überhöhung und Maßstab.
+- Der Update-Hinweis verlinkt nur noch auf Release-Seiten bei GitHub; eine Projektdatei, die beim Öffnen ausgetauscht wird, wird abgewiesen.
+- **Eingaben ohne Wirkung behoben:** Schneelast und Schneelastzone gehen in die Tragwerks-Vorbemessung ein, Ladepunkte in den Elektro-Anschlusswert, die Feuerwehr-Zufahrt in die Prüfung der Außenanlagen; die Haustechnik zeigt den Schmutzwasserabfluss aus den Sanitärobjekten. Die Windzone ist als „informativ“ gekennzeichnet.
+- **Dunkelmodus:** farbige Hinweis- und Statusflächen, Kennzeichen und Diagrammachsen sind im dunklen Modus dunkel und gut lesbar (vorher helle Pastellflächen bzw. zu schwache Achsenschrift).
+- Die Erdbeben-Simulation schließt mit Escape und hält den Fokus; der DÖE-Import nimmt nur gültige Jahreszahlen an; 3D-Ansichten geben ihren Grafikspeicher vollständig frei.
+
 ## [1.9.0] - 2026-10-21
 
 ### Neu

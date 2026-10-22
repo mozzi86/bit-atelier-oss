@@ -32,7 +32,7 @@ import Vertragskonto from "./Vertragskonto.jsx";
 import KostenDriftHinweis from "./KostenDriftHinweis.jsx";
 import NachtragDialog from "./NachtragDialog.jsx";
 import { datumText } from "@core/lib/kalender/datum.js";
-import { driftBezug, nachtragAusKostenDrift } from "@/lib/honorar/honorarNachtrag.js";
+import { driftBezug, driftNachtragImEntwurf, nachtragAusKostenDrift } from "@/lib/honorar/honorarNachtrag.js";
 
 /**
  * @param {{zh: import("@/components/zeitHonorar/useZeitHonorar.js").ZeitHonorar, wert: (id: string) => any, alleProjekte: boolean}} props
@@ -116,6 +116,15 @@ export default function VertragReiter({ zh, wert, alleProjekte }) {
           {!grundlagenBearbeitbar && <p className="text-xs text-slate-600 dark:text-slate-300">{t("Änderungen an einem beauftragten Vertrag als Honorarnachtrag erfassen.")}</p>}
           {/* 96-03: frozen LV costs drifted > 1 % — a commissioned contract takes it as a fee amendment
               (§ 10 HOAI, by agreement); a draft re-freezes through its own form. Never a silent change. */}
+          {/* 100-06: a draft amendment silences the drift banner — say that it has not reached the client yet. */}
+          {(() => {
+            const entwurf = driftNachtragImEntwurf(vertrag, zh.daten.Honorarnachtrag || []);
+            return entwurf ? (
+              <p className="rounded-md border border-warnung-rand bg-warnung-flaeche px-3 py-2 text-xs text-warnung" role="status" data-testid="nachtrag-im-entwurf">
+                {t("Honorarnachtrag Nr. {nr} im Entwurf — noch nicht beim Bauherrn. Die Kostenänderung ist erst mit Angebot und Beauftragung vereinbart.").replace("{nr}", String(entwurf.nr ?? "?"))}
+              </p>
+            ) : null;
+          })()}
           <KostenDriftHinweis
             vertrag={driftBezug(vertrag, zh.daten.Honorarnachtrag || [])}
             projektId={vertrag.project_id}

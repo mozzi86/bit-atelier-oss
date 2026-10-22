@@ -111,13 +111,13 @@ export default function LandscapePlanner({ complexData } = {}) {
     const V = rueckhaltevolumen(Q, regendauer);
     const checks = aussenanlagenChecks({
       erfKfz, vorhandenKfz, erfBarrierefrei: erfBf, barrierefreiVorh,
-      versiegelung: vgrad, gruen: ggrad, volumen: V, fwBreite, plot,
+      versiegelung: vgrad, gruen: ggrad, volumen: V, fwBreite, plot, fwErforderlich, fwZufahrt,
     });
     return { erfKfz, erfBike, erfBf, flJe, flGes, vgrad, ggrad, aRed, Q, V, checks };
   }, [
     we, plot, kfzSchluessel, stplBreite, stplLaenge, flaechenfaktor, vorhandenKfz,
     fahrradBasis, fahrradSchluessel, barrierefreiPct, barrierefreiMin, barrierefreiVorh,
-    psiDach, psiBefestigt, psiGruen, regenR, regendauer, gruenflaeche, fwBreite,
+    psiDach, psiBefestigt, psiGruen, regenR, regendauer, gruenflaeche, fwBreite, fwErforderlich, fwZufahrt,
     pm.footArea, pm.bgf,
   ]);
 

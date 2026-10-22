@@ -113,6 +113,15 @@ export function elektroAnschlusswert({ basis = "va-m2", vaM2 = 0, bezugsflaeche 
   return (num(vaM2) * num(bezugsflaeche) * num(gzf)) / 1000; // /1000: VA → kW
 }
 
+// E-Mobilität (LO-01, 22.10.2026: the input had no effect): connected load of the charge points
+// = Ladepunkte · 11 kW (AC wallbox, the common size under the GEIG) · Gleichzeitigkeit 0,3
+// [ASSUMED with load management; without it 1,0 — the planner overrides].
+export const LADEPUNKT_KW = 11;
+export const LADE_GZF = 0.3;
+export function ladeleistung({ ladepunkte = 0, kwJeLp = LADEPUNKT_KW, gzf = LADE_GZF } = {}) {
+  return num(ladepunkte) * num(kwJeLp) * num(gzf);
+}
+
 // PV-Dachpotenzial: kwp = Dachfläche (m²) · Leistungsdichte (kWp/m²);
 // kwhA = kwp · spez. Ertrag (kWh/(kWp·a)).
 export function pvPotenzial({ dachflaeche = 0, kwpJeM2 = DEFAULT_PV_KWP_M2, ertrag = DEFAULT_PV_ERTRAG } = {}) {

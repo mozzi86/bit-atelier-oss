@@ -69,7 +69,7 @@ export default function BuildingConfig({ complexData, onBuildingsChange, onUnits
           )}
         </CardHeader>
         <CardContent className="space-y-3">
-          {buildings.length === 0 && <p className="text-sm text-slate-500">Setze Baukörper im Tab „Massing".</p>}
+          {buildings.length === 0 && <p className="text-sm text-slate-500">Setze Baukörper in der „Baufeld-Planung".</p>}
           {buildings.map((b, i) => {
             // KD-23: dieselbe Umrechnung wie in SiteDesigner und CostCalculator,
             // damit die angezeigten Meter mit BGF und Kosten zusammenpassen.

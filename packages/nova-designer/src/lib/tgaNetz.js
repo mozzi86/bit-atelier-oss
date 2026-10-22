@@ -23,17 +23,21 @@ import { polygonAreaM } from "@core/lib/useBuildingProgram";
 // ---- Katalog ------------------------------------------------------------------------------
 
 /**
- * TGA trades of the network. Colours follow drawing habit (red heating, blue air, green
- * potable water, brown waste water, violet electric). dn defaults/lists are [ASSUMED]
+ * TGA trades of the network. Colours keep the drawing habit (red-orange heating, blue air,
+ * teal potable water, dark brown-grey waste water, ochre electric) but were re-chosen on
+ * 21.10.2026 so that no two trades are confused under protan/deutan/tritan vision (measured with
+ * .claude/skills/bit-farbsehen/scripts/farbsehen.mjs: worst pair heating/electric OKLab ΔE 0.094;
+ * the old violet electric and blue air were ΔE 0.004 for deutans) and each has ≥ 3:1 on white.
+ * Colour is never the only cue: `kuerzel` is printed at every line and in the legend. dn defaults/lists are [ASSUMED]
  * concept sizes for a residential building — the planner overrides per line.
  * einheit: unit of `dn` for this trade.
  */
 export const GEWERKE_TGA = {
-  heizung: { label: "Heizung", medium: "Heizwasser", farbe: "#dc2626", dnDefault: 25, dnListe: [15, 20, 25, 32, 40, 50], einheit: "mm" },
-  lueftung: { label: "Lüftung", medium: "Luft", farbe: "#2563eb", dnDefault: 160, dnListe: [100, 125, 160, 200, 250, 315], einheit: "mm" },
-  trinkwasser: { label: "Trinkwasser", medium: "Kalt-/Warmwasser", farbe: "#16a34a", dnDefault: 20, dnListe: [15, 20, 25, 32], einheit: "mm" },
-  abwasser: { label: "Abwasser", medium: "Schmutzwasser", farbe: "#92400e", dnDefault: 100, dnListe: [50, 70, 100, 125, 150, 200], einheit: "mm" }, // 200 added in Phase 63 (Grundleitungen)
-  elektro: { label: "Elektro", medium: "Strom", farbe: "#7c3aed", dnDefault: 2.5, dnListe: [1.5, 2.5, 4, 6, 10, 16], einheit: "mm²" },
+  heizung: { label: "Heizung", medium: "Heizwasser", kuerzel: "HZ", farbe: "#c2410c", dnDefault: 25, dnListe: [15, 20, 25, 32, 40, 50], einheit: "mm" },
+  lueftung: { label: "Lüftung", medium: "Luft", kuerzel: "LÜ", farbe: "#1d4ed8", dnDefault: 160, dnListe: [100, 125, 160, 200, 250, 315], einheit: "mm" },
+  trinkwasser: { label: "Trinkwasser", medium: "Kalt-/Warmwasser", kuerzel: "TW", farbe: "#0e9f8a", dnDefault: 20, dnListe: [15, 20, 25, 32], einheit: "mm" },
+  abwasser: { label: "Abwasser", medium: "Schmutzwasser", kuerzel: "AW", farbe: "#44403c", dnDefault: 100, dnListe: [50, 70, 100, 125, 150, 200], einheit: "mm" }, // 200 added in Phase 63 (Grundleitungen)
+  elektro: { label: "Elektro", medium: "Strom", kuerzel: "EL", farbe: "#b8860b", dnDefault: 2.5, dnListe: [1.5, 2.5, 4, 6, 10, 16], einheit: "mm²" },
 };
 /** Trade keys in catalogue order. */
 export const GEWERK_KEYS = Object.keys(GEWERKE_TGA);

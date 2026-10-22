@@ -9,6 +9,7 @@ import {
 } from "@core/components/ui/select";
 import { AlertTriangle, Database, Loader2, CloudDownload, FileUp, FlaskConical } from "lucide-react";
 import { korridorText } from "@ava/lib/priceReference";
+import { doeeJahr, DOEE_ERSTES_JAHR } from "@ava/lib/doeeJahr";
 import { useI18n } from "@core/lib/i18n";
 
 // Quelle → Badge-Darstellung (Lizenz-Attribution pro Zelle, Pflicht 2011/833/EU).
@@ -48,7 +49,8 @@ export default function PriceReferencePanel({ priceRefs = [], onSyncTed, onImpor
   };
 
   const setFile = (key) => (e) => setFiles((f) => ({ ...f, [key]: e.target.files?.[0] || null }));
-  const doeeReady = files.tenderFile && files.classificationFile && files.placeFile;
+  const doeeJahrWert = doeeJahr(doeeYear, currentYear); // LO-05: null = invalid year, import disabled
+  const doeeReady = files.tenderFile && files.classificationFile && files.placeFile && doeeJahrWert != null;
 
   return (
     <Card>
@@ -94,7 +96,11 @@ export default function PriceReferencePanel({ priceRefs = [], onSyncTed, onImpor
             <div className="font-medium text-sm flex items-center gap-1.5"><FileUp className="w-4 h-4 text-emerald-600" /> DÖE-Monatspaket (CSV)</div>
             <div>
               <Label className="text-xs">Jahr</Label>
-              <Input aria-label={t("Jahr")} type="number" value={doeeYear} onChange={(e) => setDoeeYear(e.target.value)} />
+              <Input aria-label={t("Jahr")} type="number" min={DOEE_ERSTES_JAHR} max={currentYear} value={doeeYear} aria-invalid={doeeJahrWert == null}
+                onChange={(e) => setDoeeYear(e.target.value)} />
+              {doeeJahrWert == null && (
+                <p className="mt-1 text-xs text-fehler" role="alert">{t("Jahr zwischen {a} und {b} eingeben").replace("{a}", String(DOEE_ERSTES_JAHR)).replace("{b}", String(currentYear))}</p>
+              )}
             </div>
             <div className="space-y-1 text-xs">
               <label className="block">tender.csv<input type="file" accept=".csv" onChange={setFile("tenderFile")} className="block w-full text-xs" /></label>
@@ -103,7 +109,7 @@ export default function PriceReferencePanel({ priceRefs = [], onSyncTed, onImpor
               <label className="block">receivedSubmissions.csv (optional)<input type="file" accept=".csv" onChange={setFile("submissionsFile")} className="block w-full text-xs" /></label>
             </div>
             <Button size="sm" disabled={!doeeReady || busy !== null}
-              onClick={run("doee", () => onImportDoee({ ...files, year: Number(doeeYear) }))}>
+              onClick={run("doee", () => onImportDoee({ ...files, year: /** @type {number} */ (doeeJahrWert) }))}>
               {busy === "doee" && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />} CSV importieren
             </Button>
             <p className="text-xs text-slate-400">

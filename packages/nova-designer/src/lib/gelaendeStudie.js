@@ -18,6 +18,8 @@
 
 import { CANVAS_CENTER_X, CANVAS_CENTER_Y } from "@designer/lib/maplibreStyles";
 import { kameraPosition } from "@designer/lib/isoKamera";
+import { metersPerPixel } from "@core/lib/geo";
+import { RIEGEL_STANDARD } from "@core/lib/massing/riegel";
 
 /** Metres per canvas unit when a record carries no own scale (maplibreStyles M_PER_UNIT). */
 export const STANDARD_M_JE_PX = 1.25;
@@ -159,8 +161,49 @@ export function grundstueckM(complexData) {
 }
 
 /**
- * Building bodies of the site plan (complexData.buildings) with their corners in plan metres.
- * Bars/perimeter blocks (complexData.riegel) are not included yet (open point of 103-01).
+ * Bars and perimeter blocks (complexData.riegel, 1.8.0) as one body per straight path segment:
+ * the segment's band (mittelflur: corridor + units on both sides, einhueftig: corridor half + units
+ * on the +normal side, as riegelLayout) lengthened by the outer depth at every joint so the corner
+ * square is covered. B-103-02: before, bars stood nowhere on the terrain and were missing from the
+ * flood order. Overlaps at corners are harmless for heights and the order.
+ * @param {any} complexData
+ * @param {number} gh storey height, metres (fallback when the bar has none)
+ * @returns {Array<{ id: string, name: string, ecken: Array<{x:number,z:number}>, geschosse: number, geschossHoeheM: number }>}
+ */
+export function riegelKoerper(complexData, gh) {
+  const mpp = mJePx(complexData);
+  const liste = [];
+  (Array.isArray(complexData?.riegel) ? complexData.riegel : []).forEach((r, k) => {
+    const pfad = (Array.isArray(r?.punkte) ? r.punkte : []).map((q) => canvasZuPlanM(q, mpp));
+    const zu = !!r?.geschlossen && pfad.length >= 3;
+    if (pfad.length < 2) return;
+    const o = { ...RIEGEL_STANDARD, ...(r?.opt || {}) };
+    const halb = (Number(o.flur) || 0) / 2, aussen = halb + (Number(o.tiefe) || 0);
+    if (!(aussen > 0)) return;
+    const links = o.art === "einhueftig" ? -halb : -aussen;
+    const P = zu ? [...pfad, pfad[0]] : pfad;
+    for (let i = 0; i < P.length - 1; i++) {
+      const a = P[i], b = P[i + 1];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (len < 1e-6) continue;
+      const d = { x: (b.x - a.x) / len, z: (b.z - a.z) / len }, n = { x: -d.z, z: d.x };
+      const t0 = (i > 0 || zu) ? -aussen : 0, t1 = (i < P.length - 2 || zu) ? len + aussen : len;
+      const pt = (t, s) => ({ x: a.x + d.x * t + n.x * s, z: a.z + d.z * t + n.z * s });
+      liste.push({
+        id: `riegel-${k + 1}-${i + 1}`,
+        name: `Riegel ${k + 1} · Abschnitt ${i + 1}`,
+        ecken: [pt(t0, links), pt(t1, links), pt(t1, aussen), pt(t0, aussen)],
+        geschosse: Math.max(1, Math.round(Number(o.geschosse) || 1)),
+        geschossHoeheM: Number(o.geschossHoehe) > 0 ? Number(o.geschossHoehe) : gh,
+      });
+    }
+  });
+  return liste;
+}
+
+/**
+ * Building bodies of the site plan (complexData.buildings) with their corners in plan metres,
+ * followed by the bars and perimeter blocks (riegelKoerper).
  * @param {any} complexData
  * @param {{ storeyHeight?: number }} [opt] storey height, metres (default 3)
  * @returns {Array<{ id: string, name: string, ecken: Array<{x:number,z:number}>, geschosse: number, geschossHoeheM: number }>}
@@ -180,7 +223,7 @@ export function baukoerperListe(complexData, { storeyHeight = 3 } = {}) {
       geschossHoeheM: gh,
     });
   });
-  return liste;
+  return [...liste, ...riegelKoerper(complexData, gh)];
 }
 
 /**
@@ -505,4 +548,89 @@ export function mJePxBildmitte(abstandM, fovGrad, hoehePx) {
  */
 export function hoeheText(h) {
   return (Math.round(Number(h) * 10) / 10).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+// --- Earthworks (B-103-01) ---------------------------------------------------------------------
+// Before, TerrainView3D sampled its own raster copy with row 0 = NORTH (the DEM's row 0 is south)
+// and placed the footprint, which footprintToMeters centres on ITS OWN centroid, at the project
+// location. A plot south of the location on a slope therefore read the terrain of a mirrored,
+// shifted spot. Both now go through hoeheAn (row 0 = south) and footprintAmOrt (real position).
+
+/**
+ * The drawn footprint at its real place on the site. footprintM (useBuildingProgram) is centred
+ * on its own centroid (buildingModel.footprintToMeters); this adds the centroid's offset from the
+ * project location, taken from the designated area of type "footprint" it was derived from (the
+ * same polygon ComplexDesigner feeds into footprintToMeters, same metres per pixel).
+ * @param {Array<{x:number,z:number}>|null} footprintM centroid-centred footprint, metres (z south)
+ * @param {any} complexData BuildingComplex record (designated_areas, site_parcel)
+ * @returns {{ poly: Array<{x:number,z:number}>|null, amOrt: boolean }} metres around the project
+ *   location; amOrt = false when no drawn footprint exists (footprint from IFC or massing) — the
+ *   polygon then stays at the location, as before, and the view should say so
+ */
+export function footprintAmOrt(footprintM, complexData) {
+  if (!Array.isArray(footprintM) || footprintM.length < 3) return { poly: null, amOrt: false };
+  const drawn = (Array.isArray(complexData?.designated_areas) ? complexData.designated_areas : []).find(
+    (a) => a?.type === "footprint" && Array.isArray(a.points) && a.points.length >= 3,
+  );
+  if (!drawn) return { poly: footprintM, amOrt: false };
+  const mpp = metersPerPixel(complexData?.site_parcel);
+  const cx = drawn.points.reduce((s, p) => s + Number(p.x), 0) / drawn.points.length;
+  const cy = drawn.points.reduce((s, p) => s + Number(p.y), 0) / drawn.points.length;
+  const dx = (cx - CANVAS_CENTER_X) * mpp, dz = (cy - CANVAS_CENTER_Y) * mpp;
+  return { poly: footprintM.map((p) => ({ x: p.x + dx, z: p.z + dz })), amOrt: true };
+}
+
+/** Sub-grid resolution over the footprint bounding box (cells per side). */
+const ERD_TEILRASTER = 48;
+
+/**
+ * Visits the centres of a fine sub-grid over a polygon's bounding box that lie inside it.
+ * @param {Array<{x:number,z:number}>} poly ring, metres
+ * @param {(x: number, z: number) => void} fn called per inside sample
+ * @returns {number} area of one sub-cell, m²
+ */
+function teilraster(poly, fn) {
+  const xs = poly.map((p) => p.x), zs = poly.map((p) => p.z);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+  const sx = (x1 - x0) / ERD_TEILRASTER, sz = (z1 - z0) / ERD_TEILRASTER;
+  for (let a = 0; a < ERD_TEILRASTER; a++) {
+    for (let b = 0; b < ERD_TEILRASTER; b++) {
+      const x = x0 + (a + 0.5) * sx, z = z0 + (b + 0.5) * sz;
+      if (punktImPolygon(x, z, poly)) fn(x, z);
+    }
+  }
+  return sx * sz;
+}
+
+/**
+ * Cut and fill against a level formation (Planum), bilinear terrain under the footprint; without
+ * a footprint the whole raster (one node = one cell). Concept volumes, no earthworks survey.
+ * @param {DemRaster|null} r raster (hoeheAn conventions)
+ * @param {number} planumNHN formation level, m a.s.l.
+ * @param {Array<{x:number,z:number}>|null} poly footprint at its real place (footprintAmOrt), metres
+ * @returns {{ cut: number, fill: number, net: number, area: number }} m³ / m², rounded; net = fill − cut
+ */
+export function erdmassen(r, planumNHN, poly) {
+  if (!r) return { cut: 0, fill: 0, net: 0, area: 0 };
+  // Height differences are summed first (m) and multiplied by the cell area once (m² → m³).
+  let ab = 0, auf = 0, n = 0;
+  const zaehle = (h) => { const d = h - planumNHN; if (d > 0) ab += d; else auf -= d; n += 1; };
+  let a;
+  if (Array.isArray(poly) && poly.length >= 3) a = teilraster(poly, (x, z) => zaehle(hoeheAn(r, x, z)));
+  else { a = r.zelleM * r.zelleM; for (const h of r.h) zaehle(h); }
+  const cut = ab * a, fill = auf * a;
+  return { cut: Math.round(cut), fill: Math.round(fill), net: Math.round(fill - cut), area: Math.round(n * a) };
+}
+
+/**
+ * Mean terrain height under a footprint — the balanced default formation level.
+ * @param {DemRaster|null} r raster
+ * @param {Array<{x:number,z:number}>|null} poly footprint at its real place, metres
+ * @returns {number|null} m a.s.l. to one decimal; null without raster or footprint
+ */
+export function mittlereHoeheUnter(r, poly) {
+  if (!r || !Array.isArray(poly) || poly.length < 3) return null;
+  let summe = 0, n = 0;
+  teilraster(poly, (x, z) => { summe += hoeheAn(r, x, z); n += 1; });
+  return n > 0 ? Math.round((summe / n) * 10) / 10 : null;
 }

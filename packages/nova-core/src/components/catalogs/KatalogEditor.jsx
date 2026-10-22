@@ -12,6 +12,8 @@ import {
   KATALOG_ENTITAETEN, SCHLUESSELFELD, validiereKatalogZeile, wirksameZeilen,
 } from "@core/lib/rules/catalogs";
 import { useI18n } from "@core/lib/i18n";
+import { useBestaetigung } from "@core/lib/useBestaetigung";
+import { katalogUpdateBefund, katalogUpdateSchritte } from "@core/lib/rules/katalogUpdate.js";
 
 // KatalogEditor — GENERISCHE Pflege über alle 14 büroweiten Kataloge.
 //
@@ -66,6 +68,23 @@ export default function KatalogEditor({
   const [entwurf, setEntwurf] = useState(null);
   const [fehler, setFehler] = useState([]);
   const [busy, setBusy] = useState(false);
+  const bestaetige = useBestaetigung();
+  // 100-05: outdated office catalogue (demolition under LB 040, no KG 212) — offered, never applied silently.
+  const update = useMemo(() => { const b = katalogUpdateBefund(kataloge); return { befund: b, schritte: katalogUpdateSchritte(b) }; }, [kataloge]);
+  const updateAnwenden = async () => {
+    const ok = await bestaetige({
+      titel: t("Katalog-Update übernehmen?"),
+      text: update.schritte.map((x) => `• ${x.text}`).join("\n"),
+      bestaetigen: t("Übernehmen"),
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      for (const x of update.schritte) await onSave?.(x.entity, x.art === "update" ? { ...x.daten, id: x.id } : x.daten);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const felder = useMemo(
     () => ANZEIGE_FELDER[entity] || [SCHLUESSELFELD[entity] || "code"],
@@ -141,6 +160,20 @@ export default function KatalogEditor({
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {update.schritte.length > 0 && onSave && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-warnung-rand bg-warnung-flaeche px-3 py-2 text-xs text-warnung" role="status" data-testid="katalog-update">
+            <span className="flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {t("Büro-Katalog veraltet: Abbruch gehört zu LB 084 (nicht 040, das ist Wärmeversorgung), KG 212 Abbruchmaßnahmen fehlt.")}
+            </span>
+            <Button size="sm" variant="outline" disabled={busy} onClick={updateAnwenden} data-testid="katalog-update-knopf">
+              {t("Katalog-Update: LB 084 (Abbruch), KG 212 ergänzen")}
+            </Button>
+          </div>
+        )}
+        {update.schritte.length === 0 && update.befund.alt040.length > 0 && (
+          <p className="text-xs text-muted-foreground">{t("Hinweis: Ein Abbruch-Eintrag steht noch unter LB 040 — LB 084 ist vorhanden; den alten Eintrag bei Bedarf selbst löschen.")}</p>
+        )}
         <p className="text-xs text-slate-600 flex items-start gap-1">
           <Info className="w-3 h-3 mt-0.5 shrink-0" />
           <span>

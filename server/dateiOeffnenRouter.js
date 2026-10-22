@@ -141,9 +141,23 @@ export async function dateiStand(pfad) {
  * @throws {DateiFehler} 413 (unpacked too large), 422 (not a readable project file)
  */
 export async function dateiEinlesen(pfad, maxEntpackt = MAX_ENTPACKT_BYTES) {
-  const bytes = await fs.promises.readFile(pfad);
-  const st = await fs.promises.stat(pfad);
-  return bytesEinlesen(bytes, { groesse: st.size, mtimeMs: st.mtimeMs }, maxEntpackt);
+  // B-104-10-12: one handle for size, mtime and content, and it must still be the file pfadPruefen
+  // checked — a link swapped in between check and read is refused instead of followed. (Without
+  // O_NOFOLLOW on Windows a swap in the instant before open cannot be ruled out completely; it needs
+  // write access to the file's folder and symlink rights.)
+  const fh = await fs.promises.open(pfad, 'r');
+  try {
+    const st = await fh.stat();
+    const lst = await fs.promises.lstat(pfad);
+    if (lst.isSymbolicLink() || lst.ino !== st.ino || lst.dev !== st.dev) {
+      throw new DateiFehler(409, 'Die Datei wurde während des Öffnens ausgetauscht — bitte erneut öffnen.');
+    }
+    const bytes = await fh.readFile();
+    // await, not return: the rejection must settle before `finally` closes the handle.
+    return await bytesEinlesen(bytes, { groesse: st.size, mtimeMs: st.mtimeMs }, maxEntpackt);
+  } finally {
+    await fh.close();
+  }
 }
 
 /**

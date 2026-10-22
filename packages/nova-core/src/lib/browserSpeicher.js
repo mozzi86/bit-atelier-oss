@@ -82,6 +82,7 @@ const EINTRAEGE = [
   { schluessel: 'bit-atelier-ansicht-als', speicher: 'localStorage', zweck: '„Ansicht als …“: gewählter Nutzer dieses Geräts (keine Anmeldung)', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: false },
   // 94-03: the fee calculator's hand-over to the offer wizard, kept until an offer is created.
   { schluessel: 'bit-honorar-vorschlag', speicher: 'sessionStorage', zweck: 'Werte aus dem HOAI-Rechner für das nächste Honorarangebot; endet mit dem Tab', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: false, inRichtlinie: true, geraetecache: false },
+  { schluessel: 'bit-ladefehler-neugeladen:', speicher: 'sessionStorage', zweck: 'Zeitpunkt des einmaligen automatischen Neuladens nach einem Modul-Ladefehler je Seite (Schutz vor einer Neulade-Schleife); endet mit dem Tab', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: false, inRichtlinie: true, geraetecache: false },
   { schluessel: 'kitool.verlauf.v1', speicher: 'sessionStorage', zweck: 'Chatverlauf des KI-Assistenten (max. 200 Nachrichten); endet mit dem Tab', kategorie: 'notwendig', fassung: 'lokale Fassung mit Harness', loeschbar: false, inRichtlinie: true, geraetecache: false },
   // 93-10: desktop client only — path, size and modification time of the .bitproj this state was opened
   // from, for "Zurück in die Datei speichern". Local on purpose (the path must never travel in an export).

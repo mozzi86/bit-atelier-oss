@@ -153,6 +153,10 @@ export default defineConfig(({ mode }) => ({
     // PORT env lets a second dev instance (e.g. the Browser pane of a parallel
     // session) run beside the default 5173 without editing this file.
     port: Number(process.env.PORT) || 5173,
+    // Pre-transform the lazy page chunks at start (22.10.2026): under the full E2E load the first
+    // visit of a page waited several seconds for the on-demand compile and random specs ran into
+    // their 5-s / 30-s limits. Dev server only — the build is unaffected.
+    warmup: { clientFiles: ['./src/pages/*.jsx', './packages/*/src/pages/*.jsx'] },
     proxy: {
       // Forward API calls to the local Express backend (see /server).
       '/api': {

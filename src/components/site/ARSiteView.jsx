@@ -5,6 +5,7 @@ import {
   RotateCcw, CameraOff, AlertTriangle, Crosshair,
 } from "lucide-react";
 import { modelDims } from "@core/lib/bimElements";
+import { objektFreigeben } from "@core/lib/threeFreigeben";
 
 /**
  * AR-Vor-Ort-Ansicht: Live-Kamera (getUserMedia) als Hintergrund + halbtransparentes
@@ -192,10 +193,7 @@ export default function ARSiteView({ building, onExit }) {
       if (stream) stream.getTracks().forEach((t) => t.stop());
       renderer.dispose();
       if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
-      scene.traverse((o) => {
-        if (o.geometry) o.geometry.dispose();
-        if (o.material) o.material.dispose();
-      });
+      scene.traverse(objektFreigeben);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [building]);
@@ -247,9 +245,7 @@ export default function ARSiteView({ building, onExit }) {
     if (!t.measureGroup) return;
     const grp = t.measureGroup;
     while (grp.children.length) {
-      const c = grp.children.pop();
-      if (c.geometry) c.geometry.dispose();
-      if (c.material) c.material.dispose();
+      objektFreigeben(grp.children.pop());
     }
     measurePts.forEach((p) => {
       const s = new THREE.Mesh(

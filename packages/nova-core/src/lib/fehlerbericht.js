@@ -64,3 +64,30 @@ export function fehlerBerichtText({ fehler, pfad = "", zeit = new Date(), versio
   if (stack.length) zeilen.push("", "Stack:", ...stack);
   return zeilen.join("\n");
 }
+
+/** sessionStorage key prefix of the automatic reload after a failed chunk import. */
+export const NEULADEN_SCHLUESSEL = "bit-ladefehler-neugeladen:";
+/** Minimum time between two automatic reloads of the same route, ms (loop guard). */
+export const NEULADEN_SPERRE_MS = 60_000;
+
+/**
+ * Whether a failed chunk import (a new version deployed, or the dev server / a synced folder briefly not
+ * delivering the file) should reload the page once by itself instead of showing the card — the card's own
+ * advice is "Neu laden". At most once per route within NEULADEN_SPERRE_MS, so a really missing module
+ * still ends on the card. Program errors never reload.
+ * @param {{fehler: unknown, pfad: string, jetzt?: number, speicher?: {getItem: (k: string) => string|null, setItem: (k: string, v: string) => void}|null}} p
+ *   jetzt in ms since epoch; speicher = sessionStorage (null when unavailable)
+ * @returns {boolean} true = reload now (the marker is written)
+ */
+export function automatischNeuLaden({ fehler, pfad, jetzt = Date.now(), speicher = null }) {
+  if (!istLadefehler(fehler) || !speicher) return false;
+  try {
+    const schluessel = NEULADEN_SCHLUESSEL + pfad;
+    const zuletzt = Number(speicher.getItem(schluessel)) || 0;
+    if (jetzt - zuletzt < NEULADEN_SPERRE_MS) return false;
+    speicher.setItem(schluessel, String(jetzt));
+    return true;
+  } catch {
+    return false; // storage blocked (private mode) — show the card instead of risking a loop
+  }
+}

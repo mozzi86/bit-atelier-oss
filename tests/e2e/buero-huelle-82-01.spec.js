@@ -49,12 +49,13 @@ test("Menü, h1, Routen-Aliase, Reiter, Weiter mit, Einstellungen mit „Nutzer 
   await page.goto("/Correspondence");
   await expect(page.locator("h1")).toHaveText(/Schriftverkehr/);
 
-  // Tab aliases and German routes keep the query.
+  // Tab aliases and German routes keep the query. 15 s: under full-suite load the dev server compiles the
+  // lazy page chunk first; the alias rewrite itself runs in the first effect (useTabParam).
   await page.goto("/Correspondence?tab=postbuch");
-  await expect(page).toHaveURL(/\/Correspondence\?tab=register$/);
+  await expect(page).toHaveURL(/\/Correspondence\?tab=register$/, { timeout: 15000 });
   await expect(page.getByRole("tab", { name: "Postbuch" })).toHaveAttribute("aria-selected", "true");
   await page.goto("/Schriftverkehr?tab=postbuch");
-  await expect(page).toHaveURL(/\/Correspondence\?tab=register$/);
+  await expect(page).toHaveURL(/\/Correspondence\?tab=register$/, { timeout: 15000 });
   await page.goto("/Fristen");
   await expect(page).toHaveURL(/\/Deadlines$/);
   await page.goto("/Abwesenheiten?tab=konto");

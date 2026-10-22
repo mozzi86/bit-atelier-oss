@@ -105,7 +105,11 @@ export function aussenanlagenChecks({
   erfBarrierefrei = 0, barrierefreiVorh = 0,
   versiegelung = 0, gruen = 0, volumen = 0,
   fwBreite = 0, plot = 0,
+  fwErforderlich = "ja", fwZufahrt = 0,
 } = {}) {
+  // LO-01 (22.10.2026): "Feuerwehrzufahrt erforderlich" and the access width were inputs without
+  // effect. Not required (planner's statement) → both fire brigade rows say so instead of warning.
+  const fwNoetig = fwErforderlich !== "nein";
   const nf = (n) => Math.round(Number(n) || 0).toLocaleString("de-DE");
   const pct = (g) => `${Math.round((Number(g) || 0) * 100)} %`;
 
@@ -154,8 +158,15 @@ export function aussenanlagenChecks({
     {
       key: "feuerwehr",
       label: "Feuerwehr-Aufstellfläche (DIN 14090)",
-      status: num(fwBreite) <= 0 ? OFFEN : num(fwBreite) >= 3.5 ? "pass" : "warn",
-      detail: num(fwBreite) <= 0 ? "Breite der Aufstellfläche fehlt — Maß eingeben" : `Breite ${(Number(fwBreite) || 0).toLocaleString("de-DE")} m (Richtwert ≥ 3,50 m)`,
+      status: !fwNoetig ? "pass" : num(fwBreite) <= 0 ? OFFEN : num(fwBreite) >= 3.5 ? "pass" : "warn",
+      detail: !fwNoetig ? "nicht erforderlich (Angabe Planer:in)" : num(fwBreite) <= 0 ? "Breite der Aufstellfläche fehlt — Maß eingeben" : `Breite ${(Number(fwBreite) || 0).toLocaleString("de-DE")} m (Richtwert ≥ 3,50 m)`,
+    },
+    {
+      // DIN 14090: Zufahrt lichte Breite ≥ 3,00 m auf gerader Strecke (Kurven breiter) — Richtwert.
+      key: "feuerwehr-zufahrt",
+      label: "Feuerwehr-Zufahrt (DIN 14090)",
+      status: !fwNoetig ? "pass" : num(fwZufahrt) <= 0 ? OFFEN : num(fwZufahrt) >= 3.0 ? "pass" : "warn",
+      detail: !fwNoetig ? "nicht erforderlich (Angabe Planer:in)" : num(fwZufahrt) <= 0 ? "Zufahrtsbreite fehlt — Maß eingeben" : `Zufahrt ${(Number(fwZufahrt) || 0).toLocaleString("de-DE")} m (Richtwert ≥ 3,00 m gerade, in Kurven breiter)`,
     },
     {
       key: "plot",

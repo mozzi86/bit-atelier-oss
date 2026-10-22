@@ -48,6 +48,10 @@ describe("tgaNetz — Katalog", () => {
       assert.ok(g.dnListe.includes(g.dnDefault), `${g.label}: Default ${g.dnDefault} nicht in Liste`);
       assert.ok(g.medium && g.einheit);
     }
+    // Colour is never the only cue (colour-vision rule): every trade has its own short label.
+    const kuerzel = Object.values(GEWERKE_TGA).map((g) => g.kuerzel);
+    assert.equal(new Set(kuerzel).size, kuerzel.length, "Kürzel eindeutig");
+    assert.ok(kuerzel.every((k) => typeof k === "string" && k.length === 2), "Kürzel zweistellig");
     assert.deepEqual(ART_KEYS, ["erzeuger", "verteiler", "schacht", "auslass", "anschluss"]);
     assert.equal(KNOTEN_ARTEN.auslass.strang, false);
     assert.ok(KNOTEN_ARTEN.erzeuger.quelle && KNOTEN_ARTEN.anschluss.quelle && !KNOTEN_ARTEN.schacht.quelle);

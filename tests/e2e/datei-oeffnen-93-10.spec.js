@@ -83,12 +83,21 @@ test.describe("93-10 Doppelklick auf .bitproj", () => {
       await page.goto(url);
       await expect(page.getByTestId("import-wieder-hinweis")).toBeVisible({ timeout: 30000 });
       await page.getByTestId("import-aktualisieren").click();
-      await page.waitForLoadState("load");
+      // The import reloads the page; "/" then redirects to /Dashboard. Wait for that end state — "load"
+      // could still be the old page and the next goto was interrupted by the redirect (flaky 22.10.2026).
+      await page.waitForURL(/\/Dashboard/, { timeout: 30000 });
       await expect.poll(projekte, { timeout: 20000 }).toContain(PROJEKT.name);
 
-      // 3. Re-open the handover file: the project exists → "Als Kopie".
+      // 3. Re-open the handover file: the project exists → "Als Kopie". The import of step 2 ends with
+      // window.location.reload(), which can fire after /Dashboard was already reached and then interrupts
+      // this goto — wait for quiet and retry once (same pattern as before /Settings below).
       url = starter(uebergabe);
-      await page.goto(url);
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.goto(url).catch(async (e) => {
+        if (!/interrupted by another navigation/.test(String(e))) throw e;
+        await page.waitForLoadState("networkidle").catch(() => {});
+        await page.goto(url);
+      });
       await expect(page.getByTestId("import-wieder-hinweis")).toContainText(PROJEKT.name, { timeout: 30000 });
       await page.getByTestId("import-als-kopie").click();
       await expect.poll(projekte, { timeout: 20000 }).toContain(`${PROJEKT.name} (Kopie)`);

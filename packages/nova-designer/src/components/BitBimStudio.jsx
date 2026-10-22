@@ -61,6 +61,7 @@ import { brilleVon, sichtbarUnter, zeigtStatus, STANDARD_BRILLE } from "@core/li
 import BrillenLeiste from "@designer/components/BrillenLeiste";
 import FehlplanungHinweise from "@designer/components/FehlplanungHinweise";
 import { planGrafik, vektorPlanPdf } from "@designer/lib/vektorPlan";
+import { objektFreigeben } from "@core/lib/threeFreigeben";
 // 104-06: floor plan as DXF R12 (own writer, no dependency).
 import { grundrissDxfDaten, dxfDatei, dxfDateiname, DXF_MIME } from "@designer/lib/dxfPlaene";
 import { dateiAnbieten } from "@core/lib/tabellenExport";
@@ -423,6 +424,8 @@ export default function BitBimStudio({ complexData }) {
   const [sunHour, setSunHour] = useState(14); // Sonnenstand (Uhrzeit 0-24)
   const animRef = useRef([]); // bewegte Stadt-Objekte für den tick()-Loop: [{mesh,pts,cum,total,d,speed}]
   const mountRef = useRef(null);
+  // The 2D plan for the raster section export (was found by scraping divs for height 520 px).
+  const planWrapRef = useRef(/** @type {HTMLDivElement|null} */ (null));
   // Mutable three.js handle bag (scene, camera, groups, callbacks) — filled in the
   // mount effect, never a render dependency. Keys are open on purpose (87-09).
   const three = useRef(/** @type {Record<string, any>} */ ({}));
@@ -1291,7 +1294,10 @@ export default function BitBimStudio({ complexData }) {
     const lvl = Math.min(planLevel, storeys - 1);
     const grafik = planGrafik({ model, level: lvl, customWalls: sichtbarUnter(brille, customWalls), customColumns: sichtbarUnter(brille, customColumns),
       customSlabs: sichtbarUnter(brille, customSlabs), customRoofs: sichtbarUnter(brille, customRoofs), customZones, brille,
-      huelleStatus: zeigtStatus(brille, attributeVon(attributLayer, "hull-wall")?.status) ? attributeVon(attributLayer, "hull-wall")?.status ?? null : null, massstab: scale, sw: swPlan });
+      huelleStatus: zeigtStatus(brille, attributeVon(attributLayer, "hull-wall")?.status) ? attributeVon(attributLayer, "hull-wall")?.status ?? null : null, massstab: scale, sw: swPlan,
+      // Print what the plan shows: the layer switches and the workshop walls (same inputs as BimPlan2D).
+      layerVis: zeigtStatus(brille, attributeVon(attributLayer, "hull-wall")?.status) ? layerVis : { ...layerVis, shell: false },
+      werkstattWaende: attributLayer?.attribute ? sichtbarUnter(brille, werkstattMitAttributen(werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight }), attributLayer).waende || []) : null });
     return { grafik, brille, lvl };
   };
   // 104-06: the current floor plan as DXF R12 (layers A_WAND, A_STUETZE, A_DECKE …, metres).
@@ -1329,9 +1335,8 @@ export default function BitBimStudio({ complexData }) {
       } catch (e) { setHint("PDF-Export fehlgeschlagen: " + (e?.message || e)); }
       return;
     }
-    const wrap = mountRef.current?.parentElement?.querySelector("svg");
-    const svgEl = [.../** @type {any} */ (document.querySelectorAll("div"))].find((d) => d.style.height === "520px" && d.className.includes("bg-slate-50"))?.querySelector("svg");
-    const target = svgEl || wrap; if (!target) { setHint("Keine 2D-Zeichnung gefunden."); return; }
+    const target = planWrapRef.current?.querySelector("[data-bim-plan2d] svg");
+    if (!target) { setHint("Keine 2D-Zeichnung gefunden."); return; }
     try {
       const { jsPDF } = await import("jspdf");
       const xml = new XMLSerializer().serializeToString(target);
@@ -1553,14 +1558,14 @@ export default function BitBimStudio({ complexData }) {
       window.removeEventListener("resize", onResize);
       renderer.dispose();
       if (el.parentNode) el.parentNode.removeChild(el);
-      scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+      scene.traverse(objektFreigeben);
     };
   }, []);
 
   // ---- Terrain patch from real elevation (200 m) ----
   useEffect(() => {
     const t = three.current; if (!t.terrainGroup || !grid || grid.length < 2) return;
-    while (t.terrainGroup.children.length) { const c = t.terrainGroup.children.pop(); c.geometry?.dispose(); c.material?.dispose(); }
+    while (t.terrainGroup.children.length) { const c = t.terrainGroup.children.pop(); objektFreigeben(c); }
     const size = grid.length;
     const PATCH = 200;
     const relief = 12; // gedämpfte Überhöhung für Lesbarkeit
@@ -1585,7 +1590,7 @@ export default function BitBimStudio({ complexData }) {
   // ---- Building from shared model ----
   useEffect(() => {
     const t = three.current; if (!t.buildingGroup) return;
-    while (t.buildingGroup.children.length) { const c = t.buildingGroup.children.pop(); c.geometry?.dispose(); c.material?.dispose(); }
+    while (t.buildingGroup.children.length) { const c = t.buildingGroup.children.pop(); objektFreigeben(c); }
 
     const envComp = compositeById(envComposite);
     // Render-Modus: Fassaden-Preset ersetzt das Standard-Hüllwandmaterial (auch Attika)
@@ -1684,7 +1689,7 @@ export default function BitBimStudio({ complexData }) {
   // ---- Custom-Elemente (gezeichnete Wände/Stützen) in 3D ----
   useEffect(() => {
     const t = three.current; if (!t.customGroup) return;
-    while (t.customGroup.children.length) { const c = t.customGroup.children.pop(); c.geometry?.dispose(); c.material?.dispose(); }
+    while (t.customGroup.children.length) { const c = t.customGroup.children.pop(); objektFreigeben(c); }
     customWalls.forEach((w) => {
       const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z); if (len < 0.05) return;
       const h = w.height || storeyHeight, elev = w.level * storeyHeight;
@@ -1862,7 +1867,7 @@ export default function BitBimStudio({ complexData }) {
   // ---- Context buildings (echte OSM-Umgebung, extrudiert) ----
   useEffect(() => {
     const t = three.current; if (!t.contextGroup) return;
-    while (t.contextGroup.children.length) { const c = t.contextGroup.children.pop(); c.geometry?.dispose(); c.material?.dispose(); }
+    while (t.contextGroup.children.length) { const c = t.contextGroup.children.pop(); objektFreigeben(c); }
     if (!showContext) return;
     if (osm.buildings?.length) {
       const ctxMat = new THREE.MeshStandardMaterial({ color: 0x6b7785, roughness: 0.95 });
@@ -2341,6 +2346,7 @@ export default function BitBimStudio({ complexData }) {
               const huelleSichtbar = zeigtStatus(brille, attributeVon(attributLayer, "hull-wall")?.status);
               const planLayerVis = huelleSichtbar ? layerVis : { ...layerVis, shell: false };
               return (
+              <div ref={planWrapRef} className="contents">
               <BimPlan2D
                 model={model} mode={/** @type {"grundriss"|"schnitt"} */ (view)} level={Math.min(planLevel, storeys - 1)} storeyHeight={storeyHeight}
                 brille={brille} huelleStatus={attributeVon(attributLayer, "hull-wall")?.status ?? null} sw={swPlan}
@@ -2382,6 +2388,7 @@ export default function BitBimStudio({ complexData }) {
                       : undefined
                 }
               />
+              </div>
               );
             })()}
             {/* 3D-Kontextmenü (Rechtsklick) */}

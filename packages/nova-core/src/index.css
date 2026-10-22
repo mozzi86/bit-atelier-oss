@@ -19,11 +19,14 @@
     --accent: 0 0% 96.1%;
     --accent-foreground: 0 0% 9%;
     /* Semantic state colours: warning (amber), success (emerald), hint (sky), error (rose) —
-       text / surface / border. Contrast text on surface >= 4.5:1. */
-    --warnung: 23 83% 31%; --warnung-flaeche: 48 100% 96%; --warnung-rand: 48 97% 77%;
-    --erfolg: 163 94% 24%; --erfolg-flaeche: 152 81% 96%; --erfolg-rand: 152 76% 80%;
-    --hinweis: 201 90% 27%; --hinweis-flaeche: 204 100% 97%; --hinweis-rand: 201 94% 86%;
-    --fehler: 0 74% 42%; --fehler-flaeche: 356 100% 97%; --fehler-rand: 353 96% 90%;
+       text / surface / border. Contrast text on surface >= 4.5:1. The four TEXT colours were
+       re-chosen 21.10.2026 so no two are confused under protan/deutan/tritan vision (OKLab ΔE ≥ 0.06,
+       .claude/skills/bit-farbsehen/scripts/farbsehen.mjs); before, warnung/fehler were 0.021 apart for
+       protans. Colour still never stands alone: state UI pairs it with an icon and a word. */
+    --warnung: 23 83% 18%; --warnung-flaeche: 48 100% 96%; --warnung-rand: 48 97% 77%;
+    --erfolg: 163 94% 20%; --erfolg-flaeche: 152 81% 96%; --erfolg-rand: 152 76% 80%;
+    --hinweis: 201 90% 36%; --hinweis-flaeche: 204 100% 97%; --hinweis-rand: 201 94% 86%;
+    --fehler: 0 74% 38%; --fehler-flaeche: 356 100% 97%; --fehler-rand: 353 96% 90%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 89.8%;
@@ -66,10 +69,10 @@
     --muted-foreground: 0 0% 63.9%;
     --accent: 0 0% 14.9%;
     --accent-foreground: 0 0% 98%;
-    --warnung: 46 97% 65%; --warnung-flaeche: 22 78% 10%; --warnung-rand: 23 83% 31%;
-    --erfolg: 156 72% 67%; --erfolg-flaeche: 164 86% 9%; --erfolg-rand: 163 94% 24%;
-    --hinweis: 199 95% 74%; --hinweis-flaeche: 204 80% 10%; --hinweis-rand: 201 90% 27%;
-    --fehler: 0 94% 82%; --fehler-flaeche: 0 63% 12%; --fehler-rand: 0 70% 35%;
+    --warnung: 46 97% 55%; --warnung-flaeche: 22 78% 10%; --warnung-rand: 23 83% 31%;
+    --erfolg: 165 72% 75%; --erfolg-flaeche: 164 86% 9%; --erfolg-rand: 163 94% 24%;
+    --hinweis: 210 95% 62%; --hinweis-flaeche: 204 80% 10%; --hinweis-rand: 201 90% 27%;
+    --fehler: 0 94% 70%; --fehler-flaeche: 0 63% 12%; --fehler-rand: 0 70% 35%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 14.9%;
@@ -169,6 +172,72 @@
 .dark .border-slate-200 { border-color: #1e293b; }
 .dark .border-slate-200\/60 { border-color: rgb(30 41 59 / 0.6); }
 .dark .border-slate-300 { border-color: #334155; }
+
+/*
+ * D-01 (REVIEW-DARKMODE, 22.10.2026): tinted light surfaces (bg-*-50/100/200, also with opacity),
+ * their borders and the dark text shades on them stayed light in dark mode — pastel boxes with dark
+ * text on a dark page. Same central mapping as for slate/white above: surface → dark tint of the hue
+ * (-100/-200 one step lighter, so chips stay visible on a -50 box), border 100–300 → muted tint,
+ * text 600 → 400, text 700–900 → 300. Contrast measured with bit-farbsehen (see commit).
+ * [class*="bg-x-50/"] catches every opacity variant (bg-x-50/40 …) without listing them.
+ */
+.dark .bg-amber-50, .dark [class*="bg-amber-50/"] { background-color: #2b1d06; }
+.dark .bg-amber-100, .dark .bg-amber-200, .dark [class*="bg-amber-100/"] { background-color: #4a3208; }
+.dark .border-amber-100, .dark .border-amber-200, .dark .border-amber-300 { border-color: #5c3d0c; }
+.dark .text-amber-600 { color: #fbbf24; }
+.dark .text-amber-700, .dark .text-amber-800, .dark .text-amber-900 { color: #fcd34d; }
+.dark .bg-emerald-50, .dark [class*="bg-emerald-50/"] { background-color: #062b20; }
+.dark .bg-emerald-100, .dark .bg-emerald-200, .dark [class*="bg-emerald-100/"] { background-color: #0b4433; }
+.dark .border-emerald-100, .dark .border-emerald-200, .dark .border-emerald-300 { border-color: #0f5a43; }
+.dark .text-emerald-600 { color: #34d399; }
+.dark .text-emerald-700, .dark .text-emerald-800, .dark .text-emerald-900 { color: #6ee7b7; }
+.dark .bg-rose-50, .dark [class*="bg-rose-50/"] { background-color: #2d0d16; }
+.dark .bg-rose-100, .dark .bg-rose-200, .dark [class*="bg-rose-100/"] { background-color: #4c1422; }
+.dark .border-rose-100, .dark .border-rose-200, .dark .border-rose-300 { border-color: #6b1a2c; }
+.dark .text-rose-600 { color: #fb7185; }
+.dark .text-rose-700, .dark .text-rose-800, .dark .text-rose-900 { color: #fda4af; }
+.dark .bg-sky-50, .dark [class*="bg-sky-50/"] { background-color: #082236; }
+.dark .bg-sky-100, .dark .bg-sky-200, .dark [class*="bg-sky-100/"] { background-color: #0b3a55; }
+.dark .border-sky-100, .dark .border-sky-200, .dark .border-sky-300 { border-color: #0c4a6e; }
+.dark .text-sky-600 { color: #38bdf8; }
+.dark .text-sky-700, .dark .text-sky-800, .dark .text-sky-900 { color: #7dd3fc; }
+.dark .bg-blue-50, .dark [class*="bg-blue-50/"] { background-color: #0b1a38; }
+.dark .bg-blue-100, .dark .bg-blue-200, .dark [class*="bg-blue-100/"] { background-color: #172c63; }
+.dark .border-blue-100, .dark .border-blue-200, .dark .border-blue-300 { border-color: #1e3a8a; }
+.dark .text-blue-600 { color: #60a5fa; }
+.dark .text-blue-700, .dark .text-blue-800, .dark .text-blue-900 { color: #93c5fd; }
+.dark .bg-red-50, .dark [class*="bg-red-50/"] { background-color: #2d0e0e; }
+.dark .bg-red-100, .dark .bg-red-200, .dark [class*="bg-red-100/"] { background-color: #521414; }
+.dark .border-red-100, .dark .border-red-200, .dark .border-red-300 { border-color: #7f1d1d; }
+.dark .text-red-600 { color: #f87171; }
+.dark .text-red-700, .dark .text-red-800, .dark .text-red-900 { color: #fca5a5; }
+.dark .bg-violet-50, .dark [class*="bg-violet-50/"] { background-color: #1d1438; }
+.dark .bg-violet-100, .dark .bg-violet-200, .dark [class*="bg-violet-100/"] { background-color: #33205e; }
+.dark .border-violet-100, .dark .border-violet-200, .dark .border-violet-300 { border-color: #4c1d95; }
+.dark .text-violet-600 { color: #a78bfa; }
+.dark .text-violet-700, .dark .text-violet-800, .dark .text-violet-900 { color: #c4b5fd; }
+.dark .bg-teal-50, .dark [class*="bg-teal-50/"] { background-color: #05292a; }
+.dark .bg-teal-100, .dark .bg-teal-200, .dark [class*="bg-teal-100/"] { background-color: #0b4240; }
+.dark .border-teal-100, .dark .border-teal-200, .dark .border-teal-300 { border-color: #115e59; }
+.dark .text-teal-600 { color: #2dd4bf; }
+.dark .text-teal-700, .dark .text-teal-800, .dark .text-teal-900 { color: #5eead4; }
+.dark .bg-green-50, .dark [class*="bg-green-50/"] { background-color: #06280f; }
+.dark .bg-green-100, .dark .bg-green-200, .dark [class*="bg-green-100/"] { background-color: #0e3d21; }
+.dark .border-green-100, .dark .border-green-200, .dark .border-green-300 { border-color: #14532d; }
+.dark .text-green-600 { color: #4ade80; }
+.dark .text-green-700, .dark .text-green-800, .dark .text-green-900 { color: #86efac; }
+
+/*
+ * D-02 (REVIEW-DARKMODE, 22.10.2026): Recharts draws axis text in #666 and grid lines in #ccc — on the
+ * dark page that is 3.1:1 for 11-px text (needs 4.5:1) and a glaring grid. Mapped centrally like the
+ * rest; the tooltip box is styled inline by Recharts, hence !important there only.
+ */
+.dark .recharts-cartesian-axis-tick-value, .dark .recharts-label, .dark .recharts-text { fill: #cbd5e1; }
+.dark .recharts-cartesian-grid line { stroke: #334155; }
+.dark .recharts-cartesian-axis-line, .dark .recharts-cartesian-axis-tick-line { stroke: #475569; }
+.dark .recharts-default-tooltip { background-color: #0f172a !important; border-color: #334155 !important; }
+.dark .recharts-tooltip-label { color: #f1f5f9; }
+.dark .recharts-legend-item-text { filter: brightness(1.25); }
 
 /* Seiten-Hintergrund-Gradients (from-slate-50 ... via ... to ...) im Dark Mode abdunkeln */
 .dark .from-slate-50 {
