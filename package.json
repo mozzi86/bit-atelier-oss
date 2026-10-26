@@ -2,7 +2,7 @@
   "name": "bit-atelier",
   "private": true,
   "license": "MIT",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "type": "module",
   "engines": {
     "node": ">=22.9"

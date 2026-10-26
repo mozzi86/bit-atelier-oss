@@ -10,7 +10,9 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
-## [1.10.0] - 2026-10-26
+## [1.10.1] - 2026-10-26
+
+1.10.0 wurde nicht ausgeliefert: Der Release-Lauf brach an der Sicherheitsprüfung und am Größen-Budget ab. 1.10.1 enthält alles aus 1.10.0 und die zwei Korrekturen unter „Behoben“.
 
 ### Neu
 
@@ -36,6 +38,8 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ### Behoben
 
+- **Sicherheitsupdate:** Eine Server-Bibliothek (Verarbeitung von Anfragen) ist auf eine Fassung ohne bekannte Schwachstelle aktualisiert.
+- **Schnellerer Start:** Die Sprachfunktion lädt erst nach dem Start nach, das Startpaket bleibt kleiner.
 - **Lizenzliste:** Das ausgelieferte Quellarchiv der Zeichen-Bibliothek entspricht jetzt genau der ausgelieferten Fassung.
 
 ## [1.9.2] - 2026-10-22

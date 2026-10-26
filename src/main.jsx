@@ -10,7 +10,9 @@ import { inHuelle } from '@/client/huelle.js'
 // 89-07: workshop zones are derived on load (one truth) — registers the designer's derivation.
 import '@/lib/werkstattAbleitungAnmelden'
 // 106-05: hands the AI harness (speech recognition, agent) to the speech field of the viewers.
-import '@/lib/sprechDienstAnmelden.js'
+// Loaded after start (dynamic import) so the harness client stays out of the entry chunk (size budget, 1.10.0);
+// the speech field reads sprechDienst() only when the person presses the button, long after this has run.
+import('@/lib/sprechDienstAnmelden.js')
 import { installiereSitzungsKopf } from '@/lib/sitzungsKopf.js'
 
 // 70-03: start gate of the desktop shell (profile, storage folder, takeover).
