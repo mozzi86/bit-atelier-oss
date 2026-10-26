@@ -10,6 +10,34 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.10.0] - 2026-10-26
+
+### Neu
+
+- **Zeigen am Modell:** Im IFC-Viewer und im BIM-Studio zeigt das Programm beim Überfahren, welches Bauteil getroffen wird, und hält die Auswahl sichtbar. Fokus, Auswahl, Warnung und Fehler unterscheiden sich in Farbe und Form, damit sie auch bei Farbsehschwäche lesbar bleiben. Maus, Stift und Finger nutzen denselben Weg.
+- **Änderungen mit Vorschau und Bestätigung:** Eigenschaft setzen, Verschieben/Drehen/Skalieren und Teilen laufen als Vorschlag: erst ein Satz in Worten und eine Prüfung (Prüfregeln, Kollision), dann „Übernehmen“ oder „Verwerfen“. Jeder Schritt trägt seine Herkunft (von Hand, Textbefehl, Spracheingabe, Agent, Bildkontext) und lässt sich einzeln zurücknehmen. Nichts ändert sich ohne Bestätigung durch eine Person — auch nicht durch einen KI-Agenten.
+- **Sprache am Modell:** Drücken und sprechen („mach die Wand 30 cm dicker“). Zuerst versteht die eingebaute Befehlsgrammatik, nur sonst fragt der lokale KI-Harness. Ein gesprochenes „ja“ zeigt den Vorschlag kurz an und lässt sich abbrechen. Spracherkennung lokal (mit Testmikrofon geprüft, am Gerät noch nicht abgenommen).
+- **Bild als Kontext:** Auf Wunsch geht ein Bild der Ansicht an ein Sprachmodell, das Bilder versteht. Vor dem ersten Bild eines Projekts fragt das Programm einmal; Projekte mit NDA-Merker senden nie Bilder; „Nur lokale KI“ und der Büro-Schalter „Bilder nach außen“ sperren zusätzlich.
+- **KI-Werkzeuge über MCP:** Ein KI-Assistent kann die Auswahl lesen, Bauteile per GUID wählen, Vorschläge machen und prüfen und ein Bild der Ansicht anfordern. Bestätigen kann er nie.
+- **Tablet:** Stift-Zeiger mit Hover, Antippen, Zwei-Finger-Gesten und ein großer Sprech-Knopf (mit Stift- und Touch-Emulation geprüft, am Gerät noch nicht abgenommen).
+- **Projektmerker NDA** im Projektformular.
+- **Schichtaufbau:** Schichten haben eine Funktion (Kern, Bekleidung, Sonstiges) und eine Verschneidungspriorität; eigene Aufbauten je Projekt im Wand-Inspektor. Die Referenzlinie kann auf der Außen-, Innen- oder Mittelfläche des Kerns liegen.
+- **Öffnungen:** Öffnung ohne Füllung (Durchbruch), Höhenanker für Brüstung und Sturz, Deckenöffnungen, Durchbrüche im IFC-Export.
+- **Geschosse:** eigene Höhe je Geschoss (Geschosstabelle), neue Wände folgen der Geschosshöhe, Decke und Dach mit Dicke und Bezug.
+- **Schnitt als Vektor-PDF** im wahren Maßstab mit Höhenkoten; **Steckbrief** auch im TGA-, Tragwerk- und Durchbruch-Editor.
+- **Personal-Schlüssel in der Sicherung:** Fingerabdruck des Schlüssels in der Sicherung, Ordner-Knopf, verständlicher Sperrgrund.
+
+### Geändert
+
+- **Eine Ableitung für alle Ausgaben:** Wandlage (Referenzlinie), Höhen, Schichten und Öffnungen werden einmal berechnet und gleich in 3D, Grundriss, Schnitt, PDF und IFC verwendet.
+- **Schnitt der Gebäudehülle:** folgt jetzt der Referenzlinie wie Grundriss und 3D. Ältere Schnitte rücken dadurch um die halbe Wanddicke nach außen.
+- **Dachklasse im IFC:** Dächer werden immer nach ihrer echten Neigung eingestuft (vorher bei älteren Dächern teils als Flachdach).
+- **IFC-Export:** Schichtsätze mit Kategorie und Priorität, Materialkennwerte (Dichte, Wärmeleitfähigkeit) und ein Datenblatt zur Referenzlinie.
+
+### Behoben
+
+- **Lizenzliste:** Das ausgelieferte Quellarchiv der Zeichen-Bibliothek entspricht jetzt genau der ausgelieferten Fassung.
+
 ## [1.9.2] - 2026-10-22
 
 ### Behoben

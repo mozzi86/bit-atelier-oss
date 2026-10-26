@@ -19,7 +19,8 @@ import {
 } from "@designer/lib/acoustics";
 import { useBuildingProgram, programMetrics } from "@core/lib/useBuildingProgram";
 import { useProject } from "@core/lib/ProjectContext";
-import { openingTypeById, compositeById } from "@core/lib/buildingModel";
+import { compositeById } from "@core/lib/buildingModel";
+import { oeffnungsTyp } from "@core/lib/bauteil/oeffnungen.js";
 import { autoEnvOpenings } from "@designer/lib/autoOpenings";
 import { usePlanModel } from "@designer/lib/usePlanModel";
 import PruefZeile from "@designer/components/PruefZeile";
@@ -74,7 +75,7 @@ function SchallschutzPlanKarte({ raumart, onUebernehmen }) {
   const fensterJeKante = useMemo(() => {
     const walls = plan.model?.walls || [];
     const platziert = (plan.envOpenings || []).map((o) => {
-      const ty = openingTypeById(o.kind, o.typeId);
+      const ty = oeffnungsTyp(o); // 107-04: own width/height of the opening first, then the type
       return { ...o, width: ty.w, height: ty.h };
     });
     const auto = autoEnvOpenings(

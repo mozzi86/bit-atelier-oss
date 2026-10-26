@@ -4,8 +4,13 @@
 // writes to (GET /api/system/datenordner, from server/datenPfad.js) and opens it on request
 // (POST /api/system/datenordner/oeffnen; the server opens only that folder and checks the Origin).
 //
+// 105-12: the personnel key — its fingerprint (the same one every backup records in sicherung.json), a
+// button that opens its folder so it can be copied next to the backup, and a plain-text alert when the
+// personnel store is locked (missing or wrong key; before, only the server console said so).
+//
 // In:  nothing. Out: the row or null; data-testids daten-ordner, daten-ordner-pfad, daten-ordner-oeffnen,
 //      daten-ordner-status, daten-ordner-fehler.
+//      personal-schluessel, personal-schluessel-fp, personal-schluessel-oeffnen, personal-gesperrt.
 import React from "react";
 import { FolderOpen } from "lucide-react";
 import { useI18n } from "@core/lib/i18n";
@@ -16,7 +21,7 @@ import { DATENQUELLE } from "@core/lib/umgebung";
  */
 export default function DatenOrdner() {
   const { t } = useI18n();
-  const [info, setInfo] = React.useState(/** @type {{ordner: string, dateien: {db: string, personal: string}, personalSchluessel?: string|null}|null} */ (null));
+  const [info, setInfo] = React.useState(/** @type {{ordner: string, dateien: {db: string, personal: string}, personalSchluessel?: string|null, personalStatus?: {fingerabdruck: string|null, gesperrt: boolean, grund: string|null}|null}|null} */ (null));
   const [fehler, setFehler] = React.useState(/** @type {string|null} */ (null));
   const [status, setStatus] = React.useState("");
 
@@ -35,10 +40,10 @@ export default function DatenOrdner() {
 
   if (DATENQUELLE !== "express") return null;
 
-  const oeffnen = async () => {
+  const oeffnen = async (ziel = "datenordner") => {
     setStatus(""); setFehler(null);
     try {
-      const r = await fetch("/api/system/datenordner/oeffnen", { method: "POST" });
+      const r = await fetch(`/api/system/${ziel}/oeffnen`, { method: "POST" });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
       setStatus(t("Ordner wird im Dateimanager geöffnet."));
@@ -53,7 +58,7 @@ export default function DatenOrdner() {
       {info ? (
         <div className="flex flex-wrap items-center gap-2">
           <code className="min-w-0 break-all rounded bg-muted px-1.5 py-0.5 text-xs dark:bg-slate-900" data-testid="daten-ordner-pfad">{info.ordner}</code>
-          <button type="button" onClick={oeffnen} data-testid="daten-ordner-oeffnen"
+          <button type="button" onClick={() => oeffnen()} data-testid="daten-ordner-oeffnen"
             className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-card dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
             <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" /> {t("Ordner öffnen")}
           </button>
@@ -67,6 +72,24 @@ export default function DatenOrdner() {
           {t("Personaldaten sind verschlüsselt. Ihr Schlüssel liegt außerhalb des Datenordners:")}{" "}
           <code className="break-all rounded bg-muted px-1 dark:bg-slate-900">{info.personalSchluessel}</code>{" "}
           {t("— getrennt sichern; ohne ihn sind die Personaldaten einer Sicherung nicht lesbar.")}
+        </p>
+      )}
+      {info?.personalSchluessel && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {info.personalStatus?.fingerabdruck && (
+            <span data-testid="personal-schluessel-fp">{t("Fingerabdruck")} <code className="rounded bg-muted px-1">{info.personalStatus.fingerabdruck}</code>
+              {" "}{t("(steht auch in jeder Sicherung, sicherung.json)")}</span>
+          )}
+          <button type="button" onClick={() => oeffnen("schluesselordner")} data-testid="personal-schluessel-oeffnen"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-card">
+            <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" /> {t("Schlüssel-Ordner öffnen")}
+          </button>
+        </div>
+      )}
+      {info?.personalStatus?.gesperrt && (
+        <p role="alert" className="rounded-md border border-fehler-rand bg-fehler-flaeche px-2 py-1.5 text-xs text-fehler" data-testid="personal-gesperrt">
+          {t("Personalbereich gesperrt:")} {info.personalStatus.grund}{" "}
+          {t("Legen Sie die getrennt gesicherte Schlüsseldatei an den oben genannten Ort und starten Sie die App neu.")}
         </p>
       )}
       <p role="status" className="text-xs text-erfolg dark:text-emerald-400" data-testid="daten-ordner-status">{status}</p>

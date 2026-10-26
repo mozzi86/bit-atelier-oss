@@ -45,6 +45,7 @@ import { vertragsmengenEinfrieren } from "@ava/lib/vobMengen";
 import { regelAusMuster } from "@ava/lib/mengenregeln";
 import { pruefeReferenzenOderWirf } from "@core/lib/rules/catalogs";
 import { classifiedElements } from "@core/lib/bimClassification";
+import { setzeProjektAufbauten, gibProjektAufbautenFrei } from "@core/lib/bauteil/aufbauten.js";
 import { filterQuantity } from "@ava/lib/avaFilters";
 import { positionMode } from "@ava/components/avaUtils";
 import BestandsMengenKarte from "@ava/components/BestandsMengenKarte";
@@ -80,6 +81,12 @@ export default function AVA() {
   const { user } = useAuth();
   const [building, setBuilding] = useState(null);
   const [bimModel, setBimModel] = useState(null);
+  // 107-03 (D-BK-22): build-ups of the project (fachlayer aufbauten_layer) must be known before the elements are classified
+  // (thickness and layers of a wall with a project build-up); idempotent registry, same call as in the BIM studio.
+  // (set while rendering, once per layer value, so the classification below reads it; released again on unmount)
+  const aufbautenLayer = bimModel?.aufbauten_layer ?? null;
+  useMemo(() => setzeProjektAufbauten(aufbautenLayer), [aufbautenLayer]);
+  useEffect(() => { setzeProjektAufbauten(aufbautenLayer); return () => gibProjektAufbautenFrei(aufbautenLayer); }, [aufbautenLayer]);
   const [positions, setPositions] = useState([]);
   const [tenders, setTenders] = useState([]);
   const [bids, setBids] = useState([]);

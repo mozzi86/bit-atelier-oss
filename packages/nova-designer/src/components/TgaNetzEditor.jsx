@@ -26,6 +26,9 @@ import { useSvgDrag } from "@core/lib/useSvgDrag";
 import { STATUS_STYLE } from "@designer/lib/compliance";
 import { useFachlayer } from "@designer/lib/useFachlayer";
 import { usePlanModel } from "@designer/lib/usePlanModel";
+// 100-02: data sheet of the selected node / run (same derivation and GUID as the IFC export)
+import { steckbrief, typFuerNetz } from "@core/lib/bauteil/steckbrief.js";
+import { SteckbriefKasten } from "./SteckbriefFelder";
 import { GEBAEUDESTANDARDS, DEFAULT_LUFTWECHSEL, DEFAULT_VA_M2 } from "@designer/lib/hvac";
 import {
   GEWERKE_TGA, GEWERK_KEYS, KNOTEN_ARTEN, ART_KEYS, NETZ_DEFAULT,
@@ -284,6 +287,11 @@ export default function TgaNetzEditor() {
                     </label>
                   </>
                 )}
+                <SteckbriefKasten t={t}
+                  s={selKnoten
+                    ? steckbrief(selKnoten, typFuerNetz(selKnoten), { projektId: project?.id || null, quelle: "netz-knoten", storeyHeight: plan?.storeyHeight || 3, netzGewerk: selKnoten.gewerk })
+                    : steckbrief(selKante, typFuerNetz(selKante), { projektId: project?.id || null, quelle: "netz-kante", storeyHeight: plan?.storeyHeight || 3 })}
+                  patch={(p) => setNetz((n) => (selKnoten ? aendereKnoten(n, selKnoten.id, p) : aendereKante(n, selKante.id, p)))} />
                 <Button size="sm" variant="outline" className="h-7 text-red-600" onClick={loeschen} data-testid="tn-loeschen">
                   <Trash2 className="w-3.5 h-3.5 mr-1" /> {t("Löschen")}
                 </Button>

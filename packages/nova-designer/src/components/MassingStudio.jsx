@@ -7,6 +7,7 @@ import { useModellierer, ModellWerkzeugleiste, ModellEbene, ErsteSchritte, Model
 import { useKontextmenue, KontextmenueAnzeige } from "@core/components/Kontextmenue";
 import KnotenEditor from "@designer/components/KnotenEditor";
 import { useBuildingProgram, rectFootprint, polygonAreaM } from "@core/lib/useBuildingProgram";
+import { geschosseAus, okfObersterGeschoss } from "@core/lib/bauteil/hoehen.js"; // 107-02: one derivation of the top-storey level and one writer of the storey height
 import { useProject } from "@core/lib/ProjectContext";
 import { useOsmBuildings } from "@designer/lib/useOsmBuildings";
 import { metersPerPixel } from "@core/lib/geo";
@@ -831,7 +832,7 @@ export default function MassingStudio({
       zerlegung: zerlegungsArt(layer.zerlegung),
       achse: store.achseM ?? null,
       geschosseJeRiegel: layer.geschosseJeRiegel && typeof layer.geschosseJeRiegel === "object" ? layer.geschosseJeRiegel : {},
-      okf_m: (Math.max(1, Math.round(store.storeys || 1)) - 1) * (store.storeyHeight || 3),
+      okf_m: okfObersterGeschoss(store.storeys || 1, geschosseAus(store)), // 107-02: elevation of the top storey, with the storey table if there is one
       // 86-05b: bar minimum of the applied proposal (same guard as the workshop; default 120).
       riegelMinFlaeche_m2: Number(layer.riegelMinFlaeche_m2) > 0 ? Number(layer.riegelMinFlaeche_m2) : WERKSTATT_DEFAULT.riegelMinFlaeche_m2,
     });
@@ -845,7 +846,7 @@ export default function MassingStudio({
         tuerpunkte: Array.isArray(w.rettungsweg_tuerpunkte) ? w.rettungsweg_tuerpunkte : [],
         innenArt: w.rettungsweg_innen_art, innenNaeherung: w.rettungsweg_innen_naeherung === true,
       }));
-  }, [rettungswegAktiv, wtLayer, store.footprintM, store.storeys, store.storeyHeight, store.achseM]);
+  }, [rettungswegAktiv, wtLayer, store.footprintM, store.storeys, store.storeyHeight, store.geschosse, store.achseM]);
   // Footprint-Mittelpunkt im Lageplan (Site-Meter) — Zonenpunkte sind um den Ursprung zentriert.
   const cxM = foot.x + foot.w / 2;
   const cyM = foot.y + foot.d / 2;
@@ -1585,7 +1586,8 @@ export default function MassingStudio({
                   : <>Grundstücksfläche ({flaechenQuelleText}): <b>{Math.round(siteArea).toLocaleString("de-DE")} m²</b> — GRZ/GFZ rechnen auf dieser Fläche.</>}
               </div>
               <Slider label="Geschosse" value={floors} min={1} max={25} step={1} unit=" OG" set={setFloors} />
-              <Slider label="Geschosshöhe" value={floorH} min={2.5} max={4.5} step={0.1} unit=" m" set={(v) => { setFloorH(v); store.set({ storeyHeight: v }); }} />
+              {/* 107-02: the slider sets ALL storeys (also the rows of an existing storey table), like the height input of the BIM studio */}
+              <Slider label="Geschosshöhe" value={floorH} min={2.5} max={4.5} step={0.1} unit=" m" set={(v) => { setFloorH(v); store.setAlleGeschosshoehen(v); }} />
               <div className="border-t pt-2 mt-1 space-y-3">
                 {/* 75-13: escape-route paths from the workshop solver — only meaningful
                     while the workshop rule "Rettungsweg" is on (the label says so). */}

@@ -3,7 +3,8 @@
 In/out: plain dataclasses, JSON-friendly via to_dict(). Events are dicts with a
 `type` key so the WebSocket route can forward them 1:1 without a second mapping.
 
-    Message   {role: system|user|assistant|tool, content, tool_calls?, tool_call_id?, name?}
+    Message   {role: system|user|assistant|tool, content, tool_calls?, tool_call_id?, name?, bilder?}
+              bilder (106-06): base64 PNGs of a user turn (images of the view); providers turn them into image blocks.
     ToolCall  {id, name, arguments: dict}
     ToolSchema{name, description, parameters: JSON schema}
     Event     {type: text_delta|tool_call|tool_result|approval|usage|error|done|notice, ...}
@@ -34,6 +35,8 @@ class Message:
     tool_calls: list[ToolCall] = field(default_factory=list)
     tool_call_id: str | None = None
     name: str | None = None
+    #: 106-06: checked base64 PNGs (harness/bilder.py) of a user turn - only context; never written to logs (to_dict counts them).
+    bilder: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.role not in ROLES:
@@ -47,6 +50,8 @@ class Message:
             d["tool_call_id"] = self.tool_call_id
         if self.name:
             d["name"] = self.name
+        if self.bilder:
+            d["bilder_anzahl"] = len(self.bilder)  # the images themselves stay out of logs and saved transcripts
         return d
 
     @classmethod

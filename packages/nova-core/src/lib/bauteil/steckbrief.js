@@ -12,13 +12,17 @@
 //
 // Stored overrides are optional fields on the element (additive, no layer version needed):
 //   bauteil_typ, ifc_klasse, ifc_typ, status, kg, gewerk_lb, bauabschnitt, guid, material,
-//   schicht_status (97-05: { "<layer index>": status }, outside → inside).
+//   schicht_status (97-05: { "<layer index>": status }, outside → inside),
+//   schicht_funktion / schicht_prioritaet (107-03: { "<layer index>": "kern"|"bekleidung"|"sonstig" } and { "<layer index>": 0-999 },
+//   same pattern; the build-up's own value or a proposal applies where the element states none, see aufbauten.js).
 //
 // In: an element object plus its type key. Out: steckbrief() data sheet, BAUTEIL_TYPEN registry,
 // bauteilGuid(), typFuerWand(), typFuerNetz(). No I/O.
 
 import { stabileGuid } from "../werkstattBauteile.js";
-import { aufbauVon } from "./aufbauten.js";
+import { aufbauVon, kernLage } from "./aufbauten.js";
+import { kernFehlt, wandDicke_m, KERN_REF_LINIEN } from "./referenz.js";
+import { wandHoehe, oberkanteFolgtGeschoss, geschosshoehe } from "./hoehen.js";
 import { lbEintrag } from "./gewerke.js";
 import { normalizeStatus } from "../bimClassification.js";
 
@@ -102,6 +106,20 @@ export const BAUTEIL_TYPEN = Object.freeze({
     annahme: "IFC-Klasse vorläufig (Proxy, ObjectType Brandschott)" },
 });
 
+/** Assumption texts of the core reference lines without a core (107-01; UI strings, EN in i18nTeile/bauteilkern-107.js). */
+const KERN_ANNAHME = Object.freeze({
+  coreOutside: "Referenzlinie „Kern außen“ ohne Kern-Schicht wie Mitte behandelt",
+  coreInside: "Referenzlinie „Kern innen“ ohne Kern-Schicht wie Mitte behandelt",
+  coreCenter: "Referenzlinie „Kern Mitte“ ohne Kern-Schicht wie Mitte behandelt",
+});
+
+/** Assumption texts when the core of a core reference line is only PROPOSED from the material (107-03; UI strings, EN in i18nTeile/bauteilkern-107.js). */
+const KERN_VORSCHLAG = Object.freeze({
+  coreOutside: "Referenzlinie „Kern außen“ bezieht sich auf die vorgeschlagene Kern-Schicht — bitte bestätigen",
+  coreInside: "Referenzlinie „Kern innen“ bezieht sich auf die vorgeschlagene Kern-Schicht — bitte bestätigen",
+  coreCenter: "Referenzlinie „Kern Mitte“ bezieht sich auf die vorgeschlagene Kern-Schicht — bitte bestätigen",
+});
+
 /** KG of a penetrating network trade (fire stop / penetration follow the system). */
 const KG_NETZ = Object.freeze({ heizung: "422", trinkwasser: "412", abwasser: "411", lueftung: "431", elektro: "444" });
 
@@ -176,11 +194,15 @@ const r2 = (v) => Math.round(v * 100) / 100;
  * beams: length; everything else: 1 piece.
  * @param {BauteilTyp} typ
  * @param {any} el
- * @param {{storeyHeight?: number}} ctx storeyHeight in m (default 3)
+ * @param {{storeyHeight?: number, geschosse?: import("./hoehen.js").Geschosse}} ctx storeyHeight in m (default 3); geschosse (107-02) the
+ *   storey source (one height or the storey table) for walls whose top edge is linked to a storey (`oberkante_bezug: "geschoss"`)
  * @returns {{wert: number, einheit: string}}
  */
 export function mengeVon(typ, el, ctx = {}) {
-  const h = Number(el?.height ?? el?.hoehe_m ?? ctx.storeyHeight ?? 3) || 3;
+  // 107-02: a wall linked to the storey has no fixed height — it is derived (hoehen.js), like in 3D, plan and IFC
+  const h = oberkanteFolgtGeschoss(el)
+    ? wandHoehe(el, ctx.geschosse ?? ctx.storeyHeight)
+    : Number(el?.height ?? el?.hoehe_m ?? (Array.isArray(ctx.geschosse) ? geschosshoehe(el?.level || 0, ctx.geschosse) : ctx.storeyHeight) ?? 3) || 3;
   if (typ.einheit === "m2" && el?.a && el?.b) return { wert: r2(Math.hypot(el.b.x - el.a.x, el.b.z - el.a.z) * h), einheit: "m2" };
   if (typ.einheit === "m2") return { wert: r2(Number(el?.flaeche_m2) || flaeche(el?.points || el?.polygon)), einheit: "m2" };
   if (typ.einheit === "m" && el?.a && el?.b) return { wert: r2(Math.hypot(el.b.x - el.a.x, el.b.z - el.a.z)), einheit: "m" };
@@ -197,7 +219,8 @@ export function mengeVon(typ, el, ctx = {}) {
  * @property {{klasse: string, typ: string}} ifc
  * @property {string} guid
  * @property {string|null} status         bestand|neubau|abbruch|null (null = ohne Status)
- * @property {{name: string, schichten: Array<{name: string, material: string|null, dicke_m: number, status: string|null, statusGeerbt: boolean}>, dicke_m: number}|null} aufbau
+ * @property {{name: string, quelle: 'composite'|'klasse'|'dicke', schichten: Array<{name: string, material: string|null, dicke_m: number, status: string|null, statusGeerbt: boolean, funktion: "kern"|"bekleidung"|"sonstig", funktionAbgeleitet: boolean, funktionAnnahme: boolean, prioritaet: number, prioritaetAbgeleitet: boolean}>, dicke_m: number, funktionAbgeleitet: boolean, funktionAnnahme: boolean, prioritaetAbgeleitet: boolean, kern: {aussen_m: number, kern_m: number, abgeleitet: boolean}|null}|null} aufbau
+ *   107-03: per layer function and priority with their origin (abgeleitet = proposal, never stored), `kern` = the core split of the build-up in m (null = no core layer)
  * @property {string|null} material       short material text
  * @property {{lb: string, name: string, folge: number}|null} gewerk  STLB-Bau LB with site order
  * @property {string|null} gewerkGrob     coarse AVA trade
@@ -205,18 +228,41 @@ export function mengeVon(typ, el, ctx = {}) {
  * @property {{wert: number, einheit: string}} menge
  * @property {string|null} bauabschnitt
  * @property {boolean} tragend
+ * @property {string|null} feuerwiderstand fire resistance class stored on the element (F30, F90, EI 90 ...; "ohne" = none), null = not set (106-03, additive)
+ * @property {string|null} statik_vermerk  note on shoring / structure stored on the element, null = none (106-03, additive)
  * @property {Record<string, 'gesetzt'|'abgeleitet'|'offen'>} quelle  origin per field
  * @property {string[]} offen             fields nobody has decided yet (shown as hints)
  * @property {string[]} annahmen          assumptions behind derived values
  */
 
 /**
+ * The data-sheet fields an editor may store on an element (100-02): KG (1–3 digits), trade LB, construction
+ * section — exactly what `steckbriefFelder` lets the user edit. Layer hardeners (TGA network, structure) keep
+ * them through this one function; an element without them yields {} so stored layers stay byte-identical.
+ * @param {any} el element with optional kg / gewerk_lb / bauabschnitt
+ * @returns {{kg?: string, gewerk_lb?: string, bauabschnitt?: string}}
+ */
+export function steckbriefFelderAus(el) {
+  /** @type {{kg?: string, gewerk_lb?: string, bauabschnitt?: string}} */
+  const aus = {};
+  if (!el || typeof el !== "object") return aus;
+  // 1–3 digits like the input field: the editor saves every keystroke ("4" → "42" → "422"); a
+  // three-digit-only rule dropped the first digit and the field jumped back to the derived KG.
+  if (el.kg != null && /^\d{1,3}$/.test(String(el.kg))) aus.kg = String(el.kg);
+  if (typeof el.gewerk_lb === "string" && /^\d{3}$/.test(el.gewerk_lb)) aus.gewerk_lb = el.gewerk_lb;
+  // not trimmed: editors save on every keystroke, a trim would eat the space typed between two words
+  if (typeof el.bauabschnitt === "string" && el.bauabschnitt.trim()) aus.bauabschnitt = el.bauabschnitt.slice(0, 40);
+  return aus;
+}
+
+/**
  * The data sheet of one element.
  * @param {any} el element (drawn, workshop, network, penetration …)
  * @param {string} typKey key of BAUTEIL_TYPEN; `el.bauteil_typ` overrides it
- * @param {{projektId?: string|number|null, quelle?: string, storeyHeight?: number, typAbgeleitet?: boolean, netzGewerk?: string}} [ctx]
+ * @param {{projektId?: string|number|null, quelle?: string, storeyHeight?: number, geschosse?: import("./hoehen.js").Geschosse, typAbgeleitet?: boolean, netzGewerk?: string, kern?: {aussen_m: number, kern_m: number}|null}} [ctx]
  *   quelle: source name for the GUID; typAbgeleitet: the type itself is an assumption;
- *   netzGewerk: trade of the penetrating line (penetration, fire stop) for the KG.
+ *   netzGewerk: trade of the penetrating line (penetration, fire stop) for the KG;
+ *   kern: core split of the wall build-up in m (default: derived from the build-up, 107-03; null = no core known).
  * @returns {Steckbrief}
  */
 export function steckbrief(el, typKey, ctx = {}) {
@@ -244,7 +290,27 @@ export function steckbrief(el, typKey, ctx = {}) {
   quelle.status = status ? "gesetzt" : "offen";
 
   const istWand = typ.ifc === "IfcWall";
-  const aufbau = istWand ? aufbauVon(el) : null;
+  // 107-03 task 5: a slab with a `composite` (project build-up) has a build-up too; other non-walls still have none
+  const aufbau = istWand || el?.composite ? aufbauVon(el) : null;
+  // `null` states "no core" on purpose (wandGeometrie does the same); a thickness-only wall has no core for the reference lines (kernVon)
+  const kernSplit = ctx.kern !== undefined ? ctx.kern : aufbau && aufbau.quelle !== "dicke" ? kernLage(aufbau.schichten) : null;
+  // 107-01 (D-BK-01, D-BW-03): a core reference line ("coreOutside" …) without a known core layer is drawn like "center"
+  // (bauteil/referenz.js); the data sheet says so instead of showing it as decided. Only walls with such a value get the
+  // field, so every other data sheet (and the IFC "Herkunft" text) stays byte-identical.
+  if (istWand && kernFehlt(el?.refLine, aufbau?.dicke_m || wandDicke_m(el), kernSplit)) {
+    quelle.refLine = "abgeleitet";
+    annahmen.push(KERN_ANNAHME[el.refLine]);
+  } else if (istWand && KERN_REF_LINIEN.includes(el?.refLine) && /** @type {any} */ (kernSplit)?.abgeleitet) {
+    // 107-03: a core exists but only as a proposal from the material (nothing stated in the build-up or on the element)
+    quelle.refLine = "abgeleitet";
+    annahmen.push(KERN_VORSCHLAG[el.refLine]);
+  }
+  // 107-03 (D-BW-03): the layer function of a layered wall is a proposal until the build-up or the element states it; the data sheet says so
+  // (no `quelle` key: it would change the IFC "Herkunft" text of every wall, golden of 107-01). Single-layer walls need no hint.
+  if (aufbau && aufbau.schichten.length > 1 && aufbau.funktionAbgeleitet) annahmen.push("Funktion der Schichten aus dem Material abgeleitet — bitte bestätigen");
+  // 107-03 review: a build-up may state a function that is itself an [ASSUMED] value (timber: core = insulation between the studs); it is
+  // stated, not derived, but still unconfirmed — the sheet says so (again no `quelle` key, same reason as above)
+  if (aufbau && aufbau.funktionAnnahme) annahmen.push("Funktion einzelner Schichten des Aufbaus ist eine Annahme — bitte bestätigen");
   const material = wahl("material", el?.material, aufbau && aufbau.quelle !== "keine" && aufbau.quelle !== "dicke" ? aufbau.name : null);
 
   const kgNetz = ctx.netzGewerk ? KG_NETZ[ctx.netzGewerk] : null;
@@ -263,7 +329,7 @@ export function steckbrief(el, typKey, ctx = {}) {
     guid: bauteilGuid(ctx.projektId, ctx.quelle || key, el),
     status,
     // 97-05: each layer carries its own status (schicht_status[index]) or inherits the element's.
-    aufbau: aufbau && aufbau.quelle !== "keine" ? { name: aufbau.name, dicke_m: aufbau.dicke_m,
+    aufbau: aufbau && aufbau.quelle !== "keine" ? { name: aufbau.name, quelle: aufbau.quelle, dicke_m: aufbau.dicke_m, funktionAbgeleitet: aufbau.funktionAbgeleitet, funktionAnnahme: aufbau.funktionAnnahme, prioritaetAbgeleitet: aufbau.prioritaetAbgeleitet, kern: kernLage(aufbau.schichten),
       schichten: aufbau.schichten.map((l, i) => ({ ...l, status: normalizeStatus(el?.schicht_status?.[i]) ?? status, statusGeerbt: normalizeStatus(el?.schicht_status?.[i]) == null })) } : null,
     material,
     gewerk,
@@ -272,6 +338,8 @@ export function steckbrief(el, typKey, ctx = {}) {
     menge: mengeVon(typ, el, ctx),
     bauabschnitt,
     tragend: el?.tragend ?? typ.tragend ?? false,
+    feuerwiderstand: typeof el?.feuerwiderstand === "string" && el.feuerwiderstand.trim() ? el.feuerwiderstand : null,
+    statik_vermerk: typeof el?.statik_vermerk === "string" && el.statik_vermerk.trim() ? el.statik_vermerk : null,
     quelle,
     offen,
     annahmen,

@@ -4,7 +4,8 @@ BIT-Atelier selbst steht unter der MIT-Lizenz (`LICENSE`). Diese Datei dokumenti
 Open-Source-Komponenten mit Hinweispflichten oder nicht-permissiven Lizenzen, die mit
 der Plattform an den Browser ausgeliefert werden. Permissiv lizenzierte Abhängigkeiten
 (MIT/ISC/BSD/Apache-2.0) sind über `package.json` und npm nachvollziehbar und hier nicht
-einzeln gelistet. Lizenzangaben laut `node_modules/<paket>/package.json` (Stand 06.10.2026).
+einzeln gelistet. Lizenzangaben laut `node_modules/<paket>/package.json` (Stand 22.10.2026). Die Versionen hier
+prüft `tests/unit/drittlizenzen-10521.test.js` gegen `package-lock.json` und `vendor/`.
 
 ## @salusoft89/planegcs — LGPL-2.0-or-later
 
@@ -19,8 +20,9 @@ einzeln gelistet. Lizenzangaben laut `node_modules/<paket>/package.json` (Stand 
   https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
 - **Quellcode:** https://github.com/Salusoft89/planegcs (Wrapper + Build) und
   https://github.com/FreeCAD/FreeCAD `src/Mod/Sketcher/App/planegcs` (C++-Kern).
-  Zusätzlich lokal archiviert: `vendor/salusoft89-planegcs-1.2.0.tgz`
-  (npm-Tarball der gepinnten Version inkl. TypeScript-Quellen des Wrappers).
+  Zusätzlich lokal archiviert: `vendor/salusoft89-planegcs-1.3.0.tgz`
+  (npm-Tarball genau der ausgelieferten Version inkl. TypeScript-Quellen des Wrappers
+  und Lizenztext; bis 22.10.2026 lag hier irrtümlich noch der Tarball von 1.2.0).
 
 **Compliance-Maßnahmen in diesem Repo** (Austauschbarkeit gemäß LGPL §6):
 
@@ -37,7 +39,7 @@ einzeln gelistet. Lizenzangaben laut `node_modules/<paket>/package.json` (Stand 
 
 ## web-ifc — MPL-2.0
 
-- **Version:** 0.0.77 (npm, `^0.0.77`)
+- **Version:** 0.0.78 (npm, `^0.0.78`)
 - **Was:** IFC-Parser und Geometrie-Kern (WebAssembly) von That Open Company —
   Grundlage von BIM-Viewer, IFC-Viewer, Modellständen und Prüf-Suite.
 - **Lizenz:** Mozilla Public License 2.0 (dateibezogenes Copyleft): Änderungen an
@@ -49,7 +51,7 @@ einzeln gelistet. Lizenzangaben laut `node_modules/<paket>/package.json` (Stand 
 
 ## dompurify — MPL-2.0 OR Apache-2.0
 
-- **Version:** 3.4.7 (npm, transitive Abhängigkeit)
+- **Version:** 3.4.16 (npm, transitive Abhängigkeit)
 - **Was:** HTML-Bereinigung (XSS-Schutz) für aus HTML erzeugte Inhalte.
 - **Lizenz:** wahlweise Mozilla Public License 2.0 oder Apache License 2.0
   (`(MPL-2.0 OR Apache-2.0)`); unmodifiziert verwendet.

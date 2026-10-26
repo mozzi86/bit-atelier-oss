@@ -13,6 +13,9 @@ import { geschuetzterPrompt, antwortBereinigen } from './llmSchutz.js';
 // 93-12: loopback targets go through node:http with a long timeout; "Nur lokale KI" guard.
 import { senden, nurLokalPruefen, lokalTimeoutMs } from './llmLokal.js';
 import { istLoopbackUrl, lokalerFehlerText } from '../src/lib/kiLokal.js';
+// 106-06: images of the view as context (bilder: [{png_base64}]) - checked here, the one choke point of the app server.
+import { bilderPruefen, bildFreigabe, bildZielText } from '../src/lib/zeigen/bildKontext.js';
+import { bildFaehig } from '../src/lib/modellKatalog.js';
 
 export { endpunktUrl, chatCompletionsUrl };
 
@@ -71,7 +74,32 @@ function buildMockFromSchema(schema) {
   return schema.enum?.[0] ?? '';
 }
 
-async function callAnthropic({ prompt, response_json_schema }) {
+/**
+ * The user turn of a request, with images when there are any (106-06). Text-only requests stay byte-identical to before.
+ * @param {"anthropic"|"openai"|"ollama"} stil  API dialect.
+ * @param {string} text  The prompt.
+ * @param {Array<{png_base64: string}>} [bilder]  Checked PNGs (bilderPruefen), base64 without data: prefix.
+ * @returns {Record<string, any>}  One message object {role: "user", content, images?}.
+ */
+export function benutzerNachricht(stil, text, bilder = []) {
+  if (!bilder.length) return { role: 'user', content: text };
+  if (stil === 'anthropic') {
+    // Messages dialect: image blocks before the text (the documented order for best results)
+    return { role: 'user', content: [
+      ...bilder.map((b) => ({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: b.png_base64 } })),
+      { type: 'text', text },
+    ] };
+  }
+  // local /api/chat dialect: base64 images in `images` next to the text content
+  if (stil === 'ollama') return { role: 'user', content: text, images: bilder.map((b) => b.png_base64) };
+  // Chat Completions dialect: content parts, the image as a data URL
+  return { role: 'user', content: [
+    { type: 'text', text },
+    ...bilder.map((b) => ({ type: 'image_url', image_url: { url: `data:image/png;base64,${b.png_base64}` } })),
+  ] };
+}
+
+async function callAnthropic({ prompt, response_json_schema, bilder = [] }, deps = {}) {
   const sys = response_json_schema
     ? 'You are a helpful assistant. Respond ONLY with valid JSON matching the schema the user describes. No prose, no code fences.'
     : 'You are a helpful assistant specialized in construction, architecture, and project management.';
@@ -79,7 +107,7 @@ async function callAnthropic({ prompt, response_json_schema }) {
     ? `${prompt}\n\nReturn JSON conforming to this JSON schema:\n${JSON.stringify(response_json_schema)}`
     : prompt;
 
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+  const resp = await (deps.fetchFn || fetch)(ENV_ZIELE.anthropic, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -90,7 +118,7 @@ async function callAnthropic({ prompt, response_json_schema }) {
       model: anthropicModell(),
       max_tokens: 2048,
       system: sys,
-      messages: [{ role: 'user', content: fullPrompt }],
+      messages: [benutzerNachricht('anthropic', fullPrompt, bilder)],
     }),
   });
   if (!resp.ok) throw new Error(`Anthropic ${resp.status}: ${await resp.text()}`);
@@ -99,7 +127,7 @@ async function callAnthropic({ prompt, response_json_schema }) {
   return response_json_schema ? safeParse(text) : text;
 }
 
-async function callOpenAI({ prompt, response_json_schema }) {
+async function callOpenAI({ prompt, response_json_schema, bilder = [] }, deps = {}) {
   const sys = response_json_schema
     ? 'You are a helpful assistant. Respond ONLY with valid JSON matching the schema the user describes.'
     : 'You are a helpful assistant specialized in construction, architecture, and project management.';
@@ -107,7 +135,7 @@ async function callOpenAI({ prompt, response_json_schema }) {
     ? `${prompt}\n\nReturn JSON conforming to this JSON schema:\n${JSON.stringify(response_json_schema)}`
     : prompt;
 
-  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+  const resp = await (deps.fetchFn || fetch)(ENV_ZIELE.openai, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -117,7 +145,7 @@ async function callOpenAI({ prompt, response_json_schema }) {
       model: openaiModell(),
       messages: [
         { role: 'system', content: sys },
-        { role: 'user', content: fullPrompt },
+        benutzerNachricht('openai', fullPrompt, bilder),
       ],
       ...(response_json_schema
         ? { response_format: { type: 'json_object' } }
@@ -202,6 +230,7 @@ export function zielUrlFuer(conn) {
 async function verbindungAufrufen(conn, url, params, { signal, timeoutMs, deps }) {
   const { sys, fullPrompt } = buildPrompts(params);
   const { response_json_schema } = params;
+  const bilder = Array.isArray(params.bilder) ? params.bilder : [];
   // Loopback: node:http with our own timeout (default 15 min); cloud: fetch as before.
   const post = (headers, body) => senden(url, { method: 'POST', headers, body, signal, timeoutMs }, deps);
 
@@ -214,7 +243,7 @@ async function verbindungAufrufen(conn, url, params, { signal, timeoutMs, deps }
       model: conn.model || STANDARD_ANTHROPIC_MODELL,
       max_tokens: 2048,
       system: sys,
-      messages: [{ role: 'user', content: fullPrompt }],
+      messages: [benutzerNachricht('anthropic', fullPrompt, bilder)],
     }));
     if (!resp.ok) throw new Error(`Anthropic ${resp.status}: ${await resp.text()}`);
     const data = await resp.json();
@@ -228,7 +257,7 @@ async function verbindungAufrufen(conn, url, params, { signal, timeoutMs, deps }
       stream: false,
       messages: [
         { role: 'system', content: sys },
-        { role: 'user', content: fullPrompt },
+        benutzerNachricht('ollama', fullPrompt, bilder),
       ],
     }));
     if (!resp.ok) throw new Error(`Ollama ${resp.status}: ${await resp.text()}`);
@@ -244,7 +273,7 @@ async function verbindungAufrufen(conn, url, params, { signal, timeoutMs, deps }
     model: conn.model || STANDARD_OPENAI_MODELL,
     messages: [
       { role: 'system', content: sys },
-      { role: 'user', content: fullPrompt },
+      benutzerNachricht('openai', fullPrompt, bilder),
     ],
   }));
   if (!resp.ok) throw new Error(`Endpoint ${resp.status}: ${await resp.text()}`);
@@ -253,30 +282,89 @@ async function verbindungAufrufen(conn, url, params, { signal, timeoutMs, deps }
   return response_json_schema ? safeParse(text) : text;
 }
 
+/** Endpoints of the env-key fallbacks (no LlmConnection), so the image check knows where an image would go. */
+export const ENV_ZIELE = Object.freeze({
+  anthropic: 'https://api.anthropic.com/v1/messages',
+  openai: 'https://api.openai.com/v1/chat/completions',
+});
+
+/**
+ * Where a request goes and with which model - for the image check (106-06).
+ * @param {object|null} connection active LlmConnection or null
+ * @param {Record<string, string|undefined>} [env]
+ * @returns {{url: string, anbieter: string, modell: string}|null}  null = the offline mock (no model at all)
+ */
+export function anfrageZiel(connection, env = process.env) {
+  if (connection) {
+    const c = /** @type {any} */ (connection);
+    // Review fix 106-06: without a model the request names the provider's default model, but only the provider's own host really
+    // answers with it. Another server behind the same dialect (a local chat-completions server, another vendor) answers with whatever
+    // model it has loaded - then the model is unknown ('') and bildFaehig refuses the image in words.
+    const standardHost = baseUrlFor(c) === String(PROVIDER_DEFAULTS[c.provider] || '').replace(/\/+$/, '') && baseUrlFor(c) !== '';
+    const standard = c.provider === 'anthropic' ? STANDARD_ANTHROPIC_MODELL : c.provider === 'ollama' ? 'llama3' : STANDARD_OPENAI_MODELL;
+    return { url: zielUrlFuer(c), anbieter: String(c.name || c.provider || ''), modell: String(c.model || (standardHost ? standard : '')) };
+  }
+  if (env.ANTHROPIC_API_KEY) return { url: ENV_ZIELE.anthropic, anbieter: 'anthropic', modell: anthropicModell(env) };
+  if (env.OPENAI_API_KEY) return { url: ENV_ZIELE.openai, anbieter: 'openai', modell: openaiModell(env) };
+  return null;
+}
+
+/**
+ * The image gate of the app server (106-06, D-IM-02): checks the images, the project (NDA, consent), the switches and whether the model
+ * reads images - BEFORE any request. Throws with a German sentence and `grund`; nothing is sent then.
+ * @param {Array<{png_base64: string}>} bilder  checked images (bilderPruefen)
+ * @param {object|null} connection
+ * @param {{ nurLokal?: boolean, bilderExtern?: boolean, projekt?: {nda?: boolean, bild_freigabe?: any}|null, katalog?: any, env?: Record<string, string|undefined> }} opt
+ * @throws {Error & {status: number, grund: string}}
+ */
+export function bildGatter(bilder, connection, opt = {}) {
+  if (!bilder.length) return;
+  const fehler = (/** @type {number} */ status, /** @type {string} */ grund, /** @type {string} */ text) => Object.assign(new Error(text), { status, grund });
+  // the project's own rules first: they hold whatever the target is (no project, NDA)
+  const vorab = bildFreigabe({ projekt: opt.projekt ?? null, zielLokal: true });
+  if (!vorab.ok) throw fehler(403, String(vorab.grund), vorab.text);
+  const ziel = anfrageZiel(connection, opt.env);
+  if (!ziel) throw fehler(422, 'vision', 'Kein Sprachmodell verbunden (Offline-Modus) — ein Bild hätte kein Ziel; nichts wurde gesendet');
+  const lokal = istLoopbackUrl(ziel.url);
+  let host = '';
+  try { host = new URL(ziel.url).hostname; } catch { host = ''; }
+  const f = bildFreigabe({ projekt: opt.projekt ?? null, zielLokal: lokal, nurLokal: !!opt.nurLokal, bilderExtern: opt.bilderExtern !== false,
+    ziel: bildZielText({ lokal, anbieter: ziel.anbieter, host }) });
+  // the consent is a question to the person (409), every other refusal is final (403)
+  if (!f.ok) throw fehler(f.grund === 'zustimmung' ? 409 : 403, String(f.grund), f.text);
+  const v = bildFaehig({ modell: ziel.modell, katalog: opt.katalog ?? null });
+  if (!v.ja) throw fehler(422, 'vision', v.text);
+}
+
 /**
  * Invoke the active model (Base44 InvokeLLM contract: string, or parsed JSON with a schema).
- * @param {object} params { prompt, response_json_schema?, daten? }
+ * @param {object} params { prompt, response_json_schema?, daten?, bilder? } - bilder (106-06): [{png_base64}] images of the view, see bildGatter
  * @param {object|null} connection active LlmConnection or null (env-key fallback / offline mock)
- * @param {{ nurLokal?: boolean, deps?: object }} [opt] nurLokal = "Nur lokale KI" (93-12): every
- *   target that is not on this computer is refused BEFORE any request, including the env-key
- *   fallbacks and the offline mock (the user asked for local AI — a mock answer would hide that none
- *   is connected); deps = injectable transports for tests
+ * @param {{ nurLokal?: boolean, bilderExtern?: boolean, projekt?: object|null, katalog?: any, deps?: object, env?: Record<string, string|undefined> }} [opt]
+ *   nurLokal = "Nur lokale KI" (93-12): every target that is not on this computer is refused BEFORE any request, including the env-key
+ *   fallbacks and the offline mock (the user asked for local AI — a mock answer would hide that none is connected);
+ *   bilderExtern/projekt/katalog: the image gate (106-06) - only read when params.bilder is not empty; deps = injectable transports for tests
  * @returns {Promise<any>}
- * @throws {Error & {status?: number}} 403 when refused by "Nur lokale KI"
+ * @throws {Error & {status?: number, grund?: string}} 403 when refused by "Nur lokale KI" or the image gate, 409 when an image needs the
+ *   project's consent, 422 when the model reads no images, 400 for a broken image
  */
 export async function invokeLLM(params, connection, opt = {}) {
   if (opt.nurLokal) nurLokalPruefen(connection ? zielUrlFuer(connection) : '', true);
+  const bilder = bilderPruefen(params?.bilder);
+  bildGatter(bilder, connection, opt);
   // 78-12: external content as data (params.daten = [{ quelle, text }]) behind a fixed preamble, and the
   // answer as plain text only (llmSchutz.js). Without params.daten the prompt is unchanged.
   const geschuetzt = { ...params, prompt: geschuetzterPrompt(params?.prompt, params?.daten) };
   delete geschuetzt.daten;
+  delete geschuetzt.bilder;
+  if (bilder.length) geschuetzt.bilder = bilder;
   return antwortBereinigen(await rufen(geschuetzt, connection, opt.deps));
 }
 
-async function rufen(params, connection, deps) {
+async function rufen(params, connection, deps = {}) {
   // Aktive benutzerdefinierte Verbindung hat Vorrang; Fallback bleibt unverändert.
   if (connection) return callConnection(connection, params, { deps });
-  if (process.env.ANTHROPIC_API_KEY) return callAnthropic(params);
-  if (process.env.OPENAI_API_KEY) return callOpenAI(params);
+  if (process.env.ANTHROPIC_API_KEY) return callAnthropic(params, deps);
+  if (process.env.OPENAI_API_KEY) return callOpenAI(params, deps);
   return mockResponse(params);
 }

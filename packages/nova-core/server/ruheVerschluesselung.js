@@ -90,6 +90,16 @@ export function ladeSchluessel(pfad, { erzeugen = false } = {}) {
 }
 
 /**
+ * Fingerprint of a key for display and for sicherung.json (105-12): the first 16 hex digits of SHA-256(key).
+ * Lets the user check which key file belongs to a backup — it reveals nothing usable about the key itself.
+ * @param {Buffer} key 32-byte key
+ * @returns {string} 16 lowercase hex digits
+ */
+export function schluesselFingerabdruck(key) {
+  return crypto.createHash('sha256').update(key).digest('hex').slice(0, 16);
+}
+
+/**
  * AES-256-GCM codec for createDb/createBlobStore. decode() passes plain text
  * (pre-96-01 files) through unchanged so they can be migrated; it throws on a
  * tampered file or a wrong key (GCM authentication fails).

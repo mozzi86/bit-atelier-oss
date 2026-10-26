@@ -14,15 +14,21 @@
 //  9 penetration in a load-bearing element without structural approval  warn
 // 10 penetration in a wall that is demolished                           hinweis
 // 11 a line crosses a wall without a planned penetration                hinweis
+// 12 a penetration lies outside its host wall (107-04)                  hinweis
 // 2 (tender position mixing statuses) runs in the AVA card "Mengentöpfe" (bestandsMengen.statusMischung),
 // 7 (lens vs sheet scale) in the PDF export (97-09). Not yet: 4 (survey-closed flag does not exist yet).
 //
 // In:  { modell (BimModel record), werkstatt (werkstattBauteile result, optional), durchbrueche
-//      (Durchbruch records), projektId, bauart }. Out: Befund[]. Pure, no I/O.
+//      (Durchbruch records), projektId, bauart, huelle (hull walls of the model, optional), geschosse (storey source, optional) }.
+//      Out: Befund[]. Pure, no I/O.
 
 import { typFuerWand, steckbrief, bauteilGuid } from "./steckbrief.js";
-import { attributeVon, werkstattMitAttributen } from "./attribute.js";
+import { attributeVon, mitAttributen, werkstattMitAttributen } from "./attribute.js";
 import { normalizeStatus } from "../bimClassification.js";
+import { wirtVon, durchbruchImWirt } from "./oeffnungen.js";
+
+/** German name and element-id prefix of an opening: door, opening without a filling (107-04), else window. */
+const artVon = (/** @type {any} */ o) => (o?.kind === "door" ? { name: "Tür", id: "door" } : o?.kind === "oeffnung" ? { name: "Öffnung", id: "oeffnung" } : { name: "Fenster", id: "window" });
 
 /**
  * @typedef {object} Befund
@@ -82,16 +88,36 @@ function waendeVon(modell, werkstatt, projektId) {
 
 /**
  * Run the checks.
- * @param {{modell: any, werkstatt?: any, durchbrueche?: any[], projektId?: string|number|null, bauart?: 'neubau'|'bestand'}} eingabe
+ * @param {{modell: any, werkstatt?: any, durchbrueche?: any[], projektId?: string|number|null, bauart?: 'neubau'|'bestand', huelle?: any[]|null, geschosse?: import("./hoehen.js").Geschosse}} eingabe
+ *   huelle (107-04): `model.walls` of the building model — hosts of check 12 among the hull walls; geschosse (107-04): the storey source (hoehen.js) —
+ *   without it check 12 does not test the height
  * @returns {Befund[]}
  */
-export function fehlplanungPruefen({ modell, werkstatt = null, durchbrueche = [], projektId = null, bauart = "neubau" }) {
+export function fehlplanungPruefen({ modell, werkstatt = null, durchbrueche = [], projektId = null, bauart = "neubau", huelle = null, geschosse = undefined }) {
   /** @type {Befund[]} */
   const befunde = [];
   const m = modell || {};
   const waende = waendeVon(m, werkstatt, projektId);
   const nachGuid = new Map(waende.map((w) => [w.guid, w]));
   const arr = (a) => (Array.isArray(a) ? a : []);
+  // host walls for the penetration checks 9, 10 and 12: ONE resolver (wirtVon) over drawn, hull and workshop walls (107-04 review: 9 and 10 used
+  // their own map of drawn and workshop walls and missed a penetration in a hull wall that check 12 found)
+  const wirtModell = { customWalls: arr(m.customWalls), huelle: arr(huelle), werkstatt: werkstatt ? werkstattMitAttributen(werkstatt, m.bauteil_attribute_layer) : null, projektId, geschosse };
+  /**
+   * Status and load-bearing flag of the host of a penetration. Drawn and workshop walls come from the wall list; a hull wall is read like the
+   * IFC export reads it (attributes of "hull-wall" over the model wall, load-bearing from the data-sheet type).
+   * @param {any} d penetration record
+   * @returns {{status: string|null, tragend: boolean}|null} null when no wall of this model matches
+   */
+  const wirtDaten = (d) => {
+    const wirt = wirtVon(d, wirtModell);
+    if (!wirt) return null;
+    if (wirt.familie === "huelle") {
+      const roh = mitAttributen({ ...wirt.roh, huelle: true, id: `${wirt.roh.level}:${wirt.roh.edge}` }, attributeVon(m, "hull-wall"));
+      return { status: normalizeStatus(roh.status), tragend: !!steckbrief(roh, typFuerWand(roh).typ).tragend };
+    }
+    return nachGuid.get(wirt.guid) ?? null;
+  };
 
   // 1 — existing-building project: every element needs a status (an unknown one silently
   // changes demolition and tender quantities).
@@ -110,12 +136,12 @@ export function fehlplanungPruefen({ modell, werkstatt = null, durchbrueche = []
   for (const o of arr(m.customWindows)) {
     const w = waende.find((x) => x.id === `wall-${o.wallIdx}`);
     if (w?.status === "abbruch" && normalizeStatus(o.status) !== "abbruch") {
-      befunde.push({ regel: 3, code: "oeffnung_in_abbruchwand", stufe: "warn", text: `${o.kind === "door" ? "Tür" : "Fenster"} bleibt stehen, die Wand wird abgebrochen`, ids: [`${o.kind === "door" ? "door" : "window"}-${o._idx}`] });
+      befunde.push({ regel: 3, code: "oeffnung_in_abbruchwand", stufe: "warn", text: `${artVon(o).name} bleibt stehen, die Wand wird abgebrochen`, ids: [`${artVon(o).id}-${o._idx}`] });
     }
   }
   if (normalizeStatus(attributeVon(m, "hull-wall")?.status) === "abbruch") {
     const bleiben = arr(m.envOpenings).filter((o) => normalizeStatus(o.status) !== "abbruch");
-    if (bleiben.length) befunde.push({ regel: 3, code: "oeffnung_in_abbruchwand", stufe: "warn", text: `${bleiben.length} Öffnung(en) der Hülle bleiben stehen, die Hülle wird abgebrochen`, ids: bleiben.map((o) => `env-${o.kind === "door" ? "door" : "window"}-${o._idx}`) });
+    if (bleiben.length) befunde.push({ regel: 3, code: "oeffnung_in_abbruchwand", stufe: "warn", text: `${bleiben.length} Öffnung(en) der Hülle bleiben stehen, die Hülle wird abgebrochen`, ids: bleiben.map((o) => `env-${artVon(o).id}-${o._idx}`) });
   }
 
   // 5 — demolishing a load-bearing element needs the structural engineer (shoring, load path).
@@ -144,11 +170,11 @@ export function fehlplanungPruefen({ modell, werkstatt = null, durchbrueche = []
     const w = waende.find((x) => x.id === `wall-${o.wallIdx}`);
     if (normalizeStatus(o.status) === "abbruch" && w && w.status && w.status !== "abbruch") {
       const zu = arr(m.customWalls).some((z) => z?.bauteil_typ === "zumauerung" && (z.level || 0) === w.level && abstandZuStrecke(z.a, w.a, w.b) < 0.3 && abstandZuStrecke(z.b, w.a, w.b) < 0.3);
-      if (!zu) befunde.push({ regel: 6, code: "zumauerung_fehlt", stufe: "hinweis", text: `${o.kind === "door" ? "Tür" : "Fenster"} wird abgebrochen, die Wand bleibt — Zumauerung als eigenes Bauteil zeichnen`, ids: [`${o.kind === "door" ? "door" : "window"}-${o._idx}`] });
+      if (!zu) befunde.push({ regel: 6, code: "zumauerung_fehlt", stufe: "hinweis", text: `${artVon(o).name} wird abgebrochen, die Wand bleibt — Zumauerung als eigenes Bauteil zeichnen`, ids: [`${artVon(o).id}-${o._idx}`] });
     }
   }
 
-  // 8, 9, 10 — penetrations (Durchbruch records of the openings planning).
+  // 8, 9, 10 — penetrations (Durchbruch records of the openings planning); the host of 9 and 10 is found like the one of 12 (wirtDaten).
   for (const d of arr(durchbrueche)) {
     if (!d || d.status === "abgelehnt") continue;
     const nr = d.nr || d.id || "?";
@@ -159,9 +185,23 @@ export function fehlplanungPruefen({ modell, werkstatt = null, durchbrueche = []
       if (!schott && !String(d.abschottung || "").trim()) befunde.push({ regel: 8, code: "schott_fehlt", stufe: "warn", text: `${nr}: Durchführung durch ${d.feuerwiderstand} ohne Brandschott (MLAR Abschn. 4)`, ids: [nr] });
       else if (schott && ist !== null && ist < soll) befunde.push({ regel: 8, code: "schott_schwaecher", stufe: "warn", text: `${nr}: Brandschott ${schott.klasse} schwächer als das Bauteil (${d.feuerwiderstand})`, ids: [nr] });
     }
-    const wirt = nachGuid.get(String(d.bauteil_guid || ""));
+    const wirt = d.bauteil_guid ? wirtDaten(d) : null;
     if (wirt?.tragend && d.pruefung?.statik?.ergebnis !== "ok") befunde.push({ regel: 9, code: "durchbruch_tragend_ohne_statik", stufe: "warn", text: `${nr}: Durchbruch in tragendem Bauteil ohne Freigabe der Statik`, ids: [nr] });
     if (wirt?.status === "abbruch") befunde.push({ regel: 10, code: "durchbruch_in_abbruchwand", stufe: "hinweis", text: `${nr}: Durchbruch in einer Wand, die abgebrochen wird — gegenstandslos?`, ids: [nr] });
+  }
+
+  // 12 — a penetration whose position does not lie in its host wall (107-04). The host is the wall named by `bauteil_guid` among the drawn, hull and
+  // workshop walls of THIS model; a GUID that names no wall here (an element of an imported model file) is no finding — it is not ours to check.
+  // hinweis, not warn (liability decision): the openings planning stores x/y/z rounded and may place a request before the wall is drawn at its
+  // final spot; whether the penetration really misses the wall is for the planner to look at. Tolerance DURCHBRUCH_WIRT_TOL_M [ASSUMED].
+  for (const d of arr(durchbrueche)) {
+    if (!d || d.status === "abgelehnt" || !d.bauteil_guid) continue;
+    // an incomplete position is the finding "lage_fehlt" of the openings planning, not ours
+    if (![d.x, d.y, d.z].every((v) => v != null && v !== "" && Number.isFinite(Number(v)))) continue;
+    const wirt = wirtVon(d, wirtModell);
+    if (!wirt) continue;
+    const r = durchbruchImWirt(d, wirt, { hoehe: geschosse !== undefined });
+    if (!r.innen) befunde.push({ regel: 12, code: "durchbruch_ausserhalb_wirt", stufe: "hinweis", text: `${d.nr || d.id || "?"}: Durchbruch liegt nicht im zugeordneten Bauteil (${r.grund})`, ids: [d.nr || d.id || "?"] });
   }
 
   // 11 — a line of the network crosses a wall on its level without a planned penetration there.

@@ -39,10 +39,11 @@ describe("97-02a IFC-Export mit Steckbrief", () => {
     }
   });
 
-  it("Klassen aus dem Typ-Register: Trennwand PARTITIONING, Flachdach, Abwasser RIGIDSEGMENT, Knoten, Träger", () => {
+  it("Klassen aus dem Typ-Register: Trennwand PARTITIONING, geneigtes Dach, Abwasser RIGIDSEGMENT, Knoten, Träger", () => {
     const ifc = exportIFC(model, MIT);
     assert.ok(zeilen(ifc, "IFCWALL").some((l) => l.endsWith(".PARTITIONING.);")));
-    assert.ok(zeilen(ifc, "IFCROOF")[0].endsWith(".FLAT_ROOF.);"));
+    // D-BK-25: roof with only `pitch` 2,5 m over the half span of 2 m (4 x 4 m outline): atan(1,25) = 51,3° > 10° -> pitched (before: 2,5 read as degrees -> flat)
+    assert.ok(zeilen(ifc, "IFCROOF")[0].endsWith(".GABLE_ROOF.);"));
     assert.ok(zeilen(ifc, "IFCPIPESEGMENT")[0].endsWith(".RIGIDSEGMENT.);"), "nicht GUTTER");
     assert.equal(zeilen(ifc, "IFCBOILER").length, 1);
     assert.equal(zeilen(ifc, "IFCAIRTERMINAL").length, 1);

@@ -68,13 +68,16 @@ describe('Projektmodelle — NDA-Schutz (läuft immer)', () => {
     assert.deepEqual(verdaechtig, [], 'NDA-Modell im Repo: ' + verdaechtig.join(', '));
     // Alle eingecheckten .ifc sind bekannte SYNTHETISCHE Modelle/fixtures:
     // public/beispiel (Demo), tests/e2e/fixtures (mini.ifc), harness/examples
-    // (efh.ifc aus 67-03, generiert). Alles andere wäre NDA-Material.
+    // (efh.ifc aus 67-03, generiert), tests/unit/fixtures/ifc-golden-107* (107-01: IFC-Golden des Exports,
+    // erzeugt aus wörtlichen Beispieldaten in ifcGoldenModell-107.js / ifcReflinieModell-10701.js, keine Projektdaten).
+    // Alles andere wäre NDA-Material.
     const ifcs = tracked.filter((f) => f.toLowerCase().endsWith('.ifc'));
     for (const f of ifcs) {
       assert.ok(
         f.startsWith('public/beispiel/')
         || f.startsWith('tests/e2e/fixtures/')
-        || f.startsWith('harness/examples/'),
+        || f.startsWith('harness/examples/')
+        || f.startsWith('tests/unit/fixtures/ifc-golden-107'),
         `unerwartete .ifc im Repo: ${f}`,
       );
     }

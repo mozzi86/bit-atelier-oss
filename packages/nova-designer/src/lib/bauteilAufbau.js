@@ -1,5 +1,6 @@
 // Bauphysik-Kern (Phase 44, PHYS-01/02): Schichtaufbau, U-Wert, Temperaturverlauf
-// und Glaser-Verfahren (Tauwasser-Richtwert) — bewusst importfrei (Node-testbar).
+// und Glaser-Verfahren (Tauwasser-Richtwert) — bewusst importfrei (Node-testbar), außer dem
+// Materialkatalog aus @core/lib/bauteil/materialien.js (107-03, ebenfalls importfrei).
 //
 // Konventionen:
 // - Schichten laufen IMMER von INNEN (Index 0, raumseitig) nach AUSSEN.
@@ -12,39 +13,11 @@
 // Checks liefern deshalb nie "fail", nur pass/warn/offen (WB_STATUS-Muster).
 
 // ---- Materialkatalog -------------------------------------------------------
-// [ASSUMED] λ (W/mK) und μ (–): marktübliche Bemessungs-Richtwerte (Anlehnung an
-// DIN 4108-4-Größenordnungen, je Spanne EIN Wert gewählt). sd (m) überschreibt
-// μ·d bei Bahnen. luft: "ruhend" → R aus LUFTSCHICHT-Tabelle statt d/λ;
-// "belueftet" → Schicht + alles Außenliegende zählt nicht (ISO-6946-Idee:
-// stark belüftete Luftschicht, Rse wird durch Rsi ersetzt).
-// schicht: Zuordnung zum bimClassification.SCHICHTEN-Bucket (null = keiner).
-// color/hatch: Darstellung im Schichtstapel-SVG (hatch-Werte wie WALL_COMPOSITES).
-export const MATERIAL_KATALOG = [
-  { id: "beton", name: "Stahlbeton", kategorie: "Massiv", lambda: 2.3, mu: 100, schicht: "Stahlbeton", color: "#9aa6b2", hatch: "concrete" },
-  { id: "ks", name: "Kalksandstein (1800)", kategorie: "Massiv", lambda: 0.99, mu: 10, schicht: "Kalksandstein", color: "#94a3b8", hatch: "block" },
-  { id: "klinker", name: "Klinker / Vollziegel", kategorie: "Massiv", lambda: 0.81, mu: 100, schicht: "Klinker", color: "#b45309", hatch: "brick" },
-  { id: "hlz", name: "Hochlochziegel (Poroton)", kategorie: "Massiv", lambda: 0.12, mu: 8, schicht: null, color: "#c2703d", hatch: "brick" },
-  { id: "porenbeton", name: "Porenbeton", kategorie: "Massiv", lambda: 0.11, mu: 8, schicht: null, color: "#e5e7eb", hatch: "block" },
-  { id: "mw035", name: "Mineralwolle WLG 035", kategorie: "Dämmung", lambda: 0.035, mu: 1, schicht: "Dämmung", color: "#fde68a", hatch: "insul" },
-  { id: "mw040", name: "Mineralwolle WLG 040", kategorie: "Dämmung", lambda: 0.04, mu: 1, schicht: "Dämmung", color: "#fde68a", hatch: "insul" },
-  { id: "eps032", name: "EPS WLG 032", kategorie: "Dämmung", lambda: 0.032, mu: 50, schicht: "Dämmung", color: "#f5f5f4", hatch: "insul" },
-  { id: "xps", name: "XPS", kategorie: "Dämmung", lambda: 0.035, mu: 100, schicht: "Dämmung", color: "#a5f3fc", hatch: "insul" },
-  { id: "pur", name: "PUR/PIR", kategorie: "Dämmung", lambda: 0.024, mu: 60, schicht: "Dämmung", color: "#fbcfe8", hatch: "insul" },
-  { id: "holzfaser", name: "Holzfaserdämmung", kategorie: "Dämmung", lambda: 0.042, mu: 5, schicht: "Dämmung", color: "#d6b38a", hatch: "insul" },
-  { id: "zellulose", name: "Zellulose (Einblas)", kategorie: "Dämmung", lambda: 0.04, mu: 2, schicht: "Dämmung", color: "#e7e5e4", hatch: "insul" },
-  { id: "gk", name: "Gipskarton", kategorie: "Platte", lambda: 0.25, mu: 8, schicht: "Gipskarton", color: "#e2e8f0", hatch: "none" },
-  { id: "osb", name: "OSB-Platte", kategorie: "Platte", lambda: 0.13, mu: 200, schicht: "Holz", color: "#d6b38a", hatch: "wood" },
-  { id: "holz", name: "Nadelholz", kategorie: "Holz", lambda: 0.13, mu: 40, schicht: "Holz", color: "#92400e", hatch: "wood" },
-  { id: "gipsputz", name: "Gipsputz (innen)", kategorie: "Putz", lambda: 0.51, mu: 10, schicht: "Putz", color: "#e2e8f0", hatch: "none" },
-  { id: "kalkzementputz", name: "Kalkzementputz (außen)", kategorie: "Putz", lambda: 1.0, mu: 25, schicht: "Putz", color: "#d1d5db", hatch: "none" },
-  { id: "lehmputz", name: "Lehmputz", kategorie: "Putz", lambda: 0.8, mu: 10, schicht: "Putz", color: "#ca8a04", hatch: "none" },
-  { id: "dampfbremse", name: "Dampfbremse PE (sd 20 m)", kategorie: "Bahn", lambda: 0.2, mu: 1, sd: 20, schicht: null, color: "#60a5fa", hatch: "none" },
-  { id: "bitumenbahn", name: "Bitumenbahn (sd 300 m)", kategorie: "Bahn", lambda: 0.17, mu: 1, sd: 300, schicht: null, color: "#334155", hatch: "none" },
-  { id: "luft", name: "Luftschicht (ruhend)", kategorie: "Luft", lambda: null, mu: 1, luft: "ruhend", schicht: null, color: "#f1f5f9", hatch: "none" },
-  { id: "luftbel", name: "Luftschicht (hinterlüftet)", kategorie: "Luft", lambda: null, mu: 1, luft: "belueftet", schicht: null, color: "#f1f5f9", hatch: "none" },
-];
-
-export const materialById = (id) => MATERIAL_KATALOG.find((m) => m.id === id) || null;
+// 107-03 (D-BK-24): the catalogue moved to @core/lib/bauteil/materialien.js (the layer function of a build-up lives in @core
+// and needs the material category); it is re-exported here, so every import of this file stays valid. The comments on
+// lambda/mu/sd/luft/schicht/color/hatch and the new fields dichte/textur are in the new file.
+import { MATERIAL_KATALOG, materialById } from "@core/lib/bauteil/materialien.js";
+export { MATERIAL_KATALOG, materialById };
 
 // ---- Wärmeübergangswiderstände (Wand, horizontaler Wärmestrom) -------------
 // [ASSUMED] ISO-6946-Richtwerte; Dach/Boden bewusst nicht abgebildet (Wand-Fokus).

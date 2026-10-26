@@ -81,3 +81,20 @@ describe("87-07 — Fachlayer-Schema", () => {
     if (register) for (const feld of Object.keys(LAYER_VERSION)) assert.ok(register.includes(`\`${feld}\``), `${feld} nur im Code registriert`);
   });
 });
+
+describe("107-03 — aufbauten_layer (projektbezogene Aufbauten, Version 1)", () => {
+  it("Version 1 mit einer Migration, Blob ohne v behält seinen Inhalt, Stempel setzt v", () => {
+    assert.equal(LAYER_VERSION.aufbauten_layer, 1);
+    assert.equal(MIGRATIONEN.aufbauten_layer.length, 1);
+    const alt = { aufbauten: { "p-1": { name: "Wand", skins: [{ name: "Ziegel", material: "hlz", thickness: 365 }] } } };
+    const r = migrateLayer("aufbauten_layer", alt);
+    assert.equal(r.migriert, true);
+    assert.deepEqual(r.wert.aufbauten, alt.aufbauten);
+    assert.equal(stempelFuerSave("aufbauten_layer", alt, new Date("2026-10-25T10:00:00.000Z")).v, 1);
+  });
+  it("steht in useFachlayer.js (Feld-Registry) und im Register FACHLAYER-SCHEMA.md", () => {
+    assert.ok(fs.readFileSync(path.join(REPO, "packages/nova-designer/src/lib/useFachlayer.js"), "utf8").includes("aufbauten_layer"));
+    const registerPfad = path.join(REPO, ".planning/FACHLAYER-SCHEMA.md");
+    if (fs.existsSync(registerPfad)) assert.ok(fs.readFileSync(registerPfad, "utf8").includes("`aufbauten_layer`"));
+  });
+});

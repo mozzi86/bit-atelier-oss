@@ -9,10 +9,12 @@
 // = group width, visible edges = half, thin lines = quarter (mm on paper).
 //
 // In:  plan data (model, level, drawn elements already filtered by the lens), lens, hull status.
-// Out: planGrafik() → primitives in metres; blattLayout() → sheet and origin in mm;
+// Out: planGrafik() / schnittGrafik() (100-01, section with level marks) → primitives in metres;
+//      blattLayout() → sheet and origin in mm;
 //      vektorPlanPdf() → PDF bytes (Uint8Array). Pure apart from pdf-lib; node-testable.
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { compositeById } from "@core/lib/buildingModel";
+import { wandGeometrie, huellSchnittWaende } from "@core/lib/bauteil/referenz.js";
+import { deckenLage, geschossHoeheAusModell } from "@core/lib/bauteil/hoehen.js"; // 107-02: slab thickness and side from the slab (default 0.25 m standing on its plane)
 import { planDarstellung, schraffur45 } from "@core/lib/plan/brillen.js";
 import { statusFarbe, STATUS_DARSTELLUNG } from "@core/lib/plan/statusDarstellung.js";
 
@@ -36,17 +38,9 @@ export function linienGruppe(massstab) {
   return { schnitt: g, ansicht: g / 2, duenn: g / 4 };
 }
 
-const dicke = (w) => { const c = compositeById(w.composite); return c ? c.skins.reduce((s, k) => s + k.thickness, 0) / 1000 : (w.thickness || 0.3); };
-const versatz = (ref, t) => (ref === "outside" ? t / 2 : ref === "inside" ? -t / 2 : 0);
-/** Wall as a four-point polygon (m), same geometry as the screen plan (BimPlan2D wallRectXZ). */
+/** Wall as a four-point polygon (m), same geometry as the screen plan (BimPlan2D wallRectXZ) — 107-01: one derivation in @core. */
 function wandPolygon(w) {
-  const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) || 1;
-  const dx = (w.b.x - w.a.x) / len, dz = (w.b.z - w.a.z) / len, nx = -dz, nz = dx;
-  const t = dicke(w), o = versatz(w.refLine, t), h = t / 2;
-  return [
-    { x: w.a.x + nx * (o + h), z: w.a.z + nz * (o + h) }, { x: w.b.x + nx * (o + h), z: w.b.z + nz * (o + h) },
-    { x: w.b.x + nx * (o - h), z: w.b.z + nz * (o - h) }, { x: w.a.x + nx * (o - h), z: w.a.z + nz * (o - h) },
-  ];
+  return wandGeometrie(w).polygon;
 }
 
 /** Poché of a cut wall without status (architects' plan: dark grey, not black). */
@@ -61,7 +55,7 @@ const POCHE = "#3f3f46";
  * (BimPlan2D) — only those with a decided status, never the hull.
  * Every element carries `ebene` (104-06, additive): the drawing layer it belongs to —
  * "wand" | "stuetze" | "decke" | "dach" | "schraffur" | "raum_text" — read by the DXF export.
- * @returns {{elemente: Array<{art: 'poly', pts: Array<{x: number, z: number}>, fill: string|null, stroke: string, breite_mm: number, dash?: string, deckkraft?: number, offen?: boolean, ebene?: string} | {art: 'text', x: number, z: number, text: string, groesse_mm: number, ebene?: string}>, bbox: {x0: number, z0: number, x1: number, z1: number}|null}}
+ * @returns {{elemente: Array<{art: 'poly', pts: Array<{x: number, z: number}>, fill: string|null, stroke: string, breite_mm: number, dash?: string, deckkraft?: number, offen?: boolean, ebene?: string} | {art: 'text', x: number, z: number, text: string, groesse_mm: number, ebene?: string, ausrichtung?: 'links'|'rechts'}>, bbox: {x0: number, z0: number, x1: number, z1: number}|null}}
  */
 export function planGrafik({ model, level, customWalls = [], customColumns = [], customSlabs = [], customRoofs = [], customZones = [], brille = null, huelleStatus = null, massstab = 100, sw = false, layerVis = null, werkstattWaende = null }) {
   const lg = linienGruppe(massstab);
@@ -108,6 +102,107 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
       if (p.x > bbox.x1) bbox.x1 = p.x;
       if (p.z > bbox.z1) bbox.z1 = p.z;
     }
+  }
+  return { elemente: el, bbox };
+}
+
+/** German decimal with sign for level marks: 0 → "±0,00", 3 → "+3,00", -2.5 → "-2,50". */
+export function koteText(m) {
+  const r = Math.round(m * 100) / 100;
+  if (r === 0) return "±0,00";
+  return `${r > 0 ? "+" : "-"}${Math.abs(r).toFixed(2).replace(".", ",")}`;
+}
+
+/**
+ * Section primitives in metres (100-01) — the same cut as the screen section (BimPlan2D `Schnitt`, cut at
+ * z = 0 across the footprint): side walls of the hull with the lens look, slabs, parapet, the windows of
+ * the back wall in elevation, plus level marks after DIN 1356-1 (filled triangle = carcass level
+ * [ASSUMED: model elevations are structural levels], value ±0,00 / +3,00 m) and dimension lines. The
+ * vertical axis is stored as z = -height so vektorPlanPdf (y down) draws it upright without a second path.
+ * @param {{model: any, storeyHeight?: number, layerVis?: Record<string, boolean>|null, brille?: any, huelleStatus?: string|null, sw?: boolean, massstab?: number}} e
+ * @returns {ReturnType<typeof planGrafik>}
+ */
+export function schnittGrafik({ model, storeyHeight = 3, layerVis = null, brille = null, huelleStatus = null, sw = false, massstab = 100 }) {
+  const lg = linienGruppe(massstab);
+  const zeige = (/** @type {string} */ id) => !layerVis || layerVis[id] !== false;
+  const k = massstab / 1000; // metres per mm on paper
+  /** @type {any[]} */
+  const el = [];
+  const fp = Array.isArray(model?.footprint) ? model.footprint : [];
+  if (fp.length < 3) return { elemente: [], bbox: null };
+  const x0 = Math.min(...fp.map((p) => p.x)), x1 = Math.max(...fp.map((p) => p.x));
+  const totalH = model.totalHeight || 0;
+  const paraH = zeige("attika") ? (model.parapetHeight || 0) : 0;
+  // 107-01: the cut side walls come from the one derivation of @core (it follows the hull reference line `huelle_bezug`)
+  const schnittWaende = huellSchnittWaende(model);
+  const Z = (h) => 0 - h; // 0 - 0 is +0 (no "-0" in the output)
+  const rechteck = (xa, xb, ha, hb) => [{ x: xa, z: Z(ha) }, { x: xb, z: Z(ha) }, { x: xb, z: Z(hb) }, { x: xa, z: Z(hb) }];
+  const linie = (pts, breite_mm, ebene, dash) => el.push({ art: "poly", pts, fill: null, stroke: "#18181b", breite_mm, dash, offen: true, ebene });
+  const geschnitten = (pts, status, ebene) => {
+    const lk = status != null ? planDarstellung(brille, status, { sw }) : null;
+    el.push({ art: "poly", pts, fill: lk?.leer ? null : lk ? lk.fill : POCHE, stroke: lk ? lk.stroke : "#18181b", breite_mm: lg.schnitt, dash: lk?.dash, deckkraft: lk?.opacity ?? 1, ebene });
+    if (lk?.schraffur) for (const [p, q] of schraffur45(pts, 2 * k)) linie([p, q], lg.duenn, "schraffur");
+  };
+
+  // Ground line 3 m beyond the building on both sides (Ansicht weight).
+  linie([{ x: x0 - 3, z: 0 }, { x: x1 + 3, z: 0 }], lg.ansicht, "gelaende");
+  if (zeige("shell")) {
+    for (const s of model.slabs || []) { const lage = deckenLage(s, undefined, "huelle"); geschnitten(rechteck(x0, x1, lage.unterkante_m, lage.oberkante_m), null, "decke"); }
+    for (const s of schnittWaende) geschnitten(rechteck(s.von_m, s.bis_m, 0, totalH), huelleStatus, "wand");
+  }
+  if (paraH > 0) for (const s of schnittWaende) geschnitten(rechteck(s.von_m, s.bis_m, totalH, totalH + paraH), null, "dach");
+  // Windows of the back wall seen in elevation — same rule as the screen and the 3D view (~1 per 3.5 m,
+  // sill 0.90 m, height 1.40 m, width 1.40 m [ASSUMED like BimPlan2D windowsAlong]).
+  if (zeige("openings")) for (const st of model.storeys || []) {
+    const back = (model.walls || []).find((w) => w.level === st.level);
+    if (!back) continue;
+    const len = Math.hypot(back.b.x - back.a.x, back.b.z - back.a.z);
+    const n = Math.max(0, Math.floor(len / 3.5));
+    for (let i = 0; i < n; i += 1) {
+      const cx = back.a.x + (back.b.x - back.a.x) * ((i + 0.5) / n);
+      if (cx < x0 || cx > x1) continue;
+      el.push({ art: "poly", pts: rechteck(cx - 0.7, cx + 0.7, st.elevation + 0.9, st.elevation + 2.3), fill: null, stroke: "#18181b", breite_mm: lg.ansicht, ebene: "oeffnung" });
+    }
+  }
+  // Level marks left of the building: reference line, filled triangle with its tip on the level, value.
+  if (zeige("labels")) {
+    const xs = x0 - 14 * k, b = 1.6 * k, h = 2.4 * k;
+    const kote = (hoehe, text) => {
+      // reference line from the triangle's tip to the building; the value sits left of the triangle, above the line
+      linie([{ x: xs, z: Z(hoehe) }, { x: x0, z: Z(hoehe) }], lg.duenn, "kote", "4 2");
+      el.push({ art: "poly", pts: [{ x: xs, z: Z(hoehe) }, { x: xs - b, z: Z(hoehe + h) }, { x: xs + b, z: Z(hoehe + h) }], fill: "#18181b", stroke: "#18181b", breite_mm: lg.duenn, ebene: "kote" });
+      el.push({ art: "text", x: xs - b - 1 * k, z: Z(hoehe + 1.6 * k), text, groesse_mm: 2.5, ausrichtung: "rechts", ebene: "kote" });
+    };
+    for (const st of model.storeys || []) kote(st.elevation, `${koteText(st.elevation)}  ${st.name || ""}`.trim());
+    kote(totalH, `${koteText(totalH)}  OK Dach`);
+    if (paraH > 0) kote(totalH + paraH, `${koteText(totalH + paraH)}  OK Attika`);
+  }
+  // Dimension lines (DIN 406: oblique ticks): storey height on the right, building width below.
+  if (zeige("dimensions")) {
+    const t = 1.2 * k;
+    const masslinie = (a, b2, text, tx, tz, ausrichtung) => {
+      linie([a, b2], lg.duenn, "bemassung");
+      for (const p of [a, b2]) linie([{ x: p.x - t, z: p.z + t }, { x: p.x + t, z: p.z - t }], lg.ansicht, "bemassung");
+      el.push({ art: "text", x: tx, z: tz, text, groesse_mm: 2.5, ausrichtung, ebene: "bemassung" });
+    };
+    const xr = x1 + 8 * k;
+    // 107-02 review fix: height of the ground floor from the model (as the level marks), not the uniform `storeyHeight` (differs with a storey table)
+    const egHoehe = geschossHoeheAusModell(model) || storeyHeight;
+    masslinie({ x: xr, z: Z(0) }, { x: xr, z: Z(egHoehe) }, `${egHoehe.toFixed(2).replace(".", ",")}`, xr + 2 * k, Z(egHoehe / 2), "links");
+    const zu = 8 * k;
+    masslinie({ x: x0, z: zu }, { x: x1, z: zu }, `${(x1 - x0).toFixed(2).replace(".", ",")}`, (x0 + x1) / 2, zu - 2.2 * k, undefined);
+  }
+  // Text extent estimated as 0.55 × font size per character (Helvetica average) so no label leaves the sheet.
+  const ausdehnung = (e) => {
+    if (e.art === "poly") return e.pts;
+    const w = String(e.text).length * 0.55 * e.groesse_mm * k;
+    const xa = e.ausrichtung === "rechts" ? e.x - w : e.ausrichtung === "links" ? e.x : e.x - w / 2;
+    return [{ x: xa, z: e.z - e.groesse_mm * k }, { x: xa + w, z: e.z }];
+  };
+  let bbox = null;
+  for (const e of el) for (const p of ausdehnung(e)) {
+    if (!bbox) bbox = { x0: p.x, z0: p.z, x1: p.x, z1: p.z };
+    else { bbox.x0 = Math.min(bbox.x0, p.x); bbox.z0 = Math.min(bbox.z0, p.z); bbox.x1 = Math.max(bbox.x1, p.x); bbox.z1 = Math.max(bbox.z1, p.z); }
   }
   return { elemente: el, bbox };
 }
@@ -165,7 +260,9 @@ export async function vektorPlanPdf(grafik, { massstab, projekt = "", planinhalt
     } else {
       const groesse = e.groesse_mm * PT;
       const breite = font.widthOfTextAtSize(e.text, groesse);
-      page.drawText(e.text, { x: ox + mm(e.x - x0) * PT - breite / 2, y: oy - mm(e.z - z0) * PT - groesse / 3, size: groesse, font, color: rgb(0.2, 0.2, 0.22) });
+      // ausrichtung (100-01, optional): "links" starts at the anchor, "rechts" ends there, default centred.
+      const dx = e.ausrichtung === "links" ? 0 : e.ausrichtung === "rechts" ? breite : breite / 2;
+      page.drawText(e.text, { x: ox + mm(e.x - x0) * PT - dx, y: oy - mm(e.z - z0) * PT - groesse / 3, size: groesse, font, color: rgb(0.2, 0.2, 0.22) });
     }
   }
   // Scale bar 5 m (true length on paper) under the drawing.

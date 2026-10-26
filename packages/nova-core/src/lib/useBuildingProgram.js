@@ -3,6 +3,7 @@
 // Raumprogramm, Machbarkeit und Kosten lesen/schreiben hier — „alles ist verbunden".
 import { useSyncExternalStore } from "react";
 import { footprintQuelleGezeichnet } from "./footprintQuelle.js";
+import { elevationOf, geschosseAus, okfObersterGeschoss, patchAlleGeschosshoehen, patchGeschosshoehe } from "./bauteil/hoehen.js";
 
 // footprintM: zentriertes Meter-Polygon [{x,z}] oder null (=> Default 20×14).
 // zones: gespiegelte Räume aus dem Gebäudemodell [{points:[{x,z}],level,name}].
@@ -14,7 +15,10 @@ import { footprintQuelleGezeichnet } from "./footprintQuelle.js";
 // achseM (86-07): user-drawn centre line of the building as a polyline [{x,z}] in the SAME centred
 //   metres as footprintM (origin = footprint bbox centre), or null (no axis). Drawn in the massing
 //   studio, read by the workshop tessellation (bars along the axis); persisted with the programme.
-let state = { footprintM: null, footprintQuelle: null, achseM: null, storeys: 4, storeyHeight: 3, unit: "m", zones: [], costEstimate: null };
+// geschosse (107-02, D-BK-05): optional storey table [{level, name?, hoehe_m}] (m) or null. null = every storey has
+//   `storeyHeight` (all old projects); with a table the heights are read through @core/lib/bauteil/hoehen.js. `storeyHeight`
+//   stays the uniform value for the readers that only need one number.
+let state = { footprintM: null, footprintQuelle: null, achseM: null, storeys: 4, storeyHeight: 3, geschosse: null, unit: "m", zones: [], costEstimate: null };
 const listeners = new Set();
 const emit = () => listeners.forEach((l) => l());
 
@@ -28,11 +32,24 @@ export const buildingProgram = {
     state = { ...state, ...p }; emit();
   },
   subscribe: (l) => { listeners.add(l); return () => listeners.delete(l); },
+  /**
+   * The ONE writer for "all storeys get this height" (107-02 review fix): sets `storeyHeight` and, when a storey table exists,
+   * every table row, so every studio (BIT-BIM, Massing) keeps number and table in step.
+   * @param {number} hoehe_m storey height in m (> 0)
+   */
+  setAlleGeschosshoehen: (hoehe_m) => { if (hoehe_m > 0) buildingProgram.set(patchAlleGeschosshoehen(state, hoehe_m)); },
+  /**
+   * Height of ONE storey in m. Creates the table from `storeys × storeyHeight` on the first call and adds a row for a storey that
+   * is not in the table yet (see patchGeschosshoehe).
+   * @param {number} level storey index (integer)
+   * @param {number} hoehe_m height in m (> 0; anything else is ignored)
+   */
+  setGeschosshoehe: (level, hoehe_m) => { const p = patchGeschosshoehe(state, level, hoehe_m); if (p) buildingProgram.set(p); },
 };
 
 export function useBuildingProgram() {
   const s = useSyncExternalStore(buildingProgram.subscribe, buildingProgram.get, buildingProgram.get);
-  return { ...s, set: buildingProgram.set };
+  return { ...s, set: buildingProgram.set, setAlleGeschosshoehen: buildingProgram.setAlleGeschosshoehen, setGeschosshoehe: buildingProgram.setGeschosshoehe };
 }
 
 // Rechteck-Footprint (zentriert) aus Breite/Tiefe in Metern.
@@ -64,8 +81,11 @@ export function programMetrics(s) {
   const storeyHeight = s?.storeyHeight || 3;
   const bgf = footArea * storeys;          // Bruttogrundfläche (alle Geschosse)
   const ngf = bgf * 0.8;                    // Nettogrundfläche ~80 % BGF
-  const height = storeys * storeyHeight;    // Gebäudehöhe (m)
-  return { footArea, storeys, storeyHeight, bgf, ngf, height };
+  // Gebäudehöhe (m); 107-02: with a storey table the sum of its heights, else storeys × one height as before
+  const height = Array.isArray(s?.geschosse) && s.geschosse.length ? elevationOf(storeys, geschosseAus(s)) : storeys * storeyHeight;
+  // OKF of the top storey (m): 107-02 review fix, was `(storeys − 1) × storeyHeight` inline in the planners and ignored the table
+  const okf_m = okfObersterGeschoss(storeys, geschosseAus(s));
+  return { footArea, storeys, storeyHeight, bgf, ngf, height, okf_m };
 }
 
 // Einheiten (Längen). Faktor von Metern + Nachkommastellen + Suffix.

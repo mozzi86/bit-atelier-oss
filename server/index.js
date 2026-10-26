@@ -24,7 +24,7 @@ import { updateCheckAus } from './selbstUpdate.js';
 import { systemRouter } from './systemRouter.js';
 import { dateiOeffnenRouter } from './dateiOeffnenRouter.js';
 import { programmRouter } from './programmRouter.js';
-import { steuerungRouter, steuerungsToken } from './steuerungRouter.js';
+import { steuerungRouter, steuerungsToken, jsonAusserSteuerung } from './steuerungRouter.js';
 import { schreibeAtomar } from '../packages/nova-core/server/atomarErsetzen.js';
 import { sicherungsDienst } from './sicherung.js';
 import { appAusliefern, istAppModus } from './appAuslieferung.js';
@@ -37,9 +37,9 @@ import { harnessManager } from './harnessProzess.js';
 import { kiEinstellungenLesen } from '../packages/nova-core/server/llmLokal.js';
 import { createDb } from '../packages/nova-core/server/db.js';
 import { createBlobStore } from '../packages/nova-core/server/blobs.js';
-import { ladeSchluessel, standardSchluesselPfad, verschluesselteDatenVorhanden, verschluesselungsCodec } from '../packages/nova-core/server/ruheVerschluesselung.js';
+import { ladeSchluessel, schluesselFingerabdruck, standardSchluesselPfad, verschluesselteDatenVorhanden, verschluesselungsCodec } from '../packages/nova-core/server/ruheVerschluesselung.js';
 import { seedCatalogs } from '../packages/nova-core/server/catalog-seed.js';
-import { authRouter, entitiesRouter, llmRouter, blobsRouter } from '../packages/nova-core/server/routes.js';
+import { authRouter, entitiesRouter, llmRouter, blobsRouter, bildFreigabeAusSpeicher } from '../packages/nova-core/server/routes.js';
 import { personalRouter } from '../packages/nova-core/server/personalRouter.js';
 import { typesafeRouter } from '../packages/nova-core/server/typesafe.js';
 import { pricesRouter } from '../packages/nova-ausschreibung/server/routes.js';
@@ -83,7 +83,7 @@ app.use(cors({
   origin: (origin, cb) => cb(null, !origin || ERLAUBTE_ORIGINS.includes(origin) || lan.origins().includes(origin)),
   exposedHeaders: [HINWEIS_HEADER, ERNEUERN_KOPF],
 }));
-app.use(express.json({ limit: '10mb' }));
+app.use(jsonAusserSteuerung(10 * 1024 * 1024)); // 10 MB; /api/steuerung* has its own limits (steuerungRouter.js)
 // 96-04: browser writes need X-Bit-Session (a token of this server run) — a form POST
 // of a foreign web page is executed despite CORS otherwise. Tools without a browser pass.
 const SITZUNG = sitzungsToken();
@@ -106,16 +106,21 @@ export const blobs = createBlobStore(datenPfad('blobs'));
 // personnel file exists yet — otherwise a missing key locks the store instead of
 // starting empty over the ciphertext.
 const PERSONAL_SCHLUESSEL = standardSchluesselPfad();
+// 105-12: what the settings show about the key (fingerprint, why the store is locked) and what a backup records.
+const personalSchluesselInfo = { fingerabdruck: /** @type {string|null} */ (null), grund: /** @type {string|null} */ (null) };
 const personalCodec = (() => {
   try {
     const vorhanden = verschluesselteDatenVorhanden(datenPfad('personal.json'), datenPfad('personal-blobs'));
     const key = ladeSchluessel(PERSONAL_SCHLUESSEL, { erzeugen: !vorhanden });
     if (!key) {
+      personalSchluesselInfo.grund = `Verschlüsselte Personaldaten, aber kein Schlüssel unter ${PERSONAL_SCHLUESSEL}.`;
       console.error(`[personal] Verschlüsselte Personaldaten, aber kein Schlüssel unter ${PERSONAL_SCHLUESSEL} — Personalbereich gesperrt (BIT_PERSONAL_SCHLUESSEL setzt einen anderen Ort).`);
       return verschluesselungsCodec(crypto.randomBytes(32)); // decrypts nothing → store locks, writes nothing
     }
+    personalSchluesselInfo.fingerabdruck = schluesselFingerabdruck(key);
     return verschluesselungsCodec(key);
   } catch (e) {
+    personalSchluesselInfo.grund = `Schlüssel nicht nutzbar: ${e?.message || e}`;
     console.error(`[personal] Schlüssel nicht nutzbar: ${e?.message || e} — Personalbereich gesperrt.`);
     return verschluesselungsCodec(crypto.randomBytes(32));
   }
@@ -182,11 +187,16 @@ app.use('/api', updateRouter({ root: path.join(__dirname, '..'), port: PORT, app
 
 // --- Automatic local backup (93-06): data entries only, flushed + read in one tick, retention 7 daily + 4 weekly;
 // also trims the self-updater's .update/sicherung-* copies. BIT_SICHERUNG_AUS=1 switches it off. ---
-const sicherung = sicherungsDienst({ datenOrdner: datenOrdner(), appOrdner: path.join(__dirname, '..'), dbs: [db, personalDb], version: PAKET.version });
+const sicherung = sicherungsDienst({ datenOrdner: datenOrdner(), appOrdner: path.join(__dirname, '..'), dbs: [db, personalDb], version: PAKET.version,
+  kopfZusatz: personalSchluesselInfo.fingerabdruck ? { personal_schluessel_fingerabdruck: personalSchluesselInfo.fingerabdruck } : {} });
 
 // --- Data folder + AI-assistant (MCP) entry + backup status for Settings (92-07, 93-06): loopback only, POST with
 // Origin check; refused for paired LAN devices of the office mode (93-03) ---
-app.use('/api', systemRouter({ personalSchluessel: PERSONAL_SCHLUESSEL, root: path.join(__dirname, '..'), port: PORT, lokalGebunden, origins: ERLAUBTE_ORIGINS, anfrageEntfernt, sicherung }));
+app.use('/api', systemRouter({ personalSchluessel: PERSONAL_SCHLUESSEL,
+  // a store that decrypts nothing (wrong key) is locked as well — gesperrt() covers both cases
+  personalStatus: () => ({ fingerabdruck: personalSchluesselInfo.fingerabdruck, gesperrt: Boolean(personalDb.gesperrt()),
+    grund: personalDb.gesperrt() ? (personalSchluesselInfo.grund || 'Personaldaten lassen sich mit diesem Schlüssel nicht entschlüsseln.') : null }),
+  root: path.join(__dirname, '..'), port: PORT, lokalGebunden, origins: ERLAUBTE_ORIGINS, anfrageEntfernt, sicherung }));
 
 // --- Local AI + harness (93-12): detection, catalog, hardware, pull, benchmark, harness process ---
 app.use('/api', kiLokalRouter({ db, root: path.join(__dirname, '..'), lokalGebunden, origins: ERLAUBTE_ORIGINS, port: PORT, harness }));
@@ -202,7 +212,11 @@ try {
 } catch (e) {
   console.error(`[steuerung] Token-Datei nicht geschrieben: ${e?.message || e}`);
 }
-app.use('/api', steuerungRouter({ lokalGebunden, anfrageEntfernt, token: STEUERUNG_TOKEN }));
+// 106-06 (D-IM-02): an image of the view that leaves through the control channel goes to an agent - always a target outside this computer.
+// 106-07: a paired device (office mode) may use the APP side of the channel (selection and proposals only, see GERAET_BEFEHLE).
+app.use('/api', steuerungRouter({ lokalGebunden, anfrageEntfernt, token: STEUERUNG_TOKEN,
+  bildPruefen: (pid) => bildFreigabeAusSpeicher(db, pid, { zielLokal: false, anbieter: 'Agent über den Steuerkanal' }),
+  geraetVon: (req) => req.bitZugang?.geraet?.id ?? null }));
 
 // --- "Programm beenden" (93-11): the hidden server has no console to press Ctrl+C in ---
 app.use('/api', programmRouter({

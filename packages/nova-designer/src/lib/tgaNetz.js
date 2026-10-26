@@ -19,6 +19,7 @@ import {
 } from "@designer/lib/hvac";
 import { punktImPolygon } from "@designer/lib/moebel";
 import { polygonAreaM } from "@core/lib/useBuildingProgram";
+import { steckbriefFelderAus } from "@core/lib/bauteil/steckbrief.js";
 
 // ---- Katalog ------------------------------------------------------------------------------
 
@@ -84,7 +85,8 @@ export function netzHardened(layer) {
     .map((k) => {
       const level = Number.isFinite(k.level) ? Math.round(k.level) : 0;
       const levelBis = k.art === "schacht" && Number.isFinite(k.levelBis) ? Math.max(level, Math.round(k.levelBis)) : level;
-      return { id: k.id, gewerk: k.gewerk, art: k.art, level, x: k.x, z: k.z, name: typeof k.name === "string" ? k.name : "", levelBis };
+      // 100-02 (additive): data-sheet fields set in the editor (KG, trade, section) — absent ones add nothing.
+      return { id: k.id, gewerk: k.gewerk, art: k.art, level, x: k.x, z: k.z, name: typeof k.name === "string" ? k.name : "", levelBis, ...steckbriefFelderAus(k) };
     });
   const ids = new Set(knoten.map((k) => k.id));
   const kanten = (Array.isArray(src.kanten) ? src.kanten : [])
@@ -98,6 +100,7 @@ export function netzHardened(layer) {
       points: e.points.filter(isPt).map((p) => ({ x: p.x, z: p.z })),
       // Phase 63 (additive): slope override of a sewage run in %, null = table value per DN (entwaesserung.js).
       gefaelle_pct: Number.isFinite(e.gefaelle_pct) && e.gefaelle_pct > 0 ? e.gefaelle_pct : null,
+      ...steckbriefFelderAus(e), // 100-02, additive
     }));
   return { version: 1, knoten, kanten };
 }

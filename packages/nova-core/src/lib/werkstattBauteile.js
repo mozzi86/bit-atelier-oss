@@ -35,6 +35,7 @@
 // derives the GUID from the same key the swing overrides use (werkstatt_layer.tuerAufschlaege).
 
 import { WAND_KLASSEN } from "./bauteil/aufbauten.js";
+import { geschosshoehe } from "./bauteil/hoehen.js";
 
 /** Wall classes of the workshop — 97-02a: defined in the ONE build-up table (bauteil/aufbauten.js). */
 export { WAND_KLASSEN };
@@ -111,11 +112,13 @@ const r3 = (v) => Math.round(v * 1000) / 1000;
  * Walls of the workshop zones (see file head). Walls are found per storey; exterior walls are the
  * remaining pieces of every zone edge not covered by a neighbour.
  * @param {Array<any>} zonen zones (only workshop zones are used)
- * @param {{storeyHeight?: number}} [opts] storey height m (wall height = storey height [ASSUMED shell height])
+ * @param {{storeyHeight?: number, geschosse?: Array<{level: number, name?: string, hoehe_m: number}>|null}} [opts] storey height m (wall height = storey
+ *   height [ASSUMED shell height]); 107-02: with a storey table (`geschosse`) every wall gets the height of ITS storey, without it all walls get `storeyHeight`
  * @returns {Array<{guid: string, typ: "wand", klasse: "aussen"|"tragend"|"leicht", huelle: boolean, level: number, a: {x:number,z:number}, b: {x:number,z:number}, dicke_m: number, hoehe_m: number, lichteLaenge_m: number, rohbauLaenge_m: number, flaeche_m2: number, volumen_m3: number, kg: string, gewerk: string, material: string, tragend: boolean, status: null, bauabschnitt: null, zonen: string[], we: Array<string|null>}>}
  */
 export function werkstattWaende(zonen, opts = {}) {
-  const h = num(opts.storeyHeight, 3) > 0 ? num(opts.storeyHeight, 3) : 3;
+  const h0 = num(opts.storeyHeight, 3) > 0 ? num(opts.storeyHeight, 3) : 3;
+  const tabelle = Array.isArray(opts.geschosse) && opts.geschosse.length ? opts.geschosse : null;
   const liste = (Array.isArray(zonen) ? zonen : []).filter((z) => istWerkstattZone(z) && z.raumart !== "balkon" && Array.isArray(z.points) && z.points.length >= 3);
   const proLevel = new Map();
   for (const z of liste) { const l = Math.round(num(z.level)); if (!proLevel.has(l)) proLevel.set(l, []); proLevel.get(l).push(z); }
@@ -123,6 +126,7 @@ export function werkstattWaende(zonen, opts = {}) {
   const baue = (klasseKey, level, seg, namen, wes, schluessel) => {
     const k = WAND_KLASSEN[klasseKey];
     const l = Math.hypot(seg.b.x - seg.a.x, seg.b.z - seg.a.z);
+    const h = tabelle ? geschosshoehe(level, tabelle) : h0;
     out.push({
       guid: stabileGuid(schluessel), typ: "wand", klasse: klasseKey, huelle: klasseKey === "aussen", level,
       a: { x: r3(seg.a.x), z: r3(seg.a.z) }, b: { x: r3(seg.b.x), z: r3(seg.b.z) },
@@ -338,7 +342,7 @@ export function rohbauZuschlag(waende, raeume) {
 /**
  * All workshop components of a zone list (one call for plan, IFC and AVA).
  * @param {Array<any>} zonen
- * @param {{storeyHeight?: number}} [opts]
+ * @param {{storeyHeight?: number, geschosse?: Array<{level: number, name?: string, hoehe_m: number}>|null}} [opts] see werkstattWaende
  */
 export function werkstattBauteile(zonen, opts = {}) {
   const waende = werkstattWaende(zonen, opts);

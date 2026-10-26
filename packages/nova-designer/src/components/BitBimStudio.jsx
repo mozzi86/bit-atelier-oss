@@ -1,11 +1,16 @@
-import React, { useRef, useEffect, useState, useMemo } from "react";
+// 107-01 rule (spec VI.3): the stored model (a, b, thickness or build-up, refLine, openings …) is the BASE
+// GEOMETRY; every mesh in this studio, the plan, the PDF plan and the IFC are derived from it again on each
+// change (the 3D effects clear their group and rebuild). A mesh is never the source and may at most later lie
+// as a discardable intermediate store (D-BK-08a, plan 107-14). The wall offset against the reference line has
+// ONE derivation: @core/lib/bauteil/referenz.js.
+import React, { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import * as THREE from "three";
 import { Card, CardContent } from "@core/components/ui/card";
 import {
   Boxes, WifiOff, Layers, Box, Grid2x2, Scissors,
   MousePointer2, RectangleHorizontal, Columns3, Square, Triangle,
   DoorOpen, AppWindow, Frame, Eye, EyeOff, Lock, LockOpen, Ruler, Type, PenLine, Trash2, Undo2,
-  Sparkles, Sun, Focus, Keyboard, Camera, Copy, Star, RotateCcw,
+  Sparkles, Sun, Focus, Keyboard, Camera, Copy, Star, RotateCcw, SquareDashed,
 } from "lucide-react";
 import { FACADE_PRESETS, facadeMaterial, sunFromHour, createCityLife, updateCityLife } from "@designer/components/renderModeAssets";
 
@@ -48,29 +53,64 @@ const SHORTCUTS = [
 ];
 
 // Deutsche Werkzeugnamen (Favoriten-Labels, BIM-F)
-const TOOL_NAMES = { wall: "Wand", column: "Stütze", window: "Fenster", door: "Tür", zone: "Zone", slab: "Decke", roof: "Dach" };
+const TOOL_NAMES = { wall: "Wand", column: "Stütze", window: "Fenster", door: "Tür", oeffnung: "Öffnung", zone: "Zone", slab: "Decke", roof: "Dach" };
 import { useProject } from "@core/lib/ProjectContext";
 import { bauartVon } from "@core/lib/bauart";
 import { useI18n } from "@core/lib/i18n";
 import { zustandFelder } from "@designer/components/ZustandFelder";
 import { steckbriefFelder } from "@designer/components/SteckbriefFelder";
+import { aufbauEditorFelder, AUFBAUTEN_LEER } from "@designer/components/AufbauEditor";
+import { useFachlayer } from "@designer/lib/useFachlayer";
+import { setzeProjektAufbauten, gibProjektAufbautenFrei, overridesNachEntfernen } from "@core/lib/bauteil/aufbauten.js";
 import { steckbrief, typFuerWand } from "@core/lib/bauteil/steckbrief.js";
 import { attributeVon, attributPatch, mitAttributen, werkstattMitAttributen } from "@core/lib/bauteil/attribute.js";
 import { statusFarbe } from "@core/lib/plan/statusDarstellung.js";
+import { wandGeometrie, wandDicke_m, eckfueller } from "@core/lib/bauteil/referenz.js";
+// 107-02: every storey elevation, wall/column height, slab thickness and roof slope comes from this one file (no own level × storeyHeight here)
+import { elevationOf, unterkante, wandHoehe, stuetzenHoehe, geschosshoehe, gesamtHoehe, deckenLage, oberkanteFolgtGeschoss, dachFirsthoehe_m, dachNeigung_grad, dachMigrieren, firsthoeheAusNeigung, geschosseAus, MAX_NEIGUNG_GRAD, FLACHDACH_BIS_GRAD, DECKEN_STANDARD } from "@core/lib/bauteil/hoehen.js";
 import { brilleVon, sichtbarUnter, zeigtStatus, STANDARD_BRILLE } from "@core/lib/plan/brillen.js";
 import BrillenLeiste from "@designer/components/BrillenLeiste";
 import FehlplanungHinweise from "@designer/components/FehlplanungHinweise";
-import { planGrafik, vektorPlanPdf } from "@designer/lib/vektorPlan";
+import { planGrafik, vektorPlanPdf, schnittGrafik } from "@designer/lib/vektorPlan";
 import { objektFreigeben } from "@core/lib/threeFreigeben";
+// 106-01: one ray pick and one highlighter for every viewer (hover, click, later VR controllers).
+import { identitaetAus, pickDrossel, zeigerPick, zeigerArt, TIPP_TOLERANZ_PX } from "@core/lib/zeigen/strahlPick.js";
+import { zweiFingerGeste } from "@core/lib/zeigen/zweiFinger.js";
+import { useZeigerArt, TABLETT_PLATZ } from "@core/lib/zeigen/useZeigerArt.js";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
+import { ansichtAlsPng } from "@core/lib/zeigen/ansichtBild.js";
+import { hervorhebung } from "@core/lib/zeigen/hervorheben.js";
+import { ZEIGE_ZUSTAENDE, ZEIGE_CSS_RAND } from "@core/lib/zeigen/zustaende.js";
+import { bauteilInfoAus, bauteilSchluessel } from "@designer/lib/bauteilInfo.js";
+import { auswahlBefehleRegistrieren } from "@core/lib/zeigen/auswahlBefehle.js";
+import { befehlsRegister } from "@core/lib/befehlsregister.js";
+// 106-03: change tools - proposal, check, preview in words and at the model, confirmation, origin, undo per step.
+import { aenderungsBefehleRegistrieren } from "@core/lib/zeigen/aenderungsBefehle.js";
+import PlanVorschau from "@core/components/zeigen/PlanVorschau.jsx";
+import { vorschlagSpeicher } from "@core/lib/zeigen/vorschlagSpeicher.js";
+import { bauteilImModell, naechsteFreieIdx, transformZentrum } from "@core/lib/zeigen/aenderungen.js";
+import { geisterMatrix, geisterKlon, schnittMarke, geisterEntsorgen } from "@core/lib/zeigen/geisterVorschau.js";
+import { umrissLinie } from "@core/lib/zeigen/hervorheben.js";
+import { AenderungsFeld } from "@core/components/zeigen/AenderungsVorschau.jsx";
+// 106-05: speech and typed sentences at the model (grammar first, model fallback, confirmation only by the person).
+import SprechFeld from "@core/components/zeigen/SprechFeld.jsx";
+import { eingabeBefehlRegistrieren } from "@core/lib/zeigen/eingabe.js";
+import { ANSICHT_GRUNDRISS, ansichtAusKamera } from "@core/lib/zeigen/ansichtRichtung.js";
+import { pruefeAttributeVorUebernahme } from "@ifc/lib/mengenAttributPruefung.js";
+import { starteSteuerungsBruecke } from "@core/lib/steuerungsBruecke.js";
+import { bimBauteil, bimPerGuid, bimModellUebersicht, bimAuswahlKontext } from "@designer/lib/auswahlBim.js";
 // 104-06: floor plan as DXF R12 (own writer, no dependency).
 import { grundrissDxfDaten, dxfDatei, dxfDateiname, DXF_MIME } from "@designer/lib/dxfPlaene";
 import { dateiAnbieten } from "@core/lib/tabellenExport";
 import { fehlplanungPruefen } from "@core/lib/bauteil/pruefregeln.js";
+// 107-04: sizes, host and height anchor of an opening come from this one file (3D hole, plan symbol, room module and IFC read the same numbers);
+// the click in the plan and the click on a wall face in 3D create the record through the same function (neueOeffnung).
+import { oeffnungsMasse, oeffnungMitte_m, oeffnungPasst, lochImWand, ankerFuerWand, wirtVon, neueOeffnung, wandPunkt, rechteckAufWand, deckenLochRechteck, durchbruchImWirt, durchbruchTiefe, lochInDecke, lochUeberlappt, istOeffnungOhneFuellung, BRUESTUNG_BEZUEGE, DURCHBRUCH_TIEFE_OHNE_WIRT_M } from "@core/lib/bauteil/oeffnungen.js";
 import { bitApi } from "@core/api/bitApi";
 import { useElevationGrid } from "@designer/lib/useElevationGrid";
 import { useOsmBuildings } from "@designer/lib/useOsmBuildings";
 import { useOsmEnvironment } from "@designer/lib/useOsmEnvironment";
-import { createBuildingModel, footprintToMeters, modelBBox, WALL_COMPOSITES, compositeById, compositeTotalM, WINDOW_TYPES, windowTypeById, DOOR_TYPES, doorTypeById, openingTypeById, DEFAULT_FOOTPRINT } from "@core/lib/buildingModel";
+import { createBuildingModel, footprintToMeters, modelBBox, aufbautenListe, compositeById, WINDOW_TYPES, windowTypeById, DOOR_TYPES, doorTypeById, openingTypeById, DEFAULT_FOOTPRINT } from "@core/lib/buildingModel";
 import { Link } from "react-router-dom";
 import { Sketch } from "@sketch/lib/sketchModel.js";
 import { runSolve } from "@sketch/lib/solveCore.js";
@@ -80,46 +120,14 @@ import { autoEnvOpenings, ENTRANCE_DEFAULT } from "@designer/lib/autoOpenings";
 import { loadBimModel, saveBimModel } from "@core/lib/useBimModelSync";
 import BimPlan2D from "@designer/components/BimPlan2D";
 import { exportExposePng } from "@designer/components/MassingView3D";
-import { exportIFC } from "@designer/lib/ifcExport";
+import { exportIFC, WARNART_GESCHOSS, WARNART_DURCHBRUCH } from "@designer/lib/ifcExport";
 import { useBuildingProgram, buildingProgram, fmtLen } from "@core/lib/useBuildingProgram";
 import { werkstattBauteile } from "@core/lib/werkstattBauteile";
 import { istGeneriert } from "@designer/lib/apartments";
 import { istWerkstattZone } from "@designer/lib/tesselierung";
 
-// Effektive Wanddicke (Composite-Gesamtdicke oder Einzeldicke).
-function effThicknessM(w) {
-  const tot = compositeTotalM(w.composite);
-  return tot || w.thickness || 0.3;
-}
-
-// Eckfüller: wo sich gezeichnete Wände an einem Endpunkt berühren, wird die Ecke
-// mit einem kleinen Pfeiler aufgefüllt (Wand-Cleanup, dependency-frei).
-function cornerFillers(walls) {
-  const tol = 0.3;
-  const pts = [];
-  walls.forEach((w) => { pts.push({ x: w.a.x, z: w.a.z, w }); pts.push({ x: w.b.x, z: w.b.z, w }); });
-  const used = new Array(pts.length).fill(false);
-  const fillers = [];
-  for (let i = 0; i < pts.length; i++) {
-    if (used[i]) continue;
-    const group = [i]; used[i] = true;
-    for (let j = i + 1; j < pts.length; j++) {
-      if (used[j]) continue;
-      if (Math.hypot(pts[i].x - pts[j].x, pts[i].z - pts[j].z) < tol && pts[i].w.level === pts[j].w.level) { group.push(j); used[j] = true; }
-    }
-    // unterschiedliche Wände? -> echte Ecke
-    const wallsHere = [...new Set(group.map((g) => pts[g].w._idx))];
-    if (wallsHere.length >= 2) {
-      const x = group.reduce((s, g) => s + pts[g].x, 0) / group.length;
-      const z = group.reduce((s, g) => s + pts[g].z, 0) / group.length;
-      const thk = Math.max(...group.map((g) => effThicknessM(pts[g].w)));
-      const h = Math.max(...group.map((g) => pts[g].w.height || 3));
-      const level = pts[group[0]].w.level;
-      fillers.push({ x, z, thk, h, level });
-    }
-  }
-  return fillers;
-}
+// 107-01: effective wall thickness, reference-line offset and corner fillers come from @core
+// (bauteil/referenz.js: wandDicke_m, wandGeometrie, eckfueller) — one derivation for 3D, plan, PDF and IFC.
 
 // Strahl o+t·d gegen Segment a-b: kleinstes t>0 oder Infinity.
 function raySegT(o, d, a, b) {
@@ -211,10 +219,23 @@ function applyLayerVisibility(t, layers) {
 // Mesh ein eigenes Material hat, plus pulsierende Kontur (EdgesGeometry) für ALLE
 // Treffer — auch Hüllwand/Geschossdecke/Verglasung, die sich ein Material teilen
 // und deshalb nicht gefärbt werden dürfen. Mehrfachauswahl (Marquee) wird mitgeführt.
-const AURA_COLOR = 0x0d9488; // Teal — dieselbe sel-Farbe wie im 2D-Grundriss (BimPlan2D)
+// 106-01: the selection is drawn in the 'auswahl' look of the state table (blue, solid outline), so
+// it differs from the hover state 'fokus' (teal, dotted outline) in hue AND form. (Before: both teal.)
+// The 2D plan (BimPlan2D) still draws its selection teal [open: unify with the 3D view].
+const AURA_COLOR = parseInt(ZEIGE_ZUSTAENDE.auswahl.hex.slice(1), 16);
+// Emissive fill of a selected mesh: the selection blue at 72 % [ASSUMED]: strong enough to read, weak enough to keep shading.
+const AUSWAHL_EMISSIV = new THREE.Color(ZEIGE_ZUSTAENDE.auswahl.hex).multiplyScalar(0.72).getHex();
+
+/** Pointer travel (px) below which hover does not pick again [ASSUMED]: sub-pixel jitter picks the same element. */
+const HOVER_MIN_PX = 2;
+/** Pause (ms) after the last wheel tick before hover looks again [ASSUMED]. */
+const WHEEL_PAUSE_MS = 180;
 
 // Kinds mit eigenem Material je Mesh — nur dort ist emissive gefahrlos.
 const EMISSIVE_KINDS = new Set(["wall", "column", "zone", "cslab", "croof"]);
+
+/** Layer a selection type lives on (a locked layer refuses the selection, by mouse and by command). */
+const EBENE_VON_TYP = { wall: "walls", zone: "zones", slab: "shell", roof: "attika", hullwall: "shell", autowin: "openings", opening: "openings", column: "columns" };
 
 // Trifft die Auswahl (Objekt aus setSelected bzw. ein multiSel-Eintrag) dieses Mesh?
 function auraMatches(m, sel) {
@@ -235,6 +256,9 @@ function auraMatches(m, sel) {
 
 function applyPickHighlight(t, selected, multi) {
   if (!t?.customGroup) return;
+  // 106-01: the hover tint lives on private material clones; give the originals back first,
+  // otherwise the emissive written below would land on the clone and vanish with the hover.
+  t.hoverLoeschen?.();
   // Alte Konturen restlos entfernen (Gruppen-Rebuilds leeren sie ohnehin mit).
   (t.auraList || []).forEach((line) => {
     line.parent?.remove(line);
@@ -248,7 +272,7 @@ function applyPickHighlight(t, selected, multi) {
       if (!m.isMesh) return;
       const isSel = sels.some((s) => auraMatches(m, s));
       if (m.material?.emissive && EMISSIVE_KINDS.has(m.userData?.kind)) {
-        m.material.emissive.setHex(isSel ? 0x0b7d74 : 0x000000);
+        m.material.emissive.setHex(isSel ? AUSWAHL_EMISSIV : 0x000000);
       }
       if (isSel) {
         const line = new THREE.LineSegments(
@@ -256,6 +280,8 @@ function applyPickHighlight(t, selected, multi) {
           new THREE.LineBasicMaterial({ color: AURA_COLOR, transparent: true, opacity: 1, depthTest: false }),
         );
         line.renderOrder = 999;
+        line.userData.zeigeHilfe = true; // 106-01: helper geometry, never a pick target
+        line.userData.zeigeZustand = "auswahl";
         m.add(line); // erbt Position/Rotation des Meshes
         t.auraList.push(line);
       }
@@ -372,23 +398,55 @@ function extrudeFootprint(points, height, material) {
   return mesh;
 }
 
+/**
+ * 107-03 (user decision 25.10.2026, naming of the reference line): the choices of a reference-line select, labelled by where the
+ * LINE lies. The stored values stay (center / outside / inside / coreOutside / coreInside / coreCenter, old projects unchanged).
+ * Drawn wall: "outside" = the body lies on the outer side of the line, so the line is on the INNER face of the whole layer stack;
+ * "inside" = the other way round (107-01 summary, finding 1). Hull (`huelle_bezug`): "outside" = the footprint line is the
+ * OUTER face of the hull wall, "inside" = the INNER face. The core values name the face of the core layer (the layer with the function
+ * "kern", e.g. the concrete wall behind the insulation). The label texts go through `tz` (German source = key, EN in bauteilkern-107.js).
+ * @param {(s: string) => string} tz translate function of the studio
+ * @param {boolean} [huelle] true for the hull select (no core values; "outside"/"inside" mean the hull wall against the footprint line)
+ * @returns {Array<[string, string, string]>} [stored value, label, tooltip]
+ */
+function bezugWahl(tz, huelle = false) {
+  const linieInnen = [tz("Linie innen · Körper außen"), tz("Referenzlinie auf der Innenfläche des Schichtaufbaus, die Wand liegt auf der Außenseite der Linie")];
+  const linieAussen = [tz("Linie außen · Körper innen"), tz("Referenzlinie auf der Außenfläche des Schichtaufbaus, die Wand liegt auf der Innenseite der Linie")];
+  /** @type {Array<[string, string, string]>} */
+  const wahl = [
+    ["center", tz("Linie Mitte"), tz("Referenzlinie in der Mitte der Wand")],
+    /** @type {[string, string, string]} */ (["outside", ...(huelle ? linieAussen : linieInnen)]),
+    /** @type {[string, string, string]} */ (["inside", ...(huelle ? linieInnen : linieAussen)]),
+  ];
+  if (!huelle) wahl.push(
+    ["coreOutside", tz("Kern außen"), tz("Referenzlinie auf der Außenfläche der Kernschicht")],
+    ["coreInside", tz("Kern innen"), tz("Referenzlinie auf der Innenfläche der Kernschicht")],
+    ["coreCenter", tz("Kern Mitte"), tz("Referenzlinie in der Mitte der Kernschicht")],
+  );
+  return wahl;
+}
+
 // Wand als Profil (Länge × Höhe) mit echten Öffnungen -> ExtrudeGeometry.
 // Das ist die boolesche Subtraktion: die Löcher (openings:[{u,sill,width,height}])
 // werden aus der Wand ausgeschnitten. thicknessOverride für Composite-Gesamtdicke.
 function buildWallMeshWithHoles(w, material, openings, thicknessOverride, normalOffset) {
   const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) || 1;
   const th = thicknessOverride || w.thickness || 0.3, H = w.height;
-  const dirx = (w.b.x - w.a.x) / len, dirz = (w.b.z - w.a.z) / len;
-  const nx = -dirz, nz = dirx;
-  const off = normalOffset != null ? normalOffset : (w.refLine === "outside" ? th / 2 : w.refLine === "inside" ? -th / 2 : 0);
+  // 107-01: normal and body offset from the one derivation (normalOffset = offset of one build-up layer)
+  const g = wandGeometrie(w, { dicke_m: th });
+  const nx = g.normale.x, nz = g.normale.z;
+  const off = normalOffset != null ? normalOffset : g.versatz_m;
   const shape = new THREE.Shape();
   shape.moveTo(0, 0); shape.lineTo(len, 0); shape.lineTo(len, H); shape.lineTo(0, H); shape.closePath();
-  (openings || []).forEach(({ u, sill, width, height }) => {
-    const x0 = Math.max(0.05, u - width / 2), x1 = Math.min(len - 0.05, u + width / 2);
-    const y0 = Math.max(0.02, sill), y1 = Math.min(H - 0.02, sill + height);
-    if (x1 <= x0 || y1 <= y0) return;
+  // 107-04: the hole of an opening has ONE rule (lochImWand: position kept in the wall like the IFC export, edge clearance at the sides and
+  // 2 cm at bottom and top). An opening that does not fit is reported by the studio (oeffnungsProblemText), no longer clamped in silence.
+  (openings || []).forEach(({ u, sill, width, height, rund }) => {
+    const loch = lochImWand({ w: width, h: height, sill }, u, len, H);
+    if (!loch) return;
     const p = new THREE.Path();
-    p.moveTo(x0, y0); p.lineTo(x1, y0); p.lineTo(x1, y1); p.lineTo(x0, y1); p.closePath();
+    // a round penetration (core drilling) is a circle in the wall plane, everything else a rectangle
+    if (rund) p.absarc((loch.x0 + loch.x1) / 2, (loch.y0 + loch.y1) / 2, Math.min(loch.x1 - loch.x0, loch.y1 - loch.y0) / 2, 0, Math.PI * 2, false);
+    else { p.moveTo(loch.x0, loch.y0); p.lineTo(loch.x1, loch.y0); p.lineTo(loch.x1, loch.y1); p.lineTo(loch.x0, loch.y1); p.closePath(); }
     shape.holes.push(p);
   });
   const geo = new THREE.ExtrudeGeometry(shape, { depth: th, bevelEnabled: false });
@@ -400,7 +458,31 @@ function buildWallMeshWithHoles(w, material, openings, thicknessOverride, normal
   return m;
 }
 
+/**
+ * 107-04: a wall as its build-up layers — one body per layer, the holes of the openings cut through ALL layers (spec I.4 Cut-Opening-Bridge).
+ * One function for the drawn wall and, new, the hull wall (before, the hull was ONE body coloured by layer 1 only). The layers run from layer 1
+ * along −n starting at the +n side of the body, the same convention as the plan (BimPlan2D wallSkinBands). [ASSUMED] "+n side = layer 1 = outer
+ * face": true for a drawn wall by convention, but for the hull of the standard footprint n points INTO the building (buildingModel.js), so layer 1
+ * lies on the inside there — plan and 3D agree, the order for the hull is open (107-04 review, noted in the SUMMARY, not changed here).
+ * @param {any} w wall: a, b, height (m), elevation (m, lower edge), thickness/composite/refLine or the stored fields of a drawn wall
+ * @param {{skins: Array<{thickness: number, color: string}>}} comp build-up (thickness in mm)
+ * @param {Array<{u: number, sill: number, width: number, height: number}>} ops holes in m
+ * @returns {THREE.Mesh[]} one mesh per layer (userData is set by the caller)
+ */
+function buildSchichtWand(w, comp, ops) {
+  const g = wandGeometrie(w);
+  let cur = g.versatz_m + g.dicke_m / 2;
+  return comp.skins.map((sk) => {
+    const tk = sk.thickness / 1000; const mid = cur - tk / 2; cur -= tk;
+    const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(sk.color), roughness: 0.9 });
+    return buildWallMeshWithHoles(w, mat, ops, Math.max(0.01, tk), mid);
+  });
+}
+
 // Öffnungstyp (für buildGlazing) aus einer Regel-Öffnung mit expliziten Maßen.
+/** Copy of an opening record without its host GUID: a copy that moves to a duplicated wall must not keep the GUID of the ORIGINAL wall (107-04 review). */
+const ohneWirtGuid = (/** @type {any} */ o) => { const { wirt_guid: _weg, ...rest } = o; return rest; };
+
 function autoOpeningType(o) {
   return o.kind === "door"
     ? { w: o.width, h: o.height, sill: 0, cols: 1, rows: 2, glass: false }
@@ -424,17 +506,38 @@ export default function BitBimStudio({ complexData }) {
   const [sunHour, setSunHour] = useState(14); // Sonnenstand (Uhrzeit 0-24)
   const animRef = useRef([]); // bewegte Stadt-Objekte für den tick()-Loop: [{mesh,pts,cum,total,d,speed}]
   const mountRef = useRef(null);
+  // 106-01 hover: refs only — no React render per frame, the overlay DOM is written directly.
+  const hoverRef = useRef(/** @type {Record<string, any>|null} */ (null)); // identity under the pointer
+  const hoverBoxRef = useRef(/** @type {HTMLDivElement|null} */ (null));
+  const hoverTextRef = useRef(/** @type {HTMLDivElement|null} */ (null));
+  const hoverZustandRef = useRef(/** @type {HTMLSpanElement|null} */ (null)); // overlay state line (words)
+  const hoverSymbolRef = useRef(/** @type {HTMLSpanElement|null} */ (null)); // overlay swatch (colour AND outline form)
   // The 2D plan for the raster section export (was found by scraping divs for height 520 px).
   const planWrapRef = useRef(/** @type {HTMLDivElement|null} */ (null));
   // Mutable three.js handle bag (scene, camera, groups, callbacks) — filled in the
   // mount effect, never a render dependency. Keys are open on purpose (87-09).
   const three = useRef(/** @type {Record<string, any>} */ ({}));
   const orbit = useRef(/** @type {Record<string, any>} */ ({ on: false, x: 0, y: 0, theta: 0.7, phi: 1.0, radius: 70 }));
+  // 106-07: kind of the last pointer on the canvas and the two-finger steps seen (for the test hook)
+  const zeigerArtRef = useRef(/** @type {"mouse"|"pen"|"touch"|null} */ (null));
+  const gestenSummeRef = useRef({ schritte: 0, drehungRad: 0, faktor: 1 });
+  // 106-07: tablet layout (finger or pen in use) and the right to change the model (rechte.js, module "modell")
+  const { grob } = useZeigerArt();
+  const darfAendern = useZugriff().darf("modell", "voll");
 
   // Gemeinsame Quelle (Massing-Studio ↔ Gebäudemodell ↔ Kennzahlen): Footprint/Geschosse/Höhe/Einheit
   const bp = useBuildingProgram();
   const storeys = bp.storeys, setStoreys = (v) => bp.set({ storeys: v });
-  const storeyHeight = bp.storeyHeight, setStoreyHeight = (v) => bp.set({ storeyHeight: v });
+  const storeyHeight = bp.storeyHeight;
+  // 107-02 (D-BK-05): optional storey table [{level, name, hoehe_m}] (programme field `geschosse`, null = one height for all storeys) and the
+  // storey source `gs` that every elevation and wall height below is read through. The single height input sets ALL storeys.
+  const geschosse = bp.geschosse || null;
+  const gs = useMemo(() => geschosseAus({ geschosse, storeyHeight }), [geschosse, storeyHeight]);
+  // One writer for both studios (107-02 review fix): the number and the table rows can never disagree, and a storey that is not a table row yet
+  // (the user raised the storey count after the table was made) gets a row instead of snapping back (see hoehen.js patchGeschosshoehe).
+  const setStoreyHeight = (v) => bp.setAlleGeschosshoehen(v);
+  /** Sets the height of ONE storey (m); the first call creates the table from storeys × storeyHeight. */
+  const setGeschossHoehe = (level, v) => bp.setGeschosshoehe(level, v);
   const unit = bp.unit || "m", setUnit = (u) => bp.set({ unit: u });
   const [view, setView] = useState("3d"); // 3d | grundriss | schnitt
   // 97-03: lens per view (plan, section), remembered per viewer in the browser — a view setting,
@@ -466,6 +569,10 @@ export default function BitBimStudio({ complexData }) {
   const [entranceCfg, setEntranceCfg] = useState(ENTRANCE_DEFAULT);
   const [envComposite, setEnvComposite] = useState(null); // Hüllwand-Aufbau (Composite) oder null=einschichtig
   const [envThickness, setEnvThickness] = useState(0.3); // Hüllwand-Dicke (einschichtig)
+  // 107-02 review: thickness (m) and reference side of the HULL slabs (fields `huelle_decke_dicke_m` / `huelle_decke_bezug`; defaults 0.25 m "unten" = as before)
+  const [huelleDeckeDicke, setHuelleDeckeDicke] = useState(/** @type {number} */ (DECKEN_STANDARD.huelle.dicke_m));
+  const [huelleDeckeBezug, setHuelleDeckeBezug] = useState(/** @type {"oben"|"unten"} */ (DECKEN_STANDARD.huelle.bezug));
+  const [huelleBezug, setHuelleBezug] = useState("center"); // 107-01 (D-BK-02): Referenzlinie der Hüllwände center | outside | inside, Feld `huelle_bezug`
   // ---- Navigator / Mappen (ArchiCAD-Stil) ----
   const [scale, setScale] = useState(100); // Maßstab-Nenner (1:scale)
   const [cutHeight, setCutHeight] = useState(1.1); // Schnitthöhe (Grundriss-Schnittebene)
@@ -491,12 +598,26 @@ export default function BitBimStudio({ complexData }) {
   const [doorType, setDoorType] = useState("single"); // aktueller Türtyp
   const [draft, setDraft] = useState([]); // aktuelle Wand-Kette (Meter-Punkte)
   const [hover, setHover] = useState(null);
-  const [selected, setSelected] = useState(null); // {type,index}
-  const [multiSel, setMultiSel] = useState([]); // Mehrfachauswahl aus Markierungsrahmen: [{type,index,...}]
+  const [selected, setSelectedState] = useState(null); // {type,index}
+  const [multiSel, setMultiSelState] = useState([]); // Mehrfachauswahl aus Markierungsrahmen: [{type,index,...}]
+  // 106-02: synchronous mirror of the selection. React state lands one render later, so two commands in the same
+  // tick ("auswahl-guid", then "ansicht-auf-auswahl") would otherwise read the old selection; every write goes
+  // through these two setters (stable like state setters), the commands read the ref.
+  const auswahlRef = useRef(/** @type {{selected: any, multiSel: any[]}} */ ({ selected: null, multiSel: [] }));
+  const setSelected = useCallback((/** @type {any} */ v) => {
+    auswahlRef.current.selected = typeof v === "function" ? v(auswahlRef.current.selected) : v;
+    setSelectedState(v);
+  }, []);
+  const setMultiSel = useCallback((/** @type {any} */ v) => {
+    auswahlRef.current.multiSel = typeof v === "function" ? v(auswahlRef.current.multiSel) : v;
+    setMultiSelState(v);
+  }, []);
   const [hint, setHint] = useState("");
   const [ctxMenu, setCtxMenu] = useState(null); // {x,y,hit:{kind,id}}
   const [wallComp, setWallComp] = useState("single24"); // Standard-Aufbau für neue Wände
   const idRef = useRef(1);
+  // 107-04: first corner of a rectangle drawn on a wall face or slab in 3D (tool "oeffnung"): { schluessel, p: {u, v} | {x, z}, art }
+  const ecke3dRef = useRef(/** @type {any} */ (null));
   const selectedRef = useRef(selected); selectedRef.current = selected;
   const multiSelRef = useRef(multiSel); multiSelRef.current = multiSel;
   const [showShortcuts, setShowShortcuts] = useState(false); // Hilfe-Popover „Tastaturkürzel" (BIM-D)
@@ -520,6 +641,15 @@ export default function BitBimStudio({ complexData }) {
   const [hatGespeichertesModell, setHatGespeichertesModell] = useState(true);
   const loadingRef = useRef(false);
   const projectId = project?.id || null;
+  // 107-03 (D-BK-22): build-ups of the project (fachlayer aufbauten_layer, Version 1). compositeById/aufbauVon ask this registry first, so it is
+  // handed over on every render (idempotent, module-level state outside React); `aufbautenKey` lets the memos and 3D effects that depend on layer
+  // thicknesses rebuild when a project build-up is edited.
+  const [aufbautenLayer, setAufbautenLayer] = useFachlayer(projectId, "aufbauten_layer", AUFBAUTEN_LEER);
+  // set while rendering (before the children read it), once per layer value; released again on unmount so the ids "p-1" … of this project
+  // never resolve in the next one (the effect also re-sets it: React StrictMode runs effect cleanups once on mount)
+  useMemo(() => setzeProjektAufbauten(aufbautenLayer), [aufbautenLayer]);
+  useEffect(() => { setzeProjektAufbauten(aufbautenLayer); return () => gibProjektAufbautenFrei(aufbautenLayer); }, [aufbautenLayer]);
+  const aufbautenKey = useMemo(() => JSON.stringify(aufbautenLayer?.aufbauten || {}), [aufbautenLayer]);
   // 97-06: openings of the project for the checks (read only; written in Werkplanung › Durchbrüche).
   useEffect(() => {
     let aktiv = true;
@@ -546,9 +676,12 @@ export default function BitBimStudio({ complexData }) {
           setEnvOpenings(m.envOpenings || []);
           setCustomZones(m.customZones || []);
           setCustomSlabs(m.customSlabs || []);
-          setCustomRoofs(m.customRoofs || []);
+          setCustomRoofs((m.customRoofs || []).map(dachMigrieren)); // 107-02: old roofs (only `pitch`, metres) get firsthoehe_m
           if (m.envComposite !== undefined) setEnvComposite(m.envComposite);
           if (m.envThickness) setEnvThickness(m.envThickness);
+          setHuelleBezug(m.huelle_bezug === "outside" || m.huelle_bezug === "inside" ? m.huelle_bezug : "center");
+          setHuelleDeckeDicke(Number(m.huelle_decke_dicke_m) > 0 ? Number(m.huelle_decke_dicke_m) : DECKEN_STANDARD.huelle.dicke_m);
+          setHuelleDeckeBezug(m.huelle_decke_bezug === "oben" ? "oben" : DECKEN_STANDARD.huelle.bezug);
           if (m.parapet) setParapet(m.parapet);
           if (m.dachform) setDachform(m.dachform);
           if (m.dachneigung != null) setDachneigung(m.dachneigung);
@@ -570,6 +703,8 @@ export default function BitBimStudio({ complexData }) {
           // Neues Projekt ohne Modell: Editor leeren (kein Übertrag vom Vorprojekt)
           setCustomWalls([]); setCustomColumns([]); setCustomWindows([]); setEnvOpenings([]); setNetzLayer(null); setStatikLayer(null); setAttributLayer(null); setMassingLayer(null);
           setCustomZones([]); setCustomSlabs([]); setCustomRoofs([]);
+          setHuelleBezug("center");
+          setHuelleDeckeDicke(DECKEN_STANDARD.huelle.dicke_m); setHuelleDeckeBezug(DECKEN_STANDARD.huelle.bezug);
           setSketchJson(null);
         }
         setSaveState("idle");
@@ -591,14 +726,14 @@ export default function BitBimStudio({ complexData }) {
       try {
         // Nur Elementfelder — Programmfelder gehören dem Hook (EIN Schreiber je Feld).
         await saveBimModel(projectId, {
-          envComposite, envThickness, parapet, dachform, dachneigung, entranceCfg,
+          envComposite, envThickness, huelle_bezug: huelleBezug, huelle_decke_dicke_m: huelleDeckeDicke, huelle_decke_bezug: huelleDeckeBezug, parapet, dachform, dachneigung, entranceCfg,
           customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs,
         });
         setSaveState("saved");
       } catch { setSaveState("error"); }
     }, 1200);
     return () => clearTimeout(t);
-  }, [projectId, envComposite, envThickness, parapet, dachform, dachneigung, entranceCfg, customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs]);
+  }, [projectId, envComposite, envThickness, huelleBezug, huelleDeckeDicke, huelleDeckeBezug, parapet, dachform, dachneigung, entranceCfg, customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs]);
 
   // ---- Ebenen (Layers) ----
   const [layers, setLayers] = useState(DEFAULT_LAYERS);
@@ -622,8 +757,9 @@ export default function BitBimStudio({ complexData }) {
   const footprint = footprintEdit || footprintM;
   // Gemeinsames Modell — Single Source of Truth für 3D UND 2D (Grundriss/Schnitt).
   const model = useMemo(
-    () => createBuildingModel({ footprintM: footprint, storeys, storeyHeight, parapet, wallThickness: envThickness, wallComposite: envComposite }),
-    [footprint, storeys, storeyHeight, parapet, envThickness, envComposite],
+    () => createBuildingModel({ footprintM: footprint, storeys, storeyHeight, parapet, wallThickness: envThickness, wallComposite: envComposite, huelleBezug, geschosse, deckenDicke: huelleDeckeDicke, deckenBezug: huelleDeckeBezug }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [footprint, storeys, storeyHeight, parapet, envThickness, envComposite, huelleBezug, geschosse, huelleDeckeDicke, huelleDeckeBezug, aufbautenKey],
   );
 
   // PW-05: Sketch des Projekts (BIT Sketcher) als read-only Grundriss-Overlay.
@@ -806,7 +942,7 @@ export default function BitBimStudio({ complexData }) {
   // (KD-16). Benutzerplatzierte Öffnungen verdrängen das Auto-Fenster an
   // derselben Stelle (keine überlappenden Löcher/Voids).
   const placedEnv = useMemo(
-    () => envOpenings.map((o) => ({ level: o.level, edge: o.edge, u: o.u, width: openingTypeById(o.kind, o.typeId).w })),
+    () => envOpenings.map((o) => ({ level: o.level, edge: o.edge, u: o.u, width: oeffnungsMasse(o).w })), // 107-04: own width of the opening first
     [envOpenings],
   );
   const autoOpenings = useMemo(
@@ -814,14 +950,87 @@ export default function BitBimStudio({ complexData }) {
     [model, entranceCfg, placedEnv],
   );
 
+  // ---- 107-04: opening chain (host, sizes, height anchor, new opening) ----
+  // The walls an opening can sit in (drawn + hull walls), for wirtVon() — the ONE host resolver (also used by the IFC export).
+  const wirtModell = useMemo(() => ({ customWalls, huelle: model.walls, werkstatt: null, projektId: projectId || null, geschosse: gs }), [customWalls, model, projectId, gs]);
+  /** Stores a record made by neueOeffnung() in its array (the plan click and the 3D click both end here). */
+  const oeffnungSetzen = ({ scope, satz }) => (scope === "env" ? setEnvOpenings : setCustomWindows)((os) => [...os, satz]);
+  /**
+   * Sizes of an opening on its wall (own width/height/sill first, then the type), the sill converted to the wall bottom when the opening names
+   * another height anchor (bruestung_bezug okrd/okff: the floor slab of the storey below is looked up). 3D, plan and checks read this.
+   * @param {any} o opening record
+   * @param {{a: {x: number, z: number}, b: {x: number, z: number}, level?: number}} w its wall
+   * @param {number} unterkante_m bottom edge of the wall in m
+   */
+  const masseAmWand = (o, w, unterkante_m) => {
+    if (o.bruestung_bezug !== "okrd" && o.bruestung_bezug !== "okff") return oeffnungsMasse(o);
+    const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) || 1, u = o.u ?? len / 2;
+    const punkt = { x: w.a.x + ((w.b.x - w.a.x) / len) * u, z: w.a.z + ((w.b.z - w.a.z) / len) * u };
+    return oeffnungsMasse(o, ankerFuerWand({ level: w.level || 0, unterkante_m }, gs, { huelle: model.slabs, gezeichnet: customSlabs }, punkt));
+  };
+  /** The type object of an opening with its own sizes laid over it (columns, rows, glass from the type) — what buildGlazing needs. */
+  const typAmWand = (o, w, unterkante_m) => ({ ...openingTypeById(o.kind, o.typeId), ...masseAmWand(o, w, unterkante_m) });
+  // Executed penetrations of the openings planning that lie IN their host wall (drawn or hull): a hole through all layers, like an opening without a filling.
+  // The host is found by its GUID (bauteil_guid); u = x/y projected on the wall axis, the sill from z (middle) minus half the height.
+  const durchbruchLoecher = useMemo(() => durchbrueche.flatMap((d) => {
+    if (d?.status !== "ausgefuehrt") return [];
+    const wirt = wirtVon(d, wirtModell);
+    if (!wirt || (wirt.familie !== "gezeichnet" && wirt.familie !== "huelle")) return [];
+    if (!durchbruchImWirt(d, wirt).innen) return []; // like the IFC export: one that misses its host stays a provision (marker) and is named by check 12
+    if (durchbruchTiefe(d, wirt)) return []; // a slot (t < wall thickness) is a recess, not a hole through every layer: shown as a marker (durchbruchVormerkungen)
+    const rund = d.form === "rund", b = Number(rund ? d.d : d.b), h = Number(rund ? d.d : d.h);
+    if (!(b > 0) || !(h > 0) || wirt.u == null || !Number.isFinite(Number(d.z))) return [];
+    return [{ schluessel: wirt.schluessel, u: wirt.u, sill: Number(d.z) - h / 2 - wirt.wand.unterkante_m, width: b, height: h, rund }];
+  }), [durchbrueche, wirtModell]);
+  // Planned penetrations (and executed ones that miss their host): translucent boxes at their place, so they can be seen against the wall (no hole).
+  const durchbruchVormerkungen = useMemo(() => durchbrueche.flatMap((d) => {
+    if (!d || d.status === "abgelehnt") return [];
+    const rund = d.form === "rund", b = Number(rund ? d.d : d.b), h = Number(rund ? d.d : d.h);
+    if (!(b > 0) || !(h > 0) || ![d.x, d.y, d.z].every((v) => v != null && Number.isFinite(Number(v)))) return [];
+    const wirt = wirtVon(d, wirtModell);
+    if (d.status === "ausgefuehrt" && wirt && (wirt.familie === "gezeichnet" || wirt.familie === "huelle") && durchbruchImWirt(d, wirt).innen && !durchbruchTiefe(d, wirt)) return []; // that one is a hole (durchbruchLoecher)
+    const tiefe = Number(d.t) > 0 ? Number(d.t) : wirt ? wirt.wand.dicke_m + 0.04 : DURCHBRUCH_TIEFE_OHNE_WIRT_M;
+    const ang = wirt ? Math.atan2(wirt.wand.b.z - wirt.wand.a.z, wirt.wand.b.x - wirt.wand.a.x) : 0;
+    return [{ nr: d.nr || d.id, x: Number(d.x), y: Number(d.z), z: Number(d.y), b, h, tiefe, ang, rund }];
+  }), [durchbrueche, wirtModell]);
+  // Openings that do not fit their wall (the IFC export leaves them out, with this very text): the 3D hole is clamped to the wall and the user is told —
+  // no silent clamp any more (107-04). The hint is cleared again only when it is still ours.
+  const oeffnungsProblemText = useMemo(() => {
+    /** @type {string[]} */
+    const out = [];
+    const f2 = (/** @type {number} */ v) => v.toFixed(2);
+    const pruefe = (/** @type {any} */ o, /** @type {any} */ wirt, /** @type {string} */ ort) => {
+      if (!wirt) return;
+      const r = oeffnungPasst(masseAmWand(o, wirt.wand, wirt.wand.unterkante_m), wirt.wand.laenge_m, wirt.wand.hoehe_m);
+      if (r.ok) return;
+      const wo = tz(o.kind === "door" ? "Tür auf {{ort}}" : o.kind === "oeffnung" ? "Öffnung auf {{ort}}" : "Fenster auf {{ort}}").replace("{{ort}}", ort);
+      out.push(tz("{{wo}}: {{b}}×{{h}} m (Brüstung {{sill}} m) passt nicht in die Wand ({{l}}×{{hw}} m)").replace("{{wo}}", wo)
+        .replace("{{b}}", f2(r.daten.w)).replace("{{h}}", f2(r.daten.h)).replace("{{sill}}", f2(r.daten.sill)).replace("{{l}}", f2(r.daten.laenge)).replace("{{hw}}", f2(r.daten.hoehe)));
+    };
+    customWindows.forEach((o) => pruefe(o, wirtVon(o, wirtModell), tz("Wand {{wand}}").replace("{{wand}}", String(o.wallIdx))));
+    envOpenings.forEach((o) => pruefe(o, wirtVon(o, wirtModell), tz("Hüllwand {{ebene}}/{{kante}}").replace("{{ebene}}", String(o.level)).replace("{{kante}}", String(o.edge))));
+    return out.length ? `${out[0]}${out.length > 1 ? ` (+${out.length - 1})` : ""} — ${tz("im 3D auf die Wand begrenzt, im IFC nicht enthalten")}` : "";
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customWindows, envOpenings, wirtModell, model, customSlabs, gs, tz]);
+  // The text is the memo result (a string), so the effect fires only when the TEXT changes — not on every recompute of the model. The old value
+  // is read into a local before the ref is overwritten: the state updater may run later (render phase, StrictMode) and must compare with it.
+  const problemHinweisRef = useRef("");
+  useEffect(() => {
+    const vorher = problemHinweisRef.current;
+    problemHinweisRef.current = oeffnungsProblemText;
+    setHint((h) => (oeffnungsProblemText ? oeffnungsProblemText : h && h === vorher ? "" : h));
+  }, [oeffnungsProblemText]);
+
   // ---- Werkzeug wählen ----
-  const FUNCTIONAL = ["arrow", "wall", "column", "window", "door", "zone", "slab", "roof", "section"]; // bereits aktiv
+  const FUNCTIONAL = ["arrow", "wall", "column", "window", "door", "oeffnung", "zone", "slab", "roof", "section"]; // bereits aktiv
   const selectTool = (id) => {
     setSelected(null); setMultiSel([]); setDraft([]); setHover(null); setHint("");
+    ecke3dRef.current = null; // 107-04: a half-drawn 3D rectangle is dropped with the tool
     if (id === "section") { setView("schnitt"); setTool("arrow"); return; }
     if (!FUNCTIONAL.includes(id)) { setHint(`Werkzeug „${id}" kommt in einer späteren Welle.`); return; }
     setTool(id);
-    if (id !== "arrow" && view === "3d") setView("grundriss"); // Zeichnen passiert im Grundriss
+    // Zeichnen passiert im Grundriss — except windows, doors and wall openings: they also go onto a wall face in 3D (107-04, Glue-To)
+    if (id !== "arrow" && view === "3d" && id !== "window" && id !== "door" && id !== "oeffnung") setView("grundriss");
   };
 
   // Werkzeugpalette (ArchiCAD-Stil)
@@ -834,6 +1043,7 @@ export default function BitBimStudio({ complexData }) {
       { id: "roof", label: "Dach", icon: Triangle },
       { id: "door", label: "Tür", icon: DoorOpen },
       { id: "window", label: "Fenster", icon: AppWindow },
+      { id: "oeffnung", label: "Öffnung", icon: SquareDashed },
       { id: "zone", label: "Zone", icon: Frame },
     ] },
     { group: "Viewpoint", items: [
@@ -857,7 +1067,7 @@ export default function BitBimStudio({ complexData }) {
         if (d.length === 0) return [p];
         const a = d[d.length - 1];
         if (Math.hypot(p.x - a.x, p.z - a.z) < 0.05) return d; // Doppelklick-Schutz
-        setCustomWalls((ws) => [...ws, { a, b: p, level: Math.min(planLevel, storeys - 1), thickness: 0.3, height: storeyHeight, refLine: wallRef, composite: wallComp, _idx: idRef.current++ }]);
+        setCustomWalls((ws) => [...ws, { a, b: p, level: Math.min(planLevel, storeys - 1), thickness: 0.3, height: storeyHeight, oberkante_bezug: "geschoss", oberkante_geschosse: 1, oberkante_versatz_m: 0, refLine: wallRef, composite: wallComp, _idx: idRef.current++ }]);
         return [...d, p];
       });
     } else if (tool === "column") {
@@ -877,11 +1087,10 @@ export default function BitBimStudio({ complexData }) {
     } else if (tool === "slab" || tool === "roof") {
       // Polygon: Punkte sammeln (Abschluss per Doppelklick → onFinish)
       setDraft((d) => (d.length && Math.hypot(p.x - d[d.length - 1].x, p.z - d[d.length - 1].z) < 0.05 ? d : [...d, p]));
-    } else if (tool === "window" || tool === "door") {
-      // Fenster/Tür auf das nächstgelegene Wandsegment setzen
+    } else if (tool === "window" || tool === "door" || tool === "oeffnung") {
+      // Fenster/Tür/Öffnung auf das nächstgelegene Wandsegment setzen (107-04: the record comes from neueOeffnung, like the click on a wall face in 3D)
       const kind = tool;
-      const typeId = kind === "door" ? doorType : winType;
-      const ty = openingTypeById(kind, typeId);
+      const typeId = kind === "door" ? doorType : kind === "window" ? winType : "oeffnung";
       const lvl = Math.min(planLevel, storeys - 1);
       let best = /** @type {{scope: string, w: any, u: number, len: number}|null} */ (null), bestD = 1e9;
       // gezeichnete Wände
@@ -895,10 +1104,8 @@ export default function BitBimStudio({ complexData }) {
         if (pr.dist < bestD) { bestD = pr.dist; best = { scope: "env", w, u: pr.t * pr.len, len: pr.len }; }
       });
       if (best && bestD < 1.2) {
-        const half = ty.w / 2;
-        const u = Math.max(half + 0.1, Math.min(best.u, best.len - half - 0.1));
-        if (best.scope === "custom") setCustomWindows((ws) => [...ws, { wallIdx: best.w._idx, u, typeId, kind, _idx: idRef.current++ }]);
-        else setEnvOpenings((es) => [...es, { level: best.w.level, edge: best.w.edge, u, typeId, kind, _idx: idRef.current++ }]);
+        const wirt = wirtVon(best.scope === "custom" ? { wallIdx: best.w._idx } : { level: best.w.level, edge: best.w.edge }, wirtModell);
+        if (wirt) oeffnungSetzen(neueOeffnung({ wirt, u: best.u, kind, typeId, idx: idRef.current++ }));
       } else { setHint("Kein Wandsegment in der Nähe."); }
     }
   };
@@ -908,7 +1115,7 @@ export default function BitBimStudio({ complexData }) {
       const pts = draft.map((p) => ({ x: p.x, z: p.z }));
       if (tool === "zone") setCustomZones((zs) => [...zs, { points: pts, level: lvl, name: `Raum ${zs.length + 1}`, _idx: idRef.current++ }]);
       else if (tool === "slab") setCustomSlabs((ss) => [...ss, { points: pts, level: lvl, _idx: idRef.current++ }]);
-      else if (tool === "roof") setCustomRoofs((rs) => [...rs, { points: pts, level: lvl, pitch: 2.5, _idx: idRef.current++ }]);
+      else if (tool === "roof") setCustomRoofs((rs) => [...rs, { points: pts, level: lvl, pitch: 2.5, firsthoehe_m: 2.5, _idx: idRef.current++ }]);
     }
     setDraft([]); setHover(null);
   };
@@ -931,7 +1138,7 @@ export default function BitBimStudio({ complexData }) {
     setMultiSel([]); setSelected(sel);
   };
   const onPick = (sel, additive) => {
-    const layerId = { wall: "walls", zone: "zones", slab: "shell", roof: "attika", hullwall: "shell", autowin: "openings", opening: "openings", column: "columns" }[sel.type] || "walls";
+    const layerId = EBENE_VON_TYP[sel.type] || "walls";
     if (layerLocked[layerId]) { setHint(`Ebene gesperrt — Auswahl nicht möglich.`); return; }
     applySelection(sel, additive);
   };
@@ -1041,7 +1248,7 @@ export default function BitBimStudio({ complexData }) {
     if (o._idx !== idx) return o;
     const w = customWalls.find((x) => x._idx === o.wallIdx); if (!w) return o;
     const pr = projectPointToSeg(p, w.a, w.b);
-    const ty = openingTypeById(o.kind, o.typeId); const half = ty.w / 2;
+    const half = oeffnungsMasse(o).w / 2; // 107-04: own width first
     const u = Math.max(half + 0.1, Math.min(pr.t * pr.len, pr.len - half - 0.1));
     return { ...o, u };
   }));
@@ -1049,6 +1256,10 @@ export default function BitBimStudio({ complexData }) {
     // letzte gezeichnete Wand bzw. Stütze entfernen (nach _idx)
     const lastW = customWalls[customWalls.length - 1];
     const lastC = customColumns[customColumns.length - 1];
+    // 106-03: an element a change step made or changed carries the step's mark (geaendert_durch). Removing it here would
+    // undo a split only halfway (part B gone, part A stays short) while the change history still lists the step as active.
+    const ziel = (lastW?._idx || 0) >= (lastC?._idx || 0) && lastW ? lastW : lastC;
+    if (ziel?.geaendert_durch) { setHint(tz("Dieses Bauteil gehört zu einem Änderungsschritt — im Änderungsverlauf zurücknehmen")); return; }
     if ((lastW?._idx || 0) >= (lastC?._idx || 0) && lastW) setCustomWalls((ws) => ws.slice(0, -1));
     else if (lastC) setCustomColumns((cs) => cs.slice(0, -1));
   };
@@ -1078,6 +1289,7 @@ export default function BitBimStudio({ complexData }) {
         const o = arr.find((x) => x._idx === m.index); if (!o?.points) return;
         const nIdx = idRef.current++;
         const copy = { ...o, points: shiftPts(o.points), _idx: nIdx };
+        if (Array.isArray(o.oeffnungen)) copy.oeffnungen = o.oeffnungen.map((l) => ({ ...l, points: shiftPts(l.points || []) })); // 107-04: the holes of a slab move with its copy
         if (m.type === "zone") { copy.name = `${o.name || "Raum"} (Kopie)`; newZones.push(copy); }
         else if (m.type === "slab") newSlabs.push(copy);
         else newRoofs.push(copy);
@@ -1098,16 +1310,16 @@ export default function BitBimStudio({ complexData }) {
         const onCopiedWall = wallMap.has(o.wallIdx);
         const w = customWalls.find((x) => x._idx === o.wallIdx);
         const len = w ? Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) : 0;
-        const half = (openingTypeById(o.kind, o.typeId)?.w || 1) / 2;
+        const half = (oeffnungsMasse(o).w || 1) / 2;
         const u = onCopiedWall ? o.u : Math.max(half + 0.1, Math.min(o.u + OFF, Math.max(half + 0.1, len - half - 0.1)));
-        newWins.push({ ...o, wallIdx: onCopiedWall ? wallMap.get(o.wallIdx) : o.wallIdx, u, _idx: nIdx });
+        newWins.push({ ...(onCopiedWall ? ohneWirtGuid(o) : o), wallIdx: onCopiedWall ? wallMap.get(o.wallIdx) : o.wallIdx, u, _idx: nIdx });
         newSel.push({ type: "opening", index: nIdx, scope: "custom" });
       }
     });
     // Öffnungen auf duplizierten Wänden mitkopieren (auch wenn nicht einzeln ausgewählt)
     if (wallMap.size) customWindows.forEach((o) => {
       if (wallMap.has(o.wallIdx) && !list.some((m) => m.type === "opening" && (m.scope || "custom") === "custom" && m.index === o._idx)) {
-        newWins.push({ ...o, wallIdx: wallMap.get(o.wallIdx), _idx: idRef.current++ });
+        newWins.push({ ...ohneWirtGuid(o), wallIdx: wallMap.get(o.wallIdx), _idx: idRef.current++ });
       }
     });
     if (newWalls.length) setCustomWalls((a) => [...a, ...newWalls]);
@@ -1138,7 +1350,8 @@ export default function BitBimStudio({ complexData }) {
     let moved = false;
     const w = ids("wall"); if (w.size) { moved = true; setCustomWalls((a) => a.map((x) => w.has(x._idx) ? { ...x, a: { x: rnd(x.a.x + dx), z: rnd(x.a.z + dz) }, b: { x: rnd(x.b.x + dx), z: rnd(x.b.z + dz) } } : x)); }
     const c = ids("column"); if (c.size) { moved = true; setCustomColumns((a) => a.map((x) => c.has(x._idx) ? { ...x, x: rnd(x.x + dx), z: rnd(x.z + dz) } : x)); }
-    const movePts = (setter, set) => setter((a) => a.map((x) => set.has(x._idx) ? { ...x, points: x.points.map((p) => ({ x: rnd(p.x + dx), z: rnd(p.z + dz) })) } : x));
+    // 107-04: the holes of a slab (`oeffnungen`) move with it
+    const movePts = (setter, set) => setter((a) => a.map((x) => set.has(x._idx) ? { ...x, points: x.points.map((p) => ({ x: rnd(p.x + dx), z: rnd(p.z + dz) })), ...(Array.isArray(x.oeffnungen) ? { oeffnungen: x.oeffnungen.map((l) => ({ ...l, points: (l.points || []).map((p) => ({ x: rnd(p.x + dx), z: rnd(p.z + dz) })) })) } : {}) } : x));
     const z = ids("zone"); if (z.size) { moved = true; movePts(setCustomZones, z); }
     const s = ids("slab"); if (s.size) { moved = true; movePts(setCustomSlabs, s); }
     const r = ids("roof"); if (r.size) { moved = true; movePts(setCustomRoofs, r); }
@@ -1146,8 +1359,8 @@ export default function BitBimStudio({ complexData }) {
   };
 
   // ---- BIM-C: BBox der Auswahl (Meter, inkl. Höhen für das 3D-Target) ----
-  const selectionBBox = () => {
-    const list = currentSelection(); if (!list.length) return null;
+  const selectionBBox = (liste) => {
+    const list = Array.isArray(liste) ? liste : currentSelection(); if (!list.length) return null; // onClick passes an event: only a real list counts
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, minY = Infinity, maxY = -Infinity;
     const add = (x, z, y0 = 0, y1 = 0) => {
       minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
@@ -1156,33 +1369,38 @@ export default function BitBimStudio({ complexData }) {
     list.forEach((m) => {
       if (m.type === "wall") {
         const w = customWalls.find((x) => x._idx === m.index); if (!w) return;
-        const y0 = (w.level || 0) * storeyHeight;
-        add(w.a.x, w.a.z, y0, y0 + (w.height || storeyHeight)); add(w.b.x, w.b.z, y0, y0 + (w.height || storeyHeight));
+        const y0 = unterkante(w, gs), h = wandHoehe(w, gs);
+        add(w.a.x, w.a.z, y0, y0 + h); add(w.b.x, w.b.z, y0, y0 + h);
       } else if (m.type === "column") {
         const cc = customColumns.find((x) => x._idx === m.index); if (!cc) return;
-        const y0 = (cc.level || 0) * storeyHeight, h = (cc.size || 0.4) / 2;
-        add(cc.x - h, cc.z - h, y0, y0 + storeyHeight); add(cc.x + h, cc.z + h, y0, y0 + storeyHeight);
+        const y0 = unterkante(cc, gs), h = (cc.size || 0.4) / 2, hs = stuetzenHoehe(cc, gs);
+        add(cc.x - h, cc.z - h, y0, y0 + hs); add(cc.x + h, cc.z + h, y0, y0 + hs);
+      } else if (m.type === "hullwall") {
+        // 106-02: a generated hull wall is addressable by GUID, so the view can frame it too
+        const w = model.walls.find((x) => x.level === m.level && x.edge === m.edge); if (!w) return;
+        const y0 = w.elevation ?? elevationOf(w.level || 0, gs);
+        add(w.a.x, w.a.z, y0, y0 + (w.height || geschosshoehe(w.level || 0, gs))); add(w.b.x, w.b.z, y0, y0 + (w.height || geschosshoehe(w.level || 0, gs)));
       } else if (m.type === "opening") {
         const scope = m.scope || "custom";
         const o = (scope === "env" ? envOpenings : customWindows).find((x) => x._idx === m.index); if (!o) return;
         const w = scope === "env" ? model.walls.find((x) => x.level === o.level && x.edge === o.edge) : customWalls.find((x) => x._idx === o.wallIdx);
         if (!w) return;
         const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) || 1;
-        const y0 = (w.level || 0) * storeyHeight;
-        add(w.a.x + ((w.b.x - w.a.x) / len) * o.u, w.a.z + ((w.b.z - w.a.z) / len) * o.u, y0, y0 + storeyHeight);
+        const y0 = elevationOf(w.level || 0, gs);
+        add(w.a.x + ((w.b.x - w.a.x) / len) * o.u, w.a.z + ((w.b.z - w.a.z) / len) * o.u, y0, y0 + geschosshoehe(w.level || 0, gs));
       } else {
         const arr = m.type === "zone" ? customZones : m.type === "slab" ? customSlabs : customRoofs;
         const o = arr.find((x) => x._idx === m.index); if (!o?.points) return;
-        const y0 = (o.level || 0) * storeyHeight;
-        const y1 = m.type === "roof" ? y0 + storeyHeight + (o.pitch || 2.5) : y0 + storeyHeight;
+        const y0 = elevationOf(o.level || 0, gs);
+        const y1 = m.type === "roof" ? elevationOf((o.level || 0) + 1, gs) + dachFirsthoehe_m(o) : y0 + geschosshoehe(o.level || 0, gs);
         o.points.forEach((p) => add(p.x, p.z, y0, y1));
       }
     });
     return isFinite(minX) ? { minX, maxX, minZ, maxZ, minY, maxY } : null;
   };
   // ---- BIM-C: Zoom auf Auswahl (F) — 2D via Fokus-Prop, 3D via Orbit-Target ----
-  const zoomToSelection = () => {
-    const bbSel = selectionBBox();
+  const zoomToSelection = (liste) => {
+    const bbSel = selectionBBox(liste);
     if (!bbSel) { resetViewAll(); return; }
     if (view === "3d") {
       const t = three.current; if (!t.target) return;
@@ -1217,7 +1435,7 @@ export default function BitBimStudio({ complexData }) {
     if (!TOOL_NAMES[t]) { setHint("Erst ein Zeichen-Werkzeug wählen (z. B. Wand), dann ★ Favorit speichern."); return; }
     const composite = t === "wall" ? (spec ? (spec.composite || null) : wallComp) : null;
     const typeId = (t === "window" || t === "door") ? (spec ? (spec.typeId || null) : (t === "window" ? winType : doorType)) : null;
-    const detail = composite ? (WALL_COMPOSITES.find((cp) => cp.id === composite)?.name || "")
+    const detail = composite ? (compositeById(composite)?.name || "")
       : typeId ? (openingTypeById(t, typeId)?.name || "") : "";
     const label = detail ? `${TOOL_NAMES[t]} · ${detail}` : TOOL_NAMES[t];
     setFavs((fs) => {
@@ -1248,20 +1466,30 @@ export default function BitBimStudio({ complexData }) {
     const meldungen = [];
     const ifc = exportIFC(model, {
       customWalls, customColumns, customWindows, envOpenings, autoOpenings,
-      customZones, customSlabs, customRoofs, storeyHeight,
+      customZones, customSlabs, customRoofs: customRoofs.map(dachMigrieren), storeyHeight, geschosse, // 107-02: a roof with only `pitch` is read as ridge rise in m, whatever path created it
       netz: netzLayer, // Phase 41 (NETZ-05): Leitungen als Segment-Elemente
       // 97-02a: every element with its data sheet (stable GUID, Pset_BIT_Bauteil, material, DIN 276); beams from statik_layer.
-      steckbrief: { projektId: projectId || null }, tragwerk: statikLayer, bauteilAttribute: attributLayer,
+      // 107-03: schichtdetails = layer Category/Priority, LayerSetUsage, material psets
+      steckbrief: { projektId: projectId || null, schichtdetails: true }, tragwerk: statikLayer, bauteilAttribute: attributLayer,
       massing: massingLayer, // 98-05: Massing-Studio bodies (proxies) and groups (assemblies)
+      durchbrueche, // 107-04: penetrations of the openings planning (provision proxies / voids in the host wall)
       // 89-03: workshop walls/doors/rooms with stable GUIDs and Pset_BIT_Bauteil (store zones).
-      werkstatt: werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight }),
+      werkstatt: werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight, geschosse }),
       projectName: project?.name || "BIT-Atelier",
-      onWarn: (msg) => meldungen.push(msg),
+      onWarn: (msg, art, daten) => meldungen.push({ msg, art, daten }),
     });
     // Nicht exportierbare Öffnungen offen benennen statt still zu schlucken.
-    setHint(meldungen.length
-      ? `IFC exportiert — ${meldungen.length} Öffnung(en) NICHT enthalten: ${meldungen[0]}${meldungen.length > 1 ? " …" : ""}`
-      : "");
+    // 107-02: the export also warns about elements on a storey the model does not have; those are no missing openings, so they are
+    // named separately. The kind comes from the structured `art` of onWarn (not from the wording) and the text is built here through tz().
+    const geschossHinweise = meldungen.filter((m) => m.art === WARNART_GESCHOSS)
+      .map((m) => tz("Element auf Geschoss {{level}}: das Modell hat dieses Geschoss nicht — im {{ziel}} abgelegt.").replace("{{level}}", String(m.daten?.level)).replace("{{ziel}}", String(m.daten?.ziel)));
+    const durchbruchHinweise = meldungen.filter((m) => m.art === WARNART_DURCHBRUCH).map((m) => m.msg);
+    const oeffnungen = meldungen.filter((m) => m.art !== WARNART_GESCHOSS && m.art !== WARNART_DURCHBRUCH).map((m) => m.msg);
+    setHint([
+      oeffnungen.length ? `IFC exportiert — ${oeffnungen.length} Öffnung(en) NICHT enthalten: ${oeffnungen[0]}${oeffnungen.length > 1 ? " …" : ""}` : "",
+      geschossHinweise.length ? `${geschossHinweise[0]}${geschossHinweise.length > 1 ? " …" : ""}` : "",
+      durchbruchHinweise.length ? `${durchbruchHinweise[0]}${durchbruchHinweise.length > 1 ? " …" : ""}` : "",
+    ].filter(Boolean).join(" · "));
     const blob = new Blob([ifc], { type: "application/x-step" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1297,7 +1525,7 @@ export default function BitBimStudio({ complexData }) {
       huelleStatus: zeigtStatus(brille, attributeVon(attributLayer, "hull-wall")?.status) ? attributeVon(attributLayer, "hull-wall")?.status ?? null : null, massstab: scale, sw: swPlan,
       // Print what the plan shows: the layer switches and the workshop walls (same inputs as BimPlan2D).
       layerVis: zeigtStatus(brille, attributeVon(attributLayer, "hull-wall")?.status) ? layerVis : { ...layerVis, shell: false },
-      werkstattWaende: attributLayer?.attribute ? sichtbarUnter(brille, werkstattMitAttributen(werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight }), attributLayer).waende || []) : null });
+      werkstattWaende: attributLayer?.attribute ? sichtbarUnter(brille, werkstattMitAttributen(werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight, geschosse }), attributLayer).waende || []) : null });
     return { grafik, brille, lvl };
   };
   // 104-06: the current floor plan as DXF R12 (layers A_WAND, A_STUETZE, A_DECKE …, metres).
@@ -1315,56 +1543,28 @@ export default function BitBimStudio({ complexData }) {
   };
   const exportPlanPDF = async () => {
     if (view === "3d") { setHint("PDF-Plan nur aus Grundriss/Schnitt — bitte 2D-Ansicht wählen."); return; }
-    // 97-09: the floor plan as VECTOR at true scale from the model data (lens applied, status
-    // colours, ISO 128 line weights, title block with lens and legend). The section still uses
-    // the raster path below and says so ("nicht maßstäblich").
-    if (view === "grundriss") {
-      try {
-        const { grafik, brille, lvl } = aktuelleGrafik();
-        const planinhalt = `Grundriss ${model.storeys[lvl]?.name || ""}`.trim();
-        const { bytes, format } = await vektorPlanPdf(grafik, { massstab: scale, projekt: project?.name || "", planinhalt, brille, datum: new Date().toLocaleDateString("de-DE") });
-        const url = URL.createObjectURL(new Blob([/** @type {any} */ (bytes)], { type: "application/pdf" }));
-        const a = document.createElement("a");
-        a.href = url; a.download = `${(project?.name || "plan").replace(/[^\w-]+/g, "_")}_${planinhalt.replace(/[^\w-]+/g, "_")}_1-${scale}.pdf`;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        // Rule 7 (concept §5): the lens has its own scale — say so when the sheet differs.
-        setHint(brille.massstab !== scale
-          ? `PDF 1:${scale} (${format}) erstellt — Hinweis: die Brille „${brille.label}“ ist für 1:${brille.massstab} gedacht.`
-          : `PDF 1:${scale} (${format}) erstellt — maßstäblich, Vektor.`);
-      } catch (e) { setHint("PDF-Export fehlgeschlagen: " + (e?.message || e)); }
-      return;
-    }
-    const target = planWrapRef.current?.querySelector("[data-bim-plan2d] svg");
-    if (!target) { setHint("Keine 2D-Zeichnung gefunden."); return; }
+    // 97-09 floor plan / 100-01 section: VECTOR at true scale from the model data (lens applied, status
+    // colours, ISO 128 line weights, title block with lens and legend; the section with level marks).
+    // Before 100-01 the section was a stretched screen image stamped "nicht maßstäblich".
     try {
-      const { jsPDF } = await import("jspdf");
-      const xml = new XMLSerializer().serializeToString(target);
-      const svg64 = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(xml)));
-      const vb = (target.getAttribute("viewBox") || "0 0 800 600").split(/\s+/).map(Number);
-      const W = vb[2] || 800, H = vb[3] || 600;
-      const img = new Image();
-      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = svg64; });
-      const SCALE_PX = 2;
-      const canvas = document.createElement("canvas"); canvas.width = W * SCALE_PX; canvas.height = H * SCALE_PX;
-      const ctx2 = canvas.getContext("2d"); ctx2.fillStyle = "#ffffff"; ctx2.fillRect(0, 0, canvas.width, canvas.height);
-      ctx2.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const png = canvas.toDataURL("image/png");
-      const landscape = W >= H;
-      const pdf = new jsPDF({ orientation: landscape ? "landscape" : "portrait", unit: "mm", format: "a3" });
-      const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
-      const margin = 12, titleH = 16;
-      const availW = pw - margin * 2, availH = ph - margin * 2 - titleH;
-      const ar = W / H; let dw = availW, dh = dw / ar; if (dh > availH) { dh = availH; dw = dh * ar; }
-      pdf.addImage(png, "PNG", (pw - dw) / 2, margin, dw, dh);
-      // Schriftfeld
-      pdf.setDrawColor(120); pdf.rect(margin, ph - margin - titleH, availW, titleH);
-      pdf.setFontSize(12); pdf.setTextColor(20);
-      pdf.text(`${project?.name || "BIT-Atelier"} — ${view === "schnitt" ? "Schnitt" : "Grundriss " + (model.storeys[Math.min(planLevel, storeys - 1)]?.name || "")}`, margin + 3, ph - margin - titleH + 7);
-      pdf.setFontSize(9); pdf.setTextColor(80);
-      // 97-09: the raster path is fitted to the sheet — it is NOT to scale and must not claim it.
-      pdf.text(`nicht maßstäblich (Bildschirmbild)   ·   Ebenen: ${combo}   ·   BIT-Atelier`, margin + 3, ph - margin - titleH + 12);
-      pdf.save(`${(project?.name || "plan").replace(/[^\w-]+/g, "_")}_${view}.pdf`);
+      const { grafik, brille, lvl } = aktuelleGrafik();
+      const huelleStatus = attributeVon(attributLayer, "hull-wall")?.status ?? null;
+      const g = view === "schnitt"
+        // same layer choice as the screen: a lens that hides the hull hides the shell (BimPlan2D planLayerVis)
+        ? schnittGrafik({ model, storeyHeight, layerVis: zeigtStatus(brille, huelleStatus) ? layerVis : { ...layerVis, shell: false }, brille,
+          huelleStatus: zeigtStatus(brille, huelleStatus) ? huelleStatus : null, sw: swPlan, massstab: scale })
+        : grafik;
+      const planinhalt = view === "schnitt" ? "Schnitt" : `Grundriss ${model.storeys[lvl]?.name || ""}`.trim();
+      const { bytes, format } = await vektorPlanPdf(g, { massstab: scale, projekt: project?.name || "", planinhalt, brille, datum: new Date().toLocaleDateString("de-DE") });
+      const url = URL.createObjectURL(new Blob([/** @type {any} */ (bytes)], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = `${(project?.name || "plan").replace(/[^\w-]+/g, "_")}_${planinhalt.replace(/[^\w-]+/g, "_")}_1-${scale}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      // Rule 7 (concept §5): the lens has its own scale — say so when the sheet differs.
+      setHint(brille.massstab !== scale
+        ? `PDF 1:${scale} (${format}) erstellt — Hinweis: die Brille „${brille.label}“ ist für 1:${brille.massstab} gedacht.`
+        : `PDF 1:${scale} (${format}) erstellt — maßstäblich, Vektor.`);
     } catch (e) { setHint("PDF-Export fehlgeschlagen: " + (e?.message || e)); }
   };
 
@@ -1376,7 +1576,7 @@ export default function BitBimStudio({ complexData }) {
       if (e.target?.closest?.("input,textarea,select,[contenteditable]")) return;
       if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) { e.preventDefault(); duplicateSelection(); return; } // Strg+D duplizieren
       if (e.ctrlKey || e.metaKey || e.altKey) return; // andere Browser-Kürzel nicht kapern
-      if (e.key === "Escape") { setDraft([]); setHover(null); setSelected(null); setMultiSel([]); setTool("arrow"); setHint(""); }
+      if (e.key === "Escape") { setDraft([]); setHover(null); setSelected(null); setMultiSel([]); setTool("arrow"); setHint(""); ecke3dRef.current = null; }
       else if (e.key === "Delete" || e.key === "Backspace") { if (multiSel.length) { e.preventDefault(); deleteMany(multiSel); } else if (selected) { e.preventDefault(); deleteSelected(); } }
       else if (e.key === "v" || e.key === "V") selectTool("arrow");
       else if (e.key === "w" || e.key === "W") selectTool("wall");
@@ -1393,6 +1593,339 @@ export default function BitBimStudio({ complexData }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
+
+  // 106-01: test and agent hook while the studio is mounted, under window.__bitZeigen.bim (the IFC
+  // viewer uses .ifc, so two mounted viewers never overwrite each other): what is under the pointer,
+  // the state table (colour AND form), and what is really drawn. Plain data only (no three.js objects).
+  // Only the hover state 'fokus' and the selection are drawn here; warnung/fehler are not wired in
+  // the studio yet (they are in the IFC viewer, see IfcViewer.jsx zustandSetzen).
+  useEffect(() => {
+    const w = /** @type {any} */ (window);
+    /** Helper objects (hover outlines, selection aura) below the element meshes, as plain data. */
+    const hilfsobjekte = () => {
+      const out = [];
+      [three.current.customGroup, three.current.buildingGroup].forEach((g) => g?.traverse((o) => {
+        if (o.userData?.zeigeHilfe) out.push({ typ: o.type, material: o.material?.type ?? null, zustand: o.userData.zeigeZustand ?? null, farbe: o.material?.color?.getHex?.() ?? null });
+      }));
+      return out;
+    };
+    const api = {
+      hover: () => (hoverRef.current ? { ...hoverRef.current, userData: undefined } : null),
+      zustaende: () => ZEIGE_ZUSTAENDE,
+      /** Active hover highlight layers (one per mesh of the element); `zustand` counts only that state. */
+      markiert: (zustand) => (three.current.zeigen?.aktive() ?? []).filter((x) => !zustand || x.zustand === zustand).length,
+      formen: () => (three.current.zeigen?.aktive() ?? []).map((x) => ({ zustand: x.zustand, umriss: x.umriss, symbol: x.symbol })),
+      hilfsobjekte,
+      /** The selection as drawn: aura lines (solid, selection blue) and the emissive tint of tinted meshes. */
+      auswahl: () => ({
+        aura: (three.current.auraList || []).map((l) => ({ material: l.material.type, farbe: l.material.color.getHex() })),
+        emissiv: (() => {
+          const out = [];
+          [three.current.customGroup, three.current.buildingGroup].forEach((g) => g?.traverse((m) => {
+            if (m.isMesh && m.material?.emissive && m.material.emissive.getHex() === AUSWAHL_EMISSIV) out.push(m.userData?.kind ?? null);
+          }));
+          return out;
+        })(),
+      }),
+      /**
+       * 106-07: the orbit camera - studio angles theta and polar phi (rad), distance radius (m); review fix: azimutRad = world azimuth of
+       * the camera around the target, atan2(x, z) as in the IFC viewer's hook (common reference for the twist direction).
+       */
+      kamera: () => ({
+        theta: orbit.current.theta, phi: orbit.current.phi, radius: orbit.current.radius,
+        azimutRad: Math.atan2(Math.cos(orbit.current.theta), Math.sin(orbit.current.theta)),
+      }),
+      /** 106-07: kind of the last pointer on the canvas and the sum of two-finger steps seen (count, twist rad, pinch factor). */
+      zeiger: () => ({ art: zeigerArtRef.current, geste: { ...gestenSummeRef.current } }),
+    };
+    w.__bitZeigen = { ...(w.__bitZeigen || {}), bim: api };
+    return () => { if (w.__bitZeigen?.bim === api) delete w.__bitZeigen.bim; };
+  }, []);
+
+  // 106-02: ONE command register for this studio (same pattern as the Massing modeller, 104-03): the
+  // selection as context for speech and agents. Built once; the commands read the latest state through
+  // `aktuell` (re-assigned every render).
+  const aktuell = useRef(/** @type {Record<string, any>} */ ({}));
+  // 106-03: synchronous mirror of the drawn elements, like `auswahlRef` for the selection: a confirmed change writes the new
+  // model here at once (and into the React state), so the next command in the same tick (auswahl-lesen, a second
+  // proposal) already sees it. Every render re-assigns it from the state, which by then holds the same arrays.
+  const modellRef = useRef(/** @type {any} */ (null));
+  modellRef.current = { customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs,
+    bauteil_attribute_layer: attributLayer, netz_layer: netzLayer };
+  /** Everything the element resolvers need, as of this render. */
+  const bimDaten = () => ({ ...modellRef.current,
+    model, storeyHeight, geschosse, huelleAttribute: attributeVon(attributLayer, "hull-wall"),
+    huelleDeckenAttribute: attributeVon(attributLayer, "hull-slab"), huelleBodenAttribute: attributeVon(attributLayer, "hull-floor") });
+  /** Selection entries right now (read from the synchronous mirror): the multi selection, else the single one. Generated auto openings have no GUID and are counted as `ohneGuid`. */
+  const auswahlEintraege = () => {
+    const a = auswahlRef.current;
+    return a.multiSel.length ? a.multiSel : a.selected ? [a.selected] : [];
+  };
+  const bimKontext = (eintraege) => {
+    const t3 = three.current;
+    const dom = t3.renderer?.domElement;
+    return bimAuswahlKontext(eintraege, bimDaten(), { projektId: projectId || null,
+      kamera: view === "3d" ? t3.camera : null, breite: dom?.clientWidth, hoehe: dom?.clientHeight }); // pixels only mean something in the 3D view
+  };
+  aktuell.current = {
+    kontext: () => bimKontext(auswahlEintraege()),
+    waehleGuid: (/** @type {string} */ guid) => {
+      const treffer = bimPerGuid(guid, bimDaten(), { projektId: projectId || null });
+      if (!treffer) return null;
+      // what a mouse pick cannot select, a command does not select either: refused with the reason, not guessed
+      if (!treffer.bauteil.waehlbar) throw new Error(`Bauteil nicht wählbar: ${guid} (${treffer.bauteil.klasse} ohne Auswahl im BIM-Studio, nur lesbar über „modell“)`);
+      const ebene = EBENE_VON_TYP[treffer.sel.type] || "walls";
+      if (layerLocked[ebene]) throw new Error("Ebene gesperrt — Auswahl nicht möglich.");
+      if (layerVis[ebene] === false) throw new Error("Ebene ausgeblendet — Auswahl nicht möglich.");
+      setCtxMenu(null);
+      setMultiSel([]); setSelected(treffer.sel); // the same state a click sets
+      return bimKontext([treffer.sel]); // from the element itself: the React state lands one render later
+    },
+    aufheben: () => { setSelected(null); setMultiSel([]); setHint(""); },
+    ansichtAufAuswahl: () => zoomToSelection(auswahlEintraege().filter((e) => bimBauteil(e, bimDaten(), { projektId: projectId || null }))),
+    modell: (/** @type {{klasse?: string}} */ opt) => bimModellUebersicht(bimDaten(), { projektId: projectId || null }, opt),
+    // 106-04: one PNG of the 3D view (the canvas is hidden in plan and section: refused with the reason, not drawn blank)
+    ansichtBild: (/** @type {{breite?: any}} */ opt) => {
+      if (view !== "3d") throw new Error(`Ein Bild gibt es nur in der 3D-Ansicht — erst auf 3D wechseln (jetzt: ${view})`);
+      return ansichtAlsPng(three.current, opt);
+    },
+    // 106-06: the open project for the image rules (an NDA project never sends an image; the id lets the MCP server check the consent)
+    projekt: () => ({ id: project?.id ?? null, nda: project?.nda === true }),
+  };
+  // ---- 106-03: change tools (proposal -> check -> preview -> confirmation -> origin) ----
+  const vorschlaege = useMemo(() => vorschlagSpeicher(), []);
+  /** Helper objects of the preview per proposal id (ghost group, outlines, cut marker), so exactly those are removed again. */
+  const vorschauRef = useRef(/** @type {Map<string, any[]>} */ (new Map()));
+  /** Group for ghosts in the scene root: the element group is rebuilt on every model change, the ghosts must survive that. */
+  const geisterGruppe = () => {
+    const t3 = three.current;
+    if (!t3.scene) return null;
+    if (!t3.geister) { t3.geister = new THREE.Group(); t3.geister.userData.zeigeHilfe = true; t3.scene.add(t3.geister); }
+    return t3.geister;
+  };
+  /** The meshes of one drawn element in the scene (a composite wall has one per skin; its openings' glazing moves with it). */
+  const meshesDesBauteils = (/** @type {any} */ fund) => {
+    const kind = /** @type {Record<string, string>} */ ({ wand: "wall", stuetze: "column", decke: "cslab", dach: "croof", zone: "zone" })[fund.art];
+    const idx = fund.element._idx;
+    const oeff = new Set(fund.art === "wand" ? (modellRef.current.customWindows || []).filter((/** @type {any} */ o) => o.wallIdx === idx).map((/** @type {any} */ o) => o._idx) : []);
+    /** @type {any[]} */
+    const out = [];
+    three.current.customGroup?.traverse((/** @type {any} */ m) => {
+      const u = m.userData || {};
+      if (!m.isMesh || u.zeigeHilfe) return;
+      if ((u.kind === kind && u.id === idx) || (oeff.size && (u.kind === "window" || u.kind === "door") && oeff.has(u.id))) out.push(m);
+    });
+    return out;
+  };
+  const vorschauEntfernen = (/** @type {string} */ id) => {
+    (vorschauRef.current.get(id) || []).forEach((o) => geisterEntsorgen(o));
+    vorschauRef.current.delete(id);
+  };
+  /** Draws what a proposal would do: ghost (transformieren), cut marker (teilen), warning outline (eigenschaft). 3D view only. */
+  const vorschauZeigen = (/** @type {any} */ v) => {
+    vorschauEntfernen(v.id);
+    const g = geisterGruppe();
+    const fund = v.ziel.quelle === "ifc" ? null : bauteilImModell(modellRef.current, v.ziel.guid, { projektId: projectId || null });
+    if (!g || !fund) return;
+    /** @type {any[]} */
+    const objs = [];
+    try {
+      const el = fund.element, sh = geschosshoehe(el.level || 0, gs), lvl = unterkante(el, gs);
+      if (v.art === "transformieren") {
+        const m = geisterMatrix({ zentrum: transformZentrum(el, v.params.zentrum), verschiebung_m: v.params.verschiebung_m, drehung_grad: v.params.drehung_grad, faktor: v.params.faktor });
+        const klon = geisterKlon(meshesDesBauteils(fund), m, v.id);
+        g.add(klon); objs.push(klon);
+      } else if (v.art === "eigenschaft") {
+        const zustand = v.pruefung?.stufe === "fehler" ? "fehler" : "warnung";
+        for (const m of meshesDesBauteils(fund)) {
+          const l = umrissLinie(new THREE.EdgesGeometry(m.geometry, 30), zustand);
+          l.userData.geisterId = v.id; m.add(l); objs.push(l);
+        }
+      } else if (v.art === "teilen" && fund.art === "wand" && v.params.punkt_m) {
+        const dx = el.b.x - el.a.x, dz = el.b.z - el.a.z, l2 = dx * dx + dz * dz || 1;
+        const t = Math.max(0, Math.min(1, ((v.params.punkt_m.x - el.a.x) * dx + (v.params.punkt_m.z - el.a.z) * dz) / l2));
+        const c = { x: el.a.x + dx * t, z: el.a.z + dz * t }, len = Math.sqrt(l2);
+        const h = wandDicke_m(el) / 2 + 0.3, nx = (-dz / len) * h, nz = (dx / len) * h;
+        const marke = schnittMarke({ x: c.x + nx, z: c.z + nz }, { x: c.x - nx, z: c.z - nz }, lvl, lvl + wandHoehe(el, gs), v.id);
+        g.add(marke); objs.push(marke);
+      } else if (v.art === "teilen" && v.params.linie) {
+        const top = elevationOf((el.level || 0) + 1, gs);
+        const marke = schnittMarke(v.params.linie.a, v.params.linie.b, top - deckenLage(el, gs, "decke").dicke_m, top + 0.6, v.id);
+        g.add(marke); objs.push(marke);
+      }
+    } catch (err) { console.warn("[BIM] preview failed: " + (/** @type {any} */ (err)?.message || err)); }
+    vorschauRef.current.set(v.id, objs);
+  };
+  /** After the element group was rebuilt: draw the previews of all open proposals again. */
+  const vorschauAlleNeu = () => {
+    [...vorschauRef.current.keys()].forEach(vorschauEntfernen);
+    vorschlaege.offen().forEach(vorschauZeigen);
+  };
+  /** Writes a new model record into the React state of the seven element arrays (only the arrays that changed) and into the mirror. */
+  const modellAnwenden = (/** @type {any} */ neu) => {
+    const alt = modellRef.current;
+    const setter = { customWalls: setCustomWalls, customColumns: setCustomColumns, customWindows: setCustomWindows, envOpenings: setEnvOpenings,
+      customZones: setCustomZones, customSlabs: setCustomSlabs, customRoofs: setCustomRoofs };
+    const stand = { ...alt };
+    for (const [k, set] of Object.entries(setter)) if (neu[k] !== alt[k]) {
+      // 107-02: roofs from an agent or an undo may only carry the old `pitch`; they get the split fields here like at load, so editor and export read one meaning
+      const wert = k === "customRoofs" && Array.isArray(neu[k]) ? neu[k].map(dachMigrieren) : neu[k];
+      set(wert); stand[k] = wert;
+    }
+    modellRef.current = stand;
+    idRef.current = Math.max(idRef.current, naechsteFreieIdx(stand)); // a split took the counter's number
+  };
+  const aenderung = useRef(/** @type {Record<string, any>} */ ({}));
+  aenderung.current = {
+    kontext: () => bimKontext(auswahlEintraege()),
+    modell: () => modellRef.current,
+    optionen: () => ({ projektId: projectId || null, bauart: bauartVon(project).bauart,
+      werkstatt: werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight, geschosse }), durchbrueche, huelle: model.walls, geschosshoehe_m: storeyHeight, geschosse,
+      attributPruefung: pruefeAttributeVorUebernahme, naechsteIdx: idRef.current }),
+    // 106-05: view directions for "nach links" (3D: from the camera, plan: fixed, section: none) and the spot last pointed at on the SELECTED element ("teile hier")
+    ansicht: () => (view === "3d" ? ansichtAusKamera(three.current.camera) : view === "grundriss" ? ANSICHT_GRUNDRISS : null),
+    zeigepunkt: () => {
+      // only in the view it was pointed in (the 3D view): a click in the plan sets no spot, an older 3D spot must not stand in for it
+      const z = three.current.letzterZeigepunkt;
+      return z && view === "3d" && bimKontext(auswahlEintraege()).bauteile.some((/** @type {any} */ b) => b.guid === z.guid) ? { x: z.x, z: z.z } : null;
+    },
+    speicher: vorschlaege,
+    uebernehmen: (/** @type {any} */ _v, /** @type {any} */ r) => modellAnwenden(r.modell),
+    zuruecknehmen: (/** @type {any} */ _e, /** @type {any} */ r) => modellAnwenden(r.modell),
+    t: tz,
+    vorschauZeigen, vorschauEntfernen,
+    darfAendern: () => darfAendern, // 106-07: bestaetigen / rueckgaengig only for a role that may change the model
+  };
+  const befehle = useMemo(() => {
+    const reg = befehlsRegister();
+    auswahlBefehleRegistrieren(reg, () => /** @type {any} */ (aktuell.current));
+    aenderungsBefehleRegistrieren(reg, () => /** @type {any} */ (aenderung.current));
+    eingabeBefehlRegistrieren(reg, () => /** @type {any} */ (aenderung.current)); // 106-05: a sentence as a command, the caller's ctx goes on
+    return reg;
+  }, []);
+  // test and agent hook next to the 106-01 one (window.__bitZeigen.bim): the previews as drawn and the element arrays as they are.
+  // Plain data only, so it serialises.
+  useEffect(() => {
+    const w = /** @type {any} */ (window);
+    const api = {
+      vorschau: () => [...vorschauRef.current.entries()].map(([id, objs]) => ({ id, objekte: objs.map((/** @type {any} */ o) => ({
+        typ: o.type, geist: !!o.userData.geisterId && o.isGroup === true,
+        // outline form of the preview (dashed 'warnung' / solid 'fehler'): on the object itself, or on the meshes of a ghost
+        umriss: (o.isGroup ? o.children.flatMap((/** @type {any} */ c) => c.children) : [o]).filter((/** @type {any} */ x) => x.userData?.zeigeZustand)
+          .map((/** @type {any} */ x) => ({ zustand: x.userData.zeigeZustand, material: x.material.type })),
+      })) })),
+      modell: () => JSON.parse(JSON.stringify(modellRef.current)),
+      // 106-05: screen right / into the screen of the current view as plan unit vectors (what "nach links" is measured against)
+      ansicht: () => aenderung.current.ansicht(),
+      // 107-01: world box (m) of the drawn wall's 3D meshes (all layers of a build-up joined), per wall _idx — proves 3D = plan = IFC
+      waende3d: () => {
+        const g = three.current.customGroup;
+        /** @type {Record<string, {min: number[], max: number[]}>} */
+        const out = {};
+        for (const m of g ? g.children : []) {
+          if (m.userData?.kind !== "wall" || m.userData.id == null) continue;
+          const b = new THREE.Box3().setFromObject(m);
+          const alt = out[m.userData.id];
+          out[m.userData.id] = alt ? { min: [Math.min(alt.min[0], b.min.x), Math.min(alt.min[1], b.min.y), Math.min(alt.min[2], b.min.z)], max: [Math.max(alt.max[0], b.max.x), Math.max(alt.max[1], b.max.y), Math.max(alt.max[2], b.max.z)] } : { min: [b.min.x, b.min.y, b.min.z], max: [b.max.x, b.max.y, b.max.z] };
+        }
+        return out;
+      },
+      // 107-02 review: world box (m) of the drawn roofs' 3D meshes, per roof _idx — proves a roof of slope 0° is a flat plate, not a 2.5 m gable
+      daecher3d: () => {
+        const g = three.current.customGroup;
+        /** @type {Record<string, {min: number[], max: number[]}>} */
+        const out = {};
+        for (const m of g ? g.children : []) {
+          if (m.userData?.kind !== "croof" || m.userData.id == null) continue;
+          const b = new THREE.Box3().setFromObject(m);
+          out[m.userData.id] = { min: [b.min.x, b.min.y, b.min.z], max: [b.max.x, b.max.y, b.max.z] };
+        }
+        return out;
+      },
+      // 107-01 review: the same for the HULL wall meshes (userData kind "wallShell"), keyed "<level>:<edge>" — proves hull plan = 3D = IFC
+      // 107-04: a hull wall with a build-up is one mesh per layer, the boxes are joined like for the drawn walls
+      huellwaende3d: () => {
+        const g = three.current.buildingGroup;
+        /** @type {Record<string, {min: number[], max: number[]}>} */
+        const out = {};
+        for (const m of g ? g.children : []) {
+          if (m.userData?.kind !== "wallShell") continue;
+          const b = new THREE.Box3().setFromObject(m);
+          const k = `${m.userData.level}:${m.userData.edge}`, alt = out[k];
+          out[k] = alt ? { min: [Math.min(alt.min[0], b.min.x), Math.min(alt.min[1], b.min.y), Math.min(alt.min[2], b.min.z)], max: [Math.max(alt.max[0], b.max.x), Math.max(alt.max[1], b.max.y), Math.max(alt.max[2], b.max.z)] } : { min: [b.min.x, b.min.y, b.min.z], max: [b.max.x, b.max.y, b.max.z] };
+        }
+        return out;
+      },
+      // 107-04: number of layer meshes of the hull wall "<level>:<edge>" (a hull wall with a build-up is shown layer by layer)
+      huellwandSchichten3d: () => {
+        const g = three.current.buildingGroup;
+        /** @type {Record<string, number>} */
+        const out = {};
+        for (const m of g ? g.children : []) if (m.userData?.kind === "wallShell") { const k = `${m.userData.level}:${m.userData.edge}`; out[k] = (out[k] || 0) + 1; }
+        return out;
+      },
+      // 107-04: number of holes (Shape.holes) per drawn wall (by _idx), hull wall ("<level>:<edge>") and drawn slab (by _idx), summed over the layers of a
+      // wall — proves a hole is cut through every layer; plus the number of planned-penetration markers in the scene
+      loecher3d: () => {
+        const t3 = three.current;
+        /** @type {{wand: Record<string, number[]>, huelle: Record<string, number[]>, decke: Record<string, number>, vormerkungen: number}} */
+        const out = { wand: {}, huelle: {}, decke: {}, vormerkungen: 0 };
+        const holes = (/** @type {any} */ m) => (m.geometry?.parameters?.shapes?.holes || []).length;
+        for (const m of t3.customGroup ? t3.customGroup.children : []) {
+          const u = m.userData || {};
+          if (u.kind === "wall" && u.id != null) (out.wand[u.id] = out.wand[u.id] || []).push(holes(m));
+          else if (u.kind === "cslab" && u.id != null) out.decke[u.id] = holes(m);
+          else if (u.kind === "durchbruch") out.vormerkungen += 1;
+        }
+        for (const m of t3.buildingGroup ? t3.buildingGroup.children : []) {
+          const u = m.userData || {};
+          if (u.kind === "wallShell") { const k = `${u.level}:${u.edge}`; (out.huelle[k] = out.huelle[k] || []).push(holes(m)); }
+        }
+        return out;
+      },
+      // 107-04: test hook — select an opening (a 3D glazing group is not pickable; the plan symbol is, by mouse)
+      oeffnungWaehlen: (/** @type {number} */ index, /** @type {string} */ scope = "custom") => setSelected({ type: "opening", index, scope }),
+      // 107-04: test hook — put the camera (orbit angles in rad, radius in m, target point in m) and read the pixel of a world point, so a test can
+      // click ON a wall face in 3D. The camera is set at once (the render loop would do it one frame later).
+      kamera: (/** @type {{theta?: number, phi?: number, radius?: number, ziel?: {x: number, y: number, z: number}}} */ opt) => {
+        const o = orbit.current, t3 = three.current;
+        o.touched = true;
+        if (opt.theta != null) o.theta = opt.theta;
+        if (opt.phi != null) o.phi = opt.phi;
+        if (opt.radius != null) o.radius = opt.radius;
+        if (opt.ziel && t3.target) t3.target.set(opt.ziel.x, opt.ziel.y, opt.ziel.z);
+        if (t3.camera && t3.target) {
+          t3.camera.position.set(t3.target.x + o.radius * Math.sin(o.phi) * Math.cos(o.theta), t3.target.y + o.radius * Math.cos(o.phi), t3.target.z + o.radius * Math.sin(o.phi) * Math.sin(o.theta));
+          t3.camera.lookAt(t3.target);
+          t3.camera.updateMatrixWorld();
+        }
+      },
+      bildpunkt3d: (/** @type {{x: number, y: number, z: number}} */ pt) => {
+        const t3 = three.current, dom = t3.renderer?.domElement;
+        if (!dom || !t3.camera) return null;
+        t3.camera.updateMatrixWorld();
+        const v = new THREE.Vector3(pt.x, pt.y, pt.z).project(t3.camera), r = dom.getBoundingClientRect();
+        return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+      },
+    };
+    w.__bitZeigen = { ...(w.__bitZeigen || {}), bimAenderung: api };
+    return () => { if (w.__bitZeigen?.bimAenderung === api) delete w.__bitZeigen.bimAenderung; };
+  }, []);
+  // the buttons of the preview take the same road as the commands (one path, one check); a refusal is shown in words
+  const aenderungBefehl = (/** @type {string} */ id, /** @type {any} */ p) => {
+    const r = befehle.ausfuehren(id, p);
+    setHint(r.ok ? "" : /** @type {{ok: false, error: string}} */ (r).error);
+  };
+  // reachable for local agents / tests while the studio is open (window.__bitBefehle.zeileBearbeiten(...))
+  // and through the local control channel (server/steuerungRouter.js); the global is deleted only if it is still ours.
+  useEffect(() => {
+    /** @type {any} */ (window).__bitBefehle = befehle;
+    const stopp = starteSteuerungsBruecke(befehle);
+    return () => {
+      stopp();
+      if (/** @type {any} */ (window).__bitBefehle === befehle) delete /** @type {any} */ (window).__bitBefehle;
+    };
+  }, [befehle]);
 
   // ---- Scene init (once) ----
   useEffect(() => {
@@ -1470,24 +2003,77 @@ export default function BitBimStudio({ complexData }) {
     el.style.touchAction = "none"; el.style.cursor = "default";
     const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 
-    // Raycasting: getroffenes pickbares Objekt unter (clientX,clientY)
-    const ray = new THREE.Raycaster();
-    const ndc = new THREE.Vector2();
-    const pickAt = (clientX, clientY) => {
-      const rect = el.getBoundingClientRect();
-      ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-      ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-      ray.setFromCamera(ndc, camera);
+    // Raycasting (106-01: strahlPick, the same core as the IFC viewer): the pickable object under
+    // (clientX,clientY). Only the DIRECT children of the groups (glazing and door leaves are Groups
+    // and stay out, as before); helper geometry (outline, aura) is never a direct child of a group.
+    // 106-07: with the capture radius of the pointer kind (mouse exact as before, pen 8 px, finger 18 px): when the exact ray
+    // finds no element of the studio (sky, ground, a context building), the rings around it are tried, nearest first.
+    // Review fix 106-07: guidPflicht (hover) = the rings accept only elements that resolve to a GUID, the test the hover applies to the
+    // result; a tap keeps accepting every element with a key (as the click always did).
+    /** @type {(clientX: number, clientY: number, art?: import("@core/lib/zeigen/strahlPick.js").ZeigerArt, guidPflicht?: boolean) => any} */
+    const treffenBei = (clientX, clientY, art = /** @type {import("@core/lib/zeigen/strahlPick.js").ZeigerArt} */ ("mouse"), guidPflicht = false) => {
       const objs = [];
       [three.current.buildingGroup, three.current.customGroup, three.current.contextGroup]
         .forEach((g) => g?.children.forEach((c) => { if (c.visible) objs.push(c); }));
-      const hits = ray.intersectObjects(objs, false);
-      return hits.length ? hits[0].object : null;
+      const annehmen = guidPflicht
+        ? (/** @type {any} */ tr) => !!bauteilSchluessel(tr.objekt.userData) && !!identitaetAus(tr, (x) => three.current.cb?.bauteilInfo?.(x.objekt.userData), { guidPflicht: true })
+        : (/** @type {any} */ tr) => !!bauteilSchluessel(tr.objekt.userData);
+      return zeigerPick(objs, camera, el, clientX, clientY, { art, kamera: camera, annehmen });
+    };
+    const pickAt = (clientX, clientY) => treffenBei(clientX, clientY)?.objekt ?? null;
+
+    // Hover highlight 'fokus' (106-01): outline + tint on private material clones.
+    const zeigen = hervorhebung();
+    const handles = three.current; // never reassigned (Object.assign), safe to use in the cleanup
+    handles.zeigen = zeigen;
+    const hoverLoeschen = () => {
+      zeigen.alleLoeschen();
+      hoverRef.current = null;
+      if (hoverBoxRef.current) hoverBoxRef.current.style.display = "none";
+    };
+    handles.hoverLoeschen = hoverLoeschen;
+    const gleichesBauteil = (a, b) => ["kind", "id", "scope", "level", "edge"].every((k) => (a?.[k] ?? null) === (b?.[k] ?? null));
+    // All meshes of one element (a composite wall has one mesh per skin, all with the same userData).
+    const meshesVon = (ud) => {
+      const out = [];
+      [three.current.customGroup, three.current.buildingGroup].forEach((g) => g?.children.forEach((m) => {
+        if (m.isMesh && m.visible && gleichesBauteil(m.userData, ud)) out.push(m);
+      }));
+      return out;
+    };
+
+    // 106-07: finger and pen. One contact: tap = select (tolerance per kind), drag = orbit (the mouse keeps its CAD buttons);
+    // two fingers: pinch = closer/further, twist = turn around the vertical axis, shift of their middle = pan. The last finger
+    // lifting after a two-finger gesture never selects.
+    const geste = zweiFingerGeste();
+    const gesteSchritt = (/** @type {import("@core/lib/zeigen/zweiFinger.js").FingerSchritt} */ sch) => {
+      const o = orbit.current;
+      o.radius = Math.max(20, Math.min(220, o.radius / sch.faktor)); // same limits as the wheel
+      // fingers clockwise on screen = model clockwise seen from above [ASSUMED direction, as on map apps]. The camera sits at
+      // (cos theta, sin theta) in x/z, so its world azimuth atan2(x, z) is PI/2 - theta: theta must DEcrease for the camera to go the
+      // way the IFC viewer turns it (azimuth + drehungRad) - review fix 106-07, the sign was the other way round before.
+      o.theta -= sch.drehungRad;
+      _f.subVectors(three.current.target, camera.position).normalize();
+      _r.crossVectors(_f, _up).normalize();
+      _u.crossVectors(_r, _f).normalize();
+      const k = o.radius * 0.0016; // same scale as the middle-button pan
+      three.current.target.addScaledVector(_r, -sch.dx * k);
+      three.current.target.addScaledVector(_u, sch.dy * k);
+      gestenSummeRef.current = {
+        schritte: gestenSummeRef.current.schritte + 1,
+        drehungRad: gestenSummeRef.current.drehungRad + sch.drehungRad,
+        faktor: gestenSummeRef.current.faktor * sch.faktor,
+      };
     };
 
     // ArchiCAD-Maus: links = wählen, rechts = Kontextmenü, mittlere = Pan, Shift+mittlere = drehen
     const down = (e) => {
       const o = orbit.current; o.touched = true;
+      const art = zeigerArt(e);
+      zeigerArtRef.current = art;
+      const anzahl = geste.runter(e.pointerId, e.clientX, e.clientY);
+      if (anzahl >= 2) { o.on = true; o.mode = "geste"; hoverLoeschen(); return; }
+      o.art = art; o.zeigerId = e.pointerId; o.startX = e.clientX; o.startY = e.clientY;
       if (e.button === 1) { o.on = true; o.mode = e.shiftKey ? "rotate" : "pan"; el.style.cursor = o.mode === "pan" ? "move" : "grabbing"; e.preventDefault(); }
       else if (e.button === 0) { o.on = true; o.mode = "select"; o.moved = false; }
       else { o.on = false; o.mode = null; }
@@ -1497,8 +2083,17 @@ export default function BitBimStudio({ complexData }) {
     const mdown = (e) => { if (e.button === 1) e.preventDefault(); };
     const move = (e) => {
       const o = orbit.current; if (!o.on) return;
+      if (o.mode === "geste") { const sch = geste.bewegt(e.pointerId, e.clientX, e.clientY); if (sch) gesteSchritt(sch); return; }
+      geste.bewegt(e.pointerId, e.clientX, e.clientY);
+      if (e.pointerId !== o.zeigerId && o.zeigerId != null) return;
       const dx = e.clientX - o.x, dy = e.clientY - o.y;
-      if (o.mode === "select") { if (Math.abs(dx) + Math.abs(dy) > 3) o.moved = true; o.x = e.clientX; o.y = e.clientY; return; }
+      if (o.mode === "select") {
+        if (o.art !== "mouse") {
+          // finger / pen: beyond the tap tolerance the contact orbits instead (there is no middle button on glass)
+          if (Math.hypot(e.clientX - o.startX, e.clientY - o.startY) > TIPP_TOLERANZ_PX[o.art]) { o.moved = true; o.mode = "rotate"; }
+          else return;
+        } else { if (Math.abs(dx) + Math.abs(dy) > 3) o.moved = true; o.x = e.clientX; o.y = e.clientY; return; }
+      }
       if (o.mode === "pan") {
         _f.subVectors(three.current.target, camera.position).normalize();
         _r.crossVectors(_f, _up).normalize();
@@ -1514,13 +2109,34 @@ export default function BitBimStudio({ complexData }) {
     };
     const up = (e) => {
       const o = orbit.current;
+      const warGeste = geste.warGeste();
+      const rest = geste.hoch(e.pointerId);
+      if (warGeste || o.mode === "geste") {
+        // two-finger gesture: nothing is selected; when the last finger lifts the canvas is free again
+        if (rest === 0) { o.on = false; o.mode = null; el.style.cursor = "default"; }
+        return;
+      }
+      if (o.zeigerId != null && e.pointerId !== o.zeigerId) return;
       if (o.mode === "select" && !o.moved) {
-        const obj = pickAt(e.clientX, e.clientY);
-        three.current.cb?.select?.(obj ? obj.userData : null);
+        const treffer = treffenBei(e.clientX, e.clientY, o.art ?? "mouse");
+        const obj = treffer?.objekt ?? null;
+        // 106-05: remember the hit point (plan x/z, m) with the element's GUID - "teile hier" cuts there, and only while that element is selected
+        const zeigeId = treffer ? identitaetAus(treffer, (tr) => three.current.cb?.bauteilInfo?.(tr.objekt.userData), { guidPflicht: true }) : null;
+        three.current.letzterZeigepunkt = zeigeId ? { x: treffer.punkt[0], z: treffer.punkt[2], guid: zeigeId.guid } : null;
+        // 107-04: with an opening tool the click places an opening on the face instead of selecting
+        if (!three.current.cb?.platziere?.(treffer)) three.current.cb?.select?.(obj ? obj.userData : null);
       }
       o.on = false; o.mode = null; el.style.cursor = "default";
     };
-    const wheel = (e) => { e.preventDefault(); orbit.current.touched = true; orbit.current.radius = Math.max(20, Math.min(220, orbit.current.radius + e.deltaY * 0.05)); };
+    // Zooming moves the scene under a resting pointer: drop the hover, look again once the wheel settled.
+    let radTimer = 0;
+    const wheel = (e) => {
+      e.preventDefault(); orbit.current.touched = true; orbit.current.radius = Math.max(20, Math.min(220, orbit.current.radius + e.deltaY * 0.05));
+      hoverLoeschen();
+      letzterPick = null;
+      clearTimeout(radTimer);
+      radTimer = window.setTimeout(() => { if (zeiger && !hoverRaf) hoverRaf = requestAnimationFrame(hoverTick); }, WHEEL_PAUSE_MS);
+    };
     // Rechtsklick = Kontextmenü für getroffenes Objekt (Standardmenü unterdrückt)
     const ctx = (e) => {
       e.preventDefault();
@@ -1528,20 +2144,79 @@ export default function BitBimStudio({ complexData }) {
       const rect = el.getBoundingClientRect();
       three.current.cb?.context?.(obj ? obj.userData : null, e.clientX - rect.left, e.clientY - rect.top);
     };
-    // Hover-Feedback: Zeiger-Cursor über pickbaren Bauteilen (gedrosselt; nie während Orbit/Pan)
-    let lastHover = 0;
-    const hoverMove = (e) => {
-      if (orbit.current.on) return;
-      const now = performance.now();
-      if (now - lastHover < 90) return;
-      lastHover = now;
-      el.style.cursor = pickAt(e.clientX, e.clientY) ? "pointer" : "default";
+    // Hover (106-01): the last pointer is remembered, ONE pick per animation frame, never faster than
+    // the pick budget allows, and no new pick for sub-pixel jitter. A hit is shown in words and as
+    // 'fokus' only if the studio knows the element and it has a GUID (unknown hit, e.g. context
+    // buildings: nothing is shown, nothing is guessed).
+    let zeiger = null;
+    let letzterPick = null;
+    let hoverRaf = 0;
+    const drossel = pickDrossel();
+    const hoverTick = () => {
+      hoverRaf = 0;
+      if (!zeiger) return;
+      if (orbit.current.on) { hoverLoeschen(); return; } // never while orbiting / panning
+      const jetzt = performance.now();
+      if (!drossel.darf(jetzt)) { hoverRaf = requestAnimationFrame(hoverTick); return; }
+      const bewegt = !letzterPick || Math.hypot(zeiger.x - letzterPick.x, zeiger.y - letzterPick.y) >= HOVER_MIN_PX;
+      if (bewegt || !hoverRef.current) {
+        letzterPick = { x: zeiger.x, y: zeiger.y };
+        const treffer = treffenBei(zeiger.x, zeiger.y, zeiger.art, true); // 106-07: a hovering pen gets its capture radius (GUID elements only)
+        drossel.messen(performance.now() - jetzt, performance.now());
+        el.style.cursor = treffer ? "pointer" : "default";
+        // cheap key first: the GUID is derived only when the element under the pointer changed
+        const schluessel = treffer ? bauteilSchluessel(treffer.objekt.userData) : "";
+        if (!schluessel) { hoverLoeschen(); return; }
+        if (hoverRef.current?.schluessel !== schluessel) {
+          const id = identitaetAus(treffer, (tr) => three.current.cb?.bauteilInfo?.(tr.objekt.userData), { guidPflicht: true });
+          if (!id) { hoverLoeschen(); return; }
+          zeigen.alleLoeschen();
+          const meshes = meshesVon(id.userData);
+          const sels = multiSelRef.current?.length ? multiSelRef.current : selectedRef.current ? [selectedRef.current] : [];
+          const gewaehlt = meshes.some((m) => sels.some((s) => auraMatches(m, s)));
+          const name = gewaehlt ? "auswahl" : "fokus";
+          if (!gewaehlt) { // a selected element keeps its aura, hover never paints over it
+            try { meshes.forEach((m) => zeigen.setzen({ mesh: m }, "fokus")); }
+            catch (err) { console.warn(`[BIM] hover highlight failed: ${err?.message || err}`); }
+          }
+          hoverRef.current = { quelle: "bim", guid: id.guid, kind: id.kind, id: id.bauteilId, schluessel: id.schluessel, typ: id.label, name: id.name, zustand: name };
+          if (hoverTextRef.current) hoverTextRef.current.textContent = id.name ? `${id.label} · ${id.name}` : id.label;
+          // the overlay says the state the picture shows: words, colour and outline form
+          const look = ZEIGE_ZUSTAENDE[name];
+          if (hoverZustandRef.current) hoverZustandRef.current.textContent = tz(look.label);
+          if (hoverSymbolRef.current) {
+            hoverSymbolRef.current.style.borderColor = look.hex;
+            hoverSymbolRef.current.style.borderStyle = ZEIGE_CSS_RAND[look.umriss];
+          }
+        }
+      }
+      const box = hoverBoxRef.current;
+      if (box) {
+        box.style.display = ""; // visible first, otherwise offsetWidth is 0 and the clamp below is skipped
+        const r = el.getBoundingClientRect();
+        const x = Math.max(0, Math.min(zeiger.x - r.left + 14, r.width - box.offsetWidth - 4));
+        const y = Math.max(0, Math.min(zeiger.y - r.top + 14, r.height - box.offsetHeight - 4));
+        box.style.transform = `translate(${x}px, ${y}px)`;
+      }
     };
-    el.addEventListener("pointermove", hoverMove);
+    const hoverMove = (e) => {
+      // 106-07: a finger has no hover (it only moves while on the glass); a pen above the glass hovers like the mouse
+      const art = zeigerArt(e);
+      if (art === "touch") return;
+      if (art === "pen" && !e.buttons) zeigerArtRef.current = "pen";
+      zeiger = { x: e.clientX, y: e.clientY, art };
+      if (!hoverRaf) hoverRaf = requestAnimationFrame(hoverTick);
+    };
+    // a cancelled contact (the browser took over the gesture) must not leave a finger counted
+    const abbruch = (e) => { if (geste.hoch(e.pointerId) === 0) { const o = orbit.current; o.on = false; o.mode = null; } };
+    const hoverLeave = () => { zeiger = null; hoverLoeschen(); };
+    el.addEventListener("pointermove", hoverMove, { passive: true });
+    el.addEventListener("pointerleave", hoverLeave);
     el.addEventListener("pointerdown", down);
     el.addEventListener("mousedown", mdown);
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", abbruch);
     el.addEventListener("wheel", wheel, { passive: false });
     el.addEventListener("contextmenu", ctx);
 
@@ -1551,9 +2226,16 @@ export default function BitBimStudio({ complexData }) {
     return () => {
       cancelAnimationFrame(raf);
       el.removeEventListener("pointermove", hoverMove);
+      el.removeEventListener("pointerleave", hoverLeave);
+      if (hoverRaf) cancelAnimationFrame(hoverRaf);
+      clearTimeout(radTimer);
+      hoverLoeschen();
+      zeigen.verwerfen(); // cached outline geometries
+      handles.zeigen = null; handles.hoverLoeschen = null;
       el.removeEventListener("pointerdown", down); el.removeEventListener("mousedown", mdown);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up); el.removeEventListener("wheel", wheel);
+      window.removeEventListener("pointercancel", abbruch);
       el.removeEventListener("contextmenu", ctx);
       window.removeEventListener("resize", onResize);
       renderer.dispose();
@@ -1590,6 +2272,7 @@ export default function BitBimStudio({ complexData }) {
   // ---- Building from shared model ----
   useEffect(() => {
     const t = three.current; if (!t.buildingGroup) return;
+    t.hoverLoeschen?.(); // 106-01: material clones of the hover must not outlive their meshes
     while (t.buildingGroup.children.length) { const c = t.buildingGroup.children.pop(); objektFreigeben(c); }
 
     const envComp = compositeById(envComposite);
@@ -1606,26 +2289,37 @@ export default function BitBimStudio({ complexData }) {
     // derselben Liste, die auch der IFC-Export bekommt (KD-16).
     model.walls.forEach((w) => {
       const autos = autoOpenings.filter((o) => o.level === w.level && o.edge === w.edge);
-      const ops = autos.map((o) => ({ u: o.u, sill: o.sill, width: o.width, height: o.height }));
+      const ops = /** @type {Array<{u: number, sill: number, width: number, height: number, rund?: boolean}>} */ (autos.map((o) => ({ u: o.u, sill: o.sill, width: o.width, height: o.height })));
       // benutzerplatzierte Öffnungen auf dieser Hüllwand
       const myEnv = envOpenings.filter((e) => e.level === w.level && e.edge === w.edge);
-      myEnv.forEach((e) => { const ty = openingTypeById(e.kind, e.typeId); ops.push({ u: e.u, sill: ty.sill, width: ty.w, height: ty.h }); });
-      const m = buildWallMeshWithHoles(w, wallMat, ops);
-      m.userData.layer = "shell"; m.userData.kind = "wallShell"; m.userData.level = w.level; m.userData.edge = w.edge;
-      t.buildingGroup.add(m);
+      myEnv.forEach((e) => { const ty = masseAmWand(e, w, w.elevation); ops.push({ u: e.u, sill: ty.sill, width: ty.w, height: ty.h }); });
+      // 107-04: executed penetrations of the openings planning in this wall are holes like openings without a filling
+      durchbruchLoecher.filter((l) => l.schluessel === `env:${w.level}:${w.edge}`).forEach((l) => ops.push({ u: l.u, sill: l.sill, width: l.width, height: l.height, rund: l.rund }));
+      // 107-04: with a build-up (not in render mode: the facade preset replaces the material) the hull wall is shown layer by layer, the holes cut
+      // through ALL layers — before it was one body coloured by layer 1 only
+      const hComp = !renderMode && w.composite ? compositeById(w.composite) : null;
+      const huellMeshes = hComp ? buildSchichtWand(w, hComp, ops) : [buildWallMeshWithHoles(w, wallMat, ops)];
+      huellMeshes.forEach((m) => {
+        m.userData.layer = "shell"; m.userData.kind = "wallShell"; m.userData.level = w.level; m.userData.edge = w.edge;
+        t.buildingGroup.add(m);
+      });
       const rotY = -Math.atan2(w.b.z - w.a.z, w.b.x - w.a.x);
+      // 107-01: glazing sits in the wall BODY — shifted by the hull reference line (0 for "center")
+      const hg = wandGeometrie(w), hx = w.a.x + hg.normale.x * hg.versatz_m, hz = w.a.z + hg.normale.z * hg.versatz_m;
       // Verglasung/Türblatt der Regel-Öffnungen (gleiche Quelle wie die Löcher)
       autos.forEach((o) => {
         const g = buildGlazing(autoOpeningType(o), o.u, glassMat, frameMat, o.kind, leafMat);
-        g.position.set(w.a.x, w.elevation, w.a.z); g.rotation.y = rotY;
+        g.position.set(hx, w.elevation, hz); g.rotation.y = rotY;
         g.traverse((c) => { if (c.isMesh) { c.userData.layer = "openings"; c.userData.kind = o.kind; c.userData.scope = "auto"; c.userData.level = w.level; c.userData.edge = w.edge; } });
         t.buildingGroup.add(g);
       });
       // Verglasung/Türblatt für platzierte Hüllwand-Öffnungen
       myEnv.forEach((e) => {
-        const ty = openingTypeById(e.kind, e.typeId);
-        const g = buildGlazing(ty, e.u, glassMat, frameMat, e.kind, leafMat);
-        g.position.set(w.a.x, w.elevation, w.a.z); g.rotation.y = rotY;
+        if (istOeffnungOhneFuellung(e)) return; // 107-04: an opening without a filling is only the hole
+        const ty = typAmWand(e, w, w.elevation);
+        const hlen = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) || 1;
+        const g = buildGlazing(ty, oeffnungMitte_m(e.u, ty.w, hlen), glassMat, frameMat, e.kind, leafMat); // position kept in the wall like the hole and the IFC
+        g.position.set(hx, w.elevation, hz); g.rotation.y = rotY;
         g.traverse((c) => { if (c.isMesh) { c.userData.layer = "openings"; c.userData.kind = e.kind; c.userData.id = e._idx; c.userData.scope = "env"; } });
         t.buildingGroup.add(g);
       });
@@ -1635,9 +2329,10 @@ export default function BitBimStudio({ complexData }) {
       const shape = new THREE.Shape();
       s.polygon.forEach((p, i) => (i ? shape.lineTo(p.x, -p.z) : shape.moveTo(p.x, -p.z)));
       shape.closePath();
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.25, bevelEnabled: false });
+      const lage = deckenLage(s, undefined, "huelle"); // 107-02: thickness/side from the slab (default 0.25 m on its plane)
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: lage.dicke_m, bevelEnabled: false });
       const m = new THREE.Mesh(geo, slabMat); m.castShadow = true; m.receiveShadow = true;
-      m.rotation.x = -Math.PI / 2; m.position.y = s.elevation;
+      m.rotation.x = -Math.PI / 2; m.position.y = lage.unterkante_m;
       m.userData.layer = "shell"; m.userData.kind = "slab";
       t.buildingGroup.add(m);
     });
@@ -1648,7 +2343,8 @@ export default function BitBimStudio({ complexData }) {
         const len = Math.hypot(p.b.x - p.a.x, p.b.z - p.a.z); if (len < 0.05) return;
         const geo = new THREE.BoxGeometry(len, p.height, p.thickness);
         const m = new THREE.Mesh(geo, wallMat); m.castShadow = true; m.receiveShadow = true;
-        m.position.set((p.a.x + p.b.x) / 2, p.elevation + p.height / 2, (p.a.z + p.b.z) / 2);
+        const pm = wandGeometrie(p).koerperMitte; // 107-01: parapet follows the hull reference line
+        m.position.set(pm.x, p.elevation + p.height / 2, pm.z);
         m.rotation.y = -Math.atan2(p.b.z - p.a.z, p.b.x - p.a.x);
         m.userData.layer = "attika"; m.userData.kind = "parapet";
         t.buildingGroup.add(m);
@@ -1657,7 +2353,7 @@ export default function BitBimStudio({ complexData }) {
 
     // Globale Dachform über dem Footprint (Sattel/Walm/Pult) auf der obersten Decke
     if (dachform && dachform !== "flach") {
-      const baseY = model.totalHeight || (model.storeys?.length || 1) * (model.storeyHeight || 3);
+      const baseY = model.totalHeight || gesamtHoehe(model.storeys?.length || 1, gs); // 107-02: from the storey source, no own multiplication
       const rise = roofRiseFromPitch(model.footprint, dachform, dachneigung);
       const roofMat = renderMode
         ? new THREE.MeshStandardMaterial({ color: 0x8a5a44, roughness: 0.85, side: THREE.DoubleSide }) // Ziegelrot im Render
@@ -1675,7 +2371,7 @@ export default function BitBimStudio({ complexData }) {
     applyLayerVisibility(t, layersRef.current);
     // Hülle wurde neu gebaut — Aura auf Hüllwand/Auto-Fenster wiederherstellen
     applyPickHighlight(t, selectedRef.current, multiSelRef.current);
-  }, [model, envOpenings, autoOpenings, renderMode, facadePreset, dachform, dachneigung]);
+  }, [model, envOpenings, autoOpenings, renderMode, facadePreset, dachform, dachneigung, customSlabs, gs, durchbruchLoecher]);
 
   // Kamera nur bei Modelländerung neu ausrichten (nicht bei jeder Öffnung)
   useEffect(() => {
@@ -1689,34 +2385,36 @@ export default function BitBimStudio({ complexData }) {
   // ---- Custom-Elemente (gezeichnete Wände/Stützen) in 3D ----
   useEffect(() => {
     const t = three.current; if (!t.customGroup) return;
+    t.hoverLoeschen?.(); // 106-01: see above
     while (t.customGroup.children.length) { const c = t.customGroup.children.pop(); objektFreigeben(c); }
     customWalls.forEach((w) => {
       const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z); if (len < 0.05) return;
-      const h = w.height || storeyHeight, elev = w.level * storeyHeight;
-      const dirx = (w.b.x - w.a.x) / len, dirz = (w.b.z - w.a.z) / len;
-      const nx = -dirz, nz = dirx;
+      const h = wandHoehe(w, gs), elev = unterkante(w, gs);
+      // 107-01: normal, thickness, offset and middle from the one derivation (bauteil/referenz.js)
+      const g = wandGeometrie(w);
+      const nx = g.normale.x, nz = g.normale.z;
       const comp = compositeById(w.composite);
-      const total = comp ? compositeTotalM(w.composite) : (w.thickness || 0.3);
-      const o = w.refLine === "outside" ? total / 2 : w.refLine === "inside" ? -total / 2 : 0;
-      const cx = (w.a.x + w.b.x) / 2, cz = (w.a.z + w.b.z) / 2;
+      const total = g.dicke_m;
+      const o = g.versatz_m;
+      const cx = g.mitte.x, cz = g.mitte.z;
       const rotY = -Math.atan2(w.b.z - w.a.z, w.b.x - w.a.x);
       const myWins = customWindows.filter((cw) => cw.wallIdx === w._idx);
-      if (myWins.length) {
+      const meineLoecher = durchbruchLoecher.filter((l) => l.schluessel === `cw:${w._idx}`);
+      if (myWins.length || meineLoecher.length) {
         // Wand mit echten Öffnungen (einschichtig dargestellt) + Verglasung/Türblatt je Öffnung
-        const ops = myWins.map((cw) => { const ty = openingTypeById(cw.kind, cw.typeId); return { u: cw.u, sill: ty.sill, width: ty.w, height: ty.h }; });
+        // 107-04: sizes of the record (own width/height/sill first), plus the executed penetrations of the openings planning in this wall
+        const ops = [...myWins.map((cw) => { const ty = masseAmWand(cw, w, elev); return { u: cw.u, sill: ty.sill, width: ty.w, height: ty.h }; }),
+          ...meineLoecher.map((l) => ({ u: l.u, sill: l.sill, width: l.width, height: l.height, rund: l.rund }))];
         if (comp) {
-          // Loch durch jede Schicht schneiden (mehrschichtig + Öffnung)
-          let cur = o + total / 2;
-          comp.skins.forEach((sk) => {
-            const tk = sk.thickness / 1000; const mid = cur - tk / 2; cur -= tk;
-            const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(sk.color), roughness: 0.9 });
-            const m = buildWallMeshWithHoles({ ...w, height: h }, mat, ops, Math.max(0.01, tk), mid);
+          // Loch durch jede Schicht schneiden (mehrschichtig + Öffnung) — 107-04: one function for drawn and hull walls
+          // 107-02: elevation = lower edge (storey + offset); a drawn wall has none stored
+          buildSchichtWand({ ...w, height: h, elevation: elev }, comp, ops).forEach((m) => {
             m.userData.layer = "walls"; m.userData.kind = "wall"; m.userData.id = w._idx;
             t.customGroup.add(m);
           });
         } else {
           const wallMat = new THREE.MeshStandardMaterial({ color: 0x0f766e, roughness: 0.85 });
-          const m = buildWallMeshWithHoles({ ...w, height: h }, wallMat, ops, total);
+          const m = buildWallMeshWithHoles({ ...w, height: h, elevation: elev }, wallMat, ops, total);
           m.userData.layer = "walls"; m.userData.kind = "wall"; m.userData.id = w._idx;
           t.customGroup.add(m);
         }
@@ -1724,8 +2422,9 @@ export default function BitBimStudio({ complexData }) {
         const frameMat = new THREE.MeshStandardMaterial({ color: 0x3b4654, roughness: 0.6 });
         const leafMat = new THREE.MeshStandardMaterial({ color: 0x6b4f3a, roughness: 0.7 });
         myWins.forEach((cw) => {
-          const ty = openingTypeById(cw.kind, cw.typeId);
-          const g = buildGlazing(ty, cw.u, glassMat, frameMat, cw.kind, leafMat);
+          if (istOeffnungOhneFuellung(cw)) return; // 107-04: an opening without a filling is only the hole
+          const ty = typAmWand(cw, w, elev);
+          const g = buildGlazing(ty, oeffnungMitte_m(cw.u, ty.w, len), glassMat, frameMat, cw.kind, leafMat); // position kept in the wall like the hole and the IFC
           g.position.set(w.a.x + nx * o, elev, w.a.z + nz * o);
           g.rotation.y = rotY;
           g.traverse((c) => { if (c.isMesh) { c.userData.layer = "openings"; c.userData.kind = cw.kind; c.userData.id = cw._idx; } });
@@ -1755,34 +2454,43 @@ export default function BitBimStudio({ complexData }) {
         t.customGroup.add(m);
       }
     });
-    // Eckfüller (Wand-Cleanup an Berührungspunkten)
-    cornerFillers(customWalls).forEach((f) => {
+    // Eckfüller (Wand-Cleanup an Berührungspunkten) — 107-01: sits on the body corner, not on the line end
+    eckfueller(customWalls, undefined, gs).forEach((f) => {
       const mat = new THREE.MeshStandardMaterial({ color: 0x0f766e, roughness: 0.85 });
-      const m = new THREE.Mesh(new THREE.BoxGeometry(f.thk, f.h, f.thk), mat);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(f.dicke_m, f.hoehe_m, f.dicke_m), mat);
       m.castShadow = true; m.receiveShadow = true;
-      m.position.set(f.x, f.level * storeyHeight + f.h / 2, f.z);
+      m.position.set(f.x, f.unterkante_m + f.hoehe_m / 2, f.z);
       m.userData.layer = "walls"; m.userData.kind = "wall";
       t.customGroup.add(m);
     });
     customColumns.forEach((c) => {
-      const elev = c.level * storeyHeight, s = c.size || 0.4;
+      const elev = unterkante(c, gs), s = c.size || 0.4, hc = stuetzenHoehe(c, gs);
       const mat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.8 });
-      const m = new THREE.Mesh(new THREE.BoxGeometry(s, storeyHeight, s), mat);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(s, hc, s), mat);
       m.castShadow = true; m.receiveShadow = true;
-      m.position.set(c.x, elev + storeyHeight / 2, c.z);
+      m.position.set(c.x, elev + hc / 2, c.z);
       m.userData.layer = "columns"; m.userData.kind = "column"; m.userData.id = c._idx;
       t.customGroup.add(m);
     });
-    // Decken (gezeichnete Slabs) — Polygon extrudiert, 0,22 m, an Geschossdecke
+    // Decken (gezeichnete Slabs) — Polygon extrudiert, 107-02: Dicke/Bezug aus dicke_m/bezug (Standard 0,22 m, Oberkante = Geschossdecke)
     customSlabs.forEach((s) => {
       if (!s.points || s.points.length < 3) return;
       const shape = new THREE.Shape();
       s.points.forEach((p, i) => (i ? shape.lineTo(p.x, -p.z) : shape.moveTo(p.x, -p.z)));
       shape.closePath();
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.22, bevelEnabled: false });
+      // 107-04: holes of the slab (`oeffnungen: [{points}]`, plan polygon in m), non-destructive like the wall holes (Shape.holes, no CSG)
+      (Array.isArray(s.oeffnungen) ? s.oeffnungen : []).forEach((loch) => {
+        if (!Array.isArray(loch?.points) || loch.points.length < 3) return;
+        const path = new THREE.Path();
+        loch.points.forEach((p, i) => (i ? path.lineTo(p.x, -p.z) : path.moveTo(p.x, -p.z)));
+        path.closePath();
+        shape.holes.push(path);
+      });
+      const lage = deckenLage(s, gs, "decke");
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: lage.dicke_m, bevelEnabled: false });
       const mat = new THREE.MeshStandardMaterial({ color: 0x9aa6b2, roughness: 0.85 });
       const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true;
-      m.rotation.x = -Math.PI / 2; m.position.y = (s.level || 0) * storeyHeight + storeyHeight - 0.22;
+      m.rotation.x = -Math.PI / 2; m.position.y = lage.unterkante_m;
       m.userData.layer = "shell"; m.userData.kind = "cslab"; m.userData.id = s._idx;
       t.customGroup.add(m);
     });
@@ -1790,7 +2498,20 @@ export default function BitBimStudio({ complexData }) {
     customRoofs.forEach((rf) => {
       if (!rf.points || rf.points.length < 3) return;
       const mat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.9, side: THREE.DoubleSide });
-      const m = buildGableRoof(rf.points, (rf.level || 0) * storeyHeight + storeyHeight, rf.pitch || 2.5, mat);
+      // 107-02: eaves = elevation of level + 1 (+ bezug/dicke_m of the roof plate), ridge rise from firsthoehe_m / neigung_grad
+      // A slope of 0° (or rise 0) is a FLAT roof, as the data sheet and the IFC say: no `|| 2.5` fallback any more (dachFirsthoehe_m already
+      // defaults to 2.5 m when the roof has no field at all) — a flat roof is drawn as a plate of the roof thickness, not as a gable.
+      const lage = deckenLage(rf, gs, "dach"), rise = dachFirsthoehe_m(rf);
+      let m;
+      if (rise > 0.005) m = buildGableRoof(rf.points, lage.unterkante_m, rise, mat);
+      else {
+        const shape = new THREE.Shape();
+        rf.points.forEach((p, i) => (i ? shape.lineTo(p.x, -p.z) : shape.moveTo(p.x, -p.z)));
+        shape.closePath();
+        m = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: lage.dicke_m, bevelEnabled: false }), mat);
+        m.rotation.x = -Math.PI / 2; m.position.y = lage.unterkante_m;
+        m.castShadow = true; m.receiveShadow = true;
+      }
       m.userData.layer = "attika"; m.userData.kind = "croof"; m.userData.id = rf._idx;
       t.customGroup.add(m);
     });
@@ -1803,8 +2524,18 @@ export default function BitBimStudio({ complexData }) {
       const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.08, bevelEnabled: false });
       const mat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.9, transparent: true, opacity: 0.35 });
       const m = new THREE.Mesh(geo, mat); m.receiveShadow = true;
-      m.rotation.x = -Math.PI / 2; m.position.y = (z.level || 0) * storeyHeight + 0.04;
+      m.rotation.x = -Math.PI / 2; m.position.y = unterkante(z, gs) + 0.04;
       m.userData.layer = "zones"; m.userData.kind = "zone"; m.userData.id = z._idx;
+      t.customGroup.add(m);
+    });
+    // 107-04: planned penetrations (not yet executed) as translucent boxes / cylinders at their place; not pickable (they sit in the wall surface)
+    durchbruchVormerkungen.forEach((v) => {
+      const geo = v.rund ? new THREE.CylinderGeometry(v.b / 2, v.b / 2, v.tiefe, 24) : new THREE.BoxGeometry(v.b, v.h, v.tiefe);
+      if (v.rund) geo.rotateX(Math.PI / 2); // cylinder axis across the wall
+      const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.8, transparent: true, opacity: 0.45 }));
+      m.position.set(v.x, v.y, v.z); m.rotation.y = -v.ang;
+      m.raycast = () => {};
+      m.userData.layer = "openings"; m.userData.kind = "durchbruch"; m.userData.id = v.nr;
       t.customGroup.add(m);
     });
     // 97-04b: in 3D, walls and columns with a decided status take its colour (one table:
@@ -1821,10 +2552,14 @@ export default function BitBimStudio({ complexData }) {
     });
     applyLayerVisibility(t, layersRef.current);
     applyPickHighlight(t, selectedRef.current, multiSelRef.current);
-  }, [customWalls, customColumns, customWindows, customZones, customSlabs, customRoofs, storeyHeight]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customWalls, customColumns, customWindows, customZones, customSlabs, customRoofs, storeyHeight, gs, aufbautenKey, model, durchbruchLoecher, durchbruchVormerkungen]);
 
   // 3D-Auswahl hervorheben (Aura: emissive + pulsierende Kontur, inkl. Mehrfachauswahl)
   useEffect(() => { applyPickHighlight(three.current, selected, multiSel); }, [selected, multiSel]);
+  // 106-03: the element group was rebuilt above - draw the previews of open proposals again (before the next frame)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { vorschauAlleNeu(); }, [customWalls, customColumns, customWindows, customZones, customSlabs, customRoofs, storeyHeight, gs, view]);
 
   // Räume in die gemeinsame Quelle spiegeln (Massing-Studio zeigt sie dann mit an).
   // KD-18: NICHT unkonditional überschreiben. Der Store enthält auch die Zonen des
@@ -1862,6 +2597,66 @@ export default function BitBimStudio({ complexData }) {
       else setSelected(null);
     },
     context: (hit, x, y) => setCtxMenu(hit ? { x, y, hit } : null),
+    // 107-04 (spec I.4 Glue-To, part IV "push a rectangle through"): with the tool window / door / oeffnung a click on a wall face in 3D places the
+    // opening through the same function as the plan click (neueOeffnung). Window and door take the type size at the clicked position; the tool
+    // "oeffnung" takes TWO clicks on the same wall face (rectangle: position, sill, width, height from the corners in wall coordinates) or on a
+    // slab (a hole of the slab, no CSG). Returns true when the click was consumed — the studio then does not select.
+    platziere: (/** @type {any} */ treffer) => {
+      if (view !== "3d" || !(tool === "window" || tool === "door" || tool === "oeffnung")) return false;
+      const ud = treffer?.objekt?.userData || null, p = treffer?.punkt;
+      if (!ud || !p) { ecke3dRef.current = null; setHint(tz("Keine Fläche getroffen — Fenster, Türen und Öffnungen brauchen eine Wandfläche")); return true; }
+      if (ud.kind === "wall" || ud.kind === "wallShell") {
+        const wirt = wirtVon(ud.kind === "wall" ? { wallIdx: ud.id } : { level: ud.level, edge: ud.edge }, wirtModell);
+        if (!wirt) { setHint(tz("Wand nicht gefunden")); return true; }
+        const wp = wandPunkt(wirt.wand.a, wirt.wand.b, wirt.wand.unterkante_m, p);
+        if (tool !== "oeffnung") {
+          const typeId = tool === "door" ? doorType : winType;
+          oeffnungSetzen(neueOeffnung({ wirt, u: wp.u, kind: tool, typeId, idx: idRef.current++ }));
+          setHint("");
+          return true;
+        }
+        const e = ecke3dRef.current;
+        if (!e || e.art !== "wand" || e.schluessel !== wirt.schluessel) {
+          ecke3dRef.current = { art: "wand", schluessel: wirt.schluessel, p: wp };
+          setHint(tz("Öffnung: zweite Ecke auf derselben Wandfläche klicken"));
+          return true;
+        }
+        ecke3dRef.current = null;
+        const r = rechteckAufWand(e.p, wp, wirt.wand.laenge_m, wirt.wand.hoehe_m);
+        if (!r) { setHint(tz("Rechteck zu klein (mindestens 10 cm je Seite)")); return true; }
+        oeffnungSetzen(neueOeffnung({ wirt, u: r.u, kind: "oeffnung", typeId: "oeffnung", masse: { width: r.width, height: r.height, sill: r.sill }, idx: idRef.current++ }));
+        setHint("");
+        return true;
+      }
+      if (ud.kind === "cslab" && tool === "oeffnung") {
+        const punkt = { x: p[0], z: p[2] };
+        const e = ecke3dRef.current;
+        if (!e || e.art !== "decke" || e.schluessel !== ud.id) {
+          ecke3dRef.current = { art: "decke", schluessel: ud.id, p: punkt };
+          setHint(tz("Deckenöffnung: zweite Ecke auf derselben Decke klicken"));
+          return true;
+        }
+        ecke3dRef.current = null;
+        const loch = deckenLochRechteck(e.p, punkt);
+        if (!loch) { setHint(tz("Rechteck zu klein (mindestens 10 cm je Seite)")); return true; }
+        const decke = customSlabs.find((s) => s._idx === ud.id);
+        if (!decke || !lochInDecke(loch, decke.points)) { setHint(tz("Deckenöffnung: das Rechteck muss ganz auf der Decke liegen")); return true; }
+        const alt = Array.isArray(decke.oeffnungen) ? decke.oeffnungen : [];
+        if (lochUeberlappt(loch, alt)) { setHint(tz("Deckenöffnung: das Rechteck überschneidet eine andere Öffnung der Decke")); return true; }
+        // own id per hole (unique within the slab): the IFC GUID hangs on it, not on the list position
+        const lochId = alt.reduce((m, l) => Math.max(m, Number(l?.id) || 0), 0) + 1;
+        setCustomSlabs((ss) => ss.map((s) => (s._idx === ud.id ? { ...s, oeffnungen: [...(Array.isArray(s.oeffnungen) ? s.oeffnungen : []), { points: loch, id: lochId }] } : s)));
+        setHint("");
+        return true;
+      }
+      ecke3dRef.current = null;
+      setHint(tz(tool === "oeffnung" ? "Öffnungen gehören in eine Wand oder eine gezeichnete Decke" : "Fenster und Türen gehören in eine Wand"));
+      return true;
+    },
+    // 106-01: which element is this mesh? Reads the userData tags and the element arrays (bauteilInfoAus,
+    // unit-tested); null for anything that is no element of the model (context buildings, parapet,
+    // corner fillers): refused. Hull walls carry the GUID the IFC export gives them.
+    bauteilInfo: (ud) => bauteilInfoAus(ud, { customWalls, customColumns, customZones, customSlabs, customRoofs }, { projektId: projectId || null, uebersetze: tz }),
   };
 
   // ---- Context buildings (echte OSM-Umgebung, extrudiert) ----
@@ -2035,8 +2830,9 @@ export default function BitBimStudio({ complexData }) {
             // 97-06: checks against wrong planning on the current state (drawn, workshop, hull, network, openings).
             <FehlplanungHinweise t={tz} befunde={fehlplanungPruefen({
               modell: { customWalls, customColumns, customWindows, envOpenings, customSlabs, customRoofs, netz_layer: netzLayer, bauteil_attribute_layer: attributLayer },
-              werkstatt: werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight }),
+              werkstatt: werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight, geschosse }),
               durchbrueche, projektId: projectId || null, bauart: bauartVon(project).bauart,
+              huelle: model.walls, geschosse: gs, // 107-04: check 12 (penetration in its host) also finds hull walls and tests the height
             })} />
           )}
           {sketchEdit && (
@@ -2074,11 +2870,33 @@ export default function BitBimStudio({ complexData }) {
             </label>
             <label className="flex items-center gap-1.5 text-xs text-slate-600">
               Höhe
-              <input type="number" min="2.5" max="6" step="0.1" value={storeyHeight}
+              {/* range 2–8 m like the per-storey inputs; with a storey table whose heights differ the field still shows the uniform `storeyHeight` and says "uneinheitlich" */}
+              <input type="number" min="2" max="8" step="0.1" value={storeyHeight}
                 onChange={(e) => setStoreyHeight(+e.target.value)}
                 className="w-16 rounded-md border border-slate-300 px-1.5 py-0.5 bg-white" aria-label="Geschosshöhe" />
               <span className="text-slate-400">m</span>
+              {geschosse && new Set(geschosse.map((g) => g.hoehe_m)).size > 1 && (
+                <span className="text-muted-foreground underline decoration-dotted" data-testid="geschosshoehe-abweichend" title={tz("Die Geschosse haben verschiedene Höhen (siehe Geschosshöhen); eine Eingabe hier setzt alle Geschosse gleich")}>{tz("uneinheitlich")}</span>
+              )}
             </label>
+            {/* 107-02 (D-BK-05): own height per storey; the first edit creates the table, "alle gleich" removes it */}
+            <details className="relative text-xs text-muted-foreground" data-testid="geschosshoehen">
+              <summary className="cursor-pointer select-none rounded-md border border-border px-1.5 py-0.5 bg-card">{tz("Geschosshöhen")}{geschosse ? " ●" : ""}</summary>
+              <div className="absolute z-20 mt-1 w-56 rounded-md border border-border bg-card p-2 shadow-lg">
+                {model.storeys.map((st) => (
+                  <label key={st.level} className="flex items-center justify-between gap-2 py-0.5">
+                    <span>{st.name}</span>
+                    <input type="number" min="2" max="8" step="0.05" value={+geschosshoehe(st.level, gs).toFixed(3)} data-testid={`geschosshoehe-${st.level}`}
+                      onChange={(e) => setGeschossHoehe(st.level, +e.target.value)} className="w-16 rounded border border-border px-1 py-0.5 text-right bg-card" aria-label={`${tz("Geschosshöhe")} ${st.name}`} />
+                  </label>
+                ))}
+                {geschosse && <button type="button" className="mt-1 text-[11px] underline" onClick={() => {
+                  // the individual heights are lost by the reset: ask first when they differ (107-02 review)
+                  if (new Set(geschosse.map((g) => g.hoehe_m)).size > 1 && !window.confirm(tz("Die einzelnen Geschosshöhen gehen verloren. Alle Geschosse gleich setzen?"))) return;
+                  bp.set({ geschosse: null });
+                }}>{tz("alle gleich (zurücksetzen)")}</button>}
+              </div>
+            </details>
             {/* Dachform */}
             <label className="flex items-center gap-1.5 text-xs text-slate-600">
               Dach
@@ -2156,9 +2974,7 @@ export default function BitBimStudio({ complexData }) {
                   <select value={selected?.type === "wall" ? (customWalls.find((w) => w._idx === selected.index)?.refLine || "center") : wallRef}
                     onChange={(e) => setWallRefLine(e.target.value)}
                     className="rounded-md border border-slate-300 px-1.5 py-0.5 bg-white" aria-label="Wand-Referenzlinie">
-                    <option value="center">Mitte</option>
-                    <option value="outside">Außen</option>
-                    <option value="inside">Innen</option>
+                    {bezugWahl(tz).map(([v, l, h]) => <option key={v} value={v} title={h}>{l}</option>)}
                   </select>
                 </label>
                 <label className="flex items-center gap-1.5 text-xs text-slate-600">
@@ -2166,7 +2982,7 @@ export default function BitBimStudio({ complexData }) {
                   <select value={selected?.type === "wall" ? (customWalls.find((w) => w._idx === selected.index)?.composite || "single24") : wallComp}
                     onChange={(e) => setWallComposite(e.target.value)}
                     className="rounded-md border border-slate-300 px-1.5 py-0.5 bg-white" aria-label="Wand-Aufbau">
-                    {WALL_COMPOSITES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {aufbautenListe().map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </label>
               </>
@@ -2310,6 +3126,26 @@ export default function BitBimStudio({ complexData }) {
           {/* ---- Zeichenfläche ---- */}
           <div className="flex-1 min-w-0 relative">
             <div ref={mountRef} className="w-full" style={{ height: 520, display: view === "3d" ? "block" : "none" }} />
+            {/* 106-01: what is under the pointer, in words; the form (dotted outline) matches the 3D highlight. */}
+            <div ref={hoverBoxRef} data-testid="zeigen-hover" style={{ display: "none" }}
+              className="pointer-events-none absolute left-0 top-0 z-20 max-w-[16rem] rounded bg-card px-2 py-1 text-xs text-foreground shadow">
+              <div ref={hoverTextRef} data-testid="zeigen-hover-text" className="truncate font-medium" />
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <span ref={hoverSymbolRef} className="inline-block h-2.5 w-2.5 border-2" style={{ borderColor: ZEIGE_ZUSTAENDE.fokus.hex, borderStyle: ZEIGE_CSS_RAND[ZEIGE_ZUSTAENDE.fokus.umriss] }} />
+                <span ref={hoverZustandRef}>{tz(ZEIGE_ZUSTAENDE.fokus.label)}</span>
+              </div>
+            </div>
+            {/* 106-03: proposed changes in words with check and origin, Übernehmen / Verwerfen, and the history of steps. */}
+            {/* 106-05: speech and typed sentences; what is understood becomes a proposal card, a change runs only after "ja" by the person. */}
+            {/* review 106-07: in the tablet layout both stand FIXED at the bottom of the screen (speech right = thumb, cards left), so they */}
+            {/* are reachable without scrolling even when the 520 px view reaches below the visible part of the page (TABLETT_PLATZ, @core). */}
+            <SprechFeld register={befehle} kontext={() => bimKontext(auswahlEintraege())} ansicht={() => aenderung.current.ansicht()} zeigepunkt={() => aenderung.current.zeigepunkt()} nda={project?.nda === true} t={tz}
+              projektId={project?.id ?? null} bild={(o) => /** @type {any} */ (aktuell.current).ansichtBild(o)} grob={grob}
+              className={grob ? TABLETT_PLATZ.sprechen : "absolute bottom-2 right-2 z-30 w-[22rem] max-w-[40%]"} />
+            <AenderungsFeld speicher={vorschlaege} t={tz} darfUebernehmen={darfAendern} grob={grob} className={grob ? TABLETT_PLATZ.karten : `absolute bottom-2 z-30 w-[22rem] max-w-[60%] max-h-[480px] overflow-y-auto ${renderMode ? "left-[200px]" : "left-2"}`}
+              onUebernehmen={(v) => aenderungBefehl("bestaetigen", { vorschlag_id: v.id, durch: "hand" })}
+              onVerwerfen={(v) => aenderungBefehl("verwerfen", { vorschlag_id: v.id })}
+              onZuruecknehmen={(sch) => aenderungBefehl("rueckgaengig", { vorschlag_id: sch.vorschlag_id })} />
             {/* ---- Render-Modus: Fassaden-Presets + Sonnenstand (klein, unten links) ---- */}
             {view === "3d" && renderMode && (
               <div className="absolute z-10 left-2 bottom-2 w-[180px] rounded-lg border border-slate-200 bg-white/90 backdrop-blur shadow-lg text-xs p-2">
@@ -2350,12 +3186,12 @@ export default function BitBimStudio({ complexData }) {
               <BimPlan2D
                 model={model} mode={/** @type {"grundriss"|"schnitt"} */ (view)} level={Math.min(planLevel, storeys - 1)} storeyHeight={storeyHeight}
                 brille={brille} huelleStatus={attributeVon(attributLayer, "hull-wall")?.status ?? null} sw={swPlan}
-                werkstattWaende={attributLayer?.attribute ? sichtbarUnter(brille, werkstattMitAttributen(werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight }), attributLayer).waende || []) : null}
+                werkstattWaende={attributLayer?.attribute ? sichtbarUnter(brille, werkstattMitAttributen(werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight, geschosse }), attributLayer).waende || []) : null}
                 layerVis={planLayerVis} envOpenings={huelleSichtbar ? sichtbarUnter(brille, envOpenings) : []} customZones={customZones} customSlabs={sichtbarUnter(brille, customSlabs)} customRoofs={sichtbarUnter(brille, customRoofs)} unit={unit}
                 edit={view === "grundriss" && !sketchEdit ? { tool, draft, hover, customWalls: planWalls, customColumns: sichtbarUnter(brille, customColumns), customWindows: planWindows, selected, multiSel, onPoint, onHover: setHover, onFinish, onPick, onMarquee, onClear, onMoveWallPt, onMoveWall, onMoveColumn, onMoveOpening, onMovePolyVert, onMoveFootVert, onMoveFootEdge, onInsertFootVert, onDeleteFootVert } : undefined}
                 focus={focus2d}
                 overlayBounds={sketchEdit ? sketchEditBounds : sketchBounds}
-                overlay={
+                overlay={(ovArgs) => (<>{(
                   sketchEdit && sketchEditRef.current
                     ? ({ X, Z, SCALE, toMeters, bounds }) => (
                         // 34-05: parametrisches Zeichnen/Ziehen direkt im Plan.
@@ -2386,7 +3222,10 @@ export default function BitBimStudio({ complexData }) {
                           </g>
                         )
                       : undefined
-                }
+                )?.(ovArgs)}
+                {/* 106-03: the open proposals in the plan (dashed outline; blocked: solid) - the plan is the main view */}
+                <PlanVorschau speicher={vorschlaege} modell={() => modellRef.current} projektId={projectId || null} geschosshoehe_m={storeyHeight}
+                  level={ovArgs.level} X={ovArgs.X} Z={ovArgs.Z} SCALE={ovArgs.SCALE} /></>)}
               />
               </div>
               );
@@ -2401,13 +3240,13 @@ export default function BitBimStudio({ complexData }) {
                 {ctxMenu.hit.kind === "wall" && (
                   <>
                     <div className="px-3 pt-1.5 pb-0.5 text-[10px] text-slate-400">Aufbau</div>
-                    {WALL_COMPOSITES.map((c) => (
+                    {aufbautenListe().map((c) => (
                       <button key={c.id} onClick={() => { setWallComposite(c.id, ctxMenu.hit.id); setCtxMenu(null); }}
                         className="w-full text-left px-3 py-1 hover:bg-slate-50 text-slate-700">{c.name}</button>
                     ))}
                     <div className="px-3 pt-1.5 pb-0.5 text-[10px] text-slate-400 border-t">Referenzlinie</div>
-                    {[["center", "Mitte"], ["outside", "Außen"], ["inside", "Innen"]].map(([v, l]) => (
-                      <button key={v} onClick={() => { setCustomWalls((ws) => ws.map((w) => w._idx === ctxMenu.hit.id ? { ...w, refLine: v } : w)); setCtxMenu(null); }}
+                    {bezugWahl(tz).map(([v, l, h]) => (
+                      <button key={v} title={h} onClick={() => { setCustomWalls((ws) => ws.map((w) => w._idx === ctxMenu.hit.id ? { ...w, refLine: v } : w)); setCtxMenu(null); }}
                         className="w-full text-left px-3 py-1 hover:bg-slate-50 text-slate-700">{l}</button>
                     ))}
                     <button onClick={ctxDuplicate} className="w-full flex items-center gap-1.5 text-left px-3 py-1.5 mt-1 border-t text-slate-700 hover:bg-slate-50"><Copy className="w-3 h-3" /> Duplizieren (+1 m)</button>
@@ -2443,9 +3282,10 @@ export default function BitBimStudio({ complexData }) {
               // 73-07: condition + Erfassungsgrad rows, only in an existing-building project.
               const zfOpts = { bauart: bauartVon(project).bauart, field, selCls, t: tz };
               // 97-02a: data sheet rows under the attributes (same element object, optional fields).
-              const sbCtx = { projektId: projectId || null, storeyHeight };
+              const sbCtx = { projektId: projectId || null, storeyHeight, geschosse: gs };
               const sbFelder = (el, typ, quelle, patch, extra = {}) => steckbriefFelder(steckbrief(el, typ, { ...sbCtx, quelle, ...extra }), patch,
-                { field, selCls, t: tz, schichtStatus: zfOpts.bauart === "bestand" ? { wert: el?.schicht_status || null } : null });
+                { field, selCls, t: tz, schichtStatus: zfOpts.bauart === "bestand" ? { wert: el?.schicht_status || null } : null,
+                  schichtDetail: { funktion: el?.schicht_funktion || null, prioritaet: el?.schicht_prioritaet || null } }); // 107-03: layer function/priority rows
               let title = "Objekt", body = null, readOnly = false, favSpec = null; // favSpec: ★-Favorit aus der Auswahl (BIM-F)
 
               if (panelSel.type === "wall") {
@@ -2454,10 +3294,32 @@ export default function BitBimStudio({ complexData }) {
                 title = "Wand"; favSpec = { tool: "wall", composite: w.composite || null };
                 body = [
                   field("Geschoss", <select className={selCls} value={w.level} onChange={(e) => patchWall(w._idx, { level: +e.target.value })}>{storeyOpts}</select>),
-                  field("Höhe (m)", <input type="number" className={numCls} step="0.1" min="2" max="8" value={w.height ?? storeyHeight} onChange={(e) => patchWall(w._idx, { height: +e.target.value })} />),
-                  field("Aufbau", <select className={selCls} value={w.composite || "single24"} onChange={(e) => patchWall(w._idx, { composite: e.target.value })}>{WALL_COMPOSITES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>),
+                  // 107-02 (D-BK-04): the top edge either stays absolute (`height`) or follows a storey (`oberkante_bezug: "geschoss"`, + offset)
+                  field(tz("Oberkante"), <select className={selCls} value={oberkanteFolgtGeschoss(w) ? "geschoss" : "absolut"} aria-label={tz("Oberkante")}
+                    onChange={(e) => patchWall(w._idx, e.target.value === "geschoss"
+                      ? { oberkante_bezug: "geschoss", oberkante_geschosse: w.oberkante_geschosse ?? 1, oberkante_versatz_m: w.oberkante_versatz_m ?? 0 }
+                      : { oberkante_bezug: "absolut", height: Math.round(wandHoehe(w, gs) * 100) / 100 })}>
+                    <option value="absolut">{tz("absolut")}</option><option value="geschoss">{tz("bis Geschoss (+Versatz)")}</option></select>),
+                  ...(oberkanteFolgtGeschoss(w) ? [
+                    // 107-02 review fix: how many storeys the wall reaches up (default 1 = the storey above; 2 = a wall over two storeys)
+                    field(tz("Geschosse bis Oberkante"), <input type="number" className={numCls} step="1" min="1" max={Math.max(1, model.storeys.length - w.level)} value={Math.max(1, Math.round(w.oberkante_geschosse ?? 1))} onChange={(e) => patchWall(w._idx, { oberkante_geschosse: Math.max(1, Math.round(+e.target.value) || 1) })} aria-label={tz("Geschosse bis Oberkante")} data-testid="wand-oberkante-geschosse" />),
+                    field(tz("Versatz Oberkante (m)"), <input type="number" className={numCls} step="0.05" min="-2" max="2" value={w.oberkante_versatz_m ?? 0} onChange={(e) => patchWall(w._idx, { oberkante_versatz_m: +e.target.value })} aria-label={tz("Versatz Oberkante (m)")} />),
+                    field("Höhe (m)", <span className="text-muted-foreground" data-testid="wand-hoehe-abgeleitet">{wandHoehe(w, gs).toFixed(2)}</span>),
+                  ] : [
+                    field("Höhe (m)", <input type="number" className={numCls} step="0.1" min="2" max="8" value={w.height ?? storeyHeight} onChange={(e) => patchWall(w._idx, { height: +e.target.value })} />),
+                  ]),
+                  field(tz("Versatz Unterkante (m)"), <input type="number" className={numCls} step="0.05" min="-2" max="2" value={w.unterkante_versatz_m ?? 0} onChange={(e) => patchWall(w._idx, { unterkante_versatz_m: +e.target.value })} aria-label={tz("Versatz Unterkante (m)")} />),
+                  field("Aufbau", <select className={selCls} value={w.composite || "single24"} onChange={(e) => patchWall(w._idx, { composite: e.target.value })} data-testid="wand-aufbau">{aufbautenListe().map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>),
+                  // 107-03 task 5: copy the build-up into the project / edit a project build-up (fachlayer aufbauten_layer)
+                  ...aufbauEditorFelder({ layer: aufbautenLayer, setLayer: setAufbautenLayer, composite: w.composite || null, dicke_m: w.thickness,
+                    // id = null: the build-up was deleted, the wall keeps its thickness (m)
+                    waehlen: (id, d) => patchWall(w._idx, id ? { composite: id } : { composite: undefined, thickness: d }),
+                    // per-layer settings are stored by layer index: they move with the layers behind a removed one (walls and slabs of this build-up)
+                    schichtEntfernt: (id, i) => { const neu = (/** @type {any[]} */ liste) => liste.map((el) => (el.composite === id ? { ...el, ...(overridesNachEntfernen(el, i) || {}) } : el)); setCustomWalls(neu); setCustomSlabs(neu); },
+                    geloescht: (id) => { setWallComp((c) => (c === id ? "single24" : c)); setFavs((fs) => fs.filter((f) => f.composite !== id)); },
+                    verwendet: (id) => customWalls.filter((x) => x.composite === id).length + customSlabs.filter((x) => x.composite === id).length + (envComposite === id ? 1 : 0), field, selCls, numCls, t: tz }),
                   !hasComp && field("Dicke (m)", <input type="number" className={numCls} step="0.05" min="0.1" max="0.6" value={w.thickness ?? 0.3} onChange={(e) => patchWall(w._idx, { thickness: +e.target.value })} />),
-                  field("Bezug", <select className={selCls} value={w.refLine || "center"} onChange={(e) => patchWall(w._idx, { refLine: e.target.value })}><option value="center">Mitte</option><option value="outside">Außen</option><option value="inside">Innen</option></select>),
+                  field("Bezug", <select className={selCls} value={w.refLine || "center"} onChange={(e) => patchWall(w._idx, { refLine: e.target.value })} data-testid="wand-bezug">{bezugWahl(tz).map(([v, l, h]) => <option key={v} value={v} title={h}>{l}</option>)}</select>),
                   ...zustandFelder(w, (p) => patchWall(w._idx, p), zfOpts),
                   ...(() => { const ty = typFuerWand(w); return sbFelder(w, ty.typ, "customWalls", (p) => patchWall(w._idx, p), { typAbgeleitet: ty.abgeleitet }); })(),
                 ];
@@ -2474,14 +3336,29 @@ export default function BitBimStudio({ complexData }) {
                 const scope = panelSel.scope || "custom";
                 const o = (scope === "env" ? envOpenings : customWindows).find((x) => x._idx === panelSel.index); if (!o) return null;
                 const types = o.kind === "door" ? DOOR_TYPES : WINDOW_TYPES;
-                title = o.kind === "door" ? "Tür" : "Fenster"; favSpec = { tool: o.kind, typeId: o.typeId };
+                const ohneFuellung = istOeffnungOhneFuellung(o); // 107-04: opening without a filling (IfcOpeningElement only)
+                title = o.kind === "door" ? "Tür" : ohneFuellung ? tz("Öffnung") : "Fenster"; favSpec = ohneFuellung ? null : { tool: o.kind, typeId: o.typeId };
+                // 107-04: own sizes (empty = the size of the type) and the height anchor of the sill; the lintel is shown, not stored
+                const wirtO = wirtVon(o, wirtModell);
+                const mO = wirtO ? masseAmWand(o, wirtO.wand, wirtO.wand.unterkante_m) : oeffnungsMasse(o);
+                const typ0 = openingTypeById(o.kind, o.typeId);
+                const masseFeld = (feld, platz, label, min) => field(label, <input type="number" className={numCls} step="0.05" min={min} placeholder={String(platz)} title={tz("leer = Maß des Typs")}
+                  value={o[feld] ?? ""} aria-label={label} data-testid={`oeffnung-${feld}`} onChange={(e) => patchOpening(o._idx, scope, { [feld]: e.target.value === "" ? undefined : +e.target.value })} />);
                 body = [
-                  field("Art", <select className={selCls} value={o.kind} onChange={(e) => { const k = e.target.value; const def = (k === "door" ? DOOR_TYPES : WINDOW_TYPES)[0].id; patchOpening(o._idx, scope, { kind: k, typeId: def }); }}><option value="window">Fenster</option><option value="door">Tür</option></select>),
-                  field("Typ", <select className={selCls} value={o.typeId} onChange={(e) => patchOpening(o._idx, scope, { typeId: e.target.value })}>{types.map((ty) => <option key={ty.id} value={ty.id}>{ty.name}</option>)}</select>),
+                  field("Art", <select className={selCls} value={o.kind} onChange={(e) => { const k = e.target.value; const def = k === "door" ? DOOR_TYPES[0].id : k === "oeffnung" ? "oeffnung" : WINDOW_TYPES[0].id; patchOpening(o._idx, scope, { kind: k, typeId: def }); }}><option value="window">Fenster</option><option value="door">Tür</option><option value="oeffnung">{tz("Öffnung (ohne Füllung)")}</option></select>),
+                  ...(ohneFuellung ? [] : [field("Typ", <select className={selCls} value={o.typeId} onChange={(e) => patchOpening(o._idx, scope, { typeId: e.target.value })}>{types.map((ty) => <option key={ty.id} value={ty.id}>{ty.name}</option>)}</select>)]),
                   field("Position (m)", <input type="number" className={numCls} step="0.25" value={+o.u.toFixed(2)} onChange={(e) => patchOpening(o._idx, scope, { u: Math.max(0.2, +e.target.value) })} />),
+                  masseFeld("width", typ0.w, tz("Breite (m)"), "0.1"),
+                  masseFeld("height", typ0.h, tz("Höhe (m)"), "0.1"),
+                  masseFeld("sill", typ0.sill, tz("Brüstung (m)"), "0"),
+                  field(tz("Brüstung ab"), <select className={selCls} value={BRUESTUNG_BEZUEGE.includes(o.bruestung_bezug) ? o.bruestung_bezug : "wand_uk"} data-testid="oeffnung-bezug" aria-label={tz("Höhenbezug der Brüstung")}
+                    title={tz("Woher die Brüstung gemessen wird: Wand-Unterkante, Oberkante Rohdecke (OKRD) oder Oberkante Fertigfußboden (OKFF)")}
+                    onChange={(e) => patchOpening(o._idx, scope, { bruestung_bezug: e.target.value === "wand_uk" ? undefined : e.target.value })}>
+                    <option value="wand_uk">{tz("Wand-Unterkante")}</option><option value="okrd">{tz("OK Rohdecke (OKRD)")}</option><option value="okff">{tz("OK Fertigfußboden (OKFF)")}</option></select>),
+                  field(tz("Sturz (m)"), <span className="text-muted-foreground" data-testid="oeffnung-sturz">{mO.sturz.toFixed(2)}</span>),
                   field("Lage", <span className="text-slate-400">{scope === "env" ? "Hüllwand" : "Innenwand"}</span>),
                   ...zustandFelder(o, (p) => patchOpening(o._idx, scope, p), zfOpts),
-                  ...sbFelder(o, o.kind === "door" ? (scope === "env" ? "tuer-aussen" : "tuer-innen") : "fenster", `oeffnung|${scope === "env" ? `env:${o.level}:${o.edge}` : `cw:${o.wallIdx}`}|${o.kind}|${o._idx}`, (p) => patchOpening(o._idx, scope, p)),
+                  ...sbFelder(o, o.kind === "door" ? (scope === "env" ? "tuer-aussen" : "tuer-innen") : ohneFuellung ? "oeffnung" : "fenster", `oeffnung|${scope === "env" ? `env:${o.level}:${o.edge}` : `cw:${o.wallIdx}`}|${o.kind}|${o._idx}`, (p) => patchOpening(o._idx, scope, p)),
                 ];
               } else if (panelSel.type === "zone") {
                 const z = customZones.find((x) => x._idx === panelSel.index); if (!z) return null;
@@ -2496,15 +3373,30 @@ export default function BitBimStudio({ complexData }) {
               } else if (panelSel.type === "slab") {
                 const s = customSlabs.find((x) => x._idx === panelSel.index); if (!s) return null;
                 title = "Decke";
-                body = [field("Geschoss", <select className={selCls} value={s.level} onChange={(e) => patchSlab(s._idx, { level: +e.target.value })}>{storeyOpts}</select>), ...zustandFelder(s, (p) => patchSlab(s._idx, p), zfOpts), ...sbFelder(s, "decke", "customSlabs", (p) => patchSlab(s._idx, p))];
+                const sLage = deckenLage(s, gs, "decke");
+                body = [field("Geschoss", <select className={selCls} value={s.level} onChange={(e) => patchSlab(s._idx, { level: +e.target.value })}>{storeyOpts}</select>),
+                  // 107-02: thickness and reference side of the slab (default 0.22 m, upper edge on the storey ceiling = today)
+                  field(tz("Dicke (m)"), <input type="number" className={numCls} step="0.01" min="0.05" max="1" value={+sLage.dicke_m.toFixed(3)} onChange={(e) => patchSlab(s._idx, { dicke_m: +e.target.value })} aria-label={tz("Dicke (m)")} />),
+                  field(tz("Bezug"), <select className={selCls} value={s.bezug === "unten" ? "unten" : "oben"} title={tz("Welche Kante der Decke auf der Geschossebene liegt")} aria-label={tz("Bezug der Decke")} onChange={(e) => patchSlab(s._idx, { bezug: e.target.value })}><option value="oben">{tz("Oberkante auf Geschossebene")}</option><option value="unten">{tz("Unterkante auf Geschossebene")}</option></select>),
+                  // 107-04: holes of the slab (`oeffnungen`), drawn with the tool "Öffnung" on the slab in 3D
+                  ...((s.oeffnungen || []).length ? [field(tz("Öffnungen"), <span className="flex items-center gap-1"><span data-testid="decke-oeffnungen">{s.oeffnungen.length}</span>
+                    <button type="button" className="text-destructive hover:underline" onClick={() => patchSlab(s._idx, { oeffnungen: s.oeffnungen.length > 1 ? s.oeffnungen.slice(0, -1) : undefined })}>{tz("letzte entfernen")}</button></span>)] : []),
+                  // 107-03 task 5: optional build-up of the slab from the project build-ups (data and data sheet only; the thickness above still leads the geometry)
+                  ...(Object.keys(aufbautenLayer?.aufbauten || {}).length ? [field("Aufbau", <select className={selCls} value={s.composite || ""} data-testid="decke-aufbau" aria-label={tz("Projektaufbau")}
+                    onChange={(e) => patchSlab(s._idx, { composite: e.target.value || undefined })}><option value="">—</option>{aufbautenListe().filter((c) => aufbautenLayer?.aufbauten?.[c.id]).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>)] : []),
+                  ...zustandFelder(s, (p) => patchSlab(s._idx, p), zfOpts), ...sbFelder(s, "decke", "customSlabs", (p) => patchSlab(s._idx, p))];
               } else if (panelSel.type === "roof") {
                 const rf = customRoofs.find((x) => x._idx === panelSel.index); if (!rf) return null;
                 title = "Dach";
                 body = [
                   field("Geschoss", <select className={selCls} value={rf.level} onChange={(e) => patchRoof(rf._idx, { level: +e.target.value })}>{storeyOpts}</select>),
-                  field("Firsthöhe (m)", <input type="number" className={numCls} step="0.25" min="0.5" max="6" value={rf.pitch ?? 2.5} onChange={(e) => patchRoof(rf._idx, { pitch: +e.target.value })} />),
+                  // 107-02: ridge rise (m) and slope (°) are two fields; the one typed last leads, the other follows (old field `pitch` mirrors the rise)
+                  field("Firsthöhe (m)", <input type="number" className={numCls} step="0.25" min="0.5" max="6" value={+dachFirsthoehe_m(rf).toFixed(2)} onChange={(e) => patchRoof(rf._idx, { firsthoehe_m: +e.target.value, pitch: +e.target.value, neigung_grad: undefined })} />),
+                  field(tz("Neigung (°)"), <input type="number" className={numCls} step="1" min="0" max={MAX_NEIGUNG_GRAD} value={+dachNeigung_grad(rf).toFixed(1)} aria-label={tz("Neigung (°)")} onChange={(e) => { const g = +e.target.value; const h = Math.round(firsthoeheAusNeigung(rf.points, g) * 100) / 100; patchRoof(rf._idx, { neigung_grad: g, firsthoehe_m: h, pitch: h }); }} />),
+                  field(tz("Dicke (m)"), <input type="number" className={numCls} step="0.01" min="0.05" max="1" value={+deckenLage(rf, gs, "dach").dicke_m.toFixed(3)} onChange={(e) => patchRoof(rf._idx, { dicke_m: +e.target.value })} aria-label={tz("Dicke (m)")} />),
+                  field(tz("Bezug"), <select className={selCls} value={rf.bezug === "oben" ? "oben" : "unten"} aria-label={tz("Bezug des Dachs")} onChange={(e) => patchRoof(rf._idx, { bezug: e.target.value })}><option value="unten">{tz("Unterkante auf Traufe")}</option><option value="oben">{tz("Oberkante auf Traufe")}</option></select>),
                   ...zustandFelder(rf, (p) => patchRoof(rf._idx, p), zfOpts),
-                  ...sbFelder(rf, (Number(rf.pitch) || 0) <= 10 ? "dach-flach" : "dach-geneigt", "customRoofs", (p) => patchRoof(rf._idx, p)),
+                  ...sbFelder(rf, dachNeigung_grad(rf) <= FLACHDACH_BIS_GRAD ? "dach-flach" : "dach-geneigt", "customRoofs", (p) => patchRoof(rf._idx, p)),
                 ];
               } else if (panelSel.type === "hullwall") {
                 const w = model.walls.find((x) => x.level === panelSel.level && x.edge === panelSel.edge); if (!w) return null;
@@ -2514,8 +3406,13 @@ export default function BitBimStudio({ complexData }) {
                 body = [
                   field("Geschoss", <span className="text-slate-500">{model.storeys.find((s) => s.level === w.level)?.name}</span>),
                   field("Länge", <span className="text-slate-500">{len.toFixed(2)} m</span>),
-                  field("Aufbau", <select className={selCls} value={envComposite || "single"} onChange={(e) => setEnvComposite(e.target.value === "single" ? null : e.target.value)}><option value="single">Einschichtig</option>{WALL_COMPOSITES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>),
+                  field("Aufbau", <select className={selCls} value={envComposite || "single"} onChange={(e) => setEnvComposite(e.target.value === "single" ? null : e.target.value)}><option value="single">Einschichtig</option>{aufbautenListe().map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>),
                   !hasComp && field("Dicke (m)", <input type="number" className={numCls} step="0.05" min="0.1" max="0.6" value={envThickness} onChange={(e) => setEnvThickness(+e.target.value)} />),
+                  // 107-01 (D-BK-02): where the hull wall lies against the footprint line; footprint, slabs and zones never move
+                  field(tz("Bezug der Hülle"), <select className={selCls} value={huelleBezug} onChange={(e) => setHuelleBezug(e.target.value)} title={tz("Nur die Wandkörper verschieben sich; Grundrisslinie, Decken und Räume bleiben")} aria-label={tz("Bezug der Hülle")}>{bezugWahl(tz, true).map(([v, l, h]) => <option key={v} value={v} title={h}>{l}</option>)}</select>),
+                  // 107-02 review: the hull slabs (all storeys and the base plate) get a thickness and a reference side like drawn slabs
+                  field(tz("Dicke der Hüllplatten (m)"), <input type="number" className={numCls} step="0.01" min="0.05" max="1" value={huelleDeckeDicke} onChange={(e) => { const v = +e.target.value; if (v > 0) setHuelleDeckeDicke(v); }} aria-label={tz("Dicke der Hüllplatten (m)")} data-testid="huelle-decke-dicke" />),
+                  field(tz("Bezug der Hüllplatten"), <select className={selCls} value={huelleDeckeBezug} aria-label={tz("Bezug der Hüllplatten")} onChange={(e) => setHuelleDeckeBezug(e.target.value === "oben" ? "oben" : "unten")}><option value="unten">{tz("Unterkante auf Geschossebene")}</option><option value="oben">{tz("Oberkante auf Geschossebene")}</option></select>),
                   field("Hinweis", <span className="text-slate-400 text-[10px]">Griffe ziehen verformt den Grundriss (alle Geschosse)</span>),
                   // 97-02: the hull's decisions live in the attribute table ("hull-wall" — one entry for the
                   // whole generated envelope, as the AVA classifies it); written at once, not with the debounce.
@@ -2636,7 +3533,7 @@ export default function BitBimStudio({ complexData }) {
                 <button onClick={exportPlanPDF} className="w-full rounded-md bg-emerald-600 text-white px-2 py-1.5 hover:bg-emerald-700">Aktuellen Plan als PDF</button>
                 <button onClick={exportPlanDXF} data-testid="bim-plan-dxf" className="w-full mt-1 rounded-md border border-border text-muted-foreground px-2 py-1.5 hover:bg-muted">{tz("Aktuellen Plan als DXF")}</button>
                 <button onClick={downloadIFC} className="w-full mt-1 rounded-md border border-slate-300 text-slate-600 px-2 py-1.5 hover:bg-slate-50">Modell als IFC</button>
-                <div className="px-1 pt-1 text-[10px] text-slate-400">Grundriss: Vektor-PDF im gewählten Maßstab mit Plankopf und Brille (Blatt A3–A0 nach Größe). Schnitt: Bildschirmbild, nicht maßstäblich.</div>
+                <div className="px-1 pt-1 text-[10px] text-slate-400">Grundriss und Schnitt: Vektor-PDF im gewählten Maßstab mit Plankopf und Brille (Blatt A3–A0 nach Größe), Schnitt mit Höhenkoten.</div>
               </div>
             </div>
           )}
@@ -2671,7 +3568,7 @@ export default function BitBimStudio({ complexData }) {
           <span className="font-medium text-slate-600">Maßstab 1:{scale}</span>
           <span>Geschoss: <b className="text-slate-700">{model.storeys[Math.min(planLevel, storeys - 1)]?.name}</b></span>
           <span>Werkzeug: <b className="text-slate-700">{PALETTE.flatMap((c) => c.items).find((i) => i.id === tool)?.label || "Pfeil"}</b></span>
-          <span>Wände: <b className="text-slate-700">{customWalls.length}</b> · Stützen: <b className="text-slate-700">{customColumns.length}</b> · Fenster: <b className="text-slate-700">{[...customWindows, ...envOpenings].filter((o) => o.kind !== "door").length}</b> · Türen: <b className="text-slate-700">{[...customWindows, ...envOpenings].filter((o) => o.kind === "door").length}</b> · Räume: <b className="text-slate-700">{customZones.length}</b> · Decken: <b className="text-slate-700">{customSlabs.length}</b> · Dächer: <b className="text-slate-700">{customRoofs.length}</b></span>
+          <span>Wände: <b className="text-slate-700">{customWalls.length}</b> · Stützen: <b className="text-slate-700">{customColumns.length}</b> · Fenster: <b className="text-slate-700">{[...customWindows, ...envOpenings].filter((o) => o.kind !== "door" && o.kind !== "oeffnung").length}</b> · Türen: <b className="text-slate-700">{[...customWindows, ...envOpenings].filter((o) => o.kind === "door").length}</b>{[...customWindows, ...envOpenings].some((o) => o.kind === "oeffnung") && <> · {tz("Öffnungen")}: <b className="text-foreground">{[...customWindows, ...envOpenings].filter((o) => o.kind === "oeffnung").length}</b></>} · Räume: <b className="text-slate-700">{customZones.length}</b> · Decken: <b className="text-slate-700">{customSlabs.length}</b> · Dächer: <b className="text-slate-700">{customRoofs.length}</b></span>
           {/* BIM-B: Auswahl-Zähler-Badge + BIM-A/C: Kontextaktionen der Auswahl */}
           {selCount > 0 && (
             <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold" title="Anzahl ausgewählter Elemente (Shift+Klick erweitert)">{selCount} ausgewählt</span>
@@ -2698,6 +3595,7 @@ export default function BitBimStudio({ complexData }) {
               : tool === "column" ? "Stütze: klicken zum Platzieren"
               : tool === "window" ? "Fenster: Typ links wählen, dann auf eine Wand klicken"
               : tool === "door" ? "Tür: Typ links wählen, dann auf eine Wand klicken"
+              : tool === "oeffnung" ? tz("Öffnung: im Grundriss auf eine Wand klicken — oder in 3D zwei Ecken auf einer Wand- oder Deckenfläche")
               : tool === "zone" ? "Raum: in eine von Wänden umschlossene Fläche klicken — wird automatisch erkannt"
               : tool === "slab" ? "Decke: Eckpunkte klicken, Doppelklick schließt das Polygon"
               : tool === "roof" ? "Dach: Eckpunkte klicken, Doppelklick → Satteldach über der Fläche"

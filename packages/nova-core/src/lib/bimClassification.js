@@ -23,9 +23,10 @@
 import { normalisiereStatus } from "./kataloge.js";
 // 89-03: workshop components (walls/doors) as classified elements.
 import { werkstattBauteile } from "./werkstattBauteile.js";
-import { WALL_COMPOSITES, aufbauVon } from "./bauteil/aufbauten.js";
-import { openingTypeById } from "./buildingModel.js";
+import { aufbauById, aufbauVon } from "./bauteil/aufbauten.js";
+import { oeffnungsGroesse } from "./buildingModel.js";
 import { attributeVon, istAbgeleitet } from "./bauteil/attribute.js";
+import { wandHoehe, stuetzenHoehe, geschosshoehe, gesamtHoehe, geschosseAus, oberkanteFolgtGeschoss, raumHoehe } from "./bauteil/hoehen.js";
 
 // Defensive, nicht-negative, endliche Zahl.
 const num = (x) => Math.max(0, Number(x) || 0);
@@ -224,7 +225,7 @@ export function normalizeStatusMitWarnung(raw, snapshot = null) {
 // [ASSUMED A3] Composite → Schichten: read from the skins of the ONE build-up table (97-02a,
 // bauteil/aufbauten.js; each skin names its AVA layer in `schicht`). Unknown/undefined → [].
 export function schichtFromComposite(compositeId) {
-  const c = WALL_COMPOSITES.find((x) => x.id === compositeId);
+  const c = aufbauById(compositeId); // 107-03: project build-ups first, then the constants
   return c ? c.skins.filter((s) => s.schicht).map((s) => /** @type {string} */ (s.schicht)) : [];
 }
 
@@ -328,6 +329,9 @@ export function synthHull(bimModel) {
   const fp = Array.isArray(m.footprintM) && m.footprintM.length >= 3 ? m.footprintM : DEFAULT_FOOTPRINT;
   const n = Math.max(1, Math.round(num(m.storeys) || 4));
   const sh = num(m.storeyHeight) || 3;
+  // 107-02: with a storey table the hull height is the sum of its heights; without it exactly the old `sh * n` (same arithmetic)
+  const gq = geschosseAus(m);
+  const hSumme = Array.isArray(gq) ? gesamtHoehe(n, gq) : null;
   const area = num(polygonArea(fp));
   const per = num(polygonPerimeter(fp));
 
@@ -351,8 +355,8 @@ export function synthHull(bimModel) {
   return [
     // Außenwände: Umfang × Geschosshöhe × Geschosse. [ASSUMED] Dicke 24 cm für Volumen.
     el("hull-wall", "wall-hull", "330", "Rohbau", ["Stahlbeton"], {
-      area: per * sh * n,
-      volume: per * sh * n * 0.24,
+      area: hSumme != null ? per * hSumme : per * sh * n,
+      volume: hSumme != null ? per * hSumme * 0.24 : per * sh * n * 0.24,
       length: per * n,
       count: 1,
     }),
@@ -399,6 +403,8 @@ export function synthHull(bimModel) {
 export function classifiedElements(bimModel, building, optionen = {}) {
   const m = bimModel || {};
   const sh = num(m.storeyHeight) || 3;
+  // 107-02: storey source (one height, or the storey table of the record) — wall/column heights come from hoehen.js like 3D, plan and IFC
+  const gq = geschosseAus(m);
   const arr = (a) => (Array.isArray(a) ? a : []);
   const els = [];
 
@@ -409,7 +415,7 @@ export function classifiedElements(bimModel, building, optionen = {}) {
   // zones (optionen.werkstattZonen empty/missing) the list is byte-identical to before.
   // Status: normalizeElement still defaults to "neubau" — the D-BW-03 fix belongs to 89-04.
   if (Array.isArray(optionen?.werkstattZonen) && optionen.werkstattZonen.length) {
-    const wt = werkstattBauteile(optionen.werkstattZonen, { storeyHeight: sh });
+    const wt = werkstattBauteile(optionen.werkstattZonen, { storeyHeight: sh, geschosse: Array.isArray(gq) ? gq : null }); // 107-02: wall height per storey with a storey table, as in the studio and the IFC export
     wt.waende.filter((w) => !w.huelle).forEach((w) => {
       els.push(normalizeElement({ kg: w.kg, gewerk: w.gewerk, schicht: ["Kalksandstein", "Putz"] }, `wt-wall-${w.guid}`, "wall-inner", {
         area: w.flaeche_m2, volume: w.volumen_m3, length: w.lichteLaenge_m, count: 1,
@@ -422,7 +428,7 @@ export function classifiedElements(bimModel, building, optionen = {}) {
 
   arr(m.customWalls).forEach((w, i) => {
     const len = num(wallLength(w));
-    const h = num(w?.height) || sh;
+    const h = wandHoehe(w, gq); // 107-02: a wall linked to the storey follows it (before: the frozen `height`)
     els.push(
       normalizeElement(w, `wall-${w?._idx ?? i}`, "wall-inner", {
         area: len * h,
@@ -438,14 +444,17 @@ export function classifiedElements(bimModel, building, optionen = {}) {
     els.push(
       normalizeElement(c, `column-${c?._idx ?? i}`, "column", {
         area: 0,
-        volume: size * size * sh,
-        length: sh,
+        volume: size * size * stuetzenHoehe(c, gq),
+        length: stuetzenHoehe(c, gq),
         count: 1,
       }),
     );
   });
 
+  // 107-04: an opening without a filling (kind "oeffnung") is a hole, neither a window nor a door: it is not counted as a piece here
+  // (before, it fell into the window branch and counted as a window of the type size)
   arr(m.customWindows).forEach((o, i) => {
+    if (o?.kind === "oeffnung") return;
     const kind = o?.kind === "door" ? "door" : "window";
     els.push(
       normalizeElement(o, `${kind}-${o?._idx ?? i}`, kind, {
@@ -458,6 +467,7 @@ export function classifiedElements(bimModel, building, optionen = {}) {
   });
 
   arr(m.envOpenings).forEach((o, i) => {
+    if (o?.kind === "oeffnung") return; // see customWindows above
     const kind = o?.kind === "door" ? "door" : "window";
     els.push(
       normalizeElement(o, `env-${kind}-${o?._idx ?? i}`, kind, {
@@ -474,7 +484,9 @@ export function classifiedElements(bimModel, building, optionen = {}) {
     els.push(
       normalizeElement(z, `zone-${z?._idx ?? i}`, "zone", {
         area,
-        volume: area * sh,
+        // 107-02: a zone whose top edge follows a storey (`oberkante_bezug: "geschoss"`) has the linked height like the IFC space;
+        // otherwise the full storey height as before (the AVA rule differs from the IFC's 98 %, D-BK-03 style, not unified here)
+        volume: area * (oberkanteFolgtGeschoss(z) ? raumHoehe(z, gq) : geschosshoehe(num(z?.level) || 0, gq)),
         length: 0,
         count: 1,
       }),
@@ -482,11 +494,12 @@ export function classifiedElements(bimModel, building, optionen = {}) {
   });
 
   arr(m.customSlabs).forEach((s, i) => {
-    const area = num(polygonArea(s?.points));
+    // 107-04: the holes of a slab (`oeffnungen: [{points}]`, m) reduce its area and volume like the IFC void does
+    const area = Math.max(0, num(polygonArea(s?.points)) - arr(s?.oeffnungen).reduce((sum, l) => sum + num(polygonArea(l?.points)), 0));
     els.push(
       normalizeElement(s, `slab-${s?._idx ?? i}`, "slab", {
         area,
-        volume: area * 0.25, // [ASSUMED] Deckendicke 25 cm
+        volume: area * (num(s?.dicke_m) > 0 ? num(s.dicke_m) : 0.25), // [ASSUMED] Deckendicke 25 cm; 107-02: the stored `dicke_m` wins
         length: 0,
         count: 1,
       }),
@@ -520,8 +533,9 @@ export function classifiedElements(bimModel, building, optionen = {}) {
   arr(m.customWindows).forEach((o, i) => {
     const w = arr(m.customWalls).find((x) => x?._idx === o?.wallIdx);
     if (!w || normalizeStatus(o?.status) !== "neubau" || normalizeStatus(w?.status) !== "bestand") return;
-    const typ = openingTypeById(o?.kind === "door" ? "door" : "window", o?.typeId);
-    const breite = num(o?.width) || num(typ?.w), hoehe = num(o?.height) || num(typ?.h);
+    // 107-04: the size is read by the ONE rule (own width/height first, else the type of ITS kind: an opening without a filling has the
+    // 1.00 × 2.10 m type, not the window type)
+    const { w: breite, h: hoehe } = oeffnungsGroesse(o);
     // Thickness of the build-up (layers) or the single thickness; 24 cm [ASSUMED] as for walls above.
     const dickeW = aufbauVon(w).dicke_m || num(w?.thickness) || 0.24;
     const r4 = (v) => Math.round(v * 10000) / 10000;

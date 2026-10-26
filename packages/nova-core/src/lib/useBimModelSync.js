@@ -148,6 +148,8 @@ export function useBimModelSync(projectId, opts = {}) {
   const lastLoaded = useRef("");
   // 86-07: did the loaded/last saved record carry a drawn axis (so clearing it writes null)?
   const hatteAchse = useRef(false);
+  // 107-02: same for the optional storey table (written only when there is one or there was one)
+  const hatteGeschosse = useRef(false);
   // 87-02: the project whose record was LOADED successfully. Until then the store only
   // holds defaults — and the write-back below must never push those to the server
   // (a transient load failure used to be followed, 1,5 s later, by a save of 4 storeys
@@ -179,6 +181,8 @@ export function useBimModelSync(projectId, opts = {}) {
           achseM: Array.isArray(m?.achseM) && m.achseM.length >= 2 ? m.achseM : null,
           storeys: m?.storeys || 4,
           storeyHeight: m?.storeyHeight || 3,
+          // 107-02 (D-BK-05): optional storey table; absent in every old record → null = one height for all storeys
+          geschosse: Array.isArray(m?.geschosse) && m.geschosse.length ? m.geschosse : null,
           unit: m?.unit || "m",
           zones: zonenNachLoad({
             // id = persistentes _idx der BIM-Studio-Zone (Phase 43: stabiler Raumschlüssel der Möblierung)
@@ -188,8 +192,9 @@ export function useBimModelSync(projectId, opts = {}) {
             behalten: behaltenRef.current,
           }),
         };
-        lastLoaded.current = JSON.stringify([patch.footprintM, patch.storeys, patch.storeyHeight, patch.unit, patch.footprintQuelle, patch.achseM]);
+        lastLoaded.current = JSON.stringify([patch.footprintM, patch.storeys, patch.storeyHeight, patch.unit, patch.footprintQuelle, patch.achseM, patch.geschosse]);
         hatteAchse.current = patch.achseM !== null;
+        hatteGeschosse.current = patch.geschosse !== null;
         geladenRef.current = projectId;
         buildingProgram.set({ ...patch, syncFehler: null });
         letztesSyncProjekt = projectId;
@@ -210,7 +215,8 @@ export function useBimModelSync(projectId, opts = {}) {
     // 87-02: never before a successful load of THIS project (see geladenRef).
     if (!projectId || loadingRef.current || geladenRef.current !== projectId) return;
     const achse = Array.isArray(bp.achseM) && bp.achseM.length >= 2 ? bp.achseM : null;
-    const sig = JSON.stringify([bp.footprintM, bp.storeys, bp.storeyHeight, bp.unit, bp.footprintQuelle, achse]);
+    const geschosse = Array.isArray(bp.geschosse) && bp.geschosse.length ? bp.geschosse : null;
+    const sig = JSON.stringify([bp.footprintM, bp.storeys, bp.storeyHeight, bp.unit, bp.footprintQuelle, achse, geschosse]);
     if (sig === lastLoaded.current) return;
     let abgebrochen = false;
     const t = setTimeout(async () => {
@@ -223,8 +229,11 @@ export function useBimModelSync(projectId, opts = {}) {
           await saveBimModel(projectId, {
             footprintM: bp.footprintM, footprintQuelle: bp.footprintQuelle ?? null, storeys: bp.storeys, storeyHeight: bp.storeyHeight, unit: bp.unit,
             ...(achse || hatteAchse.current ? { achseM: achse } : {}),
+            // 107-02: the storey table the same way — records of projects that never had one stay as they were
+            ...(geschosse || hatteGeschosse.current ? { geschosse } : {}),
           });
           hatteAchse.current = achse !== null;
+          hatteGeschosse.current = geschosse !== null;
           lastLoaded.current = sig;
           if (buildingProgram.get().syncFehler === "speichern") buildingProgram.set({ syncFehler: null });
           return;
@@ -239,7 +248,7 @@ export function useBimModelSync(projectId, opts = {}) {
       }
     }, 1500);
     return () => { abgebrochen = true; clearTimeout(t); };
-  }, [projectId, bp.footprintM, bp.footprintQuelle, bp.storeys, bp.storeyHeight, bp.unit, bp.achseM]);
+  }, [projectId, bp.footprintM, bp.footprintQuelle, bp.storeys, bp.storeyHeight, bp.unit, bp.achseM, bp.geschosse]);
 }
 
 /**

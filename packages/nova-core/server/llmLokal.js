@@ -39,6 +39,8 @@ export function lokalTimeoutMs(env = process.env) {
  * @typedef {object} KiEinstellungen
  * @property {boolean} nur_lokal only loopback AI targets are allowed
  * @property {boolean} harness_autostart start the Python harness together with the server
+ * @property {boolean} bilder_extern 106-06 (D-IM-02): images of the view may go to a model outside this computer (default true; per project
+ *   a consent is still needed, NDA projects never send). Office-wide off switch.
  * @property {string} ollama_url base URL of the Ollama server (loopback only)
  * @property {string} lmstudio_url base URL of LM Studio's OpenAI-compatible server (loopback only)
  * @property {{modell: string, tokenProSekunde: number, ersteAntwortMs: number, datum: string}|null} benchmark
@@ -49,6 +51,7 @@ export function lokalTimeoutMs(env = process.env) {
 export const STANDARD_EINSTELLUNGEN = Object.freeze({
   nur_lokal: false,
   harness_autostart: false,
+  bilder_extern: true,
   ollama_url: OLLAMA_STANDARD_URL,
   lmstudio_url: LMSTUDIO_STANDARD_URL,
   benchmark: null,
@@ -77,7 +80,7 @@ export function kiEinstellungenSchreiben(db, patch) {
   /** @type {Record<string, unknown>} */
   const sauber = {};
   const fehler = (text) => Object.assign(new Error(text), { status: 400 });
-  for (const feld of ['nur_lokal', 'harness_autostart']) {
+  for (const feld of ['nur_lokal', 'harness_autostart', 'bilder_extern']) {
     if (patch[feld] === undefined) continue;
     if (typeof patch[feld] !== 'boolean') throw fehler(`${feld} muss true oder false sein`);
     sauber[feld] = patch[feld];

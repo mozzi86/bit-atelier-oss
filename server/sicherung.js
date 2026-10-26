@@ -130,7 +130,7 @@ export function datenLesen(datenOrdner) {
  * @throws {Error} when the target folder lies inside a data entry (the backup would back itself up) or breaks
  *   the path rule of 104-10 (device name/path, "..", control characters; a network share is allowed)
  */
-export function sicherungAnlegen({ datenOrdner, zielOrdner, dbs = [], jetzt = new Date(), version = '' }) {
+export function sicherungAnlegen({ datenOrdner, zielOrdner, dbs = [], jetzt = new Date(), version = '', kopfZusatz = {} }) {
   const ziel = path.resolve(zielOrdner);
   // 104-10: the target comes from BIT_SICHERUNG_ORDNER (operator configuration). A share (\\nas\backup) is a
   // sensible backup target, so UNC is allowed here; a device name (NUL — the zip would vanish), a device
@@ -147,7 +147,8 @@ export function sicherungAnlegen({ datenOrdner, zielOrdner, dbs = [], jetzt = ne
   const inhalt = Object.entries(dateien).map(([name, bytes]) => ({
     name, bytes: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
   }));
-  const kopf = { app: 'bit-atelier', version, zeit: jetzt.toISOString(), dateien: inhalt };
+  // 105-12: kopfZusatz carries the fingerprint of the personnel key — never the key (it stays outside the data).
+  const kopf = { app: 'bit-atelier', version, zeit: jetzt.toISOString(), dateien: inhalt, ...kopfZusatz };
   // Level 6: JSON shrinks to ~10–20 %; mtime fixed to the backup time so the zip says when it was taken.
   const zip = zipSync({ ...dateien, 'sicherung.json': new TextEncoder().encode(`${JSON.stringify(kopf, null, 2)}\n`) }, { level: 6, mtime: jetzt });
   fs.mkdirSync(ziel, { recursive: true });
@@ -261,7 +262,7 @@ export function updateKopienAufraeumen(appOrdner, behalten = STANDARD.updateKopi
  * }} o automatisch=false: no timers (tests and API-only checks call jetztSichern themselves)
  * @returns {{status: () => SicherungsStatus, jetztSichern: () => ReturnType<typeof sicherungAnlegen>, stop: () => void}}
  */
-export function sicherungsDienst({ datenOrdner, appOrdner, dbs, env = process.env, version = '', jetzt = () => new Date(), automatisch = true }) {
+export function sicherungsDienst({ datenOrdner, appOrdner, dbs, env = process.env, version = '', jetzt = () => new Date(), automatisch = true, kopfZusatz = {} }) {
   const e = sicherungsEinstellungen(datenOrdner, env);
   /** @type {string|null} */
   let letzterFehler = null;
@@ -284,7 +285,7 @@ export function sicherungsDienst({ datenOrdner, appOrdner, dbs, env = process.en
     if (laeuft) throw new Error('Eine Sicherung läuft bereits.');
     laeuft = true;
     try {
-      const ergebnis = sicherungAnlegen({ datenOrdner, zielOrdner: e.ordner, dbs, jetzt: jetzt(), version });
+      const ergebnis = sicherungAnlegen({ datenOrdner, zielOrdner: e.ordner, dbs, jetzt: jetzt(), version, kopfZusatz });
       const { loeschen } = aufbewahrung(sicherungenListe(e.ordner), e);
       for (const name of loeschen) {
         try { fs.rmSync(path.join(e.ordner, name), { force: true }); } catch (err) {

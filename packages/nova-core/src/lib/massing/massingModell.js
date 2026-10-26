@@ -8,10 +8,17 @@
 // instance changes the definition → all instances with the same number change together.
 // "Eindeutig machen" gives an instance a new number with a copy of the definition.
 //
+// Rule (phase 107-01, spec VI.3): the store holds the BASE GEOMETRY of a body (profile, height, base, position,
+// rotation, group); mesh, plan, section and IFC are always derived from it. A mesh is never the source and may at
+// most later lie as a discardable intermediate store (D-BK-08a, plan 107-14). Derivations must never write back
+// into profile or height.
+//
 // Units: metres in site coordinates (x east, y north — the studio's convention), angles in
 // degrees. Pure functions, every edit returns a NEW layer (undo via @core/lib/undoStack).
 //
 // In: layer objects, edit parameters. Out: new layers, resolved geometry, parsed typed input.
+
+import { gesamtHoehe, geschosseAus } from "../bauteil/hoehen.js"; // 107-02: building height from the storey table (ausEinzelkoerper)
 
 /** Golden ratio φ (proportion suggestion while drawing, like the studio's φ magnet). */
 export const PHI = (1 + Math.sqrt(5)) / 2;
@@ -47,12 +54,14 @@ const kopiePkt = (p) => ({ x: runde(p.x), y: runde(p.y) });
  * @param {Pkt[]|null} footprint site metres (the studio's `poly`)
  * @param {number} storeys
  * @param {number} storeyHeight m
+ * @param {Array<{level: number, name?: string, hoehe_m: number}>|null} [geschosse] optional storey table (programme field `geschosse`, 107-02):
+ *   with it the body is as high as the sum of the table heights (the same total as `model.totalHeight`), without it `storeys × storeyHeight` as before
  * @returns {MassingLayer}
  */
-export function ausEinzelkoerper(footprint, storeys, storeyHeight) {
+export function ausEinzelkoerper(footprint, storeys, storeyHeight, geschosse = null) {
   const l = leererLayer();
   if (!Array.isArray(footprint) || footprint.length < 3) return l;
-  l.koerper.push({ id: "k0", name: "Baukörper", profil: footprint.map(kopiePkt), hoehe: runde((storeys || 1) * (storeyHeight || 3)), basis: 0, pos: { x: 0, y: 0 }, drehung: 0, gruppe: null });
+  l.koerper.push({ id: "k0", name: "Baukörper", profil: footprint.map(kopiePkt), hoehe: runde(gesamtHoehe(storeys || 1, Array.isArray(geschosse) && geschosse.length ? geschosseAus({ geschosse, storeyHeight }) : storeyHeight || 3)), basis: 0, pos: { x: 0, y: 0 }, drehung: 0, gruppe: null });
   return l;
 }
 

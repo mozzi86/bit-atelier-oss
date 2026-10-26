@@ -123,6 +123,18 @@ export default function LokaleKi() {
       <p className="text-xs text-slate-500 dark:text-slate-400">
         {t("Eingeschaltet weist der Server jede KI-Anfrage an einen Dienst außerhalb dieses Rechners ab — auch die des KI-Tools. Projektdaten verlassen den Rechner dann nicht über die KI.")}
       </p>
+      {/* 106-06 (D-IM-02): office switch for images of the view to a model outside this computer (default on; per project a consent is
+          still asked once, NDA projects never send). "Nur lokale KI" blocks them anyway. */}
+      <label className="flex cursor-pointer items-start gap-2 text-sm text-foreground">
+        <input type="checkbox" data-testid="ki-bilder-extern" className="mt-0.5 h-4 w-4" checked={einst ? einst.bilder_extern !== false : true}
+          disabled={!einst || nurLokal} onChange={(e) => speichern({ bilder_extern: e.target.checked })} />
+        <span>
+          {t("Bilder der Ansicht dürfen an KI außerhalb dieses Rechners gehen")}
+          <span className="block text-xs text-muted-foreground">
+            {t("Je Projekt wird einmal gefragt, bevor das erste Bild den Rechner verlässt; Projekte mit NDA-Merker senden nie Bilder. Bei „Nur lokale KI“ geht ein Bild nur an ein Modell auf diesem Rechner.")}
+          </span>
+        </span>
+      </label>
 
       <div className="grid gap-2 rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800/60 sm:grid-cols-2">
         <div data-testid="ki-erkennung-ollama">

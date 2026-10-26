@@ -25,7 +25,10 @@ import { Plus } from "lucide-react";
 import {
   DURCHBRUCH_ARTEN, DURCHBRUCH_STATUS, DURCHBRUCH_GEWERKE, FEUERWIDERSTAENDE,
   labelAus, masseText, durchbruchHinweise, pruefSchritt, ausgefuehrtPatch, neuerDurchbruch, alsBcfTopic, ZULASSUNG_ARTEN,
+  durchbruchSteckbriefe,
 } from "@/lib/werkplanung/durchbrueche";
+// 100-02: data sheet of the opening and its fire stop (same rows as the BIT-BIM inspector)
+import { SteckbriefKasten } from "@designer/components/SteckbriefFelder";
 
 const LEER = { art: "durchbruch", form: "rechteck", x: "", y: "", z: "", b_mm: "", h_mm: "", d_mm: "", t_mm: "", bauteil_guid: "", bauteil_name: "", geschoss: "", gewerk: "GH", feuerwiderstand: "ohne", abschottung: "", kommentar: "", schott_klasse: "", schott_system: "", schott_zulassung_art: "abZ", schott_zulassung_nr: "", schott_hersteller: "" };
 const fehlerText = (e) => (e instanceof Error ? e.message : String(e));
@@ -41,6 +44,7 @@ export default function DurchbruchListe({ projectId, projektName = "" }) {
   const [formular, setFormular] = useState(/** @type {null | Record<string, string>} */ (null));
   const [pruefen, setPruefen] = useState(/** @type {null | {d: any, rolle: 'statik'|'architekt', ergebnis: 'ok'|'abgelehnt', von: string, kommentar: string}} */ (null));
   const [fehler, setFehler] = useState(/** @type {string|null} */ (null));
+  const [steckbriefId, setSteckbriefId] = useState(/** @type {string|null} */ (null)); // 100-02: open data sheet row
 
   const laden = useCallback(async () => {
     try {
@@ -69,6 +73,14 @@ export default function DurchbruchListe({ projectId, projektName = "" }) {
     if (!patch) { setFehler(t("Prüfschritt nicht möglich (Reihenfolge Statik → Architekt, Name nötig)")); return; }
     try { await bitApi.entities.Durchbruch.update(pruefen.d.id, patch); setPruefen(null); await laden(); }
     catch (err) { setFehler(`${t("Durchbruch konnte nicht gespeichert werden")}: ${fehlerText(err)}`); }
+  };
+
+  // 100-02: KG / trade / section from the data sheet — optimistic in the list (the inputs save per keystroke),
+  // then stored on the record; a failed write reloads the list and says so.
+  const steckbriefPatch = async (d, patch) => {
+    setListe((l) => l.map((x) => (x.id === d.id ? { ...x, ...patch } : x)));
+    try { await bitApi.entities.Durchbruch.update(d.id, patch); }
+    catch (err) { setFehler(`${t("Durchbruch konnte nicht gespeichert werden")}: ${fehlerText(err)}`); await laden(); }
   };
 
   const ausgefuehrt = async (d) => {
@@ -142,8 +154,10 @@ export default function DurchbruchListe({ projectId, projektName = "" }) {
                 {liste.map((d) => {
                   const hw = durchbruchHinweise(d, liste);
                   const guidOk = /^[0-9A-Za-z_$]{22}$/.test(String(d.bauteil_guid || ""));
+                  const sb = steckbriefId === d.id ? durchbruchSteckbriefe(d, { projektId: projectId }) : null;
                   return (
-                    <tr key={d.id} className="border-b last:border-0 align-top" data-testid="db-zeile" data-nr={d.nr} data-status={d.status}>
+                    <React.Fragment key={d.id}>
+                    <tr className="border-b last:border-0 align-top" data-testid="db-zeile" data-nr={d.nr} data-status={d.status}>
                       <td className="py-1.5 px-2 font-mono text-xs">{d.nr}</td>
                       <td className="py-1.5 px-2">{t(labelAus(DURCHBRUCH_ARTEN, d.art))}<div className="text-xs text-muted-foreground">{masseText(d)}</div></td>
                       <td className="py-1.5 px-2 text-xs">{d.bauteil_name || "—"}<div className="font-mono text-muted-foreground">{d.bauteil_guid || ""}</div>{d.geschoss && <div>{d.geschoss}</div>}</td>
@@ -174,9 +188,22 @@ export default function DurchbruchListe({ projectId, projektName = "" }) {
                               to={`/IfcViewer?${serialisiereZustand({ sel: d.bauteil_guid })}`}>{t("Im Modell zeigen")}</Link>
                           )}
                           <Button size="sm" variant="ghost" data-testid="db-bcf" onClick={() => bcf([d], `${d.nr}_${dateiTeil(projektName)}.bcf`)}>BCF</Button>
+                          <Button size="sm" variant="ghost" data-testid="db-steckbrief-knopf" aria-expanded={steckbriefId === d.id}
+                            onClick={() => setSteckbriefId((id) => (id === d.id ? null : d.id))}>{t("Steckbrief")}</Button>
                         </div>
                       </td>
                     </tr>
+                    {sb && (
+                      <tr className="border-b" data-testid="db-steckbrief">
+                        <td colSpan={10} className="px-2 pb-2">
+                          <div className="grid gap-2 sm:grid-cols-2 max-w-3xl">
+                            <SteckbriefKasten t={t} s={sb.durchbruch} patch={(p) => steckbriefPatch(d, p)} testId="db-steckbrief-durchbruch" />
+                            {sb.brandschott && <SteckbriefKasten t={t} s={sb.brandschott} testId="db-steckbrief-schott" />}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>

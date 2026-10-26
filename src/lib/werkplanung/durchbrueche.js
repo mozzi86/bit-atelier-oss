@@ -31,7 +31,7 @@
 
 import { KATALOG } from "@ifc/lib/dateiname";
 import { newTopicGuid } from "@ifc/lib/bcf";
-import { steckbrief } from "@core/lib/bauteil/steckbrief.js";
+import { durchbruchSteckbriefe } from "@core/lib/bauteil/durchbruchSteckbrief.js";
 import { feuerMinuten } from "@core/lib/bauteil/pruefregeln.js";
 
 /** Kinds of openings (labels double as i18n keys). */
@@ -286,21 +286,10 @@ export function brandschottAus(w) {
 }
 
 /**
- * Data sheets of an opening and its fire stop (97-02a). Requested/approved openings are a
- * provision for void, an executed one a real opening; the fire stop is its own element.
- * @param {DurchbruchRecord} d
- * @param {{projektId?: string|number|null}} [ctx]
- * @returns {{durchbruch: import("@core/lib/bauteil/steckbrief.js").Steckbrief, brandschott: import("@core/lib/bauteil/steckbrief.js").Steckbrief|null}}
+ * Data sheets of an opening and its fire stop (97-02a) — 107-04: lives in @core (bauteil/durchbruchSteckbrief.js) so the IFC export and
+ * the BIM studio can use it; re-exported here, all app callers stay valid.
  */
-export function durchbruchSteckbriefe(d, { projektId = null } = {}) {
-  const id = d?.id || d?.nr || "?";
-  const durchbruch = steckbrief({ id, kg: d?.kg, gewerk_lb: d?.gewerk_lb, bauabschnitt: d?.bauabschnitt }, d?.status === "ausgefuehrt" ? "oeffnung" : "durchbruch", { projektId, quelle: "durchbruch" });
-  const s = d?.brandschott;
-  const brandschott = s && typeof s === "object"
-    ? steckbrief({ id, material: [s.system, s.hersteller].filter(Boolean).join(", ") || null }, "brandschott", { projektId, quelle: "brandschott" })
-    : null;
-  return { durchbruch, brandschott };
-}
+export { durchbruchSteckbriefe };
 
 /**
  * New opening from form values (status 'beantragt', stable BCF topic guid).

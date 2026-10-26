@@ -21,7 +21,10 @@ export const JOURNAL_VERSION = 1;
 /** @typedef {string|number|boolean|null} Wert */
 /**
  * @typedef {{id?: string, project_id?: string|null, modell: string, guid: string, pset: string,
- *   eigenschaft: string, alt: Wert, wert: Wert, zeit: string}} JournalEintrag
+ *   eigenschaft: string, alt: Wert, wert: Wert, zeit: string, herkunft?: string, befehl_text?: string|null, bestaetigt_durch?: string}} JournalEintrag
+ *   herkunft / befehl_text / bestaetigt_durch (106-03, additive, only on entries written by the change commands): who asked
+ *   (hand / text / sprache / agent / bild), with which words, and which channel confirmed. Entries of the attribute editor
+ *   do not carry them; readers and the harness writer ignore unknown fields.
  */
 
 const SEP = "\u0000";

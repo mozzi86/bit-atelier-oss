@@ -78,10 +78,10 @@ export default function BrandschutzPlanner() {
   const setBestandteil = (key, v) => setBestandteile((prev) => ({ ...prev, [key]: v }));
 
   // Modell-/OKF-getriebene Vorbelegungen — nur solange Nutzer:in nichts geändert hat.
-  // OKF ≈ (storeys−1)·storeyHeight [ASSUMED A1] — NICHT die Gesamthöhe (storeys·storeyHeight)!
+  // OKF = Elevation des obersten Geschosses (107-02: aus der Geschosstabelle, sonst (storeys−1)·storeyHeight) [ASSUMED A1] — NICHT die Gesamthöhe!
   useEffect(() => {
-    if (!okfDirty && pm.storeys > 0) setOkf(Math.round((pm.storeys - 1) * pm.storeyHeight * 10) / 10);
-  }, [pm.storeys, pm.storeyHeight, okfDirty, setOkf]);
+    if (!okfDirty && pm.storeys > 0) setOkf(Math.round(pm.okf_m * 10) / 10);
+  }, [pm.storeys, pm.okf_m, okfDirty, setOkf]);
   useEffect(() => {
     if (!neDirty && pm.footArea > 0) setGroessteNE(Math.round(pm.footArea)); // [ASSUMED A13]
   }, [pm.footArea, neDirty, setGroessteNE]);
@@ -137,7 +137,7 @@ export default function BrandschutzPlanner() {
 
       {pm.footArea > 0 && (
         <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
-          Aus Gebäudemodell: {pm.storeys} Geschosse · Grundfläche {de(pm.footArea)} m² · BGF {de(pm.bgf)} m² · OKF ≈ {de1((pm.storeys - 1) * pm.storeyHeight)} m (Näherung, überschreibbar)
+          Aus Gebäudemodell: {pm.storeys} Geschosse · Grundfläche {de(pm.footArea)} m² · BGF {de(pm.bgf)} m² · OKF ≈ {de1(pm.okf_m)} m (Näherung, überschreibbar)
         </div>
       )}
 

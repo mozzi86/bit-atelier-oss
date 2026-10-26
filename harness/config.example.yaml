@@ -75,4 +75,17 @@ freecad:
 ifc:
   georef: null          # {ostwert: m, nordwert: m, hoehe: m, drehung_grad: °, crs: "EPSG:…"}
 
+# Connection to the BIT-Atelier app's MCP server (106-05, speech profile). The harness starts `node tools/mcp-server.mjs --schreiben`
+# when the first spoken sentence that the app's grammar did not understand arrives, and offers the model a SMALL allowlist of its tools:
+# proposals (eigenschaft_setzen, transformieren, teilen), reads (auswahl_abfragen, vorschlaege_lesen, pruefen), vorschlag_verwerfen.
+# Never offered, whatever this file says: anything that confirms, changes records, sends an image or picks another element than the
+# selected one. Needs Node >= 22 and a running app (api_url). A change is only a proposal - the person confirms in the app.
+mcp:
+  enabled: true
+  command: node
+  script: null          # default: tools/mcp-server.mjs under repo_root
+  api_url: null         # BIT_API_URL of the MCP server; default http://127.0.0.1:3001/api
+  timeout_s: 60
+  # tools: [auswahl_abfragen, vorschlaege_lesen, pruefen, eigenschaft_setzen, transformieren, teilen, vorschlag_verwerfen]
+
 logs_dir: logs

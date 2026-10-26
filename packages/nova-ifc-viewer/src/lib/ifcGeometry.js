@@ -259,6 +259,25 @@ export function expressIdAtFaceIndex(ranges, faceIndex) {
   return null;
 }
 
+/**
+ * Resolver for identitaetAus() (106-01): which IFC element did a ray hit on the merged mesh?
+ * face index → range table → expressId → GlobalId. Every consumer that points at the IFC model
+ * (mouse, pen, VR controller, agent) uses this one resolver, so they all reach the same GUID.
+ * @param {{merged?: {ranges: {eid: number, start: number, count: number}[]}, guidByExpressId?: Map<number, string>}|null|undefined} model
+ *   Loaded model: merged.ranges in INDEX units, guidByExpressId expressId → GlobalId.
+ * @param {object|null|undefined} mesh  The merged mesh; hits on any other object are refused.
+ * @returns {(treffer: {objekt: object, faceIndex: number|null}) => ({expressId: number, guid: string|null}|null)}
+ *   Resolver: null for a hit on another object, without face index or outside every range.
+ */
+export function ifcAufloeser(model, mesh) {
+  return (treffer) => {
+    if (!model?.merged || !mesh || treffer.objekt !== mesh || treffer.faceIndex == null) return null;
+    const eid = expressIdAtFaceIndex(model.merged.ranges, treffer.faceIndex);
+    if (eid == null) return null;
+    return { expressId: eid, guid: model.guidByExpressId?.get(eid) ?? null };
+  };
+}
+
 // Vertex-Bereich je Element (für Umfärben): Map eid → [{ start, count }] in INDEX-Einheiten.
 // Umgefärbt werden die referenzierten VERTICES — dazu Index-Werte der Range durchlaufen.
 export function recolorElements(merged, colorForEid) {

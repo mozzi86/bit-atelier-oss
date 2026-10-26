@@ -14,6 +14,7 @@ from pathlib import Path
 from harness.agent.context import PromptInputs, build_system_prompt
 from harness.agent.session import Session
 from harness.config import HARNESS_DIR, HarnessConfig
+from harness.mcp.bridge import SPRECH_PROMPT, McpBridge, McpSettings
 from harness.providers.base import LLMProvider, ProviderProfile
 from harness.providers.registry import ProviderRegistry
 from harness.skills.loader import Skill, load_skills, skills_index
@@ -36,6 +37,8 @@ class Runtime:
     skills: list[Skill] = field(default_factory=list)
     skill_warnings: list[str] = field(default_factory=list)
     skills_dir: Path = SKILLS_DIR
+    # 106-05: connection to the app's MCP server (tools of the open viewer) for the speech profile; connected on first use
+    mcp: McpBridge | None = None
 
     @classmethod
     def from_config(cls, cfg: HarnessConfig, *, skills_dir: Path = SKILLS_DIR) -> "Runtime":
@@ -55,6 +58,7 @@ class Runtime:
         else:
             model = cfg.model or profile.default_model or (profile.models[0] if profile.models else "")
         rt = cls(cfg, providers, provider_name, model, skills_dir=skills_dir)
+        rt.mcp = McpBridge(McpSettings.from_raw(cfg.raw.get("mcp"), cfg.repo_root))
         rt.reload_skills()
         if cfg.project:
             try:
@@ -162,9 +166,15 @@ class Runtime:
             memory_budget_chars=self.config.memory_budget_chars,
         ))
 
-    def build_session(self) -> Session:
+    def build_session(self, profil: str | None = None) -> Session:
+        """One session. profil "sprechen" (106-05): the speech profile - a short prompt, no project memory, no skills; its tools
+        are the registry of the MCP bridge (the caller passes that registry to run_turn), never the file/shell tools."""
         s = Session(provider_name=self.provider_name, model=self.model, mode=self.config.mode,
                     project=self.project.slug if self.project else None)
+        if profil == "sprechen":
+            tools = self.mcp.registry().schemas(self.config.mode) if self.mcp else []
+            s.set_system_prompt(SPRECH_PROMPT + ("\n\n## Werkzeuge\n" + "\n".join(f"- {t.name}: {t.description.splitlines()[0] if t.description else ''}" for t in tools) if tools else ""))
+            return s
         s.set_system_prompt(self.system_prompt())
         return s
 
@@ -173,4 +183,13 @@ class Runtime:
         d["offene_aufgaben"] = len(self.project.open_tasks()) if self.project else 0
         d["skills"] = len(skills_index(self.skills, self.config.mode))
         d["nur_lokal"] = self.config.nur_lokal  # 93-12: the app shows a badge
+        # 106-05: the speech field needs to know whether the current provider leaves this computer, and whether the viewer tools are connected
+        from harness.lokal import profile_is_local
+        d["provider_lokal"] = profile_is_local(self.profile)
+        # 106-06: what the "mit Bild" button shows - does the model read images, and where does the provider talk to (host only, never a key)
+        from urllib.parse import urlsplit
+        from harness.bilder import kann_bilder, katalog_vision
+        d["bilder"] = kann_bilder(self.profile, self.model, katalog=katalog_vision(self.config.repo_root))
+        d["provider_ziel"] = urlsplit(self.profile.base_url or "").hostname or ("" if self.profile.api_mode == "mock" else None)
+        d["mcp"] = self.mcp.status() if self.mcp else {"verbunden": False, "aktiv": False, "werkzeuge": [], "hinweis": "kein MCP-Client"}
         return d

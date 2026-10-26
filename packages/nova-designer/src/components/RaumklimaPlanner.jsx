@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { STATUS_STYLE } from "@designer/lib/compliance";
 import { openingTypeById } from "@core/lib/buildingModel";
+import { oeffnungsTyp } from "@core/lib/bauteil/oeffnungen.js";
 import { useProject } from "@core/lib/ProjectContext";
 import { autoEnvOpenings } from "@designer/lib/autoOpenings";
 import { useSiteClimate } from "@designer/lib/useSiteClimate";
@@ -60,7 +61,7 @@ export default function RaumklimaPlanner() {
   const fenster = useMemo(() => {
     const walls = plan.model?.walls || [];
     const platziert = (plan.envOpenings || []).map((o) => {
-      const ty = openingTypeById(o.kind, o.typeId);
+      const ty = oeffnungsTyp(o); // 107-04: own width/height of the opening first, then the type
       return { ...o, width: ty.w, height: ty.h, g: ty.g };
     });
     const auto = autoEnvOpenings(

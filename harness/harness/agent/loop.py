@@ -48,6 +48,34 @@ async def run_turn(
     max_tokens: int = 4096,
     nudge_every: int = 0,
     compression: Any = None,
+    bilder: list[str] | None = None,
+) -> AsyncIterator[dict[str, Any]]:
+    """One user turn. `bilder` (106-06) are images of the view, checked by harness/bilder.py for THIS turn's provider and project.
+    Review fix 106-06: they live only for this turn - afterwards (also after an error or an abort) every image is removed from the
+    history, so a later turn of the same session (perhaps after a model switch to a provider outside this computer, or after the
+    person withdrew the consent) never resends an image that was checked for another target."""
+    try:
+        async for ev in _run_turn(session, provider, registry, ctx, user_text, max_rounds=max_rounds, max_tokens=max_tokens,
+                                  nudge_every=nudge_every, compression=compression, bilder=bilder):
+            yield ev
+    finally:
+        for m in session.history:
+            if m.bilder:
+                m.bilder = []
+
+
+async def _run_turn(
+    session: Session,
+    provider: LLMProvider,
+    registry: ToolRegistry,
+    ctx: ToolContext,
+    user_text: str,
+    *,
+    max_rounds: int,
+    max_tokens: int,
+    nudge_every: int,
+    compression: Any,
+    bilder: list[str] | None,
 ) -> AsyncIterator[dict[str, Any]]:
     # Compression runs once per turn, BEFORE the new user message is appended, so the
     # last protected messages and the fresh turn stay verbatim.
@@ -57,7 +85,8 @@ async def run_turn(
             if cev.get("type") == "compression":
                 session.compressions += 1
             yield cev
-    session.history.append(Message(role="user", content=user_text))
+    # 106-06: images of the view (already checked by harness/bilder.py) travel with this user message as context only
+    session.history.append(Message(role="user", content=user_text, bilder=list(bilder or [])))
     session.turns += 1
     tools = registry.schemas(ctx.mode)
     fail_count: dict[str, int] = {}

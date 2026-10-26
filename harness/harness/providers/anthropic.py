@@ -34,7 +34,14 @@ def to_anthropic_payload(
         if m.role == "system":
             continue
         if m.role == "user":
-            out.append({"role": "user", "content": m.content})
+            if m.bilder:
+                # 106-06: image blocks before the text, base64 PNG
+                out.append({"role": "user", "content": [
+                    *({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b}} for b in m.bilder),
+                    {"type": "text", "text": m.content},
+                ]})
+            else:
+                out.append({"role": "user", "content": m.content})
         elif m.role == "assistant":
             blocks: list[dict[str, Any]] = []
             if m.content:

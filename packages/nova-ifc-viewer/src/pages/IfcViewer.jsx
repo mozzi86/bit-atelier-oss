@@ -10,7 +10,7 @@
 // (public/beispiel/musterprojekt.ifc) replaces "Modell vom Server", ?beispiel=1 loads it
 // on arrival, and a linked element (?sel) says honestly that it waits for a model.
 // A single selected element leads to a prefilled ticket (ticketLink.js, N-10).
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { parseZustand, viewerLink } from "@ifc/lib/viewerLink";
 import { neuesTicketUrl } from "@ifc/lib/ticketLink";
@@ -22,7 +22,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import {
-  parseIfcModel, expressIdAtFaceIndex, recolorElements, expandWithDescendants,
+  parseIfcModel, expressIdAtFaceIndex, ifcAufloeser, recolorElements, expandWithDescendants,
   extractSubGeometry, STATUS_COLORS, HIGHLIGHT_COLOR, SELECT_COLOR, DIM_COLOR, sichtbarkeitAnwenden,
 } from "@ifc/lib/ifcGeometry";
 import { statusZaehler, STATUS_OHNE_LABEL } from "@core/lib/bimClassification";
@@ -38,6 +38,34 @@ import { parseFilterXml, applyNovaFilter } from "@ifc/lib/novaFilters";
 import { byTrade } from "@core/lib/tradeSort";
 import { pruefeAttributeVorUebernahme } from "@ifc/lib/mengenAttributPruefung";
 import { statusFarbe } from "@core/lib/plan/statusDarstellung.js";
+// 106-01: one ray pick and one highlighter for every viewer (hover, click, later VR controllers).
+import { identitaetAus, pickDrossel, zeigerPick, zeigerArt, TIPP_TOLERANZ_PX } from "@core/lib/zeigen/strahlPick.js";
+import { zweiFingerGeste } from "@core/lib/zeigen/zweiFinger.js";
+import { useZeigerArt, TABLETT_PLATZ } from "@core/lib/zeigen/useZeigerArt.js";
+import { useZugriff } from "@core/lib/ZugriffContext.jsx";
+import { hervorhebung, umrissLinie } from "@core/lib/zeigen/hervorheben.js";
+import { ZEIGE_ZUSTAENDE, ZEIGE_CSS_RAND } from "@core/lib/zeigen/zustaende.js";
+import { ansichtAufBox } from "@core/lib/zeigen/ansichtAufBox.js";
+import { auswahlBefehleRegistrieren } from "@core/lib/zeigen/auswahlBefehle.js";
+import { ansichtAlsPng } from "@core/lib/zeigen/ansichtBild.js";
+import { befehlsRegister } from "@core/lib/befehlsregister.js";
+import { starteSteuerungsBruecke } from "@core/lib/steuerungsBruecke.js";
+import { elementBox, ifcAuswahlKontext, ifcModellUebersicht } from "@ifc/lib/auswahlIfc";
+// 106-03: change commands (property of an imported element -> journal entry; the file stays unchanged).
+import { aenderungsBefehleRegistrieren } from "@core/lib/zeigen/aenderungsBefehle.js";
+import { vorschlagSpeicher } from "@core/lib/zeigen/vorschlagSpeicher.js";
+import { AenderungsFeld } from "@core/components/zeigen/AenderungsVorschau.jsx";
+// 106-05: speech and typed sentences at the model.
+import SprechFeld from "@core/components/zeigen/SprechFeld.jsx";
+import { eingabeBefehlRegistrieren } from "@core/lib/zeigen/eingabe.js";
+import { ansichtAusKamera } from "@core/lib/zeigen/ansichtRichtung.js";
+import { letzterEintrag } from "@ifc/lib/attributJournal";
+/** Pointer travel (px) below which hover does not pick again [ASSUMED]: sub-pixel jitter picks the same element. */
+const HOVER_MIN_PX = 2;
+/** Pause (ms) after the last wheel tick before hover looks again [ASSUMED]: the damped camera has mostly settled. */
+const WHEEL_PAUSE_MS = 180;
+/** Largest selection (vertices) that still gets an outline [ASSUMED]: EdgesGeometry of ~200k vertices takes a few ms. */
+const SEL_UMRISS_MAX_ECKEN = 200000;
 // Modul-Cache: geparstes Modell überlebt Routen-/Tab-Wechsel (kein Re-Import).
 let MODEL_CACHE = null;
 // Label of the model held in MODEL_CACHE — lets ?beispiel=1 see that the cached model
@@ -58,18 +86,9 @@ if (typeof window !== "undefined") /** @type {any} */ (window).__ifcAufbau = AUF
 const fmt = (n, d = 0) => Number(n ?? 0).toLocaleString("de-DE", { maximumFractionDigits: d });
 const fmtDate = (ms) => new Date(ms).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
 
-// BUGFIX (Schnittebene + Klick): Der three.js-Raycaster berücksichtigt clippingPlanes
-// NICHT — er trifft weiterhin die Geometrie hinter der Schnittfläche, auch wenn die
-// visuell bereits weggeschnitten ist. Deshalb hier alle sortierten Schnittpunkte
-// durchgehen und den ersten nehmen, der vor keiner aktiven Schnittebene liegt
-// (kleine Toleranz wegen Rundung). Ohne aktive Schnittebene identisch zu [0].
-function ersterSichtbarerTreffer(raycaster, mesh) {
-  const treffer = raycaster.intersectObject(mesh, false);
-  const planes = mesh.material?.clippingPlanes;
-  if (!planes || !planes.length) return treffer[0];
-  const TOLERANZ = -1e-4;
-  return treffer.find((hit) => planes.every((plane) => plane.distanceToPoint(hit.point) >= TOLERANZ));
-}
+// BUGFIX (Schnittebene + Klick): three's Raycaster ignores clippingPlanes and hits geometry
+// behind the section face. strahlPick() (106-01) takes the material's clippingPlanes as
+// `schnittebenen` and returns the first hit in front of all of them (tolerance -1e-4 m, as before).
 
 // SPIKE-BEFUND (2026-07-30): Der Demo-Weg über exportIFC() ist deaktiviert —
 // web-ifc 0.0.77 HÄNGT beim Parsen des generierten Mini-STEP (Endlosschleife,
@@ -90,6 +109,21 @@ export default function IfcViewer({ embedded = false }) {
   const selMeshRef = useRef(null); // blaues Auswahl-Mesh (Klick)
   const modelRef = useRef(MODEL_CACHE);
   const fpsRef = useRef(null);
+  // 106-01 hover: kept in refs — no React render per frame, only the overlay DOM is written.
+  const zeigenRef = useRef(null); // hervorhebung() instance of this viewer: hover ('fokus') and marks (zustandSetzen)
+  const hoverZieleRef = useRef([]); // targets that currently carry the hover state 'fokus' (so marks survive a hover change)
+  const hoverRef = useRef(null); // identity under the pointer: { quelle, guid, expressId, typ, name, zustand } | null
+  // 106-07: kind of the last pointer on the canvas and the two-finger steps seen (for the test hook)
+  const zeigerArtRef = useRef(/** @type {"mouse"|"pen"|"touch"|null} */ (null));
+  const gestenSummeRef = useRef({ schritte: 0, drehungRad: 0, faktor: 1 });
+  // 106-07: tablet layout (finger or pen in use) and the right to change the model (rechte.js, module "modell")
+  const { grob } = useZeigerArt();
+  const darfAendern = useZugriff().darf("modell", "voll");
+  const hoverBoxRef = useRef(null); // overlay box near the pointer
+  const hoverTextRef = useRef(null); // its text line
+  const hoverZustandRef = useRef(null); // its state line (words)
+  const hoverSymbolRef = useRef(null); // its swatch (colour AND outline form of the state)
+  const pickedRef = useRef(null); // mirror of `picked` for the pointer handlers
   const [modelInfo, setModelInfo] = useState(MODEL_CACHE ? { ...MODEL_CACHE.stats, label: MODEL_CACHE_LABEL } : null);
   const [progress, setProgress] = useState("");
   const [busy, setBusy] = useState(false);
@@ -101,7 +135,10 @@ export default function IfcViewer({ embedded = false }) {
   const [ausgeblendet, setAusgeblendet] = useState(0);
   const [kgFilter, setKgFilter] = useState("");
   const [matchInfo, setMatchInfo] = useState(null);
-  const [picked, setPicked] = useState(null);
+  const [picked, setPickedState] = useState(null);
+  // 106-02: every write also lands in `pickedRef` at once (React state lands one render later), so two commands
+  // in the same tick see the same selection; the commands read the ref, the panel reads the state.
+  const setPicked = useCallback((/** @type {any} */ v) => { pickedRef.current = v; setPickedState(v); }, []);
   const [suchParams] = useSearchParams();
   const beispielImLink = suchParams.get("beispiel") === "1";
   const selImLink = suchParams.get("sel") || "";
@@ -119,7 +156,7 @@ export default function IfcViewer({ embedded = false }) {
   const [novaSuche, setNovaSuche] = useState("");
   // Mengenübernahme Modell → LV-Position (Richtung 2)
   // Testlauf 26.08.: Positionsliste aufs AKTIVE Projekt begrenzt (vorher alle 784).
-  const { projectId } = useProject();
+  const { projectId, project } = useProject();
   const [positionen, setPositionen] = useState([]);
   const [zielId, setZielId] = useState(getTakeoffTarget()?.id || "");
   const [lvFilter, setLvFilter] = useState(getTakeoffTarget()?.trade || ""); // Vorauswahl LV/Gewerk
@@ -245,10 +282,29 @@ export default function IfcViewer({ embedded = false }) {
     };
   }, []);
 
+  // 106-01: remove the hover highlight (vertex colours back to the originals) and hide the overlay.
+  // Must run before anything else rewrites the colour buffer or the mesh (applyColors, buildMesh):
+  // otherwise the remembered colours would be written back over the new ones.
+  const hoverLoeschen = () => {
+    const zeigen = zeigenRef.current;
+    if (zeigen) for (const z of hoverZieleRef.current) zeigen.loeschen(z, "fokus");
+    hoverZieleRef.current = [];
+    hoverRef.current = null;
+    if (hoverBoxRef.current) hoverBoxRef.current.style.display = "none";
+  };
+  // Same, but for every state of this highlighter (hover AND marks): needed before the colour buffer
+  // or the mesh is rewritten. `verwerfen` also frees the cached outline geometries (mesh replaced).
+  const zeigenZuruecksetzen = (verwerfen = false) => {
+    const zeigen = zeigenRef.current;
+    if (zeigen) { if (verwerfen) zeigen.verwerfen(); else zeigen.alleLoeschen(); }
+    hoverLoeschen();
+  };
+
   // 89-04: status key of an element for the visibility switches ("ohne" for null/unknown).
   const statusSchluessel = (s) => (s === "abbruch" || s === "neubau" || s === "bestand" ? s : "ohne");
   // Apply the current switches to the rendered index (degenerate triangles, see ifcGeometry.js).
   const sichtbarkeitNachStatus = () => {
+    zeigenZuruecksetzen();
     const model = modelRef.current;
     const attr = meshRef.current?.geometry?.index;
     if (!model?.merged || !attr) return;
@@ -263,6 +319,7 @@ export default function IfcViewer({ embedded = false }) {
   const buildMesh = (model) => {
     const t = threeRef.current;
     if (!t || !model) return;
+    zeigenZuruecksetzen(true);
     if (highlightRef.current) {
       t.scene.remove(highlightRef.current);
       highlightRef.current.geometry.dispose();
@@ -398,6 +455,8 @@ export default function IfcViewer({ embedded = false }) {
       t.scene.remove(selMeshRef.current);
       selMeshRef.current.geometry.dispose();
       selMeshRef.current.material.dispose();
+      // the outline child (state 'auswahl': solid line = form, not only colour)
+      selMeshRef.current.children.forEach((c) => { c.geometry?.dispose(); c.material?.dispose(); });
       selMeshRef.current = null;
     }
     const idSet = eids instanceof Set ? eids : (eids != null ? new Set([eids]) : null);
@@ -415,6 +474,14 @@ export default function IfcViewer({ embedded = false }) {
       clippingPlanes: [clipPlaneRef.current],
     });
     const mesh = new THREE.Mesh(geo, mat);
+    // Solid outline in the 'auswahl' look of the state table (106-01). Skipped for huge selections
+    // (EdgesGeometry cost): the blue fill stays. X-ray (no depth test): the selection polygonOffset
+    // pulls its faces towards the camera, so a depth-tested line on the edges would mostly vanish.
+    if (sub.vertices <= SEL_UMRISS_MAX_ECKEN) {
+      const linie = umrissLinie(new THREE.EdgesGeometry(geo, 30), "auswahl", { schnittebenen: [clipPlaneRef.current] });
+      linie.material.depthTest = false;
+      mesh.add(linie);
+    }
     t.scene.add(mesh);
     selMeshRef.current = mesh;
   };
@@ -481,20 +548,7 @@ export default function IfcViewer({ embedded = false }) {
       const treffer = model.elements.find((e) => e.globalId === zustand.sel);
       if (treffer) {
         setSelectionMesh(treffer.expressId);
-        setPicked({
-          eid: treffer.expressId,
-          ms: 0,
-          guid: treffer.globalId || "",
-          typ: treffer.ifcType || "",
-          typ2: treffer.typ || "",
-          layer: treffer.layer || "",
-          name: treffer.name || "",
-          status: treffer.status || "unbekannt",
-          kg: treffer.classification?.code || "—",
-          storey: treffer.storey || "—",
-          area: treffer.mengen?.area || 0,
-          volume: treffer.mengen?.volume || 0,
-        });
+        setPicked(pickedAus(treffer.expressId, treffer, null)); // same record as a click or a command (panel texts agree)
       } else {
         // Honest instead of silent: the link names an element this model does not have.
         toast.info(bauteilFehltText(zustand.sel));
@@ -546,6 +600,7 @@ export default function IfcViewer({ embedded = false }) {
   const applyColors = (colorForEid, matched, label, paintSet) => {
     const model = modelRef.current;
     if (!model || !meshRef.current) return;
+    zeigenZuruecksetzen();
     recolorElements(model.merged, colorForEid);
     meshRef.current.geometry.attributes.color.needsUpdate = true;
     setGhost(paintSet && paintSet.size ? paintSet : null);
@@ -1006,6 +1061,8 @@ export default function IfcViewer({ embedded = false }) {
     const els = model.elements.filter((el) => lm.matched.has(el.expressId));
     setPicked({
       multi: true,
+      // snapshot of the selected elements: a later search or filter replaces lastMatchRef, the selection stays
+      eids: [...lm.matched],
       count: lm.matched.size,
       semantik: els.length,
       area: els.reduce((s, el) => s + (el.mengen?.area || 0), 0),
@@ -1014,46 +1071,439 @@ export default function IfcViewer({ embedded = false }) {
     });
   };
 
-  // Klick → Raycast → Element-Info (mit Drag-Unterdrückung)
+  // expressId → semantic element, built once per model (hover asks every frame, click once).
+  const semKarteRef = useRef({ model: null, karte: new Map() });
+  const elementZu = (model, eid) => {
+    if (semKarteRef.current.model !== model) {
+      semKarteRef.current = { model, karte: new Map(model.elements.map((x) => [x.expressId, x])) };
+    }
+    return semKarteRef.current.karte.get(eid);
+  };
+
+  // The selection record of one element (panel + links). Used by the click, by the command
+  // "auswahl-guid" (106-02) and by the ?sel link, so all reach the same state. GlobalId, not expressID,
+  // anchors shareable links (65-05): the expressID changes with every export, the GlobalId does not.
+  // ms: ray time in ms; null when no ray ran (command, link) - the panel then says how it was selected.
+  const pickedAus = (eid, sem, ms) => ({
+    eid, ms,
+    guid: sem?.globalId || "",
+    typ: sem?.ifcType || "(ohne Semantik — z. B. Morph/Proxy)",
+    typ2: sem?.typ || "",       // Archicad-Bauteiltyp (für die Ähnlichkeitssuche)
+    layer: sem?.layer || "",    // Ebene (für die Ähnlichkeitssuche)
+    name: sem?.name || "", status: sem?.status || "unbekannt",
+    kg: sem?.classification?.code || "—", storey: sem?.storey || "—",
+    area: sem?.mengen?.area || 0, volume: sem?.mengen?.volume || 0,
+  });
+
+  // Klick + Hover → Strahl → Treffer (106-01: ein Pick-Kern, Klick und Hover gleich) → Element-Info
+  const tText = t; // the effect below shadows `t` with the three.js handle bag
   useEffect(() => {
     const t = threeRef.current;
     if (!t) return;
     const el = t.renderer.domElement;
+    const zeigen = hervorhebung();
+    zeigenRef.current = zeigen;
+    const drossel = pickDrossel();
+
+    // Which element a hit belongs to: face index → range table → expressId → GUID (@ifc resolver,
+    // the same for click, hover and every later pointer).
+    const aufloeser = (treffer) => ifcAufloeser(modelRef.current, meshRef.current)(treffer);
+    // Ray through a client position, tested against the merged mesh ONLY (never the selection or
+    // ghost overlays) and against its section plane; null on a miss or a zero-size canvas.
+    // 106-07: with the capture radius of the pointer kind (mouse exact as before, pen 8 px, finger 18 px): when the exact
+    // ray finds no element, the rings around it are tried and the nearest element wins.
+    // Review fix 106-07: with guidPflicht (hover) the rings accept only elements WITH a GUID - the same test the hover applies to the
+    // result, so an element without GUID near the pointer no longer ends the ring search before an element with GUID further out.
+    /** @type {(clientX: number, clientY: number, art?: import("@core/lib/zeigen/strahlPick.js").ZeigerArt, guidPflicht?: boolean) => any} */
+    const treffenBei = (clientX, clientY, art = /** @type {import("@core/lib/zeigen/strahlPick.js").ZeigerArt} */ ("mouse"), guidPflicht = false) => {
+      const mesh = meshRef.current;
+      if (!mesh) return null;
+      return zeigerPick(mesh, t.camera, el, clientX, clientY, {
+        art, schnittebenen: mesh.material?.clippingPlanes,
+        annehmen: (tr) => !!identitaetAus(tr, aufloeser, { guidPflicht }),
+      });
+    };
+
+    // 106-07: pointers on the canvas. One finger or the pen tip: tap = select, drag = orbit (OrbitControls); two fingers:
+    // pinch and pan (OrbitControls) plus twist = turn around the vertical axis (here). The last finger lifting after a
+    // two-finger gesture never selects.
+    const geste = zweiFingerGeste();
+    const ACHSE_Y = new THREE.Vector3(0, 1, 0);
+    const versatz = new THREE.Vector3();
     let down = null;
-    const onDown = (e) => { down = { x: e.clientX, y: e.clientY }; };
+    const onDown = (e) => {
+      const art = zeigerArt(e);
+      zeigerArtRef.current = art;
+      const anzahl = geste.runter(e.pointerId, e.clientX, e.clientY);
+      if (anzahl === 1) down = { x: e.clientX, y: e.clientY, art, id: e.pointerId };
+      if (anzahl >= 2) hoverLoeschen();
+    };
+    const onGeste = (e) => {
+      const schritt = geste.bewegt(e.pointerId, e.clientX, e.clientY);
+      if (!schritt) return;
+      // twist: the camera turns around the orbit target about the vertical axis, so the model turns WITH the fingers
+      // (fingers clockwise on screen = model clockwise seen from above) [ASSUMED direction, as on map apps]
+      const ziel = t.controls.target;
+      versatz.subVectors(t.camera.position, ziel).applyAxisAngle(ACHSE_Y, schritt.drehungRad);
+      t.camera.position.copy(ziel).add(versatz);
+      t.camera.lookAt(ziel);
+      gestenSummeRef.current = {
+        schritte: gestenSummeRef.current.schritte + 1,
+        drehungRad: gestenSummeRef.current.drehungRad + schritt.drehungRad,
+        faktor: gestenSummeRef.current.faktor * schritt.faktor,
+      };
+    };
+    const onEnde = (e) => { geste.hoch(e.pointerId); };
     const onUp = (e) => {
-      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return;
+      const warGeste = geste.warGeste();
+      onEnde(e);
+      if (!down || down.id !== e.pointerId || warGeste) { if (geste.anzahl() === 0) down = null; return; }
+      const art = down.art;
+      const weit = Math.hypot(e.clientX - down.x, e.clientY - down.y) > TIPP_TOLERANZ_PX[art];
+      down = null;
+      if (weit) return;
       const model = modelRef.current;
       const mesh = meshRef.current;
       if (!model || !mesh) return;
-      const r = el.getBoundingClientRect();
-      const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-      const ray = new THREE.Raycaster();
-      ray.setFromCamera(ndc, t.camera);
       const t0 = performance.now();
-      const hit = ersterSichtbarerTreffer(ray, mesh);
+      const id = identitaetAus(treffenBei(e.clientX, e.clientY, art), aufloeser); // click keeps elements without GUID selectable
       const ms = Math.round(performance.now() - t0);
-      if (!hit) { setPicked(null); return; }
-      const eid = expressIdAtFaceIndex(model.merged.ranges, hit.faceIndex);
-      const sem = model.elements.find((x) => x.expressId === eid);
+      if (!id) { setPicked(null); return; } // miss or unknown hit: nothing is selected, nothing is guessed
+      hoverLoeschen(); // the clicked element becomes "ausgewählt" (blue); the hover colour must not stay under it
+      const eid = /** @type {number} */ (id.expressId);
+      const sem = elementZu(model, eid);
       setSelectionMesh(eid);
-      setPicked({
-        eid, ms,
-        // GlobalId statt expressID als Anker für teilbare Links (65-05):
-        // die expressID ändert sich bei jedem Export, die GlobalId nicht.
-        guid: sem?.globalId || "",
-        typ: sem?.ifcType || "(ohne Semantik — z. B. Morph/Proxy)",
-        typ2: sem?.typ || "",       // Archicad-Bauteiltyp (für die Ähnlichkeitssuche)
-        layer: sem?.layer || "",    // Ebene (für die Ähnlichkeitssuche)
-        name: sem?.name || "", status: sem?.status || "unbekannt",
-        kg: sem?.classification?.code || "—", storey: sem?.storey || "—",
-        area: sem?.mengen?.area || 0, volume: sem?.mengen?.volume || 0,
-      });
+      setPicked(pickedAus(eid, sem, ms));
     };
+
+    // Hover: remember the last pointer, ONE pick per animation frame, and never faster than the
+    // pick budget allows (a slow pick on a big model delays the next one; a pointer that moved
+    // less than HOVER_MIN_PX since the last pick does not pick again).
+    let zeiger = null;
+    let letzterPick = null;
+    let rafId = 0;
+    let radTimer = 0;
+    const tick = () => {
+      rafId = 0;
+      const model = modelRef.current;
+      const mesh = meshRef.current;
+      if (!zeiger || !model || !mesh) return;
+      if (cutRef.current?.tc?.dragging) { hoverLoeschen(); return; } // the section gizmo owns the pointer
+      const jetzt = performance.now();
+      if (!drossel.darf(jetzt)) { rafId = requestAnimationFrame(tick); return; }
+      const bewegt = !letzterPick || Math.hypot(zeiger.x - letzterPick.x, zeiger.y - letzterPick.y) >= HOVER_MIN_PX;
+      if (bewegt || !hoverRef.current) {
+        letzterPick = { x: zeiger.x, y: zeiger.y };
+        const treffer = treffenBei(zeiger.x, zeiger.y, zeiger.art, true); // 106-07: a hovering pen gets its capture radius (GUID elements only)
+        drossel.messen(performance.now() - jetzt, performance.now());
+        // guidPflicht: only what a later "dieses" command could address is shown
+        const id = identitaetAus(treffer, aufloeser, { guidPflicht: true });
+        if (!id) { hoverLoeschen(); return; } // no hit or unknown hit: nothing is shown, nothing is guessed
+        const eid = /** @type {number} */ (id.expressId);
+        const gewaehlt = !!(pickedRef.current && !pickedRef.current.multi && pickedRef.current.eid === eid);
+        const name = gewaehlt ? "auswahl" : "fokus";
+        if (hoverRef.current?.expressId !== eid || hoverRef.current?.zustand !== name) {
+          hoverLoeschen();
+          if (!gewaehlt) { // the selected element keeps its blue and its outline, hover never paints over it
+            try {
+              for (const r of model.merged.ranges) {
+                if (r.eid !== eid) continue;
+                const ziel = { mesh, bereich: { start: r.start, count: r.count } };
+                zeigen.setzen(ziel, "fokus");
+                hoverZieleRef.current.push(ziel);
+              }
+            } catch (err) { console.warn(`[IFC] hover highlight failed: ${err?.message || err}`); }
+          }
+          const sem = elementZu(model, eid);
+          hoverRef.current = { quelle: "ifc", guid: id.guid, expressId: eid, typ: sem?.ifcType || "IFC", name: sem?.name || "", zustand: name };
+          if (hoverTextRef.current) hoverTextRef.current.textContent = `${hoverRef.current.typ}${sem?.name ? ` · ${sem.name}` : ""}`;
+          // the overlay says the state the picture shows: words, colour and outline form
+          const look = ZEIGE_ZUSTAENDE[name];
+          if (hoverZustandRef.current) hoverZustandRef.current.textContent = tText(look.label);
+          if (hoverSymbolRef.current) {
+            hoverSymbolRef.current.style.borderColor = look.hex;
+            hoverSymbolRef.current.style.borderStyle = ZEIGE_CSS_RAND[look.umriss];
+          }
+        }
+      }
+      const box = hoverBoxRef.current;
+      const mount = mountRef.current;
+      if (box && mount) {
+        box.style.display = ""; // visible first, otherwise offsetWidth is 0 and the clamp below is skipped
+        const r = mount.getBoundingClientRect();
+        const x = Math.max(0, Math.min(zeiger.x - r.left + 14, r.width - box.offsetWidth - 4));
+        const y = Math.max(0, Math.min(zeiger.y - r.top + 14, r.height - box.offsetHeight - 4));
+        box.style.transform = `translate(${x}px, ${y}px)`;
+      }
+    };
+    const onMove = (e) => {
+      onGeste(e);
+      if (e.buttons) { hoverLoeschen(); zeiger = null; return; } // orbit / pan / gizmo drag / finger on the glass: no hover
+      // 106-07: a pen above the glass (buttons 0) is hovering: it shows the focus like the mouse; a finger has no hover
+      const art = zeigerArt(e);
+      if (art === "touch") return;
+      if (art === "pen") zeigerArtRef.current = "pen";
+      zeiger = { x: e.clientX, y: e.clientY, art };
+      if (!rafId) rafId = requestAnimationFrame(tick);
+    };
+    const onLeave = () => { zeiger = null; hoverLoeschen(); };
+    // Zooming moves the scene under a resting pointer: drop the hover and look again once the
+    // wheel has settled (the pointer itself did not move, so no pointermove will come).
+    const onWheel = () => {
+      hoverLoeschen();
+      letzterPick = null;
+      clearTimeout(radTimer);
+      radTimer = window.setTimeout(() => { if (zeiger && !rafId) rafId = requestAnimationFrame(tick); }, WHEEL_PAUSE_MS);
+    };
+
     el.addEventListener("pointerdown", onDown);
     el.addEventListener("pointerup", onUp);
-    return () => { el.removeEventListener("pointerdown", onDown); el.removeEventListener("pointerup", onUp); };
+    el.addEventListener("pointercancel", onEnde);
+    el.addEventListener("pointermove", onMove, { passive: true });
+    el.addEventListener("pointerleave", onLeave);
+    el.addEventListener("wheel", onWheel, { passive: true });
+    return () => {
+      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onEnde);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerleave", onLeave);
+      el.removeEventListener("wheel", onWheel);
+      if (rafId) cancelAnimationFrame(rafId);
+      clearTimeout(radTimer);
+      zeigen.verwerfen(); // hover, marks and the cached outline geometries
+      hoverZieleRef.current = [];
+      hoverRef.current = null;
+      if (hoverBoxRef.current) hoverBoxRef.current.style.display = "none";
+      zeigenRef.current = null;
+    };
   }, [modelInfo]);
+
+  // Show a state on an element by its GUID (marks: warnung / fehler / auswahl / fokus). The ground
+  // truth is the GUID, never a picture. Used by the test hook now; later plans call it to show
+  // findings and changed parts. Returns false when the GUID is not in the model.
+  const zustandSetzen = (guid, zustand) => {
+    const zeigen = zeigenRef.current;
+    const mesh = meshRef.current;
+    const eid = eidByGuidRef.current?.get(guid);
+    if (!zeigen || !mesh || !modelRef.current || eid == null) return false;
+    let n = 0;
+    for (const r of modelRef.current.merged.ranges) {
+      if (r.eid === eid) { zeigen.setzen({ mesh, bereich: { start: r.start, count: r.count } }, zustand); n += 1; }
+    }
+    return n > 0;
+  };
+  /** Remove a mark again (one state, or all states of the element when `zustand` is omitted). */
+  const zustandLoeschen = (guid, zustand) => {
+    const zeigen = zeigenRef.current;
+    const eid = eidByGuidRef.current?.get(guid);
+    if (!zeigen || !meshRef.current || !modelRef.current || eid == null) return;
+    for (const r of modelRef.current.merged.ranges) {
+      if (r.eid === eid) zeigen.loeschen({ mesh: meshRef.current, bereich: { start: r.start, count: r.count } }, zustand);
+    }
+  };
+
+  // 106-01: test and agent hook while the viewer is mounted, under window.__bitZeigen.ifc (the BIM
+  // studio uses .bim, so two mounted viewers never overwrite each other). Plain data only (no
+  // three.js objects), so it serialises.
+  useEffect(() => {
+    const w = /** @type {any} */ (window);
+    const api = {
+      hover: () => (hoverRef.current ? { ...hoverRef.current } : null),
+      zustaende: () => ZEIGE_ZUSTAENDE,
+      /** Active highlight layers; `zustand` counts only that state. */
+      markiert: (zustand) => (zeigenRef.current?.aktive() ?? []).filter((x) => !zustand || x.zustand === zustand).length,
+      /** Form of every active highlight: state, outline material, symbol. */
+      formen: () => (zeigenRef.current?.aktive() ?? []).map((x) => ({ zustand: x.zustand, umriss: x.umriss, symbol: x.symbol })),
+      /** Helper objects really present in the scene graph below the merged mesh (outlines, symbols). */
+      hilfsobjekte: () => (meshRef.current?.children ?? []).filter((c) => c.userData.zeigeHilfe).map((c) => ({
+        typ: c.type, material: c.material?.type ?? null, zustand: c.userData.zeigeZustand ?? null, geschnitten: !!c.material?.clippingPlanes?.length,
+      })),
+      /** The selection as drawn: the blue mesh present, and its outline children. */
+      auswahl: () => (selMeshRef.current ? {
+        sichtbar: selMeshRef.current.visible,
+        umriss: selMeshRef.current.children.filter((c) => c.userData.zeigeHilfe).map((c) => ({ zustand: c.userData.zeigeZustand, material: c.material.type })),
+      } : null),
+      zustandSetzen, zustandLoeschen,
+      /** 106-07: camera relative to the orbit target - distance (m) and azimuth around the vertical axis (rad). */
+      kamera: () => {
+        const th = threeRef.current;
+        if (!th) return null;
+        const d = th.camera.position.clone().sub(th.controls.target);
+        return { abstand: d.length(), azimutRad: Math.atan2(d.x, d.z) };
+      },
+      /** 106-07: kind of the last pointer on the canvas and the sum of two-finger steps seen (count, twist rad, pinch factor). */
+      zeiger: () => ({ art: zeigerArtRef.current, geste: { ...gestenSummeRef.current } }),
+    };
+    w.__bitZeigen = { ...(w.__bitZeigen || {}), ifc: api };
+    return () => { if (w.__bitZeigen?.ifc === api) delete w.__bitZeigen.ifc; };
+  }, []);
+
+  // 106-02: ONE command register for this viewer (same pattern as the Massing modeller, 104-03): the
+  // selection as context for speech and agents. The register is built once; the commands read the
+  // latest state through `aktuell` (re-assigned every render).
+  const aktuell = useRef(/** @type {Record<string, any>} */ ({}));
+  /** expressIds of the current selection (from the synchronous ref): one element, or the snapshot taken by "Treffer auswählen". */
+  const auswahlEids = () => {
+    const p = pickedRef.current;
+    if (!p) return [];
+    if (p.multi) return [...(p.eids || [])];
+    return p.eid != null ? [p.eid] : [];
+  };
+  // a big multi selection is cut for the record, never silently: the total and `gekuerzt` say so
+  const kontextAus = (eids) => {
+    const model = modelRef.current;
+    const dom = threeRef.current?.renderer?.domElement;
+    if (!model) return ifcAuswahlKontext([], { merged: null });
+    return ifcAuswahlKontext(eids, model, { elementZu: (eid) => elementZu(model, eid),
+      kamera: threeRef.current?.camera, breite: dom?.clientWidth, hoehe: dom?.clientHeight });
+  };
+  aktuell.current = {
+    kontext: () => kontextAus(auswahlEids()),
+    waehleGuid: (/** @type {string} */ guid) => {
+      const model = modelRef.current;
+      if (!model) throw new Error("Kein Modell geladen");
+      const eid = eidByGuidRef.current?.get(guid);
+      if (eid == null) return null;
+      // what a click cannot select, a command does not select either: refused with the reason, not drawn blue
+      const sem = elementZu(model, eid);
+      if (!model.merged.ranges.some((r) => r.eid === eid)) throw new Error(`Bauteil hat keine Geometrie im Modell — Auswahl nicht möglich: ${guid}`);
+      if (statusSichtbarRef.current[statusSchluessel(sem?.status)] === false) throw new Error(`Bauteil ist über den Status-Filter ausgeblendet — Auswahl nicht möglich: ${guid}`);
+      hoverLoeschen();
+      setSelectionMesh(eid);
+      setPicked(pickedAus(eid, sem, null)); // no ray ran
+      return kontextAus([eid]);
+    },
+    aufheben: () => { setPicked(null); }, // the effect on `picked` removes the blue mesh
+    ansichtAufAuswahl: () => {
+      const model = modelRef.current;
+      const t3 = threeRef.current;
+      if (!model || !t3) throw new Error("Kein Modell geladen");
+      const eids = expandWithDescendants(new Set(auswahlEids()), model.childrenByExpressId || new Map());
+      const box = elementBox(model.merged, eids);
+      if (!box) throw new Error("Die Auswahl hat keine Geometrie im Modell");
+      const cam = t3.camera;
+      const ziel = ansichtAufBox(box, {
+        richtung: [cam.position.x - t3.controls.target.x, cam.position.y - t3.controls.target.y, cam.position.z - t3.controls.target.z],
+        fovGrad: cam.fov, aspekt: cam.aspect,
+      });
+      cam.position.set(...ziel.position);
+      t3.controls.target.set(...ziel.ziel);
+      t3.controls.update();
+    },
+    modell: (/** @type {{klasse?: string}} */ opt) => {
+      if (!modelRef.current) throw new Error("Kein Modell geladen");
+      return ifcModellUebersicht(modelRef.current, opt);
+    },
+    // 106-04: one PNG of the view (what the person sees, selection and previews included) for a model without eyes
+    ansichtBild: (/** @type {{breite?: any}} */ opt) => {
+      if (!modelRef.current) throw new Error("Kein Modell geladen");
+      return ansichtAlsPng(threeRef.current, opt);
+    },
+    // 106-06: the open project for the image rules (an NDA project never sends an image; the id lets the MCP server check the consent)
+    projekt: () => ({ id: project?.id ?? null, nda: project?.nda === true }),
+  };
+  // ---- 106-03: change commands. Only properties of imported elements, only as journal entries (IfcAenderung). ----
+  const vorschlaege = useMemo(() => vorschlagSpeicher(), []);
+  /** Journal entries of the loaded model as the viewer knows them (loaded, or written by a command: `id` follows when the save is done). */
+  const journalRef = useRef(/** @type {any[]} */ ([]));
+  const [journalStand, setJournalStand] = useState(0); // counter: tells the attribute editor to reload after a command wrote
+  const modellName = () => modelInfo?.label || loadedIfcName || "";
+  useEffect(() => {
+    journalRef.current = [];
+    if (!projectId || !modellName()) return undefined;
+    let aktiv = true;
+    bitApi.entities.IfcAenderung.filter({ project_id: projectId, modell: modellName() })
+      .then((r) => { if (aktiv) journalRef.current = r || []; })
+      .catch((e) => { if (aktiv) toast.error(`${t("Journal nicht geladen")}: ${e?.message || e}`); });
+    return () => { aktiv = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- modellName() reads exactly modelInfo and loadedIfcName
+  }, [projectId, modelInfo, loadedIfcName]);
+  /** Preview of an open proposal: the 'warnung' (or 'fehler') mark on the element, by GUID. */
+  const vorschauRef = useRef(/** @type {Map<string, {guid: string, zustand: "warnung"|"fehler"}>} */ (new Map()));
+  const vorschauEntfernen = (/** @type {string} */ id) => {
+    const m = vorschauRef.current.get(id);
+    if (m) zustandLoeschen(m.guid, m.zustand);
+    vorschauRef.current.delete(id);
+  };
+  const vorschauZeigen = (/** @type {any} */ v) => {
+    vorschauEntfernen(v.id);
+    const zustand = v.pruefung?.stufe === "fehler" ? "fehler" : "warnung";
+    if (zustandSetzen(v.ziel.guid, zustand)) vorschauRef.current.set(v.id, { guid: v.ziel.guid, zustand });
+  };
+  const aenderung = useRef(/** @type {Record<string, any>} */ ({}));
+  aenderung.current = {
+    kontext: () => kontextAus(auswahlEids()),
+    modell: () => ({}), // no drawn elements here: the checks of the rules have nothing to compare
+    ansicht: () => ansichtAusKamera(threeRef.current?.camera), // 106-05: "nach links" is screen left (only properties change here, but the words are the same)
+    zeigepunkt: () => null,
+    arten: ["eigenschaft"],
+    nichtMoeglichText: t("Nur für gezeichnete Bauteile (BIM-Studio) — IFC-Dateien bleiben unverändert"),
+    optionen: () => ({ projektId: projectId || null, attributPruefung: pruefeAttributeVorUebernahme, eintraege: journalRef.current }),
+    ifcBauteil: (/** @type {string} */ guid) => {
+      const model = modelRef.current;
+      const eid = eidByGuidRef.current?.get(guid);
+      if (!model || eid == null) return null;
+      const sem = elementZu(model, eid);
+      if (!sem) return null;
+      return { quelle: "ifc", modell: modellName(), guid, psets: sem.psets || {}, project_id: projectId || null, klasse: sem.ifcType || null, name: sem.name || "" };
+    },
+    speicher: vorschlaege,
+    uebernehmen: (/** @type {any} */ v, /** @type {any} */ r) => {
+      const eintrag = r.journal;
+      if (!eintrag) throw new Error("Kein Journal-Eintrag — nichts zu speichern");
+      const stand = { ...eintrag, id: undefined, speichern: undefined };
+      journalRef.current = [...journalRef.current, stand];
+      // the register answers at once; the entity write follows, a failure is said in words and the entry leaves the cache again
+      stand.speichern = bitApi.entities.IfcAenderung.create(eintrag)
+        .then((neu) => { stand.id = neu?.id; setJournalStand((n) => n + 1); })
+        .catch((e) => {
+          journalRef.current = journalRef.current.filter((x) => x !== stand);
+          // the step did not happen after all: the history must not list it as active
+          vorschlaege.verlaufMarkieren(v.id, { zurueckgenommen: new Date().toISOString() });
+          toast.error(`${t("Journal nicht gespeichert")}: ${e?.message || e}`);
+        });
+    },
+    zuruecknehmen: (/** @type {any} */ _e, /** @type {any} */ r) => {
+      const l = r.journal?.loeschen;
+      if (!l) return;
+      // the entry of THIS step by its time (the reversal already refused when a newer entry of the property exists);
+      // only a record without the time falls back to the newest entry of the property
+      const letzter = l.zeit != null
+        ? journalRef.current.find((x) => x.modell === l.modell && x.guid === l.guid && x.pset === l.pset && x.eigenschaft === l.eigenschaft && x.zeit === l.zeit)
+        : letzterEintrag(journalRef.current, l.modell, l.guid, l.pset, l.eigenschaft);
+      if (!letzter) throw new Error(t("Der Journal-Eintrag dieses Schrittes ist nicht mehr da"));
+      journalRef.current = journalRef.current.filter((x) => x !== letzter);
+      Promise.resolve(/** @type {any} */ (letzter).speichern).then(() => (/** @type {any} */ (letzter).id ? bitApi.entities.IfcAenderung.delete(/** @type {any} */ (letzter).id) : null))
+        .then(() => setJournalStand((n) => n + 1))
+        .catch((e) => toast.error(`${t("Journal-Eintrag nicht gelöscht")}: ${e?.message || e}`));
+    },
+    t,
+    vorschauZeigen, vorschauEntfernen,
+    darfAendern: () => darfAendern, // 106-07: bestaetigen / rueckgaengig only for a role that may change the model
+  };
+  const befehle = useMemo(() => {
+    const reg = befehlsRegister();
+    auswahlBefehleRegistrieren(reg, () => /** @type {any} */ (aktuell.current));
+    aenderungsBefehleRegistrieren(reg, () => /** @type {any} */ (aenderung.current));
+    eingabeBefehlRegistrieren(reg, () => /** @type {any} */ (aenderung.current)); // 106-05: a sentence as a command, the caller's ctx goes on
+    return reg;
+  }, []);
+  // the buttons of the preview take the same road as the commands; a refusal is shown in words
+  const aenderungBefehl = (/** @type {string} */ id, /** @type {any} */ p) => {
+    const r = befehle.ausfuehren(id, p);
+    if (!r.ok) toast.error(/** @type {{ok: false, error: string}} */ (r).error);
+  };
+  // reachable for local agents / tests while the viewer is open (window.__bitBefehle.zeileBearbeiten(...))
+  // and through the local control channel (server/steuerungRouter.js); the global is deleted only if it is still ours.
+  useEffect(() => {
+    /** @type {any} */ (window).__bitBefehle = befehle;
+    const stopp = starteSteuerungsBruecke(befehle);
+    return () => {
+      stopp();
+      if (/** @type {any} */ (window).__bitBefehle === befehle) delete /** @type {any} */ (window).__bitBefehle;
+    };
+  }, [befehle]);
 
   const neuesteIfc = ifcFiles[0] || null;
   const neuereIfcVorhanden = !!(neuesteIfc && loadedIfcName && loadedIfcName !== neuesteIfc.name);
@@ -1277,6 +1727,26 @@ export default function IfcViewer({ embedded = false }) {
 
       <div className={embedded ? "relative min-h-0 flex-1" : "relative"}>
         <div ref={mountRef} className={`w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 ${embedded ? "h-full" : "h-[560px]"}`} />
+        {/* 106-01: what is under the pointer — element text near the cursor. Colour AND form
+            (dotted outline, as in the 3D view) mark the state. Written straight into the DOM per frame. */}
+        <div ref={hoverBoxRef} data-testid="zeigen-hover" style={{ display: "none" }}
+          className="pointer-events-none absolute left-0 top-0 z-20 max-w-[16rem] rounded bg-card px-2 py-1 text-xs text-foreground shadow">
+          <div ref={hoverTextRef} data-testid="zeigen-hover-text" className="truncate font-medium" />
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <span ref={hoverSymbolRef} className="inline-block h-2.5 w-2.5 border-2" style={{ borderColor: ZEIGE_ZUSTAENDE.fokus.hex, borderStyle: ZEIGE_CSS_RAND[ZEIGE_ZUSTAENDE.fokus.umriss] }} />
+            <span ref={hoverZustandRef}>{t(ZEIGE_ZUSTAENDE.fokus.label)}</span>
+          </div>
+        </div>
+        {/* 106-03: proposed property changes in words with check and origin, Übernehmen / Verwerfen, and the history. */}
+        {/* 106-05: speech and typed sentences; what is understood becomes a proposal card, a change runs only after "ja" by the person. */}
+        {/* review 106-07: tablet layout = fixed at the bottom of the screen (speech right, cards left), reachable without scrolling. */}
+        <SprechFeld register={befehle} kontext={() => kontextAus(auswahlEids())} ansicht={() => aenderung.current.ansicht()} nda={project?.nda === true} t={t}
+          projektId={project?.id ?? null} bild={(o) => /** @type {any} */ (aktuell.current).ansichtBild(o)} grob={grob}
+          className={grob ? TABLETT_PLATZ.sprechen : "absolute bottom-2 right-2 z-30 w-[22rem] max-w-[40%]"} />
+        <AenderungsFeld speicher={vorschlaege} t={t} darfUebernehmen={darfAendern} grob={grob} className={grob ? TABLETT_PLATZ.karten : "absolute bottom-2 left-2 z-30 w-[22rem] max-w-[60%] max-h-[480px] overflow-y-auto"}
+          onUebernehmen={(v) => aenderungBefehl("bestaetigen", { vorschlag_id: v.id, durch: "hand" })}
+          onVerwerfen={(v) => aenderungBefehl("verwerfen", { vorschlag_id: v.id })}
+          onZuruecknehmen={(sch) => aenderungBefehl("rueckgaengig", { vorschlag_id: sch.vorschlag_id })} />
         <div className="pointer-events-none absolute left-2 top-2 rounded bg-white/85 px-2 py-1 text-xs text-slate-700 shadow">
           {!modelInfo && !busy && <div>{t("Noch kein Modell — eigenes IFC wählen oder Musterprojekt laden")}</div>}
           {!modelInfo && selImLink && (
@@ -1392,7 +1862,8 @@ export default function IfcViewer({ embedded = false }) {
                 <div>{picked.name}</div>
                 <div>Status: <b>{picked.status}</b> · KG: {picked.kg} · Geschoss: {picked.storey}</div>
                 <div>Fläche: {fmt(picked.area, 2)} m² · Volumen: {fmt(picked.volume, 2)} m³</div>
-                <div className="text-slate-400">expressID {picked.eid} · Raycast {picked.ms} ms</div>
+                <div className="text-slate-400">expressID {picked.eid} · {picked.ms == null ? t("per GUID gewählt") : `Raycast ${picked.ms} ms`}</div>
+                {picked.guid && <div data-testid="ifc-auswahl-guid" className="break-all text-muted-foreground">GUID {picked.guid}</div>}
                 {/* Ähnlichkeitssuche: vom Einzelbauteil zur Menge gleichartiger Bauteile */}
                 <div className="mt-2 border-t border-slate-200 pt-2">
                   <div className="mb-1 text-slate-500">Ähnliche Bauteile markieren:</div>
@@ -1423,6 +1894,12 @@ export default function IfcViewer({ embedded = false }) {
                   element={modelRef.current?.elements?.find((x) => x.expressId === picked.eid) || null}
                   modell={modelInfo?.label || loadedIfcName || ""}
                   projectId={projectId}
+                  aktualisierung={journalStand}
+                  onEintraege={(e) => {
+                    // the loaded list replaces the cache - but an entry still being saved is not in it yet and must stay
+                    const imFlug = journalRef.current.filter((/** @type {any} */ x) => x.speichern && !x.id);
+                    journalRef.current = [...e, ...imFlug];
+                  }}
                 />
               </div>
             )}

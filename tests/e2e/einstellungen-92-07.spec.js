@@ -28,6 +28,28 @@ test.describe("92-07 Datenordner + KI-Assistent verbinden", () => {
     expect(warnungen, `Konsole: ${warnungen.join(" | ")}`).toEqual([]);
   });
 
+  // 105-12: the personnel key — fingerprint, "Schlüssel-Ordner öffnen" (one POST to its own route), a locked store
+  // shown as plain-text alert, and the restore note that names the key file.
+  test("Daten & Sicherung: Personal-Schlüssel mit Fingerabdruck, Ordner öffnen, Sperre im Klartext", async ({ page }) => {
+    await nurLocalhost(page);
+    const warnungen = [];
+    page.on("console", (m) => { if ((m.type() === "error" || m.type() === "warning") && !ERLAUBT_OFFLINE.test(m.text())) warnungen.push(m.text()); });
+    const SCHLUESSEL = "C:\\Users\\nutzer\\AppData\\Roaming\\BIT-Atelier\\personal.key";
+    let posts = 0;
+    await page.route("**/api/system/datenordner", (r) => r.fulfill({ json: { ordner: ORDNER, dateien: { db: `${ORDNER}\\db.json`, personal: `${ORDNER}\\personal.json` },
+      personalSchluessel: SCHLUESSEL, personalStatus: { fingerabdruck: "0123456789abcdef", gesperrt: true, grund: "Verschlüsselte Personaldaten, aber kein Schlüssel." } } }));
+    await page.route("**/api/system/schluesselordner/oeffnen", (r) => { posts += 1; return r.fulfill({ json: { ok: true } }); });
+    await page.goto("/Settings?tab=data");
+    await expect(page.getByTestId("personal-schluessel")).toContainText(SCHLUESSEL, { timeout: 20000 });
+    await expect(page.getByTestId("personal-schluessel-fp")).toContainText("0123456789abcdef");
+    await expect(page.getByTestId("personal-gesperrt")).toContainText("kein Schlüssel");
+    await page.getByTestId("personal-schluessel-oeffnen").click();
+    await expect(page.getByTestId("daten-ordner-status")).not.toHaveText("");
+    expect(posts).toBe(1);
+    await expect(page.getByTestId("daten-sicherung-hinweis")).toContainText("personal.key");
+    expect(warnungen, `Konsole: ${warnungen.join(" | ")}`).toEqual([]);
+  });
+
   test("KI-Verbindungen: fertiger MCP-Eintrag mit echten Pfaden", async ({ page, context }) => {
     await nurLocalhost(page);
     await context.grantPermissions(["clipboard-read", "clipboard-write"]).catch(() => {});

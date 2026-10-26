@@ -148,14 +148,20 @@ export default function BauphysikStudio() {
   }, [kaeltester, thetaEDirty, setThetaE]);
 
   // Aufbau-Initialisierung aus der gewählten Quelle.
-  const quellComposite = quelle === "eigen" ? null
+  const quellRoh = quelle === "eigen" ? null
     : compositeById(quelle === "modell" ? (modellCompositeId || "cavity") : quelle);
+  const quellKey = quellRoh ? `${quellRoh.id}|${JSON.stringify(quellRoh.skins)}` : "";
+  // same object while id and layers are unchanged (a project build-up is a new object after every registry update)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const quellComposite = useMemo(() => quellRoh, [quellKey]);
 
   // Nicht-eigene Aufbauten folgen ihrer Quelle: der BimModel-Load trifft asynchron
   // ein (Init-once sähe immer den "cavity"-Fallback) und der Projektwechsel tauscht
   // das Composite. Handänderungen setzen quelle="eigen" (editLayers) und sind damit
-  // geschützt; quellComposite ist referenzstabil (Modul-Konstante aus WALL_COMPOSITES),
-  // der Effekt feuert also nur bei echtem Quellwechsel.
+  // geschützt; quellComposite ist nur dann referenzstabil, wenn es ein feststehender Aufbau
+  // (Modul-Konstante aus WALL_COMPOSITES) ist. Ein Projektaufbau (107-03) liefert nach jedem
+  // setzeProjektAufbauten ein neues Objekt; der Effekt hängt deshalb an Id und Inhalt (Schlüssel
+  // quellKey), nicht an der Objektreferenz, und feuert nur bei echtem Quell- oder Schichtwechsel.
   useEffect(() => {
     if (quelle !== "eigen" && quellComposite) setLayers(aufbauFromComposite(quellComposite).layers.map(mitUid));
   }, [quelle, quellComposite, setLayers]);

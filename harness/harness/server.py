@@ -15,6 +15,7 @@ import asyncio
 import json
 import os
 from collections.abc import Mapping
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
@@ -28,8 +29,10 @@ from harness.voice.stt import SttNotReady, SttUnavailable, TranscriptionProvider
 from harness import __version__
 from harness.agent.loop import run_turn
 from harness.agent.messages import ev_approval, ev_error
+from harness.bilder import BildFehler, FreigabeFn, api_url, bild_erlaubt, freigabe_ueber_app, katalog_vision
 from harness.config import HARNESS_DIR, HarnessConfig, load_config
 from harness.jsonlog import SessionLog
+from harness.mcp.bridge import satz_marke_aus, ziel_aus
 from harness.runtime import Runtime
 from harness.skills.commands import BUILTIN, expand_skill, parse_slash
 from harness.tools.builtin import registry
@@ -75,8 +78,15 @@ def make_stt(rt: Runtime) -> TranscriptionProvider | None:
     return FasterWhisperProvider(rt.config.stt_model, rt.config.stt_language, preload=True)
 
 
-def create_app(rt: Runtime, *, stt: TranscriptionProvider | None = None, tts=None) -> FastAPI:
-    app = FastAPI(title="Atelier AI Harness", version=__version__)
+def create_app(rt: Runtime, *, stt: TranscriptionProvider | None = None, tts=None, bild_freigabe: FreigabeFn | None = None) -> FastAPI:
+    """bild_freigabe (106-06): the project check for images (default: GET /llm/bild-freigabe of the app; injectable for tests)."""
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        yield
+        if rt.mcp is not None:  # 106-05: stop the MCP server child with the service
+            await rt.mcp.close()
+
+    app = FastAPI(title="Atelier AI Harness", version=__version__, lifespan=lifespan)
     app.state.stt = stt
     app.state.tts = tts
     # The service's own origin is allowed so the standalone UI served at / can open the WebSocket.
@@ -87,6 +97,9 @@ def create_app(rt: Runtime, *, stt: TranscriptionProvider | None = None, tts=Non
     app.state.rt = rt
     app.state.origins = origins
     app.state.sessions = {}  # session id → Session (per WebSocket)
+    # 106-06: images of the view - project rules from the app's store, image ability from the app's catalog of local models
+    app.state.bild_freigabe = bild_freigabe or freigabe_ueber_app(api_url(rt.mcp.settings.api_url if rt.mcp else None))
+    app.state.bild_katalog = katalog_vision(rt.config.repo_root)
 
     @app.get("/", include_in_schema=False)
     def ui() -> FileResponse:
@@ -197,7 +210,24 @@ def create_app(rt: Runtime, *, stt: TranscriptionProvider | None = None, tts=Non
         if origin and origin not in app.state.origins:
             await ws.close(code=4403)
             return
+        profil = ws.query_params.get("profil")  # 106-05: "sprechen" = the speech profile (only the viewer's proposal tools)
         await ws.accept()
+        turn_registry = registry
+        if profil == "sprechen":
+            if rt.mcp is None:
+                await ws.send_json(ev_error("Der KI-Harness hat keinen MCP-Client"))
+                await ws.close()
+                return
+            st = await rt.mcp.ensure()
+            if not st["verbunden"]:
+                await ws.send_json(ev_error(st["hinweis"] or "Keine Verbindung zu den Modell-Werkzeugen der App"))
+                await ws.close()
+                return
+            turn_registry = rt.mcp.registry()
+        elif profil:
+            await ws.send_json(ev_error(f"Unbekanntes Profil: {profil!r}"))
+            await ws.close()
+            return
         try:
             provider = rt.make_provider()
         except (ValueError, NotImplementedError) as exc:
@@ -205,7 +235,7 @@ def create_app(rt: Runtime, *, stt: TranscriptionProvider | None = None, tts=Non
             await ws.close()
             return
 
-        session = rt.build_session()
+        session = rt.build_session(profil)
         app.state.sessions[session.id] = session
         log = SessionLog(rt.config.logs_dir, session.project, session.id)
         log.write("session_start", mode=rt.config.mode, provider=rt.provider_name, model=rt.model, projekt=session.project)
@@ -225,7 +255,10 @@ def create_app(rt: Runtime, *, stt: TranscriptionProvider | None = None, tts=Non
             finally:
                 pending.pop(approval_id, None)
 
-        ctx = rt.tool_context(approve)
+        async def approve_nie(approval_id: str, befehl: str, erklaerung: str) -> bool:
+            return False  # the speech profile has no tool that asks; and a model's request is never answered with "ja" by a program
+
+        ctx = rt.tool_context(approve_nie if profil == "sprechen" else approve)
 
         async def reader() -> None:
             # Single reader: approval replies resolve futures, everything else is queued.
@@ -271,7 +304,7 @@ def create_app(rt: Runtime, *, stt: TranscriptionProvider | None = None, tts=Non
                 text = str(msg.get("text") or "").strip()
                 if not text:
                     continue
-                slash = parse_slash(text)
+                slash = parse_slash(text) if profil != "sprechen" else None
                 if slash and slash[0] in BUILTIN:
                     if slash[0] == "status":
                         await ws.send_json({"type": "status", **rt.status(session)})
@@ -294,7 +327,23 @@ def create_app(rt: Runtime, *, stt: TranscriptionProvider | None = None, tts=Non
                 except (KeyError, ValueError, NotImplementedError) as exc:
                     await ws.send_json(ev_error(str(exc)))
                     continue
-                async for ev in run_turn(session, provider, registry, ctx, text, **rt.turn_kwargs()):
+                if profil == "sprechen" and rt.mcp is not None:
+                    # 106-05: the GUIDs selected when the person spoke travel with the sentence; the bridge aims the change tools at them.
+                    # D-IM-07: so does the app's marker of a spoken sentence - the proposals then carry "sprache" + "agent" in the app
+                    turn_registry = rt.mcp.registry(ziel=ziel_aus(msg.get("ziel")), satz_marke=satz_marke_aus(msg.get("satz_marke")))
+                bilder: list[str] = []
+                if msg.get("bilder") is not None:
+                    # 106-06: an image goes on only if it is valid, the model reads images and the app's store allows it for this project
+                    # (NDA never, consent once per project when it leaves this computer) - checked here, not trusted from the browser
+                    try:
+                        bilder = await bild_erlaubt(msg.get("bilder"), msg.get("projekt_id"), rt.profile, rt.model,
+                                                    freigabe=app.state.bild_freigabe, katalog=app.state.bild_katalog)
+                    except BildFehler as exc:
+                        log.write("bild_abgelehnt", grund=str(exc))
+                        await ws.send_json(ev_error(str(exc)))
+                        continue
+                    log.write("bilder", anzahl=len(bilder), projekt_id=str(msg.get("projekt_id") or ""))
+                async for ev in run_turn(session, provider, turn_registry, ctx, text, bilder=bilder, **rt.turn_kwargs()):
                     log.event(ev)
                     await ws.send_json(ev)
         except WebSocketDisconnect:

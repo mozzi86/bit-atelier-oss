@@ -165,6 +165,14 @@ import { EN as DXF_104 } from "./dxf-104.js";
 import { EN as KOSTENDRIFT_96 } from "./kostendrift-96.js";
 // Plan 104-05: object snap (switches, right-click group, command line chips).
 import { EN as OBJEKTFANG_104 } from "./objektfang-104.js";
+// 105-12: personnel key in "Daten & Sicherung" (fingerprint, open folder, locked store).
+import { EN as SCHLUESSEL_105 } from "./schluessel-105.js";
+// 106-01: labels of the pointing states (zeigen/zustaende.js)
+import { EN as ZEIGEN_106 } from "./zeigen-106.js";
+// 106-03: sentences of the change proposals (zeigen/aenderungen.js, pruefung.js)
+import { EN as AENDERUNGEN_106 } from "./aenderungen-106.js";
+// 107-01: texts of the component core (reference line values; later 107 plans add keys to the same file)
+import { EN as BAUTEILKERN_107 } from "./bauteilkern-107.js";
 
 export const TEILE_EN = Object.freeze({
   ...BUCHHALTUNG_FUNDAMENT,
@@ -274,5 +282,9 @@ export const TEILE_EN = Object.freeze({
   ...ERDMASSEN_103,
   ...DXF_104,
   ...OBJEKTFANG_104,
+  ...SCHLUESSEL_105,
+  ...ZEIGEN_106,
+  ...AENDERUNGEN_106,
+  ...BAUTEILKERN_107,
   ...SONDERWUNSCH_99,
 });

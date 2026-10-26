@@ -148,10 +148,12 @@ describe('MCP server — protocol', () => {
     assert.equal(mcp.zeilen[vorher].error.code, -32700);
   });
 
-  it('tools/list ohne Schreibrecht: sieben Lesewerkzeuge, nichts zum Schreiben', async () => {
+  it('tools/list ohne Schreibrecht: nur Lesewerkzeuge, nichts zum Schreiben', async () => {
     const r = await mcp.rpc('tools/list');
     const namen = r.result.tools.map((w) => w.name);
-    assert.deepEqual(namen, ['bit_status', 'list_entity_types', 'list_projects', 'get_project', 'list_records', 'get_record', 'zeichenflaeche_befehle']);
+    // 106-04 added the viewer read tools; the full per-flag lists are checked against the doc in mcp-server-10604.test.js
+    assert.deepEqual(namen, ['bit_status', 'list_entity_types', 'list_projects', 'get_project', 'list_records', 'get_record', 'zeichenflaeche_befehle',
+      'auswahl_abfragen', 'bauteil_waehlen', 'modell_bauteile', 'vorschlaege_lesen', 'pruefen', 'ansicht_bild']);
     for (const w of r.result.tools) {
       assert.equal(w.inputSchema.type, 'object', w.name);
       assert.ok(w.description.includes(' / '), `${w.name}: description DE / EN`);

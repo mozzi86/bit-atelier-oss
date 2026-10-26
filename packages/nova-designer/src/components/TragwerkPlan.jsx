@@ -21,6 +21,9 @@ import { useSvgDrag } from "@core/lib/useSvgDrag";
 import { STATUS_STYLE } from "@designer/lib/compliance";
 import { useFachlayer } from "@designer/lib/useFachlayer";
 import { usePlanModel } from "@designer/lib/usePlanModel";
+// 100-02: data sheet of the selected beam (same derivation and GUID as the IFC export)
+import { steckbrief } from "@core/lib/bauteil/steckbrief.js";
+import { SteckbriefKasten } from "./SteckbriefFelder";
 import { LOAD_CATEGORIES, betonFcd } from "@designer/lib/statics";
 import {
   STATIK_LAYER_DEFAULT, LASTEINZUG_RASTER_ANZEIGE_M, AUSLASTUNG_WARN,
@@ -222,6 +225,13 @@ export default function TragwerkPlan() {
               <span className="w-24"><NumberField label="" suffix="m" min={0.5} step="0.5" value={selTraeger.einzugsbreite_m} onChange={(v) => setL((l) => aendereTraeger(l, selTraeger.id, { einzugsbreite_m: Math.max(0.5, v) }))} /></span>
             </span>
             <Button size="sm" variant="outline" className="h-7 text-red-600 ml-auto" onClick={loeschen} data-testid="tw-loeschen"><Trash2 className="w-3.5 h-3.5 mr-1" /> {t("Löschen")}</Button>
+          </div>
+        )}
+        {selTraeger && (
+          <div className="max-w-sm">
+            <SteckbriefKasten t={t} testId="tw-steckbrief"
+              s={steckbrief(selTraeger, "traeger", { projektId: project?.id || null, quelle: "statik-traeger", storeyHeight: plan?.storeyHeight || 3 })}
+              patch={(p) => setL((l) => aendereTraeger(l, selTraeger.id, p))} />
           </div>
         )}
 

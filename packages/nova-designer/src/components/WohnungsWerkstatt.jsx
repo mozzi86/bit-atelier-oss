@@ -12,8 +12,9 @@ import { NumberField } from "@core/components/Field";
 import { STATUS_STYLE } from "@designer/lib/compliance";
 import { useI18n } from "@core/lib/i18n";
 import { useBuildingProgram, polygonAreaM } from "@core/lib/useBuildingProgram";
+import { geschosseAus, okfObersterGeschoss } from "@core/lib/bauteil/hoehen.js"; // 107-02: storey table and the one top-storey level
 import { useProject } from "@core/lib/ProjectContext";
-import { openingTypeById } from "@core/lib/buildingModel";
+import { oeffnungsTyp } from "@core/lib/bauteil/oeffnungen.js";
 import { autoEnvOpenings, fensterJeRaum, raeumeOhneRegelfenster } from "@designer/lib/autoOpenings";
 import { usePlanModel } from "@designer/lib/usePlanModel";
 import { useFachlayer } from "@designer/lib/useFachlayer";
@@ -211,15 +212,15 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
       geschosseJeRiegel: cfg.geschosseJeRiegel,
       // 86-07: centre line drawn in the massing studio (building programme).
       achse: store.achseM ?? null,
-      // 75-13: top-storey floor level for the lift duty (OKF ≈ (storeys − 1) · storey height).
-      okf_m: (Math.max(1, Math.round(store.storeys || 1)) - 1) * (store.storeyHeight || 3),
+      // 75-13: top-storey floor level for the lift duty (OKF = elevation of the top storey; 107-02: reads the storey table).
+      okf_m: okfObersterGeschoss(store.storeys || 1, geschosseAus(store)),
       // 86-05b: bar minimum of the applied proposal (default 120 → byte-identical to before).
       riegelMinFlaeche_m2: cfg.riegelMinFlaeche_m2,
     }),
-    [store.footprintM, store.storeys, store.storeyHeight, cfg.typ, cfg.einheiten, cfg.gesperrteGrenzen, cfg.anordnung, cfg.grenzenPositionen, cfg.regeln, cfg.nordwinkel, cfg.tuerAufschlaege, cfg.stufeJeWe, cfg.raumGrenzen, cfg.zerlegung, cfg.geschosseJeRiegel, store.achseM, cfg.riegelMinFlaeche_m2]
+    [store.footprintM, store.storeys, store.storeyHeight, store.geschosse, cfg.typ, cfg.einheiten, cfg.gesperrteGrenzen, cfg.anordnung, cfg.grenzenPositionen, cfg.regeln, cfg.nordwinkel, cfg.tuerAufschlaege, cfg.stufeJeWe, cfg.raumGrenzen, cfg.zerlegung, cfg.geschosseJeRiegel, store.achseM, cfg.riegelMinFlaeche_m2]
   );
   // 89-02: workshop components (live from the result, not only after "apply") of the shown storey.
-  const bauteileAlle = useMemo(() => werkstattBauteile(ergebnis.zonen, { storeyHeight: store.storeyHeight }), [ergebnis.zonen, store.storeyHeight]);
+  const bauteileAlle = useMemo(() => werkstattBauteile(ergebnis.zonen, { storeyHeight: store.storeyHeight, geschosse: store.geschosse }), [ergebnis.zonen, store.storeyHeight, store.geschosse]); // 107-02: wall height per storey with a storey table
   const bauteileLevel = useMemo(() => {
     const w = bauteileAlle.waende.filter((x) => x.level === lvl);
     if (!w.length) return null;
@@ -250,8 +251,8 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
   // 84-07: from the effective rules — MFH/Spänner always have the stair enclosure.
   const kernStandard = KERN_STANDARD_TYPEN.includes(String(cfg.typ));
   const kernInfo = useMemo(
-    () => kernRegeln(effektiveRegeln(cfg.regeln, { typ: cfg.typ }), Math.max(1, Math.round(store.storeys || 1)), (Math.max(1, Math.round(store.storeys || 1)) - 1) * (store.storeyHeight || 3)),
-    [cfg.regeln, cfg.typ, store.storeys, store.storeyHeight]
+    () => kernRegeln(effektiveRegeln(cfg.regeln, { typ: cfg.typ }), Math.max(1, Math.round(store.storeys || 1)), okfObersterGeschoss(store.storeys || 1, geschosseAus(store))),
+    [cfg.regeln, cfg.typ, store.storeys, store.storeyHeight, store.geschosse]
   );
   // 75-13: per-room window cap by ZONE name, expanded from the type|room keys of the
   // layer (fensterJeRaum only knows zone names, the editor only knows type rooms).
@@ -456,7 +457,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
   const fensterListe = useMemo(() => {
     const walls = plan.model?.walls || [];
     const platziert = (plan.envOpenings || []).map((o) => {
-      const ty = openingTypeById(o.kind, o.typeId);
+      const ty = oeffnungsTyp(o); // 107-04: own width/height of the opening first, then the type
       return { ...o, width: ty.w, height: ty.h };
     });
     const platziertKurz = platziert.map((o) => ({ level: o.level, edge: o.edge, u: o.u, width: o.width }));
@@ -466,7 +467,9 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
       : autoEnvOpenings(walls, plan.entranceCfg ? { entrance: plan.entranceCfg } : {}, platziertKurz);
     // Rename width/height → breite/hoehe unchanged so belichtungJeWE computes
     // WITHOUT any API change (only the input data gets better).
-    return [...platziert, ...auto].map((w) => ({
+    // 107-04 review: an opening without a filling (kind "oeffnung") is a hole, it brings no glass area into the daylight calculation. It still
+    // takes the place of a rule window (platziertKurz above). Doors keep counting here as they always did (not decided in 107-04).
+    return [...platziert.filter((o) => o.kind !== "oeffnung"), ...auto].map((w) => ({
       level: w.level, edge: w.edge, u: w.u, breite: w.width, hoehe: w.height, raum: w.raum, hinweis: w.hinweis,
     }));
   }, [plan.model, plan.envOpenings, plan.entranceCfg, fensterJeRaumAktiv, ergebnis.zonen, cfg.regeln?.fensterMax, fensterMaxJeZone]);

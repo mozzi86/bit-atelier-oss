@@ -296,6 +296,8 @@ export default function DatenBereich({ kontext }) {
               not part of the open-source app. A local user restores from the zips of "Automatische Sicherung". */}
           <p data-testid="daten-sicherung-hinweis">
             {t("Wiederherstellen: App beenden, die gewünschte Sicherung (ZIP) in den Datenordner entpacken, App starten.")}{" "}
+            {/* 105-12: the backup deliberately leaves the personnel key out (96-01) — say so where restoring is explained. */}
+            {t("Die Sicherung enthält den Schlüssel der Personaldaten bewusst nicht: auf einem anderen Rechner zusätzlich die getrennt gesicherte Datei personal.key an den angezeigten Ort legen, sonst bleiben die Personaldaten gesperrt.")}{" "}
             {t("Liegt das Verzeichnis in OneDrive, synchronisiert das automatisch — ohne Verschlüsselung dieser Dateien selbst.")}
           </p>
         </div>

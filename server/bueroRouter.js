@@ -53,6 +53,10 @@ const GERAET_ERLAUBT = Object.freeze([
   // 96-04: the session token — without it a paired device could read but never write.
   [LESEND, /^\/api\/sitzung$/],
   [new Set(['POST']), /^\/api\/buero\/abmelden$/],
+  // 106-07: the app side of the agent channel (poll + answer); the router hands a device only selection and proposal commands
+  // and lets it answer only what it took. The agent side (POST /api/steuerung) stays host-only.
+  [LESEND, /^\/api\/steuerung\/naechste$/],
+  [new Set(['POST']), /^\/api\/steuerung\/antwort$/],
 ]);
 /** HR data: only with PERSONAL_LAN=1 (D-P80-05), and then only for paired devices. */
 const PERSONAL_PFAD = /^\/api\/personal(-dateien)?(\/[^/]+){1,2}$/;

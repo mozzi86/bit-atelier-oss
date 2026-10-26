@@ -74,10 +74,10 @@ export default function BarrierefreiheitPlanner() {
   const [waschtisch, setWaschtisch] = usePanelState("barrierefrei:waschtisch", "ja");
 
   // Modell-/standardgetriebene Vorbelegungen — nur solange Nutzer:in nichts geändert hat.
-  // OKF ≈ (storeys−1)·storeyHeight [ASSUMED A1] — NICHT die Gesamthöhe (storeys·storeyHeight)!
+  // OKF = Elevation des obersten Geschosses (107-02: aus der Geschosstabelle, sonst (storeys−1)·storeyHeight) [ASSUMED A1] — NICHT die Gesamthöhe!
   useEffect(() => {
-    if (!okfDirty && pm.storeys > 0) setOkf(Math.round((pm.storeys - 1) * pm.storeyHeight * 10) / 10);
-  }, [pm.storeys, pm.storeyHeight, okfDirty, setOkf]);
+    if (!okfDirty && pm.storeys > 0) setOkf(Math.round(pm.okf_m * 10) / 10);
+  }, [pm.storeys, pm.okf_m, okfDirty, setOkf]);
   useEffect(() => {
     if (!weDirty && pm.ngf > 0) setWe(weAusNgf(pm.ngf)); // WE ≈ max(1, round(ngf/75)) [ASSUMED A6]
   }, [pm.ngf, weDirty, setWe]);
@@ -124,7 +124,7 @@ export default function BarrierefreiheitPlanner() {
 
       {pm.footArea > 0 && (
         <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
-          Aus Gebäudemodell: {pm.storeys} Geschosse · NGF {de(pm.ngf)} m² · OKF ≈ {de1((pm.storeys - 1) * pm.storeyHeight)} m · ≈ {de(weAusNgf(pm.ngf))} WE (Näherungen, überschreibbar)
+          Aus Gebäudemodell: {pm.storeys} Geschosse · NGF {de(pm.ngf)} m² · OKF ≈ {de1(pm.okf_m)} m · ≈ {de(weAusNgf(pm.ngf))} WE (Näherungen, überschreibbar)
         </div>
       )}
 

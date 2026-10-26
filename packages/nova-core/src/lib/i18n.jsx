@@ -555,6 +555,7 @@ const DICT = {
       "No model yet — choose your own IFC or load the sample project",
     "Bauteil {sel} wird markiert, sobald ein Modell geladen ist": "Element {sel} will be marked once a model is loaded",
     "Auswahl aufheben": "Clear selection",
+    "per GUID gewählt": "selected by GUID",
     "Ticket zu diesem Bauteil": "Ticket for this element",
     // Change orders (72-14 N-13/N-14: Finance.jsx, ChangeOrderForm.jsx, ChangeOrderTable.jsx, FinanceSummary.jsx)
     "Das Ticket gehört zu einem anderen Projekt. Wählen Sie dieses Projekt oben in der Kopfzeile.":

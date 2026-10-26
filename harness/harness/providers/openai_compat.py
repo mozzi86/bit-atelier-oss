@@ -41,7 +41,13 @@ def to_openai_payload(
     quirks = quirks or {}
     out: list[dict[str, Any]] = []
     for m in messages:
-        if m.role in ("system", "user"):
+        if m.role == "user" and m.bilder:
+            # 106-06: content parts, the image as a data URL (local model servers understand it on their /v1 endpoints too)
+            out.append({"role": "user", "content": [
+                {"type": "text", "text": m.content},
+                *({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b}"}} for b in m.bilder),
+            ]})
+        elif m.role in ("system", "user"):
             out.append({"role": m.role, "content": m.content})
         elif m.role == "assistant":
             d: dict[str, Any] = {"role": "assistant", "content": m.content or None}

@@ -6,7 +6,7 @@
 //
 // In:  zone { points:[{x,z}], level } plus the plan context of usePlanModel:
 //      walls (hull walls of createBuildingModel: a, b, level, edge, thickness),
-//      envOpenings (placed hull openings: level, edge, u, kind, typeId),
+//      envOpenings (placed hull openings: level, edge, u, kind, typeId; 107-04: an own `width` wins over the type, bauteil/oeffnungen.js),
 //      entranceCfg (ENTRANCE_DEFAULT-shaped or null),
 //      customWalls (drawn interior walls: a, b, level, _idx), customWindows (wallIdx → _idx, u, kind, typeId).
 // Out: world segments in metres { kind: "window"|"door", a:{x,z}, b:{x,z}, width, quelle: "huelle"|"innen" }
@@ -16,7 +16,7 @@
 // the entrance door (KD-16); this module never re-implements that rule.
 
 import { autoEnvOpenings } from "@designer/lib/autoOpenings";
-import { openingTypeById } from "@core/lib/buildingModel";
+import { oeffnungsMasse } from "@core/lib/bauteil/oeffnungen.js";
 
 /**
  * Max distance (m) between an opening's midpoint and the nearest zone edge to count as
@@ -93,7 +93,7 @@ export function oeffnungenAmRaum(zone, ctx = {}, toleranzM = OEFFNUNG_TOLERANZ_M
   // auto window that would sit in the same spot — the same de-duplication as in 3D/IFC).
   const platziert = (ctx.envOpenings || [])
     .filter((o) => o.level === level)
-    .map((o) => ({ ...o, width: openingTypeById(o.kind, o.typeId).w }));
+    .map((o) => ({ ...o, width: oeffnungsMasse(o).w })); // 107-04: own width of the record first, then the type (the one reader of sizes)
   for (const o of platziert) {
     const w = wandZuKante(o.edge);
     if (!w) continue;
@@ -112,7 +112,7 @@ export function oeffnungenAmRaum(zone, ctx = {}, toleranzM = OEFFNUNG_TOLERANZ_M
   for (const cw of ctx.customWindows || []) {
     const w = innenWaende.find((x) => x._idx === cw.wallIdx);
     if (!w) continue;
-    const width = openingTypeById(cw.kind, cw.typeId).w;
+    const width = oeffnungsMasse(cw).w;
     out.push({ kind: cw.kind, width, quelle: "innen", ...segmentAufWand(w, cw.u, width) });
   }
 

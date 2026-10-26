@@ -6,7 +6,8 @@
 // file is never rewritten here: "Journal als JSON" hands the journal to the harness writer
 // (`/ifc schreibe journal=…`, 71-05), which writes a NEW file with all GlobalIds kept.
 //
-// In:  element (ifcImport element: guid, psets), modell (loaded file name), projectId.
+// In:  element (ifcImport element: guid, psets), modell (loaded file name), projectId; 106-03: aktualisierung (a
+//      counter that reloads the journal when the change commands wrote to it), onEintraege (gets the loaded journal).
 // Out: panel; data-testids ae-oeffnen, ae-pset, ae-zeile (data-eigenschaft, data-geaendert),
 //      ae-bearbeiten, ae-eingabe, ae-uebernehmen, ae-zurueck, ae-neu-name, ae-neu-wert,
 //      ae-neu, ae-anzahl, ae-json, ae-meldung.
@@ -22,9 +23,9 @@ const anzeige = (w) => (w == null || w === "" ? "—" : String(w));
 
 /**
  * @param {{element: {guid?: string, globalId?: string, psets?: Record<string, Record<string, any>>}|null,
- *   modell: string, projectId?: string|null}} props
+ *   modell: string, projectId?: string|null, aktualisierung?: number, onEintraege?: (eintraege: any[]) => void}} props
  */
-export default function AttributEditor({ element, modell, projectId = null }) {
+export default function AttributEditor({ element, modell, projectId = null, aktualisierung = 0, onEintraege = undefined }) {
   const { t } = useI18n();
   const [offen, setOffen] = useState(false);
   const [eintraege, setEintraege] = useState(/** @type {any[]} */ ([]));
@@ -40,11 +41,12 @@ export default function AttributEditor({ element, modell, projectId = null }) {
     if (!projectId || !modell) { setEintraege([]); return; }
     const r = await bitApi.entities.IfcAenderung.filter({ project_id: projectId, modell }).catch(() => []);
     setEintraege(r || []);
+    onEintraege?.(r || []); // 106-03: the viewer keeps the same list for the change commands
   };
   useEffect(() => {
     if (offen) laden();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- laden only reads the props listed here
-  }, [offen, projectId, modell]);
+  }, [offen, projectId, modell, aktualisierung]);
   useEffect(() => { setBearbeitet(null); setMeldung({ text: "", fehler: false }); }, [guid]);
 
   const zeilen = useMemo(() => editorZeilen(element?.psets || {}, eintraege, modell, guid), [element, eintraege, modell, guid]);

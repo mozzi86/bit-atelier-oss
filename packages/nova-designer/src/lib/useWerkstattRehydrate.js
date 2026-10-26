@@ -21,6 +21,7 @@
 import { useEffect, useRef } from "react";
 import { useBuildingProgram, buildingProgram } from "@core/lib/useBuildingProgram";
 import { loadBimModel } from "@core/lib/useBimModelSync";
+import { geschosseAus, okfObersterGeschoss } from "@core/lib/bauteil/hoehen.js";
 import { useFachlayer } from "@designer/lib/useFachlayer";
 import { istWerkstattZone, tesseliere } from "@designer/lib/tesselierung";
 import { WERKSTATT_DEFAULT, einheitenAnreichern, zerlegungsArt } from "@designer/lib/werkstattDefaults";
@@ -99,7 +100,7 @@ export function werkstattErgebnisAusLayer(layer, s) {
     // 86-07: the drawn centre line comes with the building programme (store.achseM).
     achse: s.achseM ?? null,
     // 86-01: same lift-duty input as the workshop (it passes okf_m too).
-    okf_m: (Math.max(1, Math.round(s.storeys || 1)) - 1) * (s.storeyHeight || 3),
+    okf_m: okfObersterGeschoss(s.storeys || 1, geschosseAus(s)), // 107-02: reads the storey table
     // 86-05b: bar minimum of the applied proposal (same guard as the workshop; default 120).
     riegelMinFlaeche_m2: Number(layer?.riegelMinFlaeche_m2) > 0 ? Number(layer.riegelMinFlaeche_m2) : WERKSTATT_DEFAULT.riegelMinFlaeche_m2,
   });

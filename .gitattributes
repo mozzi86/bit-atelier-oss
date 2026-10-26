@@ -34,3 +34,7 @@ tests/unit/fixtures/buchhaltung/datev/EXTF_Buchungsstapel_golden.csv -text
 # download. The release workflow builds BIT-Atelier.zip with `git archive`, which
 # honours export-ignore — without it the v1.4.0 zip grew from 17 to 33 MB.
 tests/e2e/*-snapshots/** export-ignore
+
+# 107-01: IFC golden fixtures — tests compare the export with these files byte for byte; the
+# export writes LF, so a CRLF checkout (core.autocrlf=true) must not turn them into a false failure.
+tests/unit/fixtures/*.ifc text eol=lf

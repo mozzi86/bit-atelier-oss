@@ -1,5 +1,8 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
-import { compositeById, openingTypeById } from "@core/lib/buildingModel";
+import { compositeById } from "@core/lib/buildingModel";
+import { oeffnungsMasse, oeffnungsTyp, oeffnungMitte_m } from "@core/lib/bauteil/oeffnungen.js";
+import { wandGeometrie, wandDicke_m, huellSchnittWaende } from "@core/lib/bauteil/referenz.js"; // 107-01: the one reference-line derivation
+import { deckenLage, geschossHoeheAusModell } from "@core/lib/bauteil/hoehen.js"; // 107-02: the one slab thickness/side (was the literal 0.25)
 import { fmtLen } from "@core/lib/useBuildingProgram";
 import { planDarstellung, schraffur45 } from "@core/lib/plan/brillen.js"; // 97-04: status look per lens
 import { usePlanViewport, bildPxJeEinheit } from "@core/lib/usePlanViewport"; // 75-09: bildPxJeEinheit = Letterbox-korrekte Bildschirm-Skala (MSB-16)
@@ -39,21 +42,12 @@ function windowsAlong(w) {
   return out;
 }
 
-// Versatz der Wandkörper-Mitte relativ zur Referenzlinie (Mitte/Außen/Innen).
-function refOffset(refLine, thickness) {
-  const h = (thickness || 0.3) / 2;
-  return refLine === "outside" ? h : refLine === "inside" ? -h : 0;
-}
-
 // Schicht-Bänder einer mehrschichtigen Wand (Composite) als Polygone von außen nach innen.
 function wallSkinBands(w) {
   const comp = compositeById(w.composite);
   if (!comp) return null;
-  const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) || 1;
-  const dx = (w.b.x - w.a.x) / len, dz = (w.b.z - w.a.z) / len;
-  const nx = -dz, nz = dx;
-  const total = comp.skins.reduce((s, k) => s + k.thickness, 0) / 1000;
-  const o = refOffset(w.refLine, total);
+  // 107-01: offset and normal come from the one derivation of @core (bauteil/referenz.js)
+  const { normale: { x: nx, z: nz }, dicke_m: total, versatz_m: o } = wandGeometrie(w);
   let cur = o + total / 2; // äußere Kante
   return comp.skins.map((sk) => {
     const tk = sk.thickness / 1000; const a1 = cur, a2 = cur - tk; cur = a2;
@@ -69,25 +63,14 @@ function wallSkinBands(w) {
   });
 }
 
-// Effektive Wanddicke (Composite-Gesamtdicke oder Einzeldicke).
+// Effektive Wanddicke (Composite-Gesamtdicke oder Einzeldicke) in m — one rule in @core (107-01).
 function wallThicknessM(w) {
-  const comp = compositeById(w.composite);
-  return comp ? comp.skins.reduce((s, k) => s + k.thickness, 0) / 1000 : (w.thickness || 0.3);
+  return wandDicke_m(w);
 }
 
-// Rechteck (Wand) als Polygon-Punkte aus Kante a->b + Dicke + Referenzlinie.
+// Rechteck (Wand) als Polygon-Punkte aus Kante a->b + Dicke + Referenzlinie (107-01: @core wandGeometrie).
 function wallRectXZ(w) {
-  const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) || 1;
-  const dx = (w.b.x - w.a.x) / len, dz = (w.b.z - w.a.z) / len;
-  const t = wallThicknessM(w);
-  const nx = -dz, nz = dx; const h = t / 2;
-  const o = refOffset(w.refLine, t);
-  return [
-    { x: w.a.x + nx * (o + h), z: w.a.z + nz * (o + h) },
-    { x: w.b.x + nx * (o + h), z: w.b.z + nz * (o + h) },
-    { x: w.b.x + nx * (o - h), z: w.b.z + nz * (o - h) },
-    { x: w.a.x + nx * (o - h), z: w.a.z + nz * (o - h) },
-  ];
+  return wandGeometrie(w).polygon;
 }
 
 // ---- Markierungsrahmen-Trefferprüfung (alles in Metern, XZ-Ebene) ----------
@@ -344,7 +327,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
       const cuts = [0, len];
       windowsAlong(w).forEach((win) => { const u = win.t * len; cuts.push(u - 0.7, u + 0.7); });
       if (level === 0 && wi === 0) { const u = len * 0.5; cuts.push(u - 0.6, u + 0.6); }
-      (envOpenings || []).filter((e) => e.level === w.level && e.edge === w.edge).forEach((e) => { const ty = openingTypeById(e.kind, e.typeId); cuts.push(e.u - ty.w / 2, e.u + ty.w / 2); });
+      (envOpenings || []).filter((e) => e.level === w.level && e.edge === w.edge).forEach((e) => { const bw = oeffnungsMasse(e).w, um = oeffnungMitte_m(e.u, bw, len); cuts.push(um - bw / 2, um + bw / 2); }); // 107-04: own width, position kept in the wall like IFC and 3D
       const sorted = [...new Set(cuts.map((v) => Math.max(0, Math.min(len, v))))].sort((a, b) => a - b);
       const us = []; sorted.forEach((v) => { if (!us.length || v - us[us.length - 1] > 0.2) us.push(v); });
       if (us[us.length - 1] < len - 0.05) us.push(len);
@@ -445,12 +428,15 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
       {show("shell") && (customSlabs || []).filter((s) => s.level === level).map((s, i) => {
         if (!s.points || s.points.length < 3) return null;
         const sel = edit?.selected?.type === "slab" && edit.selected.index === s._idx;
-        const d = s.points.map((p, k) => `${k ? "L" : "M"}${X(p.x)},${Z(p.z)}`).join(" ") + " Z";
+        // 107-04: holes of the slab (`oeffnungen: [{points}]`) are further sub-paths of the same path, filled even-odd; without holes the path is unchanged
+        const loecher = (Array.isArray(s.oeffnungen) ? s.oeffnungen : []).filter((l) => Array.isArray(l?.points) && l.points.length >= 3)
+          .map((l) => l.points.map((p, k) => `${k ? "L" : "M"}${X(p.x)},${Z(p.z)}`).join(" ") + " Z").join(" ");
+        const d = s.points.map((p, k) => `${k ? "L" : "M"}${X(p.x)},${Z(p.z)}`).join(" ") + " Z" + (loecher ? ` ${loecher}` : "");
         const onClick = (e) => { if (edit?.tool === "arrow" && edit.onPick) { e.stopPropagation(); edit.onPick({ type: "slab", index: s._idx }, e.shiftKey); } };
         return (
           <g key={`cslab${i}`}>
             {(() => { const lk = look(s.status); return (
-              <path d={d} fill={lk ? lk.fill : "#cbd5e1"} fillOpacity={sel ? 0.5 : 0.25} stroke={sel ? "#475569" : lk ? lk.stroke : "#94a3b8"} strokeWidth={sel ? "1.2" : lk ? lk.strokeWidth : "0.6"} strokeDasharray={lk?.dash || "4 2"} opacity={lk?.opacity} data-status={s.status || undefined} onClick={onClick} style={{ cursor: edit?.tool === "arrow" ? "pointer" : "inherit" }} />
+              <path d={d} fillRule="evenodd" fill={lk ? lk.fill : "#cbd5e1"} fillOpacity={sel ? 0.5 : 0.25} stroke={sel ? "#475569" : lk ? lk.stroke : "#94a3b8"} strokeWidth={sel ? "1.2" : lk ? lk.strokeWidth : "0.6"} strokeDasharray={lk?.dash || "4 2"} opacity={lk?.opacity} data-status={s.status || undefined} onClick={onClick} style={{ cursor: edit?.tool === "arrow" ? "pointer" : "inherit" }} />
             ); })()}
             {sel && edit?.tool === "arrow" && s.points.map((p, vi) => (
               <Handle key={`sh${vi}`} x={X(p.x)} y={Z(p.z)} onDown={(ev) => startDrag(ev, { kind: "polyVert", which: "slab", idx: s._idx, vi })} />
@@ -522,7 +508,9 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
       {show("openings") && walls.map((w, wi) => windowsAlong(w).map((win, k) => {
         const len = win.len, t = win.t;
         const dx = (w.b.x - w.a.x) / len, dz = (w.b.z - w.a.z) / len;
-        const cxm = w.a.x + dx * len * t, czm = w.a.z + dz * len * t;
+        // 107-01: the symbol sits in the wall body, shifted by the reference line (0 for "center")
+        const vo = wandGeometrie(w).versatz_m;
+        const cxm = w.a.x + dx * len * t - dz * vo, czm = w.a.z + dz * len * t + dx * vo;
         const half = 0.7;
         const ax = cxm - dx * half, az = czm - dz * half, bx = cxm + dx * half, bz = czm + dz * half;
         const nx = -dz, nz = dx, hh = (w.thickness / 2) + 0.05;
@@ -542,7 +530,9 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         const w = walls[0], len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z);
         const dx = (w.b.x - w.a.x) / len, dz = (w.b.z - w.a.z) / len;
         // 75-11 Task 4: renamed mittePx (was `px`) — no shadowing of vp.px.
-        const mittePx = w.a.x + dx * len * 0.5, pz = w.a.z + dz * len * 0.5;
+        // 107-01 review fix: like the other opening symbols the door sits in the wall BODY, shifted by the reference line (0 for "center")
+        const vo = wandGeometrie(w).versatz_m;
+        const mittePx = w.a.x + dx * len * 0.5 - dz * vo, pz = w.a.z + dz * len * 0.5 + dx * vo;
         const nx = -dz, nz = dx; const door = 1.0;
         const hingeX = mittePx - dx * door, hingeZ = pz - dz * door;
         const openX = hingeX + nx * door, openZ = hingeZ + nz * door;
@@ -622,13 +612,19 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         const w = walls.find((x) => x.edge === e.edge); if (!w) return null;
         const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) || 1;
         const dx = (w.b.x - w.a.x) / len, dz = (w.b.z - w.a.z) / len;
-        const nx = -dz, nz = dx; const hw = openingTypeById(e.kind, e.typeId).w / 2, hh = ((w.thickness || 0.3) / 2) + 0.05;
-        const cxm = w.a.x + dx * e.u, czm = w.a.z + dz * e.u;
+        const nx = -dz, nz = dx; const hw = oeffnungsMasse(e).w / 2, hh = ((w.thickness || 0.3) / 2) + 0.05;
+        const vo = wandGeometrie(w).versatz_m; // 107-01: symbol in the wall body (0 for "center")
+        const eu = oeffnungMitte_m(e.u, hw * 2, len); // 107-04: position kept in the wall like IFC and 3D
+        const cxm = w.a.x + dx * eu - dz * vo, czm = w.a.z + dz * eu + dx * vo;
         const ax = cxm - dx * hw, az = czm - dz * hw, bx = cxm + dx * hw, bz = czm + dz * hw;
+        // 107-04 review: an opening without a filling on a hull wall has no mesh in 3D, so the plan is the only place to pick it (inspector: sizes, delete)
+        const ohneF = e.kind === "oeffnung";
+        const gewaehlt = ohneF && edit?.selected?.type === "opening" && edit.selected.scope === "env" && edit.selected.index === e._idx;
+        const onPickEnv = ohneF ? (/** @type {any} */ ev) => { if (edit?.tool === "arrow" && edit.onPick) { ev.stopPropagation(); edit.onPick({ type: "opening", index: e._idx, scope: "env" }, ev.shiftKey); } } : undefined;
         return (
-          <g key={`env${i}`} style={{ pointerEvents: "none" }}>
+          <g key={`env${i}`} style={ohneF ? { cursor: edit?.tool === "arrow" ? "pointer" : cursor } : { pointerEvents: "none" }} onClick={onPickEnv} data-huell-oeffnung={ohneF ? e._idx : undefined}>
             <path d={`M${X(ax + nx * hh)},${Z(az + nz * hh)} L${X(bx + nx * hh)},${Z(bz + nz * hh)} L${X(bx - nx * hh)},${Z(bz - nz * hh)} L${X(ax - nx * hh)},${Z(az - nz * hh)} Z`}
-              fill={e.kind === "door" ? "#fef3c7" : "#dbeafe"} stroke="#60a5fa" strokeWidth="0.6" />
+              fill={e.kind === "door" ? "#fef3c7" : e.kind === "oeffnung" ? "#ffffff" : "#dbeafe"} stroke={gewaehlt ? "#0d9488" : "#60a5fa"} strokeWidth={gewaehlt ? "1.4" : "0.6"} strokeDasharray={e.kind === "oeffnung" ? "2 2" : undefined} />
             <line x1={X(ax)} y1={Z(az)} x2={X(bx)} y2={Z(bz)} stroke="#3b82f6" strokeWidth="0.9" />
           </g>
         );
@@ -639,9 +635,11 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         const w = customWalls.find((x) => x._idx === cw.wallIdx); if (!w) return null;
         const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) || 1;
         const dx = (w.b.x - w.a.x) / len, dz = (w.b.z - w.a.z) / len;
-        const nx = -dz, nz = dx; const ty = openingTypeById(cw.kind, cw.typeId);
+        const nx = -dz, nz = dx; const ty = oeffnungsTyp(cw); // 107-04: own width/height of the record first
         const hw = ty.w / 2, hh = (wallThicknessM(w) / 2) + 0.05;
-        const cxm = w.a.x + dx * cw.u, czm = w.a.z + dz * cw.u;
+        const vo = wandGeometrie(w).versatz_m; // 107-01: symbol in the wall body, shifted by the reference line (0 for "center")
+        const cu = oeffnungMitte_m(cw.u, ty.w, len); // 107-04: position kept in the wall like IFC and 3D
+        const cxm = w.a.x + dx * cu - dz * vo, czm = w.a.z + dz * cu + dx * vo;
         const ax = cxm - dx * hw, az = czm - dz * hw, bx = cxm + dx * hw, bz = czm + dz * hw;
         const sel = edit?.selected?.type === "opening" && edit.selected.index === cw._idx;
         const onClick = (e) => { if (edit?.tool === "arrow" && edit.onPick) { e.stopPropagation(); edit.onPick({ type: "opening", index: cw._idx, scope: "custom" }, e.shiftKey); } };
@@ -665,7 +663,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         return (
           <g key={`cop${i}`} onClick={onClick} style={style}>
             <path d={`M${X(ax + nx * hh)},${Z(az + nz * hh)} L${X(bx + nx * hh)},${Z(bz + nz * hh)} L${X(bx - nx * hh)},${Z(bz - nz * hh)} L${X(ax - nx * hh)},${Z(az - nz * hh)} Z`}
-              fill="#dbeafe" stroke={sel ? "#0d9488" : "#60a5fa"} strokeWidth={sel ? "1.2" : "0.6"} />
+              fill={cw.kind === "oeffnung" ? "#ffffff" : "#dbeafe"} stroke={sel ? "#0d9488" : "#60a5fa"} strokeWidth={sel ? "1.2" : "0.6"} strokeDasharray={cw.kind === "oeffnung" ? "2 2" : undefined} />
             <line x1={X(ax)} y1={Z(az)} x2={X(bx)} y2={Z(bz)} stroke="#3b82f6" strokeWidth="0.9" />
             {handle}
           </g>
@@ -809,23 +807,27 @@ function Schnitt({ model, storeyHeight, layerVis, unit = "m", maxSvgH = 460, bri
   const W = (wM + PAD * 2) * SCALE, H = (topH + PAD * 3) * SCALE;
   const X = (x) => (x - bb.minX + PAD) * SCALE;
   const Y = (y) => H - PAD * SCALE - y * SCALE;
-  const wt = (model.walls[0]?.thickness) || 0.3;
-  const sideWalls = [bb.minX, bb.maxX - wt];
+  // 107-01: cut side walls from the one derivation of @core (follows the hull reference line `huelle_bezug`)
+  const sideWalls = huellSchnittWaende(model);
+  // 107-02 review fix: the storey dimension is the real height of the ground floor (level marks come from the same model),
+  // not the one number `storeyHeight`, which differs as soon as a storey table has another height for the ground floor
+  const egHoehe = geschossHoeheAusModell(model) || storeyHeight;
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: maxSvgH }}>
       <rect x="0" y="0" width={W} height={H} fill="#f8fafc" />
       <line x1="0" y1={Y(0)} x2={W} y2={Y(0)} stroke="#94a3b8" strokeWidth="1.5" />
       <rect x="0" y={Y(0)} width={W} height={H - Y(0)} fill="#eef2f4" />
-      {show("shell") && model.slabs.map((s, i) => (
-        <rect key={`s${i}`} x={X(bb.minX)} y={Y(s.elevation + 0.25)} width={wM * SCALE} height={0.25 * SCALE} fill="#9aa6b2" stroke="#64748b" strokeWidth="0.4" />
-      ))}
-      {show("shell") && sideWalls.map((wx, i) => (
-        <rect key={`sw${i}`} x={X(wx)} y={Y(totalH)} width={wt * SCALE} height={totalH * SCALE} fill={lk ? (lk.leer ? "none" : lk.fill) : "url(#hatch)"} stroke={lk ? lk.stroke : "#1e293b"} strokeWidth={lk ? lk.strokeWidth : "0.6"} strokeDasharray={lk?.dash} opacity={lk?.opacity} data-schnittwand={i} data-status={huelleStatus || undefined} />
+      {show("shell") && model.slabs.map((s, i) => {
+        const lage = deckenLage(s, undefined, "huelle");
+        return <rect key={`s${i}`} x={X(bb.minX)} y={Y(lage.oberkante_m)} width={wM * SCALE} height={lage.dicke_m * SCALE} fill="#9aa6b2" stroke="#64748b" strokeWidth="0.4" />;
+      })}
+      {show("shell") && sideWalls.map((sw, i) => (
+        <rect key={`sw${i}`} x={X(sw.von_m)} y={Y(totalH)} width={sw.dicke_m * SCALE} height={totalH * SCALE} fill={lk ? (lk.leer ? "none" : lk.fill) : "url(#hatch)"} stroke={lk ? lk.stroke : "#1e293b"} strokeWidth={lk ? lk.strokeWidth : "0.6"} strokeDasharray={lk?.dash} opacity={lk?.opacity} data-schnittwand={i} data-status={huelleStatus || undefined} />
       ))}
       {/* Attika (Brüstung) auf dem Dach */}
-      {paraH > 0 && sideWalls.map((wx, i) => (
-        <rect key={`pa${i}`} x={X(wx)} y={Y(topH)} width={wt * SCALE} height={paraH * SCALE} fill="url(#hatch)" stroke="#1e293b" strokeWidth="0.6" />
+      {paraH > 0 && sideWalls.map((sw, i) => (
+        <rect key={`pa${i}`} x={X(sw.von_m)} y={Y(topH)} width={sw.dicke_m * SCALE} height={paraH * SCALE} fill="url(#hatch)" stroke="#1e293b" strokeWidth="0.6" />
       ))}
       {show("openings") && model.storeys.map((st) => {
         const back = model.walls.find((w) => w.level === st.level);
@@ -846,7 +848,7 @@ function Schnitt({ model, storeyHeight, layerVis, unit = "m", maxSvgH = 460, bri
       {show("labels") && <text x={X(bb.minX) - 10} y={Y(totalH) - 3} textAnchor="end" fontSize="9" className="fill-slate-600" fontWeight="600">OK Dach +{totalH.toFixed(2)}</text>}
       {show("labels") && paraH > 0 && <text x={X(bb.minX) - 10} y={Y(topH) - 3} textAnchor="end" fontSize="9" className="fill-slate-600" fontWeight="600">OK Attika +{topH.toFixed(2)}</text>}
       {show("dimensions") && <>
-        <DimLine x1={X(bb.maxX) + 16} y1={Y(0)} x2={X(bb.maxX) + 16} y2={Y(storeyHeight)} vertical label={fmtLen(storeyHeight, unit)} />
+        <DimLine x1={X(bb.maxX) + 16} y1={Y(0)} x2={X(bb.maxX) + 16} y2={Y(egHoehe)} vertical label={fmtLen(egHoehe, unit)} />
         <DimLine x1={X(bb.minX)} y1={Y(0) + 22} x2={X(bb.maxX)} y2={Y(0) + 22} label={fmtLen(wM, unit)} />
       </>}
       <ScaleBar x={12} y={H - 10} scale={SCALE} />

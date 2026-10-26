@@ -85,6 +85,20 @@
         "handover"
       ],
       "default": "feasibility"
+    },
+    "nda": {
+      "type": "boolean",
+      "default": false,
+      "description": "NDA marker (106-05, D-IM-02): images of the view never go to a language model, only text and element GUIDs"
+    },
+    "bild_freigabe": {
+      "type": ["object", "null"],
+      "default": null,
+      "properties": {
+        "am": { "type": "string", "description": "ISO date of the consent" },
+        "durch": { "type": "string", "description": "who consented ('person')" }
+      },
+      "description": "106-06 (D-IM-02): the person's consent, once per project, that images of the view may leave this computer for a language model. Set only through POST /api/llm/bild-zustimmung from the app; ignored when nda is true"
     }
   },
   "required": [

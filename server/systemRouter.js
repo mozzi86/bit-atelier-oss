@@ -2,6 +2,7 @@
 // under /api by server/index.js:
 //
 //   GET  /api/system/datenordner          → { ordner, dateien: { db, personal } }   absolute paths
+//   POST /api/system/schluesselordner/oeffnen → { ok: true }  opens the folder of the personnel key (105-12)
 //   POST /api/system/datenordner/oeffnen  → { ok: true }  opens the data folder in Explorer / Finder / the
 //                                            file manager (explorer.exe, open, xdg-open)
 //   GET  /api/system/ki-anbindung         → { node, mcpServer, vorhanden, apiUrl, standardPort }
@@ -63,9 +64,10 @@ export function ordnerOeffnen(ordner, plattform = process.platform) {
  *   origins = further allowed Origins for the POST (e.g. the Vite dev server); anfrageEntfernt = the request
  *   comes from another device (93-03 office mode), default never; sicherung = the backup service of
  *   server/sicherung.js (93-06); personalSchluessel = path of the personnel key file (96-01)
+ *   personalStatus = () => {fingerabdruck, gesperrt, grund} of the personnel key (105-12)
  * @returns {import('express').Router}
  */
-export function systemRouter({ root, port, lokalGebunden, origins = [], anfrageEntfernt = () => false, datenOrdnerFn = () => datenOrdner(), oeffnen = ordnerOeffnen, execPath = process.execPath, sicherung = null, personalSchluessel = null }) {
+export function systemRouter({ root, port, lokalGebunden, origins = [], anfrageEntfernt = () => false, datenOrdnerFn = () => datenOrdner(), oeffnen = ordnerOeffnen, execPath = process.execPath, sicherung = null, personalSchluessel = null, personalStatus = null }) {
   const r = Router();
   const erlaubteOrigins = new Set([`http://localhost:${port}`, `http://127.0.0.1:${port}`, ...origins]);
   const nurLokal = (req, res, next) => (lokalGebunden && !anfrageEntfernt(req) ? next()
@@ -74,7 +76,24 @@ export function systemRouter({ root, port, lokalGebunden, origins = [], anfrageE
   r.get('/system/datenordner', nurLokal, (_req, res) => {
     const ordner = datenOrdnerFn();
     // 96-01: where the personnel key lives (outside the data folder) — it must be backed up separately.
-    res.json({ ordner, dateien: { db: path.join(ordner, 'db.json'), personal: path.join(ordner, 'personal.json') }, personalSchluessel });
+    // 105-12: plus its fingerprint and whether the personnel store is locked (missing or wrong key) — the
+    // reason used to appear only in the server console.
+    res.json({ ordner, dateien: { db: path.join(ordner, 'db.json'), personal: path.join(ordner, 'personal.json') }, personalSchluessel,
+      personalStatus: personalStatus ? personalStatus() : null });
+  });
+
+  // 105-12: opens the folder of the key file so the user can copy it next to — not into — the backup.
+  r.post('/system/schluesselordner/oeffnen', nurLokal, async (req, res) => {
+    if (!erlaubteOrigins.has(String(req.headers.origin || ''))) return res.status(403).json({ error: 'Nur aus der App selbst erlaubt.' });
+    if (!personalSchluessel) return res.status(404).json({ error: 'Kein Personal-Schlüssel eingerichtet.' });
+    const ordner = path.dirname(personalSchluessel);
+    if (!fs.existsSync(ordner)) return res.status(404).json({ error: `Ordner des Schlüssels fehlt: ${ordner}` });
+    try {
+      await oeffnen(ordner);
+      res.json({ ok: true, ordner });
+    } catch (e) {
+      res.status(500).json({ error: /** @type {any} */ (e).message });
+    }
   });
 
   r.post('/system/datenordner/oeffnen', nurLokal, async (req, res) => {

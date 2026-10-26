@@ -376,13 +376,15 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   }).filter(Boolean), [layer.riegel]);
 
   /** Enter in the typed input (VCB). */
-  const eingabeAnwenden = (text = eingabe, { strg = false } = {}) => {
+  // 106-05: `ctx` = the register context of whoever typed (a call over the control channel carries {kanal: "steuerung"}); it goes on to every
+  // command this line runs, so a guarded command (the change commands refuse an agent) cannot be reached through the line without the marker.
+  const eingabeAnwenden = (text = eingabe, { strg = false, ctx = undefined } = {}) => {
     // 104-05: snap commands work idle and inside a running command ("ortho", "polar 15", "raster 0,5", "end" …)
     const fb = fangBefehlLesen(text);
     if (fb) {
       setEingabe("");
       if ("fehler" in fb) { setMeldung(`${fb.fehler}: „${text}“`); return; }
-      const r = befehle.ausfuehren(fb.id, fb.wert != null ? { wert: fb.wert } : {});
+      const r = befehle.ausfuehren(fb.id, fb.wert != null ? { wert: fb.wert } : {}, ctx);
       if ("error" in r) setMeldung(r.error);
       return;
     }
@@ -390,7 +392,7 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
     if (werkzeug == null) {
       setEingabe("");
       const b = befehle.finden(text);
-      if (b && "id" in b) { befehle.ausfuehren(b.id); return; }
+      if (b && "id" in b) { befehle.ausfuehren(b.id, {}, ctx); return; }
       if (b && "kandidaten" in b) { setMeldung(`Mehrdeutig: ${b.kandidaten.map((id) => befehle.holen(id)?.label).join(", ")}`); return; }
       setMeldung(`Befehl unbekannt: „${text}“`);
       return;
@@ -527,7 +529,7 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
     reg.registrieren({ id: "auswahl-aufheben", label: "Auswahl aufheben", menue: "Bearbeiten", aktiv: () => a().auswahl.length > 0, ausfuehren: () => a().setAuswahl([]) });
     // for agents / scripts: typed input of the running command ("@3;4", "5,40", "*3" …) and a read-out of the model
     reg.registrieren({ id: "eingabe", label: "Eingabe", menue: "Befehlszeile", parameter: { text: "text" }, aktiv: () => a().werkzeug != null,
-      ausfuehren: (p) => { if (!p?.text) throw new Error("text fehlt"); a().eingabeAnwenden(String(p.text)); return true; } });
+      ausfuehren: (p, ctx) => { if (!p?.text) throw new Error("text fehlt"); a().eingabeAnwenden(String(p.text), { ctx }); return true; } });
     // 104-05: snap switches and one-shot snaps (fang, ortho, polar <Grad>, raster <Maß>, end/mit/sch/lot/nae)
     fangBefehleRegistrieren(reg, { einmal: (art) => a().einmal(art), einmalAktiv: () => a().nimmtPunkte, melden: (text) => a().melden(text) });
     reg.registrieren({ id: "modell", label: "Modell lesen", menue: "Abfrage",

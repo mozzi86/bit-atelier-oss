@@ -207,3 +207,58 @@ export function mitInstallierten(katalog, tags) {
   }
   return liste;
 }
+
+// --- 106-06: can a model read images? --------------------------------------------------------------------------------------------
+// An image of the view goes only to a model that understands images (plan 106-06 Task 2): "vision" is mandatory, a model without it gets
+// a sentence instead of a silently dropped image. Local models: the catalog's `faehigkeiten` decide. Models the catalog does not list
+// (connections outside this computer, local chat-completions servers with their own ids): a short list of model-id patterns whose
+// vendors document image input. Unknown = no - better a sentence than an image the model cannot read.
+
+/**
+ * Model-id patterns (case-insensitive, matched against the id after its last "/") of models that read images.
+ * [ASSUMED, Stand 25.10.2026] from the vendors' public model pages; model line-ups change monthly. The patterns are kept narrow (review
+ * fix 106-06): text-only members of a family are excluded - claude-2/instant, o3-mini, gemma3 1b/270m, the audio/realtime/tts/search
+ * and embedding variants. A pattern can still miss a new text-only variant: then the provider answers with an error instead of the
+ * promised sentence (no privacy effect - the image checks of the project ran before). A missing model only means "no image".
+ * The harness keeps the SAME list (harness/harness/bilder.py BILD_MODELL_MUSTER); a unit test compares both.
+ */
+export const BILD_MODELL_MUSTER = Object.freeze([
+  "^claude-(3|sonnet|opus|haiku)",
+  "^gpt-4o(?!.*(audio|realtime|transcribe|tts|search))",
+  "^gpt-4\\.1",
+  "^gpt-5(?!.*(audio|realtime|transcribe|tts))",
+  "^o3(?!-mini)",
+  "^o4-mini",
+  "^gemini-(?!.*(embedding|tts|audio))",
+  "^gemma-?3n",
+  "^gemma-?3[-:._]?(4|12|27)b",
+  "^gemma-?4",
+  "^qwen[0-9.]*-?vl",
+  "^pixtral",
+  "^llava",
+  "^llama-?3\\.2-?vision",
+  "^llama-?4",
+  "^minicpm-v",
+  "^moondream",
+]);
+
+/**
+ * Whether a model reads images: the catalog first (local tags), then BILD_MODELL_MUSTER.
+ * @param {{modell?: string|null, katalog?: {modelle: Array<{tag: string, faehigkeiten: string[]}>}|null}} o
+ *   modell: model id or local model tag ("" = the provider's default, unknown); katalog: validated catalog (null = only the patterns).
+ * @returns {{ja: boolean, quelle: "katalog"|"muster"|"unbekannt", text: string}}  text: German sentence when ja is false ("" otherwise).
+ */
+export function bildFaehig({ modell, katalog = null }) {
+  const id = String(modell ?? "").trim();
+  const nein = (/** @type {"katalog"|"unbekannt"} */ quelle, /** @type {string} */ text) => ({ ja: false, quelle, text });
+  if (!id) return nein("unbekannt", "Kein Modell gewählt — ob es Bilder versteht, ist unbekannt; nichts wurde gesendet");
+  const eintrag = katalog?.modelle?.find((e) => tagGleich(id, e.tag));
+  if (eintrag) {
+    return eintrag.faehigkeiten.includes("vision")
+      ? { ja: true, quelle: "katalog", text: "" }
+      : nein("katalog", `Das Modell „${id}“ versteht laut Katalog keine Bilder — nichts wurde gesendet. Ohne Bild senden oder ein Bildmodell wählen (Einstellungen › KI)`);
+  }
+  const kurz = id.slice(id.lastIndexOf("/") + 1);
+  if (BILD_MODELL_MUSTER.some((m) => new RegExp(m, "i").test(kurz))) return { ja: true, quelle: "muster", text: "" };
+  return nein("unbekannt", `Vom Modell „${id}“ ist nicht bekannt, dass es Bilder versteht — nichts wurde gesendet. Ohne Bild senden oder ein Bildmodell wählen (Einstellungen › KI)`);
+}

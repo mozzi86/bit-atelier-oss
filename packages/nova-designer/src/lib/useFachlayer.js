@@ -53,7 +53,10 @@
 //      weil brandschutz_layer dem BrandschutzPlanEditor gehört) ·
 //      barrierefreiheit_layer (BarrierefreiheitPlanner, 73-13: { abweichungen[checkKey] }) ·
 //      schallschutz_vermerke_layer (SchallschutzPlanner-Zusammenfassung, 73-13: { abweichungen[checkKey] } —
-//      eigenes Feld, schallschutz_layer bleibt bei der Plankarte).
+//      eigenes Feld, schallschutz_layer bleibt bei der Plankarte) ·
+//      aufbauten_layer (BitBimStudio via useFachlayer, 107-03/D-BK-22: { aufbauten: { "<id>": { name, skins[{name, material, thickness (mm),
+//      funktion?, prioritaet?}] } } } — projektbezogene Wand-/Deckenaufbauten; Schema und Nachschlagen in @core/lib/bauteil/aufbauten.js,
+//      die Leser (usePlanModel, AVA, Studio) übergeben den Layer an setzeProjektAufbauten).
 //      Neue Layer hier ergänzen — UND in @core/lib/fachlayerSchema.js (LAYER_VERSION) und
 //      .planning/FACHLAYER-SCHEMA.md (87-07: jeder Layer trägt `v` + `updatedAt`; Migration
 //      und Stempel laufen in loadBimModel/saveBimModel, nicht hier).

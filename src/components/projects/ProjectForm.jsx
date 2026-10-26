@@ -44,7 +44,9 @@ const FORM_DEFAULTS = {
   build_kind: "neubau",
   scan_3d_url: "",
   as_built_url: "",
-  existing_building_notes: ""
+  existing_building_notes: "",
+  // 106-05 (D-IM-02): NDA marker of the project - images of the view never go to a language model, only text and element GUIDs
+  nda: false
 };
 
 export default function ProjectForm({ project, onSubmit, onCancel }) {
@@ -353,6 +355,15 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   className="border-slate-200 focus:border-emerald-500"
                 />
               </div>
+            </div>
+
+            {/* 106-05 (D-IM-02): NDA marker - read by the speech field (and by 106-06 before an image of the view could leave the device) */}
+            <div className="flex items-start gap-2">
+              <input id="nda" type="checkbox" checked={formData.nda === true} onChange={(e) => handleChange('nda', e.target.checked)}
+                data-testid="projekt-nda" className="mt-0.5 h-4 w-4" />
+              <Label htmlFor="nda" className="font-normal">
+                {t("Vertraulich (NDA): nie Bilder der Ansicht an ein Sprachmodell senden, nur Text und Bauteil-Kennungen")}
+              </Label>
             </div>
 
             {/* Notes */}

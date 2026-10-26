@@ -11,6 +11,8 @@
 import { stuetzenVordim } from "@designer/lib/statics";
 import { punktImPolygon } from "@designer/lib/moebel";
 import { polygonAreaM } from "@core/lib/useBuildingProgram";
+import { steckbriefFelderAus } from "@core/lib/bauteil/steckbrief.js";
+import { REF_LINIEN } from "@core/lib/bauteil/referenz.js";
 
 // ---- Richtwerte (alle [ASSUMED], Konzeptstufe) --------------------------------------------------
 
@@ -59,6 +61,9 @@ export function layerHardened(layer) {
       einzugsbreite_m: Number.isFinite(t.einzugsbreite_m) && t.einzugsbreite_m > 0 ? t.einzugsbreite_m : TRAEGER_EINZUG_M,
       vonIdx: Number.isFinite(t.vonIdx) ? t.vonIdx : null,
       nachIdx: Number.isFinite(t.nachIdx) ? t.nachIdx : null,
+      ...steckbriefFelderAus(t), // 100-02 (additive): KG, trade, section set in the editor
+      // 107-01 (additive): optional reference line of the beam like a wall's (bauteil/referenz.js), only known values
+      ...(typeof t.refLine === "string" && REF_LINIEN.includes(t.refLine) ? { refLine: t.refLine } : {}),
     }));
   const ergebnis = src.ergebnis && typeof src.ergebnis === "object" ? src.ergebnis : null;
   return { traeger, ergebnis };

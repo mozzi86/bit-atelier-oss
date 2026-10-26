@@ -253,6 +253,40 @@ und wird nicht gespeichert; im Log steht nur der Text.
   (Download von huggingface.co/rhasspy/piper-voices). UI-Schalter „Antworten vorlesen".
 - Ohne Extra: `/stt` und `/tts` antworten 501 mit dem Installationshinweis, der Kern läuft.
 
+### Sprachprofil am Modell (Plan 106-05)
+
+Das Sprechfeld der Viewer (IFC-Viewer, BIM-Studio) schickt einen Satz, den die Grammatik der
+App nicht kennt, über `WS /ws/chat?profil=sprechen` an den Agenten. Dieses Profil ist eng:
+
+- **Werkzeuge nur über MCP:** Beim ersten Satz startet der Harness
+  `node tools/mcp-server.mjs --schreiben` (eigener MCP-Client über stdio, keine neue
+  Abhängigkeit) und bietet dem Modell nur eine Positivliste an: `auswahl_abfragen`,
+  `vorschlaege_lesen`, `pruefen`, `eigenschaft_setzen`, `transformieren`, `teilen`,
+  `vorschlag_verwerfen`. Nie angeboten, egal was `config.yaml` sagt: Bestätigen,
+  Datensätze ändern, `ansicht_bild`, `bauteil_waehlen`. Keine Datei-, Shell- oder
+  Gedächtnis-Werkzeuge.
+- **Ziel ist die Auswahl der Person:** Das Argument `guid` der drei Änderungswerkzeuge wird
+  aus dem Schema genommen und aus jedem Aufruf gestrichen.
+- **Freigaben** beantwortet das Profil immer mit „nein"; die App ebenso. Ein Ergebnis ist nur
+  ein Vorschlag mit Vorschau, den die Person in der App übernimmt.
+- **Kurzer Systemprompt**, kein Projektgedächtnis, keine Skills (kleine lokale Modelle).
+- `/status` meldet zusätzlich `provider_lokal` (verlässt das Profil den Rechner?) und
+  `mcp` (`aktiv`, `verbunden`, `werkzeuge`, `hinweis`).
+
+Konfiguration (`config.yaml`, alles optional):
+
+```yaml
+mcp:
+  enabled: true
+  command: node
+  script: null      # Standard: tools/mcp-server.mjs unter repo_root
+  api_url: null     # BIT_API_URL des MCP-Servers, Standard http://127.0.0.1:3001/api
+  timeout_s: 60
+```
+
+Tests: `tests/test_mcp_bridge.py` (echter MCP-Server gegen eine Attrappe der App-API,
+Mock-Provider). Nicht am Gerät abgenommen: echtes Mikrofon und ein echtes Sprachmodell.
+
 ## FreeCAD (Plan 67-04)
 
 `/freecad` baut BIM-Modelle mit **FreeCAD 1.1** und exportiert IFC4 (Skill-Text:
@@ -295,7 +329,7 @@ Nicht Teil von 67-04: iteratives Verfeinern per Sprache mit Rückfragen
 ## HTTP / WebSocket
 
 `GET /status`, `GET /projects`, `POST /project/{slug}`, `GET /skills`, `GET /model`,
-`POST /model {provider, model}`, `WS /ws/chat`. Client sendet `{type:"user", text}`,
+`POST /model {provider, model}`, `WS /ws/chat` (`?profil=sprechen` = Sprachprofil, 106-05). Client sendet `{type:"user", text}`,
 `{type:"status"}`, `{type:"model", provider, model}`, `{type:"approval_reply", id, ja}`;
 der Dienst streamt die Ereignisse der Schleife 1:1: `hello`, `text_delta`, `tool_call`,
 `tool_result`, `approval`, `usage` (mit `estimated` bei Schätzung), `compression`,
