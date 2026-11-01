@@ -10,6 +10,13 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.10.2] - 2026-11-01
+
+### Sicherheit
+
+- **Gespeicherte KI-Zugangsschlüssel und Personaldaten geschützt:** Der lokale Server konnte gespeicherte Zugangsschlüssel der KI-Anbindung und Personaldaten herausgeben (und Personaldaten ändern lassen), wenn der Datensatztyp in der Anfrage mit kodierten Zeichen geschrieben war. Erreichbar war das nur von diesem Rechner aus oder von gekoppelten Bürogeräten im lokalen Netz, nicht aus dem Internet. Behoben: Die Sperre gilt jetzt für jede Schreibweise.
+- **PDF-Ausgabe:** Eine Komponente, die beim Erzeugen von PDFs Inhalte bereinigt, ist auf eine Version ohne bekannte kritische Sicherheitslücke aktualisiert.
+
 ## [1.10.1] - 2026-10-26
 
 1.10.0 wurde nicht ausgeliefert: Der Release-Lauf brach an der Sicherheitsprüfung und am Größen-Budget ab. 1.10.1 enthält alles aus 1.10.0 und die zwei Korrekturen unter „Behoben“.

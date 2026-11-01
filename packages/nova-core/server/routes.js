@@ -93,6 +93,28 @@ export function personImBrowser(req) {
   try { return new URL(String(h.origin)).host === String(h.host); } catch { return false; }
 }
 
+/** 403 texts of the entities the generic CRUD never serves - each has its own masked / guarded routes. */
+export const GESPERRT_TEXT = Object.freeze({
+  llm: 'LlmConnection nur über /api/llm/connections verwaltbar',
+  ki: 'KI-Einstellungen nur über /api/llm/einstellungen',
+  personal: 'Personaldaten nur über /api/personal',
+});
+
+/**
+ * Whether an entity name (decoded, any case) is locked for the generic CRUD for every method: LlmConnection (API keys),
+ * KiEinstellung (the "Nur lokale KI" guard) and PERSONAL_ENTITAETEN (HR data). B-106-10-01: the lock must not depend on
+ * the spelling of the path ("/entities/Llm%43onnection" decodes to the same collection).
+ * @param {unknown} name entity name as the route sees it (decoded)
+ * @returns {string|null} the 403 text, null = not locked
+ */
+export function gesperrteEntitaet(name) {
+  const n = String(name ?? '').toLowerCase();
+  if (n === LLM_ENTITY.toLowerCase()) return GESPERRT_TEXT.llm;
+  if (n === KI_EINSTELLUNG_ENTITY.toLowerCase()) return GESPERRT_TEXT.ki;
+  if (PERSONAL_ENTITAETEN.some((e) => e.toLowerCase() === n)) return GESPERRT_TEXT.personal;
+  return null;
+}
+
 /** Response header naming the project fields a write could not set (comma-separated, ASCII); the record is still saved. */
 export const FELD_GESCHUETZT_KOPF = 'X-Bit-Feld-Geschuetzt';
 
@@ -144,12 +166,13 @@ export function entitiesRouter(db) {
 
   // LlmConnection enthält API-Schlüssel und ist über das generische CRUD
   // gesperrt — Verwaltung nur über /llm/connections (maskierte Antworten).
-  r.use('/entities/LlmConnection', (_req, res) => {
-    res.status(403).json({ error: 'LlmConnection nur über /api/llm/connections verwaltbar' });
+  // B-106-10-01: these prefix locks compare the RAW path; the r.param check below covers every other spelling.
+  r.use(`/entities/${LLM_ENTITY}`, (_req, res) => {
+    res.status(403).json({ error: GESPERRT_TEXT.llm });
   });
   // 93-12: the AI switches ("Nur lokale KI" …) — a generic write could switch the guard off unvalidated.
   r.use(`/entities/${KI_EINSTELLUNG_ENTITY}`, (_req, res) => {
-    res.status(403).json({ error: 'KI-Einstellungen nur über /api/llm/einstellungen' });
+    res.status(403).json({ error: GESPERRT_TEXT.ki });
   });
 
   // Plan 80-02 (D-P80-A #4): Personal-Entitäten dürfen den generischen
@@ -159,9 +182,19 @@ export function entitiesRouter(db) {
   // Bulk-Pfad stehen, sonst matcht '/entities/:entity/bulk' zuerst.
   for (const name of PERSONAL_ENTITAETEN) {
     r.use(`/entities/${name}`, (_req, res) => {
-      res.status(403).json({ error: 'Personaldaten nur über /api/personal' });
+      res.status(403).json({ error: GESPERRT_TEXT.personal });
     });
   }
+
+  // B-106-10-01: the prefix locks above compare the RAW path, while the routes below decode `:entity` - so
+  // "/entities/Llm%43onnection" (plain API key) and "/entities/%4Ditarbeiter" (HR data) slipped past them. This check
+  // runs on the DECODED name of every route with :entity (Express router.param, before the handler), case-insensitive,
+  // for every method including bulk.
+  r.param('entity', (_req, res, next, entity) => {
+    const gesperrt = gesperrteEntitaet(entity);
+    if (gesperrt) return res.status(403).json({ error: gesperrt });
+    next();
+  });
 
   // --- Bulk-Schreibpfad (Phase 33 / W0, T-33-03) --------------------------
   // MUSS vor '/entities/:entity/:id' stehen, sonst frisst die :id-Route "bulk".

@@ -51,7 +51,7 @@ prüft `tests/unit/drittlizenzen-10521.test.js` gegen `package-lock.json` und `v
 
 ## dompurify — MPL-2.0 OR Apache-2.0
 
-- **Version:** 3.4.16 (npm, transitive Abhängigkeit)
+- **Version:** 3.4.17 (npm, transitive Abhängigkeit)
 - **Was:** HTML-Bereinigung (XSS-Schutz) für aus HTML erzeugte Inhalte.
 - **Lizenz:** wahlweise Mozilla Public License 2.0 oder Apache License 2.0
   (`(MPL-2.0 OR Apache-2.0)`); unmodifiziert verwendet.
