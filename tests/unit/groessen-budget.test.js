@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  BENANNTE_CHUNKS, chunkName, grenzeAus, grenzenAus, messwerteAus, pruefeBudget, statischeHuelle,
+  BENANNTE_ASSETS, BENANNTE_CHUNKS, chunkName, gesamtOhneEigeneAssets, grenzeAus, grenzenAus, messwerteAus, pruefeBudget, statischeHuelle,
 } from "../../scripts/groessen-budget.mjs";
 
 const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
@@ -123,5 +123,45 @@ describe("groessen-budget — Grenzen schreiben", () => {
       assert.equal(b.grenzen[k] % 1024, 0, `Grenze ${k} nicht auf volle KB`);
     }
     for (const n of ["three", "charts", "map", "ifc"]) assert.ok(b.grenzen.chunks[n] > 0, `Chunk-Grenze ${n} fehlt`);
+  });
+});
+
+describe("groessen-budget — WebAssembly-Assets (107-18)", () => {
+  // the same small build plus the binary of the CSG library: raw bytes (binaries are not gzipped by groessen.mjs)
+  const MIT_WASM = { ...MESSUNG, zeilen: [...MESSUNG.zeilen, { rel: "assets/manifold-BE4c7gO-.wasm", roh: 541470, gz: null }], gesamtGz: MESSUNG.gesamtGz + 541470 };
+
+  it("eine WASM-Datei wird unter assets.<Name> gemessen, nicht als Chunk", () => {
+    const w = messwerteAus(MIT_WASM, MANIFEST);
+    assert.deepEqual(w.assets, { manifold: 541470 });
+    assert.equal(w.chunks.manifold, undefined);
+  });
+
+  it("eigene Grenze: geprüft auf eigener Zeile, nicht zusätzlich in gesamt; ohne eigene Grenze zählt sie in gesamt", () => {
+    const w = messwerteAus(MIT_WASM, MANIFEST);
+    const ohne = pruefeBudget(w, { gesamt: 1495 });
+    assert.equal(ohne.ueber.map((v) => v.schluessel).join(), "gesamt", "the binary counts in the total without a limit of its own");
+    const mit = pruefeBudget(w, { gesamt: 1495, assets: { manifold: 595968 } });
+    assert.deepEqual(mit.ueber, []);
+    assert.equal(mit.vergleiche.find((v) => v.schluessel === "gesamt")?.wert, 1495, "541 470 B moved to their own line");
+    assert.equal(mit.vergleiche.find((v) => v.schluessel === "assets.manifold")?.status, "ok");
+    assert.equal(pruefeBudget(w, { assets: { manifold: 500000 } }).ueber[0].schluessel, "assets.manifold");
+    assert.equal(gesamtOhneEigeneAssets(w, {}), w.gesamt);
+  });
+
+  it("fehlende WASM-Datei mit Grenze: gemeldet als fehlt, kein Fehlschlag (wie ein benannter Chunk)", () => {
+    const r = pruefeBudget(messwerteAus(MESSUNG, MANIFEST), { assets: { manifold: 595968 } });
+    assert.equal(r.vergleiche[0].status, "fehlt");
+    assert.deepEqual(r.ueber, []);
+  });
+
+  it("grenzenAus: benannte Assets eigene Grenze (+ Puffer), gesamt ohne sie", () => {
+    const g = grenzenAus(messwerteAus(MIT_WASM, MANIFEST), 10, BENANNTE_CHUNKS, BENANNTE_ASSETS);
+    assert.deepEqual(g.assets, { manifold: 595968 }); // 541 470 · 1.1 = 595 617 → 582 KB
+    assert.equal(g.gesamt, 2048, "1 495 B · 1.1 → 2 KB, without the binary");
+  });
+
+  it("budget.json im Repo hat die Grenze der WASM-Datei des CSG-Kerns", () => {
+    const b = JSON.parse(fs.readFileSync(path.join(WURZEL, "budget.json"), "utf8"));
+    for (const n of BENANNTE_ASSETS) assert.ok(Number.isInteger(b.grenzen.assets?.[n]) && b.grenzen.assets[n] % 1024 === 0, `Asset-Grenze ${n} fehlt`);
   });
 });

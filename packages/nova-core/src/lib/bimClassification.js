@@ -24,9 +24,10 @@ import { normalisiereStatus } from "./kataloge.js";
 // 89-03: workshop components (walls/doors) as classified elements.
 import { werkstattBauteile } from "./werkstattBauteile.js";
 import { aufbauById, aufbauVon } from "./bauteil/aufbauten.js";
-import { oeffnungsGroesse } from "./buildingModel.js";
+import { oeffnungsGroesse, kniestockGeometrie } from "./buildingModel.js";
 import { attributeVon, istAbgeleitet } from "./bauteil/attribute.js";
-import { wandHoehe, stuetzenHoehe, geschosshoehe, gesamtHoehe, geschosseAus, oberkanteFolgtGeschoss, raumHoehe } from "./bauteil/hoehen.js";
+import { wandHoehe, stuetzenHoehe, geschosshoehe, gesamtHoehe, geschosseAus, oberkanteFolgtGeschoss, raumHoehe, elevationOf } from "./bauteil/hoehen.js";
+import { untergeschosseAnzahl } from "./bauteil/ebenen.js";
 
 // Defensive, nicht-negative, endliche Zahl.
 const num = (x) => Math.max(0, Number(x) || 0);
@@ -90,8 +91,11 @@ export const SCHICHTEN = ["Stahlbeton", "Klinker", "Dämmung", "Kalksandstein", 
 
 // [ASSUMED A4] Status-Achse (ZUSTAND-Filter). KEIN Default mehr: ein Bauteil ohne
 // belegten Status ist `null` ("unbekannt"), nicht "neubau" (Phase 33 / L8).
-export const STATUS_WERTE = ["abbruch", "neubau", "bestand"];
-export const STATUS_LABEL = { abbruch: "Abbruch", neubau: "Neubau", bestand: "Bestand" };
+// 107-12 (D-BK-21, decided 24.10.2026): "temporaer" (IFC4 TEMPORARY, catalogue row since 107-08) is a value of this axis now — the
+// AVA filter and the condition fields offer it (appended last, so the order of the three legal statuses stays). The counter
+// statusZaehler still counts it under "ohne": the visibility bar of the IFC viewer has four buttons (open point of 107-12-SUMMARY).
+export const STATUS_WERTE = ["abbruch", "neubau", "bestand", "temporaer"];
+export const STATUS_LABEL = { abbruch: "Abbruch", neubau: "Neubau", bestand: "Bestand", temporaer: "Temporär" };
 
 // Sentinel für die UI: `status === null` ist ein echter Zustand („das Modell sagt es
 // nicht") und muss sichtbar sein. Ein leeres Select-Feld würde als „egal" gelesen.
@@ -109,10 +113,10 @@ export const STATUS_WERTE_UI = [...STATUS_WERTE, STATUS_UNBEKANNT];
 // Fehlermeldung; deshalb ist ein unbekannter Wert `null` PLUS Warnung, nie ein Default.
 
 /**
- * Status-Rohwert → interne Schreibweise (`"bestand"|"neubau"|"abbruch"|null`).
+ * Status-Rohwert → interne Schreibweise (`"bestand"|"neubau"|"abbruch"|"temporaer"|null`; temporaer seit 107-08).
  * @param {*} raw Rohwert aus IFC-Pset, Pipeline oder UI.
  * @param {object|null} snapshot optionaler Katalog-Snapshot (`{ StatusKonvention: [...] }`).
- * @returns {"bestand"|"neubau"|"abbruch"|null}
+ * @returns {"bestand"|"neubau"|"abbruch"|"temporaer"|null}
  */
 export function normalizeStatus(raw, snapshot = null) {
   return normalisiereStatus(raw, snapshot);
@@ -122,7 +126,8 @@ export function normalizeStatus(raw, snapshot = null) {
 export const STATUS_OHNE_LABEL = "ohne Status";
 
 /**
- * Count elements per status (89-04). `null`/unknown values count as "ohne" — never as "neubau".
+ * Count elements per status (89-04). `null`/unknown values count as "ohne" — never as "neubau". "temporaer" (107-08, axis value since
+ * 107-12) still counts as "ohne" here: the IFC viewer's visibility bar has no fifth button yet (see STATUS_WERTE).
  * @param {Array<{status?: string|null}>} elemente classified or IFC elements
  * @returns {{abbruch: number, neubau: number, bestand: number, ohne: number}}
  */
@@ -331,9 +336,24 @@ export function synthHull(bimModel) {
   const sh = num(m.storeyHeight) || 3;
   // 107-02: with a storey table the hull height is the sum of its heights; without it exactly the old `sh * n` (same arithmetic)
   const gq = geschosseAus(m);
-  const hSumme = Array.isArray(gq) ? gesamtHoehe(n, gq) : null;
+  const hSumme0 = Array.isArray(gq) ? gesamtHoehe(n, gq) : null;
+  // 107-13 (D-BK-20): basements add their storeys to the hull walls (area, length) and their ceilings to the slabs; 0 = the old figures.
+  // [ASSUMED] earth-contact walls and basement ceilings stay in KG 330 / 350 like the storeys above (no own cost group for earth-contact
+  // hull elements yet — noted as an open finding in 107-13-SUMMARY, not set silently). Depth = −elevation of the lowest basement (hoehen.js).
+  const U = untergeschosseAnzahl(m.untergeschosse);
+  const ugTiefe = U > 0 ? -elevationOf(-U, gq) : 0;
+  const hSumme = U > 0 ? (hSumme0 != null ? hSumme0 : sh * n) + ugTiefe : hSumme0;
+  const nW = n + U; // storeys with a hull wall and a slab above (basements included)
   const area = num(polygonArea(fp));
   const per = num(polygonPerimeter(fp));
+  // 108-02 (D-EFH-01): with a knee wall (pitched global roof + `kniestock_m` on the top storey row) the hull walls of the top storey are
+  // only as high as the knee wall (plus the slab offset, buildingModel.kniestockGeometrie — the same numbers as the 3D model and the IFC),
+  // and the slab above the top storey is the collar-beam floor clipped to the roof (or dropped above the ridge). null = the old figures.
+  const knie = kniestockGeometrie({ footprintM: fp, storeys: n, storeyHeight: sh, geschosse: m.geschosse, deckenDicke: m.huelle_decke_dicke_m, deckenBezug: m.huelle_decke_bezug, dachform: m.dachform, dachneigung: m.dachneigung });
+  const wandH = knie ? (hSumme != null ? hSumme : sh * n) - geschosshoehe(n - 1, gq) + knie.wandHoehe_m : null;
+  const kehlArea = knie && knie.kehlbalken ? num(polygonArea(knie.kehlbalken)) : 0;
+  const deckenArea = knie ? area * (nW - 1) + kehlArea : null;
+  const deckenZahl = knie ? nW - (knie.kehlbalken ? 0 : 1) : nW;
 
   const el = (id, kind, kg, gewerk, schicht, mengen) => ({
     id,
@@ -355,9 +375,9 @@ export function synthHull(bimModel) {
   return [
     // Außenwände: Umfang × Geschosshöhe × Geschosse. [ASSUMED] Dicke 24 cm für Volumen.
     el("hull-wall", "wall-hull", "330", "Rohbau", ["Stahlbeton"], {
-      area: hSumme != null ? per * hSumme : per * sh * n,
-      volume: hSumme != null ? per * hSumme * 0.24 : per * sh * n * 0.24,
-      length: per * n,
+      area: wandH != null ? per * wandH : hSumme != null ? per * hSumme : per * sh * n,
+      volume: wandH != null ? per * wandH * 0.24 : hSumme != null ? per * hSumme * 0.24 : per * sh * n * 0.24,
+      length: per * nW,
       count: 1,
     }),
     // Bodenplatte. [ASSUMED] Dicke 40 cm für Volumen.
@@ -369,10 +389,10 @@ export function synthHull(bimModel) {
     }),
     // Geschossdecken: Grundfläche × Geschosse. [ASSUMED] Dicke 25 cm.
     el("hull-slab", "slab", "350", "Rohbau", ["Stahlbeton"], {
-      area: area * n,
-      volume: area * n * 0.25,
+      area: deckenArea != null ? deckenArea : area * nW,
+      volume: deckenArea != null ? deckenArea * 0.25 : area * nW * 0.25,
       length: 0,
-      count: n,
+      count: deckenZahl,
     }),
     // Dach (Flachdach = Grundfläche).
     el("hull-roof", "roof", "360", "Dach", [], {

@@ -5,13 +5,17 @@ import { Camera } from "lucide-react";
 import { useI18n } from "@core/lib/i18n";
 import { lichtrichtung } from "@designer/lib/sonnenstand";
 import { mittelklickZaehler } from "@core/lib/mittelklick";
+import { ZEIGE_ZUSTAENDE } from "@core/lib/zeigen/zustaende.js"; // 107-05: error token of invalid modelled bodies
+import { lochImWand } from "@core/lib/bauteil/oeffnungen.js"; // 107-06: hole rectangle of a body opening (rule of the wall openings)
+import { dachBerechnen, dachDreiecke } from "@core/lib/bauteil/dachGeometrie.js"; // 107-10: roof on a body (massing_layer v6 `dach`)
+import { ugStatusText } from "@designer/lib/ugStatus.js"; // 107-10 review: visible basement state
 import {
   ISO_PITCH_GRAD, ISO_START_YAW, ISO_ZOOMSTUFEN, KAMERA_ABSTAND_M, RAD_SCHWELLE,
   RAND_VERWEIL_MS, PAN_PX_JE_S,
   pxJeMeter, frustumFuer, kameraPosition, einpassenStufe,
   bodenpunktUnterCursor, zoomAufPunkt, verschiebeZiel,
   zoomEinrasten, naechsteZoomstufe, yawDrehen, yawInterpol,
-  tweenFortschritt, tweenDauer, nordpfeilWinkel, randScrollRichtung,
+  tweenFortschritt, tweenDauer, nordpfeilWinkel, randScrollRichtung, zugEntlangNormale,
 } from "@designer/lib/isoKamera";
 
 /** 101-09: horizontal pixels of Shift + middle drag per 90° orbit detent. [ASSUMED] */
@@ -54,6 +58,16 @@ const ORBIT_PX = 80;
 //             null/empty (default) ⇒ rendering byte-identical to 75-08.
 //   geschossHoehe (75-09): storey height in metres (default 3) — vertical
 //             extent of each focus-zone volume (level · geschossHoehe).
+//   pushPull (98-03, 107-06): { aktiv, tippziel, waehlen(id, punkt, normale, {unten}) → face or null, anwenden(id, meter, strg, face) } —
+//             punkt in site m (x/y plan, z up), normale (x/y plan, z up), unten = Alt held; the drag counts along the face normal;
+//             a null face (hit on an opening reveal) starts no drag; tippziel = something to type a distance for ("-" then types).
+//   flaecheMarke (107-06): { art, kennung, punkte[{x,y,z}], mitte, normale{x,y,z}, teil? } — the picked face (site m),
+//             drawn as an outline with a normal arrow; null = none.
+//   hauptdach (108-11): { form, traufhoehe_m, firsthoehe_m, flaechen[{art, punkte3d[{x,y,z}]}], wandFlaechen?[same], geschossEbenen_m[] }
+//             — the global roof of the building model on the main body (massing/hauptdach.js; faces in site m: x plan, z = plan y,
+//             y height); wandFlaechen = wall infill above the eaves (shed roof: high wall and side triangles), drawn as body.
+//             The body is extruded to the eaves, the roof faces sit on it, thin lines mark the storey planes; `height` is then the
+//             ridge (camera fit). null (default) = the box of `height` exactly as before.
 //
 // Scene = plan axes (isoKamera convention): x = plan right (east at north
 // angle 0), z = plan down (south), y = up; origin = site centre.
@@ -143,10 +157,12 @@ export function exportExposePng(three, { fusszeile = [] } = {}) {
 function clearGroup(group) {
   while (group.children.length) {
     const c = group.children.pop();
-    if (c.geometry) c.geometry.dispose();
+    // a THREE.Sprite shares ONE module-level geometry with every other sprite (three/src/objects/Sprite.js) — disposing it
+    // would drop the shared quad on every rebuild; only its material and texture are its own (review 107-05)
+    if (c.geometry && !c.isSprite) c.geometry.dispose();
     if (c.material) {
       if (Array.isArray(c.material)) c.material.forEach((m) => m.dispose());
-      else c.material.dispose();
+      else { c.material.map?.dispose?.(); c.material.dispose(); } // 107-05: the "!" sprite carries a canvas texture
     }
   }
 }
@@ -179,6 +195,169 @@ const FOKUS_FARBE = 0x0f766e;
 /** 98-02: modelled bodies (massing layer) — warm grey like a working model; group instances darker. */
 const MODELL_FARBE = 0xd6d3d1;
 const MODELL_GRUPPE_FARBE = 0xa8a29e;
+/** 107-10: roof on a modelled body — the roof colour of the BIM studio's drawn roofs (0xb45309), so both studios read alike. */
+const MODELL_DACH_FARBE = 0xb45309;
+/** 108-11: global roof of the main body — the roof colour of the BIM studio's global roof form (BitBimStudio roofMat 0xb05a3c), so the
+ *  massing iso and the building model show the same roof alike. Display colour only. */
+const HAUPTDACH_FARBE = 0xb05a3c;
+/** 107-10: basement body below ±0.00 — concrete grey, darker than the bodies above ground. [ASSUMED] display colour only. */
+const UG_FARBE = 0x78716c;
+
+/**
+ * 107-10 review: counters of the modelled bodies for headless checks — computed WITHOUT WebGL by the same rules as the draw loop of the
+ * body effect (valid outline, height > 0; openings that fit; a pitched roof the library computes or not), so a check never depends on
+ * a canvas.
+ * @param {any[]} liste bodies (weitereKoerper)
+ * @returns {{ungueltig: number, loecher: number, oeffnungen: number, daecher: number, dachOffen: number}}
+ */
+function koerperZaehler(liste) {
+  let oeffnungen = 0, daecher = 0, dachOffen = 0;
+  for (const k of liste) {
+    const pts = Array.isArray(k?.profil) ? k.profil : null;
+    if (!pts || pts.length < 3 || pts.length > NACHBAR_MAX_PUNKTE || !(k.hoehe > 0)) continue;
+    if (pts.some((/** @type {any} */ p) => !Number.isFinite(p?.x) || !Number.isFinite(p?.y))) continue;
+    oeffnungen += Array.isArray(k.oeffnungenGeprueft) ? k.oeffnungenGeprueft.filter((/** @type {any} */ o) => o?.ok).length : 0;
+    const ungueltig = k.gueltig && k.gueltig.ok === false;
+    if (k.dach && k.dach.form && k.dach.form !== "flach" && !ungueltig) {
+      // the outline in the plan frame {x, z} (the translation of the 3D frame does not change whether the library computes the form)
+      const dd = dachBerechnen(pts.map((/** @type {any} */ p) => ({ x: p.x, z: p.y })), k.dach, { traufhoehe_m: 0 });
+      if (dd.ok) daecher += 1; else dachOffen += 1;
+    }
+  }
+  return {
+    ungueltig: liste.filter((k) => k?.gueltig && k.gueltig.ok === false).length,
+    loecher: liste.reduce((n, k) => n + (Array.isArray(k?.loecher) ? k.loecher.length : 0), 0),
+    oeffnungen, daecher, dachOffen,
+  };
+}
+/** 107-05: an invalid modelled body (self-intersecting or degenerate profile) — the "fehler" pointing state of 106-01
+ *  (zustaende.js: colour = --fehler of the light theme, outline SOLID, symbol "!"): error-coloured edges and a "!" sprite,
+ *  colour is never the only cue. Dashed edges are reserved for "warnung" (review 107-05). */
+const MODELL_FEHLER_FARBE = parseInt(ZEIGE_ZUSTAENDE.fehler.hex.slice(1), 16);
+/** Size of the "!" marker above an invalid body, m [ASSUMED]. */
+const MODELL_FEHLER_SYMBOL_M = 1.6;
+
+/**
+ * "!" marker as a sprite (canvas texture, white glyph on the error colour) — the shape cue of an invalid body.
+ * @returns {any} THREE.Sprite, or null where no canvas exists
+ */
+function fehlerSymbol() {
+  if (typeof document === "undefined") return null;
+  const c = document.createElement("canvas");
+  c.width = 64; c.height = 64;
+  const g = c.getContext("2d");
+  if (!g) return null;
+  g.fillStyle = ZEIGE_ZUSTAENDE.fehler.hex;
+  g.beginPath(); g.arc(32, 32, 30, 0, Math.PI * 2); g.fill();
+  g.fillStyle = "#ffffff"; g.font = "bold 44px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText(ZEIGE_ZUSTAENDE.fehler.symbol || "!", 32, 34);
+  const sprite = /** @type {any} */ (new THREE.Sprite(/** @type {any} */ (new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false }))));
+  sprite.scale.set(MODELL_FEHLER_SYMBOL_M, MODELL_FEHLER_SYMBOL_M, 1);
+  sprite.renderOrder = 10;
+  return sprite;
+}
+/** 107-06: colour of the face picked for push/pull — the "auswahl" pointing state of 106-01 (zustaende.js); the form cue is the
+ *  normal arrow next to the outline, so colour is never the only cue. */
+const FLAECHE_FARBE = parseInt(ZEIGE_ZUSTAENDE.auswahl.hex.slice(1), 16);
+/** Length of the normal arrow at a picked face, m [ASSUMED: readable at the default iso scales 1:200–1:500]. */
+const FLAECHE_PFEIL_M = 1.2;
+/** Outline of a picked face lies this far in front of it (no z-fighting with the face), m [ASSUMED]. */
+const FLAECHE_ABSTAND_M = 0.02;
+
+/**
+ * 107-06: a body with openings (massing_layer v3) as its own faces — the extrusion has no way to cut a hole through a side, and
+ * the CSG core comes only with 107-14. Top and bottom are the plan shape (with its courtyards), every side face is a rectangle
+ * edge length × height with the holes of the openings that enter or leave through it (Shape.holes, the pattern of the wall
+ * openings in BitBimStudio, hole rectangle by lochImWand), and each opening gets four reveal faces through the body depth.
+ * Geometry in the mesh frame: scene x/z, y from 0 (body bottom) to the height.
+ * @param {any} k resolved body (profil, loecher, hoehe; site m)
+ * @param {any} shape THREE.Shape of the plan outline with holes (x, −z), as for the extrusion
+ * @param {Array<any>} gute ok entries of oeffnungenPruefen (a, b, laenge, masse, oeffnung, durchgang)
+ * @param {number} sw site width, m
+ * @param {number} sd site depth, m
+ * @returns {any} THREE.BufferGeometry (non-indexed, with normals)
+ */
+function koerperMitOeffnungenGeo(k, shape, gute, sw, sd) {
+  const H = k.hoehe;
+  /** @type {any[]} */
+  const teile = [];
+  const nurPosition = (/** @type {any} */ g) => {
+    const n = g.index ? g.toNonIndexed() : g;
+    for (const name of Object.keys(n.attributes)) if (name !== "position") n.deleteAttribute(name);
+    return n;
+  };
+  for (const y of [0, H]) {
+    const g = new THREE.ShapeGeometry(shape);
+    g.rotateX(-Math.PI / 2); // (x, −z) → scene x/z, like the extrusion
+    g.translate(0, y, 0);
+    teile.push(nurPosition(g));
+  }
+  // hole rectangles per face: key "<ring>|<edge>" → [{u0, u1, v0, v1}] in m along the face from its start corner
+  /** @type {Map<string, Array<{u0: number, u1: number, v0: number, v1: number}>>} */
+  const loecherJeSeite = new Map();
+  const dazu = (/** @type {string} */ key, /** @type {{u0: number, u1: number, v0: number, v1: number}} */ r) => { const l = loecherJeSeite.get(key) || []; l.push(r); loecherJeSeite.set(key, l); };
+  const ringe = [k.profil, ...(Array.isArray(k.loecher) ? k.loecher : [])];
+  /** @type {number[]} */
+  const laibung = [];
+  for (const o of gute) {
+    const rect = lochImWand(o.masse, o.oeffnung.u, o.laenge, H);
+    if (!rect) continue;
+    const ex = (o.b.x - o.a.x) / o.laenge, ey = (o.b.y - o.a.y) / o.laenge, nx = ey, ny = -ex; // outward normal in plan
+    const t = o.durchgang.tiefe;
+    dazu(`aussen|${o.oeffnung.kante}`, { u0: rect.x0, u1: rect.x1, v0: rect.y0, v1: rect.y1 });
+    // exit: the entry rectangle moved by the depth against the normal, measured along the exit edge
+    const ring = o.durchgang.austritt.ring === "aussen" ? k.profil : k.loecher[o.durchgang.austritt.ring];
+    const p = ring[o.durchgang.austritt.kante], q = ring[(o.durchgang.austritt.kante + 1) % ring.length];
+    const lq = Math.hypot(q.x - p.x, q.y - p.y) || 1, fx = (q.x - p.x) / lq, fy = (q.y - p.y) / lq;
+    const aufAustritt = (/** @type {number} */ u) => (o.a.x + ex * u - nx * t - p.x) * fx + (o.a.y + ey * u - ny * t - p.y) * fy;
+    const w0 = aufAustritt(rect.x0), w1 = aufAustritt(rect.x1);
+    dazu(`${o.durchgang.austritt.ring}|${o.durchgang.austritt.kante}`, { u0: Math.min(w0, w1), u1: Math.max(w0, w1), v0: rect.y0, v1: rect.y1 });
+    // four reveals: corners of the entry rectangle and the same corners at the exit (scene x/y/z)
+    const E = (/** @type {number} */ u, /** @type {number} */ v, /** @type {number} */ s) => {
+      const pt = { x: o.a.x + ex * u - nx * s, y: o.a.y + ey * u - ny * s };
+      return [toX3d(pt, sw), v, toZ3d(pt, sd)];
+    };
+    const ecken = [[rect.x0, rect.y0], [rect.x1, rect.y0], [rect.x1, rect.y1], [rect.x0, rect.y1]];
+    for (let i = 0; i < 4; i++) {
+      const [u1, v1] = ecken[i], [u2, v2] = ecken[(i + 1) % 4];
+      const a1 = E(u1, v1, 0), a2 = E(u2, v2, 0), b2 = E(u2, v2, t), b1 = E(u1, v1, t);
+      laibung.push(...a1, ...a2, ...b2, ...a1, ...b2, ...b1);
+    }
+  }
+  ringe.forEach((ring, r) => {
+    const name = r === 0 ? "aussen" : String(r - 1);
+    ring.forEach((/** @type {any} */ a, /** @type {number} */ j) => {
+      const b = ring[(j + 1) % ring.length], L = Math.hypot(b.x - a.x, b.y - a.y);
+      if (!(L > 0)) return;
+      const s = new THREE.Shape();
+      s.moveTo(0, 0); s.lineTo(L, 0); s.lineTo(L, H); s.lineTo(0, H); s.closePath();
+      for (const l of loecherJeSeite.get(`${name}|${j}`) || []) {
+        const h = new THREE.Path();
+        h.moveTo(l.u0, l.v0); h.lineTo(l.u1, l.v0); h.lineTo(l.u1, l.v1); h.lineTo(l.u0, l.v1); h.closePath();
+        s.holes.push(h);
+      }
+      const g = nurPosition(new THREE.ShapeGeometry(s));
+      const pos = g.attributes.position;
+      const ex = (b.x - a.x) / L, ey = (b.y - a.y) / L;
+      for (let i = 0; i < pos.count; i++) {
+        const u = pos.getX(i), v = pos.getY(i);
+        const pt = { x: a.x + ex * u, y: a.y + ey * u };
+        pos.setXYZ(i, toX3d(pt, sw), v, toZ3d(pt, sd));
+      }
+      teile.push(g);
+    });
+  });
+  if (laibung.length) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(laibung, 3));
+    teile.push(g);
+  }
+  const geo = mergeGeometries(teile, false);
+  teile.forEach((g) => g.dispose());
+  geo.computeVertexNormals();
+  return geo;
+}
+
 /** 98-09: unit-type colours of the residential bar (same as WOHNUNGSTYPEN in @core/lib/massing/riegel). */
 const RIEGEL_FARBEN = { "1-Zi": 0x22d3ee, "2-Zi": 0xfacc15, "3-Zi": 0xec4899, "4-Zi": 0x6366f1, Ecke: 0xa855f7 };
 /** Body opacity when focus zones are shown (75-09) [ASSUMED 0.25] — the
@@ -201,8 +380,9 @@ export default function MassingView3D({
   sonne = null, schatten = true, nordwinkel = 0, nachbarn = [],
   massstab = null, info = null, kameraRef = null,
   fokusZonen = null, geschossHoehe = 3, weitereKoerper = null, gelaende = null, pushPull = null, riegel3d = null,
+  flaecheMarke = null, untergeschoss = null, hauptdach = null,
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const mountRef = useRef(null);
   const wrapperRef = useRef(null);
   const tooltipRef = useRef(null);
@@ -226,7 +406,7 @@ export default function MassingView3D({
   // the single active tween and the wheel accumulator.
   /** Input-layer state. `tween` is null between tweens — typed as any so the
    *  effect may fill it without a cast at every use. */
-  /** @type {React.MutableRefObject<{panKeys: Set<string>, drag: {on: boolean, x: number, y: number, id: number|null, orbit?: boolean, acc?: number}, edge: {dx: number, dy: number, seit: number}, tween: any, radAccum: number, letzteZeit: number, loopGeplant?: boolean, loopRaf?: number, pp: {id: string, y: number, strg: boolean}|null}>} */
+  /** @type {React.MutableRefObject<{panKeys: Set<string>, drag: {on: boolean, x: number, y: number, id: number|null, orbit?: boolean, acc?: number}, edge: {dx: number, dy: number, seit: number}, tween: any, radAccum: number, letzteZeit: number, loopGeplant?: boolean, loopRaf?: number, pp: {id: string, x: number, y: number, strg: boolean, normale: {x: number, y: number, z: number}, wahl: any}|null}>} */
   const eingabe = useRef(({ panKeys: new Set(), drag: { on: false, x: 0, y: 0, id: null }, edge: { dx: 0, dy: 0, seit: 0 }, tween: null, radAccum: 0, letzteZeit: 0, pp: null }));
   // Camera state (isoKamera convention): yaw/pitch degrees, ziel = ground
   // target in scene metres, massstab = ladder denominator (fractional during
@@ -257,6 +437,7 @@ export default function MassingView3D({
     // lint: eingabe.current may have changed by unmount; the object identity
     // is stable across the component's life, so one snapshot is correct).
     const eingabeSnapshot = eingabe.current;
+    const wrapperSnapshot = wrapperRef.current;
 
     let renderer;
     try {
@@ -309,8 +490,12 @@ export default function MassingView3D({
     scene.add(mkGroup);
     const glGroup = new THREE.Group(); // 98-06: sandbox terrain
     scene.add(glGroup);
+    const ugGroup = new THREE.Group(); // 107-10: basement body (below ±0.00, seen through the excavation pit)
+    scene.add(ugGroup);
     const rgGroup = new THREE.Group(); // 98-09: residential bars (unit boxes per storey)
     scene.add(rgGroup);
+    const fmGroup = new THREE.Group(); // 107-06: outline + normal arrow of the face picked for push/pull
+    scene.add(fmGroup);
 
     // Orthographic camera: near/far only clip (0.1…2000 m covers the 500-m
     // camera distance); image size comes from the frustum = scale ladder.
@@ -542,8 +727,33 @@ export default function MassingView3D({
       starteZoom(bis, G);
     };
 
-    Object.assign(three.current, { renderer, scene, camera, group, nbGroup, fzGroup, mkGroup, glGroup, rgGroup, dir, requestRender, anwenden, startLoop, starteYaw, starteZoom, starteHome, zoomMitte, tweenBeenden, reduziert });
+    Object.assign(three.current, { renderer, scene, camera, group, nbGroup, fzGroup, mkGroup, glGroup, ugGroup, rgGroup, fmGroup, dir, requestRender, anwenden, startLoop, starteYaw, starteZoom, starteHome, zoomMitte, tweenBeenden, reduziert });
     anwenden();
+    // 107-06: read-only hook for headless checks (e2e): where a site point (m; x/y plan, z height) appears on the canvas (CSS px
+    // from the canvas' top left), through the real camera — the same way a pointer would hit it. Not part of the UI.
+    if (wrapperRef.current) {
+      /** @type {any} */ (wrapperRef.current).__planZuBildschirm = (/** @type {{x: number, y: number, z?: number}} */ p) => {
+        const { siteW: sw, siteD: sd } = propsRef.current;
+        camera.updateMatrixWorld();
+        const v = new THREE.Vector3(toX3d(p, sw), Number(p.z) || 0, toZ3d(p, sd)).project(camera);
+        const r = renderer.domElement.getBoundingClientRect();
+        return { sx: ((v.x + 1) / 2) * r.width, sy: ((1 - v.y) / 2) * r.height };
+      };
+      // 108-11: read-only hook for headless checks — the `userData.art` of the first mesh of the main group (body, roof of the main body)
+      // under a canvas point (CSS px from the canvas' top left), through the real camera; "" = nothing hit. Not part of the UI.
+      // 108-11 review: with `teil` true the `userData.teil` of that mesh when it has one (the gable/wall infill above the eaves:
+      // "wand-ueber-traufe"), so a check can tell the infill from the top face of the wall body.
+      /** @type {any} */ (wrapperRef.current).__artUnter = (/** @type {number} */ sx, /** @type {number} */ sy, /** @type {boolean} */ teil = false) => {
+        const r = renderer.domElement.getBoundingClientRect();
+        if (!r.width || !r.height) return "";
+        camera.updateMatrixWorld();
+        const rc = new THREE.Raycaster();
+        rc.setFromCamera(new THREE.Vector2((sx / r.width) * 2 - 1, -(sy / r.height) * 2 + 1), camera);
+        const treffer = rc.intersectObjects(group.children, false).find((h) => h.object?.userData?.art);
+        if (!treffer) return "";
+        return String((teil && treffer.object.userData.teil) || treffer.object.userData.art);
+      };
+    }
 
     // --- Keyboard (Task 3 B) — handlers are wired to the WRAPPER via React
     // props (onKeyDown/onKeyUp/onBlur); no window/document listener here.
@@ -568,6 +778,9 @@ export default function MassingView3D({
           return;
         }
         if (lower === "+" || lower === "=") { if (!ev.repeat) { ev.preventDefault(); zoomMitte(1); } return; }
+        // 107-06: while push/pull runs and there is something to type for (a selection or a running input), "-" starts a typed
+        // depth ("-0,3" = push in) and goes to the typed input; otherwise it zooms as always (review 107-06)
+        if (lower === "-" && propsRef.current.pushPull?.aktiv && propsRef.current.pushPull?.tippziel) return;
         if (lower === "-") { if (!ev.repeat) { ev.preventDefault(); zoomMitte(-1); } return; }
         if (key === "Home") { if (!ev.repeat) { ev.preventDefault(); starteHome(); } return; }
         if (key === "Escape") { wrapperRef.current?.blur(); return; }
@@ -593,7 +806,7 @@ export default function MassingView3D({
     const ndc = new THREE.Vector2();
     three.current.ray = ray;
 
-    // Hover test (Task 4 B): ONLY on mouse move, ONLY the body mesh.
+    // Hover test (Task 4 B): ONLY on mouse move, ONLY the main body (108-11 review: with a roof also its gable/wall infill and roof).
     const hoverTest = (clientX, clientY) => {
       const tt = three.current;
       const e = eingabe.current;
@@ -603,7 +816,7 @@ export default function MassingView3D({
       ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
       ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
       ray.setFromCamera(ndc, tt.camera);
-      const hits = ray.intersectObject(tt.bodyMesh, false);
+      const hits = ray.intersectObjects(Array.isArray(tt.hoverMeshes) && tt.hoverMeshes.length ? tt.hoverMeshes : [tt.bodyMesh], false);
       const getroffen = hits.length > 0;
       if (getroffen !== tt.hoverAktiv) {
         tt.hoverAktiv = getroffen;
@@ -627,6 +840,9 @@ export default function MassingView3D({
     const onPointerDown = (ev) => {
       if (ev.button !== 0 && ev.button !== 1) return;
       // 98-03: with the push/pull tool, dragging a modelled body changes its height (Ctrl = stack).
+      // 107-06: the hit carries its FACE: the triangle normal in world axes (turned towards the viewer — the material is
+      // double-sided, a triangle may be wound either way) goes with the hit point to the modeller, which resolves the face from
+      // the derived faces of the core (flaecheWaehlen); Alt picks the bottom face, which the iso view never shows.
       const pp = propsRef.current.pushPull;
       if (ev.button === 0 && pp?.aktiv && three.current.mkGroup) {
         const rect = el.getBoundingClientRect();
@@ -635,9 +851,20 @@ export default function MassingView3D({
         ray.setFromCamera(ndc, three.current.camera);
         const treffer = ray.intersectObjects(three.current.mkGroup.children.filter((o) => o.userData?.art === "modellkoerper"), false)[0];
         if (treffer) {
-          eingabe.current.pp = { id: treffer.object.userData.id, y: ev.clientY, strg: ev.ctrlKey || ev.metaKey };
+          const { siteW: sw, siteD: sd } = propsRef.current;
+          const n = treffer.face ? treffer.face.normal.clone().transformDirection(treffer.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
+          if (n.dot(ray.ray.direction) > 0) n.negate();
+          if (ev.altKey) n.set(0, -1, 0);
+          const punkt = { x: treffer.point.x + sw / 2, y: treffer.point.z + sd / 2, z: treffer.point.y };
+          const wahl = pp.waehlen ? pp.waehlen(treffer.object.userData.id, punkt, { x: n.x, y: n.z, z: n.y }, { unten: ev.altKey }) : null;
+          // review 107-06: a hit on no body face (reveal, sill or lintel of a body opening) starts no push/pull — before, it fell
+          // back to the top face and a drag in the opening changed the body height
+          if (pp.waehlen && !wahl) { wrapperRef.current?.focus({ preventScroll: true }); return; }
+          // scene normal of the picked face for the drag projection: top/bottom vertical, a side horizontal (plan x → x, plan y → z)
+          const sn = wahl?.art === "seite" ? { x: wahl.normale.x, y: 0, z: wahl.normale.y } : { x: 0, y: wahl?.art === "unten" ? -1 : 1, z: 0 };
+          eingabe.current.pp = { id: treffer.object.userData.id, x: ev.clientX, y: ev.clientY, strg: ev.ctrlKey || ev.metaKey, normale: sn, wahl };
           try { el.setPointerCapture(ev.pointerId); } catch { /* capture unsupported */ }
-          el.style.cursor = "ns-resize";
+          el.style.cursor = wahl?.art === "seite" ? "move" : "ns-resize";
           return;
         }
       }
@@ -695,15 +922,16 @@ export default function MassingView3D({
     const onPointerUp = (ev) => {
       const e = eingabe.current;
       if (e.pp) {
-        // Screen px → metres: a vertical metre shows as pxJeM · cos(pitch) pixels in the iso view.
+        // 107-06: screen px → metres ALONG THE FACE NORMAL (its screen projection, isoKamera.zugEntlangNormale); for the top face
+        // this is the old rule (a vertical metre shows as pxJeM · cos(pitch) pixels).
         const k = kam.current;
-        const meter = (e.pp.y - ev.clientY) / Math.max(1e-6, k.pxJeM * Math.cos(((k.pitch || 30) * Math.PI) / 180));
+        const meter = zugEntlangNormale(ev.clientX - e.pp.x, ev.clientY - e.pp.y, e.pp.normale, { yaw: k.yaw, pitch: k.pitch, pxJeM: k.pxJeM });
         const ziel = e.pp;
         e.pp = null;
         try { el.releasePointerCapture(ev.pointerId); } catch { /* already released */ }
         el.style.cursor = "grab";
         // Rounded to 5 cm [ASSUMED] — a free mouse drag is not a measured input (type it for exact values).
-        propsRef.current.pushPull?.anwenden(ziel.id, Math.round(meter * 20) / 20, ziel.strg);
+        propsRef.current.pushPull?.anwenden(ziel.id, Math.round(meter * 20) / 20, ziel.strg, ziel.wahl);
         return;
       }
       if (!e.drag.on) return;
@@ -791,6 +1019,7 @@ export default function MassingView3D({
 
     return () => {
       const e = eingabeSnapshot;
+      if (wrapperSnapshot) delete /** @type {any} */ (wrapperSnapshot).__planZuBildschirm; // the read-only e2e hook goes with the scene
       if (ro) ro.disconnect();
       cancelAnimationFrame(three.current.renderRaf || 0);
       cancelAnimationFrame(e.loopRaf || 0);
@@ -836,9 +1065,17 @@ export default function MassingView3D({
   // Mesh-Gruppe bei Prop-Aenderung NEU aufbauen — OHNE Scene-Neuaufbau.
   useEffect(() => {
     const t3 = three.current;
+    // 108-11: roof of the main body for headless checks — set from the PROP (readable without WebGL), empty without a roof
+    const hd = hauptdach && Array.isArray(hauptdach.flaechen) && hauptdach.flaechen.length && hauptdach.traufhoehe_m > 0 ? hauptdach : null;
+    if (wrapperRef.current) {
+      wrapperRef.current.dataset.hauptdach = hd ? String(hd.form || "") : "";
+      wrapperRef.current.dataset.traufeM = hd ? Number(hd.traufhoehe_m).toFixed(2) : "";
+      wrapperRef.current.dataset.firstM = hd ? Number(hd.firsthoehe_m).toFixed(2) : "";
+    }
     if (!t3.group) return;
     clearGroup(t3.group);
     t3.bodyMesh = null;
+    t3.hoverMeshes = [];
     t3.edgesMesh = null;
     t3.hoverAktiv = false;
 
@@ -913,7 +1150,8 @@ export default function MassingView3D({
       else shape.lineTo(sx, sy);
     });
     shape.closePath();
-    const bodyGeo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+    // 108-11: with the roof of the building model the walls end at the eaves; the roof faces sit on top (below)
+    const bodyGeo = new THREE.ExtrudeGeometry(shape, { depth: hd ? hd.traufhoehe_m : height, bevelEnabled: false });
     bodyGeo.rotateX(-Math.PI / 2); // Extrusion (z) → Höhe (y)
     // DoubleSide + hohe Deckkraft: sonst blickt man durch die Dachflaeche in einen
     // scheinbar offenen Kasten, statt ein lesbares Volumen zu sehen.
@@ -942,9 +1180,56 @@ export default function MassingView3D({
     // edges = the highlight that lights up on hover.
     t3.bodyMesh = body;
     t3.edgesMesh = edges;
+    t3.hoverMeshes = [body];
+
+    // 108-11: the global roof (faces of dachGeometrie.globalesDach, site m → scene) and thin storey lines on the walls
+    if (hd) {
+      // site m → scene: x − siteW/2, z − siteD/2 (y = height stays)
+      const szene = (/** @type {number[]} */ roh) => roh.map((v, i) => (i % 3 === 0 ? v - siteW / 2 : i % 3 === 2 ? v - siteD / 2 : v));
+      // the gable triangles belong to the gable WALL (D-EFH-02: the gable walls reach the roof contour) — body material, not roof colour
+      // 108-11 review: plus the wall infill above the eaves (shed roof: high-side wall and side triangles; the body ends at the low eaves)
+      const giebel = szene(dachDreiecke([
+        ...hd.flaechen.filter((/** @type {any} */ f) => f.art === "giebel"),
+        ...(Array.isArray(hd.wandFlaechen) ? hd.wandFlaechen : []),
+      ]));
+      if (giebel.length) {
+        const ggeo = new THREE.BufferGeometry();
+        ggeo.setAttribute("position", new THREE.Float32BufferAttribute(giebel, 3));
+        ggeo.computeVertexNormals();
+        const gmesh = /** @type {any} */ (new THREE.Mesh(ggeo, bodyMat));
+        gmesh.castShadow = true;
+        gmesh.userData.art = "baukoerper";
+        gmesh.userData.teil = "wand-ueber-traufe"; // for the headless hook __artUnter(…, true) only
+        t3.group.add(gmesh);
+        t3.hoverMeshes.push(gmesh);
+      }
+      const pos = szene(dachDreiecke(hd.flaechen.filter((/** @type {any} */ f) => f.art !== "giebel")));
+      if (pos.length) {
+        const dgeo = new THREE.BufferGeometry();
+        dgeo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+        dgeo.computeVertexNormals();
+        const dmesh = /** @type {any} */ (new THREE.Mesh(dgeo, /** @type {any} */ (new THREE.MeshLambertMaterial({
+          color: HAUPTDACH_FARBE, side: THREE.DoubleSide,
+          ...(fokusAktiv ? { transparent: true, opacity: FOKUS_BODY_OPACITY } : {}),
+        }))));
+        dmesh.castShadow = true;
+        dmesh.userData.art = "hauptdach";
+        t3.group.add(dmesh);
+        t3.hoverMeshes.push(dmesh);
+        t3.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(dgeo), new THREE.LineBasicMaterial({ color: KANTEN_FARBE })));
+      }
+      for (const z of Array.isArray(hd.geschossEbenen_m) ? hd.geschossEbenen_m : []) {
+        if (!(z > 0) || !(z < hd.traufhoehe_m)) continue;
+        const linie = new THREE.LineLoop(
+          new THREE.BufferGeometry().setFromPoints(poly.map((p) => new THREE.Vector3(toX3d(p, siteW), z, toZ3d(p, siteD)))),
+          new THREE.LineBasicMaterial({ color: KANTEN_FARBE, transparent: true, opacity: 0.45 }),
+        );
+        t3.group.add(linie);
+      }
+    }
 
     t3.requestRender?.();
-  }, [poly, siteW, siteD, height, setbacks, fokusAktiv]);
+  }, [poly, siteW, siteD, height, setbacks, fokusAktiv, hauptdach]);
 
   // 75-09 (Task 3): focus-zone volumes — the rooms of ONE dwelling unit, each
   // extruded one storey tall at its level, teal like the 2D focus outline.
@@ -1004,9 +1289,18 @@ export default function MassingView3D({
   // main body, neighbours and focus zones are untouched; without the prop nothing is drawn.
   useEffect(() => {
     const tt = three.current;
+    const liste = Array.isArray(weitereKoerper) ? weitereKoerper : [];
+    // 107-05/06/10: counts for headless checks FIRST — readable without WebGL (review 107-10: before, they were set only after drawing)
+    if (wrapperRef.current) {
+      const z = koerperZaehler(liste);
+      wrapperRef.current.dataset.mkUngueltig = String(z.ungueltig);
+      wrapperRef.current.dataset.mkLoecher = String(z.loecher);
+      wrapperRef.current.dataset.mkOeffnungen = String(z.oeffnungen); // 107-06: openings drawn as holes
+      wrapperRef.current.dataset.mkDaecher = String(z.daecher); // 107-10: roofs drawn on bodies
+      wrapperRef.current.dataset.mkDachOffen = String(z.dachOffen); // 107-10: roof forms the library does not compute (curved)
+    }
     if (!tt.mkGroup) return;
     clearGroup(tt.mkGroup);
-    const liste = Array.isArray(weitereKoerper) ? weitereKoerper : [];
     const { siteW: sw, siteD: sd } = propsRef.current;
     for (const k of liste) {
       const pts = Array.isArray(k?.profil) ? k.profil : null;
@@ -1015,21 +1309,155 @@ export default function MassingView3D({
       const shape = new THREE.Shape();
       pts.forEach((p, i) => (i === 0 ? shape.moveTo(toX3d(p, sw), -toZ3d(p, sd)) : shape.lineTo(toX3d(p, sw), -toZ3d(p, sd))));
       shape.closePath();
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: k.hoehe, bevelEnabled: false });
-      geo.rotateX(-Math.PI / 2);
-      const farbe = k.gruppe != null ? MODELL_GRUPPE_FARBE : MODELL_FARBE;
-      const mesh = /** @type {any} */ (new THREE.Mesh(geo, /** @type {any} */ (new THREE.MeshLambertMaterial({ color: farbe, side: THREE.DoubleSide }))));
+      // 107-05: inner rings (courtyards) as Shape.holes — the pattern of the slab openings in BitBimStudio; three.js fixes
+      // the winding itself, the core already hands them over opposite to the outer ring (profilNormieren)
+      for (const ring of Array.isArray(k.loecher) ? k.loecher : []) {
+        if (!Array.isArray(ring) || ring.length < 3 || ring.some((p) => !Number.isFinite(p?.x) || !Number.isFinite(p?.y))) continue;
+        const loch = new THREE.Path();
+        ring.forEach((p, i) => (i === 0 ? loch.moveTo(toX3d(p, sw), -toZ3d(p, sd)) : loch.lineTo(toX3d(p, sw), -toZ3d(p, sd))));
+        loch.closePath();
+        shape.holes.push(loch);
+      }
+      // 107-06: a body with openings that fit is built face by face with the holes; all others stay the plain extrusion
+      const gute = Array.isArray(k.oeffnungenGeprueft) ? k.oeffnungenGeprueft.filter((o) => o?.ok) : [];
+      /** @type {any} */
+      let geo;
+      if (gute.length) {
+        geo = koerperMitOeffnungenGeo(k, shape, gute, sw, sd);
+      } else {
+        geo = new THREE.ExtrudeGeometry(shape, { depth: k.hoehe, bevelEnabled: false });
+        geo.rotateX(-Math.PI / 2);
+      }
+      const ungueltig = k.gueltig && k.gueltig.ok === false;
+      const farbe = ungueltig ? MODELL_FEHLER_FARBE : k.gruppe != null ? MODELL_GRUPPE_FARBE : MODELL_FARBE;
+      const mesh = /** @type {any} */ (new THREE.Mesh(geo, /** @type {any} */ (new THREE.MeshLambertMaterial({ color: farbe, side: THREE.DoubleSide, ...(ungueltig ? { transparent: true, opacity: 0.55 } : {}) }))));
       mesh.position.y = k.basis || 0;
       mesh.castShadow = true;
       mesh.userData.art = "modellkoerper";
       mesh.userData.id = k.id;
+      if (ungueltig) mesh.userData.ungueltig = k.gueltig.grund;
       tt.mkGroup.add(mesh);
-      const kanten = /** @type {any} */ (new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x44403c })));
+      const kanten = /** @type {any} */ (new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: ungueltig ? MODELL_FEHLER_FARBE : 0x44403c })));
       kanten.position.y = mesh.position.y;
       tt.mkGroup.add(kanten);
+      // 107-10: an optional roof on the body top (roof library: the same faces as the IFC export); a curved/unknown form is counted as open
+      if (k.dach && k.dach.form && k.dach.form !== "flach" && !ungueltig) {
+        const dd = dachBerechnen(pts.map((p) => ({ x: toX3d(p, sw), z: toZ3d(p, sd) })), k.dach, { traufhoehe_m: (k.basis || 0) + k.hoehe });
+        if (dd.ok) {
+          const dgeo = new THREE.BufferGeometry();
+          dgeo.setAttribute("position", new THREE.Float32BufferAttribute(dachDreiecke(dd.flaechen), 3));
+          dgeo.computeVertexNormals();
+          const dmesh = /** @type {any} */ (new THREE.Mesh(dgeo, /** @type {any} */ (new THREE.MeshLambertMaterial({ color: MODELL_DACH_FARBE, side: THREE.DoubleSide }))));
+          dmesh.castShadow = true;
+          dmesh.userData.art = "modelldach";
+          dmesh.userData.id = k.id;
+          tt.mkGroup.add(dmesh);
+        }
+      }
+      if (ungueltig) {
+        const sym = fehlerSymbol();
+        if (sym) {
+          const mitte = pts.reduce((a, p) => ({ x: a.x + p.x / pts.length, y: a.y + p.y / pts.length }), { x: 0, y: 0 });
+          sym.position.set(toX3d(mitte, sw), (k.basis || 0) + k.hoehe + MODELL_FEHLER_SYMBOL_M, toZ3d(mitte, sd));
+          tt.mkGroup.add(sym);
+        }
+      }
     }
     tt.requestRender?.();
   }, [weitereKoerper, siteW, siteD]);
+
+  // 107-06: the face picked for push/pull stays marked until the next hit — outline slightly in front of the face plus an arrow
+  // along its normal (colour of the "auswahl" state + the arrow as form cue); a part rectangle is outlined too. Own group.
+  useEffect(() => {
+    const tt = three.current;
+    if (!tt.fmGroup) return;
+    clearGroup(tt.fmGroup);
+    const m = flaecheMarke;
+    if (wrapperRef.current) wrapperRef.current.dataset.mkFlaeche = m ? m.kennung || m.art || "" : "";
+    if (m && Array.isArray(m.punkte) && m.punkte.length >= 3) {
+      const { siteW: sw, siteD: sd } = propsRef.current;
+      const n = m.normale || { x: 0, y: 0, z: 1 };
+      const v3 = (/** @type {{x: number, y: number, z?: number}} */ p, /** @type {number} */ s = 0) => new THREE.Vector3(toX3d({ x: p.x + n.x * s, y: p.y + n.y * s }, sw), (Number(p.z) || 0) + n.z * s, toZ3d({ x: p.x + n.x * s, y: p.y + n.y * s }, sd));
+      const mat = new THREE.LineBasicMaterial({ color: FLAECHE_FARBE, depthTest: false });
+      const umriss = /** @type {any} */ (new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(m.punkte.map((p) => v3(p, FLAECHE_ABSTAND_M))), mat));
+      umriss.renderOrder = 11;
+      tt.fmGroup.add(umriss);
+      if (Array.isArray(m.teil) && m.teil.length >= 3) {
+        const teil = /** @type {any} */ (new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(m.teil.map((p) => v3(p, FLAECHE_ABSTAND_M))), new THREE.LineBasicMaterial({ color: FLAECHE_FARBE, depthTest: false })));
+        teil.renderOrder = 11;
+        tt.fmGroup.add(teil);
+      }
+      // arrow: shaft along the normal and two head strokes (perpendicular helper: up for a side, scene x for top/bottom)
+      const mitte = m.mitte || m.punkte[0];
+      const fuss = v3(mitte, FLAECHE_ABSTAND_M), spitze = v3(mitte, FLAECHE_PFEIL_M);
+      const richtung = spitze.clone().sub(fuss).normalize();
+      const quer = Math.abs(n.z) > 0.5 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+      const kopf = (/** @type {number} */ sgn) => spitze.clone().addScaledVector(richtung, -0.3).addScaledVector(quer, 0.15 * sgn);
+      const pfeil = /** @type {any} */ (new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints([fuss, spitze, spitze, kopf(1), spitze, kopf(-1)]), new THREE.LineBasicMaterial({ color: FLAECHE_FARBE, depthTest: false })));
+      pfeil.renderOrder = 11;
+      tt.fmGroup.add(pfeil);
+    }
+    tt.requestRender?.();
+  }, [flaecheMarke, siteW, siteD]);
+
+  // 107-10 (task 6, D-BK-20): basement with the terrain subtraction. The basement body (footprint × [fusshoehe_m, 0]) is drawn at once as an
+  // extrusion; with a terrain grid the CSG derivation (@core/lib/bauteil/gelaendeSolid.js, loaded lazily with the csg chunk) gives the
+  // terrain AFTER the excavation, which replaces the terrain mesh below, and the excavation volume. Without `untergeschoss` nothing of
+  // this runs and the view renders exactly as before.
+  const [ugErgebnis, setUgErgebnis] = useState(/** @type {any} */ (null));
+  const [ugFehler, setUgFehler] = useState(/** @type {string|null} */ (null));
+  useEffect(() => {
+    setUgErgebnis(null);
+    setUgFehler(null);
+    const ug = untergeschoss;
+    const g = gelaende;
+    if (!ug || !Array.isArray(ug.profil) || ug.profil.length < 3 || !(ug.fusshoehe_m < 0)) return undefined;
+    if (!(g && g.nx >= 2 && g.ny >= 2 && Array.isArray(g.h) && g.h.length === g.nx * g.ny)) return undefined;
+    let ab = false;
+    import("@core/lib/bauteil/gelaendeSolid.js")
+      .then((m) => m.untergeschossMitGelaende({ gelaende: g, profil: ug.profil, fusshoehe_m: ug.fusshoehe_m, waende: ug.waende || [], bezug: ug.bezug || null, geschosse: ug.geschosse || null }))
+      .then((r) => {
+        if (ab) { r.ug.geometrie.dispose(); r.aushub.geometrie?.dispose(); r.gelaendeNach.geometrie?.dispose(); return; }
+        setUgErgebnis(r);
+      })
+      .catch((e) => { if (!ab) setUgFehler(String(e?.message || e)); });
+    return () => { ab = true; };
+  }, [untergeschoss, gelaende]);
+  useEffect(() => () => {
+    if (!ugErgebnis) return;
+    ugErgebnis.ug.geometrie.dispose(); ugErgebnis.aushub.geometrie?.dispose(); ugErgebnis.gelaendeNach.geometrie?.dispose();
+  }, [ugErgebnis]);
+  // 107-10 review: the visible state of the basement (quantity, source, warning, earth contact, "nicht verfügbar") — shown below the view
+  const gelaendeOk = !!(gelaende && gelaende.nx >= 2 && gelaende.ny >= 2 && Array.isArray(gelaende.h) && gelaende.h.length === gelaende.nx * gelaende.ny);
+  const ugStatus = ugStatusText({ ug: untergeschoss, gelaende: gelaendeOk ? gelaende : null, gelaendeGueltig: gelaendeOk, ergebnis: ugErgebnis, fehler: ugFehler, t, lang });
+  useEffect(() => {
+    const tt = three.current;
+    const ug = untergeschoss;
+    const w = wrapperRef.current;
+    // counters for headless checks first (readable without WebGL); review 107-10: without a grid the quantity is footprint × depth
+    if (w) {
+      w.dataset.ug = ug ? "1" : "";
+      w.dataset.ugAushubM3 = ugStatus?.aushub_m3 != null ? String(Math.round(ugStatus.aushub_m3 * 1000) / 1000) : "";
+      w.dataset.ugQuelle = ugStatus?.quelle || "";
+      w.dataset.ugFehler = ugFehler || (ugErgebnis?.fehler ? String(ugErgebnis.fehler.code) : "");
+      w.dataset.gelaendeAbzug = ugErgebnis?.gelaendeNach?.geometrie ? "1" : "";
+    }
+    if (!tt.ugGroup) return;
+    clearGroup(tt.ugGroup);
+    if (ug && Array.isArray(ug.profil) && ug.profil.length >= 3 && ug.fusshoehe_m < 0) {
+      const { siteW: sw, siteD: sd } = propsRef.current;
+      const shape = new THREE.Shape();
+      ug.profil.forEach((p, i) => (i === 0 ? shape.moveTo(toX3d(p, sw), -toZ3d(p, sd)) : shape.lineTo(toX3d(p, sw), -toZ3d(p, sd))));
+      shape.closePath();
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: -ug.fusshoehe_m, bevelEnabled: false });
+      geo.rotateX(-Math.PI / 2);
+      const mesh = /** @type {any} */ (new THREE.Mesh(geo, /** @type {any} */ (new THREE.MeshLambertMaterial({ color: UG_FARBE }))));
+      mesh.position.y = ug.fusshoehe_m;
+      mesh.userData.art = "untergeschoss";
+      tt.ugGroup.add(mesh);
+    }
+    tt.requestRender?.();
+  }, [untergeschoss, ugErgebnis, ugFehler, siteW, siteD, ugStatus?.aushub_m3, ugStatus?.quelle]);
 
   // 98-06: sandbox terrain as a height mesh in the site frame (only once it exists — untouched
   // projects render exactly as before).
@@ -1038,7 +1466,16 @@ export default function MassingView3D({
     if (!tt.glGroup) return;
     clearGroup(tt.glGroup);
     const g = gelaende;
-    if (g && g.nx >= 2 && g.ny >= 2 && Array.isArray(g.h) && g.h.length === g.nx * g.ny) {
+    // 107-10: with a basement the terrain AFTER the excavation (local frame around the grid middle, shifted into the site frame)
+    if (ugErgebnis?.gelaendeNach?.geometrie) {
+      const { siteW: sw, siteD: sd } = propsRef.current;
+      const mesh = /** @type {any} */ (new THREE.Mesh(ugErgebnis.gelaendeNach.geometrie.clone(), /** @type {any} */ (new THREE.MeshLambertMaterial({ color: 0x9caf88, side: THREE.DoubleSide, transparent: true, opacity: 0.85 }))));
+      mesh.position.set(ugErgebnis.mitte.x - sw / 2, 0, ugErgebnis.mitte.y - sd / 2);
+      mesh.receiveShadow = true;
+      mesh.userData.art = "gelaende";
+      mesh.userData.abzug = true;
+      tt.glGroup.add(mesh);
+    } else if (g && g.nx >= 2 && g.ny >= 2 && Array.isArray(g.h) && g.h.length === g.nx * g.ny) {
       const { siteW: sw, siteD: sd } = propsRef.current;
       const geo = new THREE.BufferGeometry();
       const pos = new Float32Array(g.nx * g.ny * 3);
@@ -1060,7 +1497,7 @@ export default function MassingView3D({
       tt.glGroup.add(mesh);
     }
     tt.requestRender?.();
-  }, [gelaende, siteW, siteD]);
+  }, [gelaende, siteW, siteD, ugErgebnis]);
 
   // 98-09: residential bars — one extruded box per unit and storey in the unit-type colour (a 15 cm
   // gap between storeys keeps the floors readable, like the reference video). One material per type.
@@ -1200,6 +1637,13 @@ export default function MassingView3D({
       onKeyUp={(ev) => three.current.steuerung?.keyup(ev)}
       onBlur={() => three.current.steuerung?.blur()}
     >
+      {/* 107-10 review: basement state as text (also without WebGL) — the quantity, its source and every warning stand on the view */}
+      {ugStatus && (
+        <div data-testid="mv-ug-status" role="status" className="absolute bottom-6 left-2 z-10 max-w-[24rem] rounded-md border border-border bg-card px-2 py-1 text-[11px] leading-snug text-foreground shadow-sm">
+          {ugStatus.zeilen.map((z) => <div key={z}>{z}</div>)}
+          {ugStatus.warnungen.map((w) => <div key={w} className="flex items-start gap-1 text-warnung" data-testid="mv-ug-warnung"><span aria-hidden="true">▲</span><span>{w}</span></div>)}
+        </div>
+      )}
       {glFehler ? (
         // Klartext statt Crash/leerem Canvas — beide Fälle (kein WebGL,
         // Kontext verloren) mit eigener Meldung.

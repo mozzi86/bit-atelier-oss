@@ -146,6 +146,27 @@ export function kameraBasis({ yaw, pitch }) {
 }
 
 /**
+ * 107-06: metres a pointer drag moves a face along its normal (push/pull in the iso view). The normal is projected onto the
+ * screen (rechts/hoch of kameraBasis, pxJeM px per metre, screen y down); the drag counts only along that screen direction:
+ * metres = (drag · s) / |s|² with s = screen image of one metre of normal. For the top face (normal +y) this is the old rule
+ * −dy / (pxJeM · cos pitch). A normal that points (almost) straight at the camera has no screen length — then 0 (no move).
+ * @param {number} dxPx pointer movement right, CSS px
+ * @param {number} dyPx pointer movement down, CSS px
+ * @param {{x: number, y: number, z: number}} normale face normal in SCENE axes (x right, y up, z plan down), unit length
+ * @param {{yaw: number, pitch: number, pxJeM: number}} kamera degrees, CSS px per metre
+ * @returns {number} metres along the normal (positive = outwards)
+ */
+export function zugEntlangNormale(dxPx, dyPx, normale, kamera) {
+  const b = kameraBasis({ yaw: kamera.yaw, pitch: kamera.pitch });
+  const n = normale || { x: 0, y: 0, z: 0 };
+  const sx = (n.x * b.rechts.x + n.y * b.rechts.y + n.z * b.rechts.z) * kamera.pxJeM;
+  const sy = -(n.x * b.hoch.x + n.y * b.hoch.y + n.z * b.hoch.z) * kamera.pxJeM;
+  const s2 = sx * sx + sy * sy;
+  if (!(s2 > 1e-9)) return 0;
+  return ((Number(dxPx) || 0) * sx + (Number(dyPx) || 0) * sy) / s2;
+}
+
+/**
  * Camera position for a target on the ground (y = 0):
  * (ziel.x − vor.x·r, sinP·r, ziel.z − vor.z·r).
  * Check: yaw 45°, pitch 30°, r = 1 → (−0.6124, 0.5, 0.6124); the elevation

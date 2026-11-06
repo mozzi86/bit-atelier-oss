@@ -9,10 +9,13 @@
 // Eine magische Konstante 1,48 im Code wäre ein Fehler — sie würde beim Editieren
 // der Reihe still falsch bleiben.
 
+// 107-08 (spec V renovation_status): the English spec words "Existing" / "New" / "Demolition" are aliases, and the IFC4 status
+// TEMPORARY (PEnum_ElementStatus) gets its own row "temporaer" — the brillen/plan display knew it already, the catalogue did not.
 const DEFAULT_STATUS = [
-  { intern: 'bestand', pipeline: 'Bestand', ifc_enum: 'EXISTING', aliase: ['bestand', 'Bestand', 'EXISTING', 'existing'] },
-  { intern: 'neubau', pipeline: 'Neubau', ifc_enum: 'NEW', aliase: ['neubau', 'Neubau', 'NEW', 'new'] },
-  { intern: 'abbruch', pipeline: 'Abbruch', ifc_enum: 'DEMOLISH', aliase: ['abbruch', 'Abbruch', 'DEMOLISH', 'demolish'] },
+  { intern: 'bestand', pipeline: 'Bestand', ifc_enum: 'EXISTING', aliase: ['bestand', 'Bestand', 'EXISTING', 'existing', 'Existing'] },
+  { intern: 'neubau', pipeline: 'Neubau', ifc_enum: 'NEW', aliase: ['neubau', 'Neubau', 'NEW', 'new', 'New'] },
+  { intern: 'abbruch', pipeline: 'Abbruch', ifc_enum: 'DEMOLISH', aliase: ['abbruch', 'Abbruch', 'DEMOLISH', 'demolish', 'Demolition', 'demolition'] },
+  { intern: 'temporaer', pipeline: 'Temporär', ifc_enum: 'TEMPORARY', aliase: ['temporaer', 'Temporär', 'temporär', 'TEMPORARY', 'temporary', 'Temporary'] },
   { intern: null, pipeline: '?', ifc_enum: null, aliase: ['?', '', 'unbekannt', 'unknown'] },
 ];
 

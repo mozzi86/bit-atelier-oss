@@ -12,13 +12,21 @@
 //   click = select, Shift+click = toggle, empty drag left→right = window, right→left = crossing;
 //   drag a block = move (Ctrl = copy, Alt = snapping off); rotate handle = 15° steps (Alt = free);
 //   Delete, Esc, Ctrl+A/C/V/Z/Y, arrows 0.1 m (Shift 1 m).
+// 107-07: the last copy (Ctrl-drag, or the rotate handle with Ctrl = rotated copy) is remembered; typed "*n" / "/n" (keys
+//   while the plan is visible, or the command line field) turns it into a row through the shared array core — parsed by
+//   eingabeLesen of the massing core, so the site plan reads exactly what the modeller reads.
+//   Review 107-07: the row is built on the CURRENT blocks (only the copies of the last copy / row are replaced), so a delete,
+//   paste or nudge since the copy survives; the step of a shifted copy is where the copy stands now (an arrow nudge counts).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  alsBlock, alsGebaeude, auswahlMitte, drehen, ecken, FANG_PX, fangKorrektur, klickAuswahl,
+  alsBlock, alsGebaeude, auswahlMitte, drehen, drehKopieren, ecken, FANG_PX, fangKorrektur, klickAuswahl,
   kopieren, pruefen, rahmenAuswahl, rahmenModus, trefferBlock, verschieben, winkelFang, GESCHOSS_HOEHE_M,
+  kopieMerken, reiheAusKopie,
 } from "@core/lib/massing/bloecke";
+import { eingabeLesen } from "@core/lib/massing/massingModell.js";
 import { abstandsTiefe } from "@core/lib/massing/baurecht";
+import { useI18n } from "@core/lib/i18n";
 
 /** Max. undo depth (snapshots of the buildings array). [ASSUMED] */
 const VERLAUF_MAX = 100;
@@ -50,8 +58,15 @@ export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM =
   const ablageRef = useRef(/** @type {any[]} */ ([]));
   const cursorRef = useRef(/** @type {P|null} */ (null));
   const [, setVerlaufStand] = useState(0); // re-render after undo stack changes (button states)
+  // 107-07: the last copy (originals, its copies, the first pair and its factor, or angle + pivot of a rotated copy)
+  const [letzteKopie, setLetzteKopie] = useState(/** @type {import("@core/lib/massing/bloecke").Kopie|null} */ (null));
+  // 107-07: typed input after a copy ("*3", "/4") and the last message of the command line (already translated)
+  const [eingabe, setEingabe] = useState("");
+  const [meldung, setMeldung] = useState("");
+  const { t: tz } = useI18n(); // tz: `t` is the modifier-key parameter of hoch
   // F1 (102): undo/redo belong to one site plan — a project switch must not undo into the old one.
-  useEffect(() => { undoRef.current = []; redoRef.current = []; setVerlaufStand((v) => v + 1); }, [schluessel]);
+  // Review 107-07: the last copy, the typed input and the message belong to it too.
+  useEffect(() => { undoRef.current = []; redoRef.current = []; setVerlaufStand((v) => v + 1); setLetzteKopie(null); setEingabe(""); setMeldung(""); }, [schluessel]);
 
   const anzeige = live || buildings;
   const bloecke = useMemo(() => anzeige.filter((b) => Number(b?.width) > 0 && Number(b?.height) > 0).map((b) => alsBlock(b, mpp)), [anzeige, mpp]);
@@ -142,8 +157,11 @@ export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM =
       let g = ((Math.atan2(p.y - z.um.y, p.x - z.um.x) - z.w0) * 180) / Math.PI;
       if (!t.alt) g = winkelFang(g);
       z.bewegt = true;
+      z.grad = g;
+      z.kopie = z.kopie || !!t.strg; // 107-07: Ctrl while turning = rotated copy (originals stay)
       setWinkel(Math.round(g));
-      z.ergebnis = speichern(drehen(z.basis, z.ids, g, z.um));
+      let n = 0;
+      z.ergebnis = speichern(z.kopie ? drehKopieren(z.basis, z.ids, g, z.um, () => `vorschau_${n++}`).bloecke : drehen(z.basis, z.ids, g, z.um));
       setLive(z.ergebnis);
       return;
     }
@@ -182,16 +200,56 @@ export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM =
     }
     setLive(null);
     if (!z.bewegt) return;
-    if (z.art === "drehen") { commit(z.ergebnis); return; }
+    if (z.art === "drehen") {
+      // 107-07: a rotated copy keeps its own ids and is remembered for "*n" / "/n"
+      if (z.kopie || t.strg) {
+        const { bloecke: neu, neu: ids } = drehKopieren(z.basis, z.ids, z.grad || 0, z.um, neueId);
+        commit(speichern(neu));
+        setAuswahl(ids);
+        setLetzteKopie(kopieMerken(z.basis, neu, z.ids, 1, { grad: z.grad || 0, um: z.um }));
+        setMeldung(tz("Gedrehte Kopie gesetzt — *4 = vier Kopien im Winkel, /4 = vier Kopien im geteilten Winkel"));
+        return;
+      }
+      commit(z.ergebnis);
+      setLetzteKopie(null);
+      return;
+    }
     const { dx, dy } = z.d || { dx: 0, dy: 0 };
     if (z.kopie || t.strg) {
       const { bloecke: neu, neu: ids } = kopieren(z.basis, z.ids, dx, dy, neueId);
       commit(speichern(neu));
       setAuswahl(ids);
+      setLetzteKopie(kopieMerken(z.basis, neu, z.ids, 1));
+      setMeldung(tz("Kopie gesetzt — *3 = drei Kopien im Abstand, /3 = drei Kopien im geteilten Abstand"));
     } else {
       commit(speichern(verschieben(z.basis, z.ids, dx, dy)));
+      setLetzteKopie(null);
     }
-  }, [bloecke, commit, gueltig, rahmen, speichern]);
+  }, [bloecke, commit, gueltig, rahmen, speichern, tz]);
+
+  /**
+   * 107-07: typed input of the site plan after a copy — "*n" (n copies, each one step further) or "/n" (n copies dividing the
+   * step), parsed by the massing core's eingabeLesen; the row replaces the copies of the last copy / row on the CURRENT blocks
+   * (reiheAusKopie, one undo step) — typing again ("*5" after "*3") replaces that row.
+   * @param {string} [text] typed text, default = the buffer
+   * @returns {boolean} true when it was applied
+   */
+  const eingabeAnwenden = useCallback((text = eingabe) => {
+    setEingabe("");
+    const e = eingabeLesen(text);
+    if (!e || (e.art !== "mal" && e.art !== "teilen")) { setMeldung(`${tz("Eingabe nicht verstanden")}: „${text}“ — ${tz("nach einer Kopie *3 oder /3")}`); return false; }
+    if (!letzteKopie) { setMeldung(tz("Erst eine Kopie setzen (Strg + Ziehen), dann *3 oder /3")); return false; }
+    const lk = letzteKopie;
+    const r = reiheAusKopie(bloecke, lk, e.n, e.art, neueId);
+    if ("fehler" in r) { setLetzteKopie(null); setMeldung(tz(r.fehler)); return false; }
+    commit(speichern(r.bloecke));
+    setAuswahl(r.neu);
+    setLetzteKopie(r.kopie);
+    setMeldung(lk.grad != null
+      ? `${e.n} ${tz(e.art === "mal" ? "gedrehte Kopien im Winkel" : "gedrehte Kopien im geteilten Winkel")}`
+      : `${e.n} ${tz(e.art === "mal" ? "Kopien im Abstand" : "Kopien im geteilten Abstand")}`);
+    return true;
+  }, [bloecke, commit, eingabe, letzteKopie, speichern, tz]);
 
   /** Escape during a drag: drop the preview. */
   const abbrechen = useCallback(() => {
@@ -220,6 +278,11 @@ export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM =
         return;
       }
       if (!aktiv) return;
+      // 107-07: typed "*n" / "/n" after a copy — "*" or "/" starts the buffer, digits follow, Enter applies, Esc drops it
+      if (!strg && ((letzteKopie && /^[*/]$/.test(e.key)) || (eingabe && /^[0-9]$/.test(e.key)))) { e.preventDefault(); setEingabe((v) => v + e.key); return; }
+      if (eingabe && k === "backspace") { e.preventDefault(); setEingabe((v) => v.slice(0, -1)); return; }
+      if (eingabe && k === "enter") { e.preventDefault(); eingabeAnwenden(eingabe); return; }
+      if (eingabe && k === "escape") { e.preventDefault(); setEingabe(""); return; }
       if (k === "escape") { abbrechen(); setAuswahl([]); return; }
       if (k === "delete" || k === "backspace") { if (gueltig.length) { e.preventDefault(); loeschen(); } return; }
       if (strg && k === "a") { e.preventDefault(); setAuswahl(bloecke.map((b) => b.id)); return; }
@@ -245,7 +308,7 @@ export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM =
     };
     window.addEventListener("keydown", taste);
     return () => window.removeEventListener("keydown", taste);
-  }, [aktiv, abbrechen, bloecke, commit, containerRef, gueltig, loeschen, rueckgaengig, speichern, wiederholen]);
+  }, [aktiv, abbrechen, bloecke, commit, containerRef, gueltig, loeschen, rueckgaengig, speichern, wiederholen, letzteKopie, eingabe, eingabeAnwenden]);
 
   // Rotate handle anchor: top centre of the selection (metres). The views draw the handle a fixed
   // number of SCREEN pixels above it — a metre offset covered small blocks at low zoom.
@@ -259,6 +322,7 @@ export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM =
   return {
     auswahl: gueltig, setAuswahl, anzeige, bloecke, pruefung, rahmen, fangZiel, winkel, griff,
     runter, griffRunter, bewegen, hoch, abbrechen, loeschen, commit, rueckgaengig, wiederholen,
+    letzteKopie, eingabe, setEingabe, eingabeAnwenden, meldung, // 107-07
     kannZurueck: undoRef.current.length > 0, kannVor: redoRef.current.length > 0,
   };
 }

@@ -9,16 +9,23 @@
 //     (WebGL-Kontext-Limit).
 // Aufrufer erreichen die Map über ref.getMap() und spielen GeoJSON per
 // getSource(id).setData() ein. Phase 46 (Hochwasser-Karte) baut hierauf auf.
+// 108-01 (9b): a note "Karte offline" over the map when tiles cannot be loaded (error events of a tile source, kartenStoerung.js — not
+// sprite/style-image errors) or the device is offline (useOnline) — before, the map just stayed an empty area.
 
-import React, { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
+import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import { useOnline } from "@core/lib/useOnline";
+import { useI18n, englischErgaenzen } from "@core/lib/i18n";
+import { EN as EN_EFH_108 } from "@core/lib/i18nTeile/efh-108.js"; // 108-01: lazy part (entry chunk budget)
 // maplibre-gl 6 is ESM-only without a default export (namespace import) and needs its
 // worker URL set once when bundled; Vite's ?worker&url yields a self-contained worker.
 import * as maplibregl from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { resolveStyle, OSM_RASTER_FALLBACK, nullSichererFilter } from "@designer/lib/maplibreStyles";
+import { istKachelFehler } from "@designer/lib/kartenStoerung"; // 108-01 review: rule by tile/source type, unit-tested
 
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
+englischErgaenzen(EN_EFH_108);
 
 // Arabic/Hebrew labels: since maplibre-gl 6.9 shaping is built in; the former RTL text
 // plugin (public/mapbox-gl-rtl-text.js, user finding Cairo 2026-08-11) is deprecated and gone.
@@ -79,6 +86,11 @@ const MapLibreMap = forwardRef(function MapLibreMap(
   onPickRef.current = onPick;
   const onLayersReadyRef = useRef(null);
   onLayersReadyRef.current = onLayersReady;
+  // 108-01 (9b): tiles not reachable (set by a tile error, cleared by the next loaded tile); offline device = note as well, because a
+  // captive portal reports "online" while no tile comes through, both signals are needed
+  const [kartenStoerung, setKartenStoerung] = useState(false);
+  const online = useOnline();
+  const { t } = useI18n();
 
   useImperativeHandle(ref, () => ({ getMap: () => mapRef.current }), []);
 
@@ -102,6 +114,7 @@ const MapLibreMap = forwardRef(function MapLibreMap(
     });
     mapRef.current = map;
     fallbackTriedRef.current = false;
+    setKartenStoerung(false);
 
     if (navControl && interactive) {
       map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
@@ -133,13 +146,19 @@ const MapLibreMap = forwardRef(function MapLibreMap(
       }
     });
 
+    // 108-01 (9b): tile errors set the note, the next loaded tile clears it
+    map.on("error", (e) => { if (istKachelFehler(/** @type {any} */ (e))) setKartenStoerung(true); });
+    map.on("sourcedata", (e) => { if (/** @type {any} */ (e)?.tile && e.isSourceLoaded) setKartenStoerung(false); });
+
     // Style-Fallback: schlägt der Vektor-Style fehl, einmalig auf OSM-Raster umschalten.
     map.on("error", (e) => {
       if (fallbackTriedRef.current) return;
       const msg = String(e?.error?.message || "");
       if (!map.isStyleLoaded() && (msg.includes("style") || /** @type {any} */ (e)?.sourceId == null)) {
         fallbackTriedRef.current = true;
-        map.setStyle(/** @type {any} */ (OSM_RASTER_FALLBACK));
+        // 108-01: diff false — the failed style never finished loading, a diff against it only warned "Unable to perform style diff"
+        // and rebuilt the style anyway
+        map.setStyle(/** @type {any} */ (OSM_RASTER_FALLBACK), { diff: false });
       }
     });
 
@@ -219,7 +238,18 @@ const MapLibreMap = forwardRef(function MapLibreMap(
     mapRef.current?.easeTo({ center: [ln, la] });
   }, [center?.lat, center?.lng]);
 
-  return <div key={styleKey} ref={containerRef} className={className} />;
+  // 108-01: wrapper for the note; the map container keeps its own div (maplibre owns its children)
+  return (
+    <div className={`relative ${className}`}>
+      <div key={styleKey} ref={containerRef} className="h-full w-full" />
+      {(kartenStoerung || !online) && (
+        <div role="status" data-testid="karte-offline"
+          className="pointer-events-none absolute left-1/2 top-2 z-10 -translate-x-1/2 rounded-md border border-warnung bg-warnung-flaeche px-2 py-1 text-xs text-warnung shadow">
+          {t("Karte offline — Kacheln nicht erreichbar")}
+        </div>
+      )}
+    </div>
+  );
 });
 
 export default MapLibreMap;

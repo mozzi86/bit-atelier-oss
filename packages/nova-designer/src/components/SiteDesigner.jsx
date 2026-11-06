@@ -16,7 +16,7 @@ import { useKontextmenue, KontextmenueAnzeige } from "@core/components/Kontextme
 import FangGlyphe, { strahlEnden } from "@core/components/FangGlyphe";
 import { fangIndex, fangPunkt } from "@core/lib/objektfang.js";
 import { useFangEinstellungen, useFangTasten, fangEinstellungen, fangKontextEintraege, fangSchalter } from "@core/lib/fangEinstellungen.js";
-import { lageplanFangSegmente, LAGEPLAN_FANG_PX, QUELLE_GRUNDSTUECK, QUELLE_ENTWURF } from "@designer/lib/lageplanFang";
+import { lageplanFangSegmente, lageplanUrsprungM, LAGEPLAN_FANG_PX, QUELLE_GRUNDSTUECK, QUELLE_ENTWURF } from "@designer/lib/lageplanFang";
 import { baufeldAufforderung } from "@core/lib/befehlszeile";
 import { mittelklickZaehler } from "@core/lib/mittelklick";
 import { useI18n } from "@core/lib/i18n";
@@ -995,8 +995,9 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
     () => (mitStandort ? draftGeo.map((q) => lngLatToCanvasPoint(q, loc.lat, loc.lng, mpp)) : draft),
     [mitStandort, draftGeo, draft, loc?.lat, loc?.lng, mpp],
   );
+  // 107-07: the origin is a snap point too — review 107-07: the project location (canvas centre = DXF origin), not 0;0 site metres
   const fangIdx = useMemo(() => fangIndex(lageplanFangSegmente({
-    parcel, parcelGeschaetzt, areas, buildings: bb.anzeige, riegel: Array.isArray(riegelDaten) ? riegelDaten : [], entwurf: entwurfC, mSite,
+    parcel, parcelGeschaetzt, areas, buildings: bb.anzeige, riegel: Array.isArray(riegelDaten) ? riegelDaten : [], entwurf: entwurfC, mSite, ursprung: lageplanUrsprungM(mSite),
   })), [parcel, parcelGeschaetzt, areas, bb.anzeige, riegelDaten, entwurfC, mSite]);
   /**
    * Snap a point of the site plan (site metres in and out).
@@ -1627,9 +1628,12 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
         {/* 101-06: command line — which command runs and what the next input expects */}
         {(() => {
           const b = baufeldAufforderung(/** @type {any} */ (mode), { entwurf: hatKarte ? draftGeo.length : draft.length, gewaehlt: bb.auswahl.length, karte: hatKarte });
-          const meldung = bb.winkel != null ? `${bb.winkel}°` : bb.fangZiel ? `${t("Fang")}: ${fangText(bb.fangZiel, t)}` : "";
+          // 107-07: the message of the last copy / row (bb.meldung) when nothing is being dragged; typed "*n" / "/n" after a copy
+          const meldung = bb.winkel != null ? `${bb.winkel}°` : bb.fangZiel ? `${t("Fang")}: ${fangText(bb.fangZiel, t)}` : bb.meldung || ""; // review 107-07: bb.meldung is translated in the hook (number + translated text)
           return <Befehlszeile befehl={t(b.befehl)} aufforderung={t(b.aufforderung)} meldung={meldung} meldungTestid="sd-fang" testid="sd-befehlszeile"
-            schalter={fangSchalter(fangEinst, t)} schalterTestid="sd-schalter" />;
+            schalter={fangSchalter(fangEinst, t)} schalterTestid="sd-schalter"
+            eingabe={mode === "auswahl" ? { id: "sd-eingabe", testid: "sd-eingabe", label: t("Eingabe"), value: bb.eingabe, onChange: bb.setEingabe,
+              onSubmit: () => { bb.eingabeAnwenden(bb.eingabe); }, placeholder: "*3 · /3", disabled: !bb.letzteKopie } : undefined} />;
         })()}
         <KontextmenueAnzeige menue={kontext.menue} schliessen={kontext.schliessen} testid="sd-kontextmenue" />
       </Card>

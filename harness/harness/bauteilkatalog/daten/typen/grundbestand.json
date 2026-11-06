@@ -1,0 +1,1530 @@
+{
+ "quelle": "Erstbestand BIT-Atelier, 05.11.2026",
+ "typen": [
+  {
+   "schluessel": "gk-2-lagen-10-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "GK 10 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "PARTITIONING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "342",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "IsExternal": false,
+    "LoadBearing": false
+   },
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.05,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "profil": "CW50",
+      "achsabstand_m": 0.625,
+      "uw_anschluss": true,
+      "querriegel": [],
+      "norm": "DIN 18183-1"
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "gk-2-lagen-15-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "GK 2-Lagen 15 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "PARTITIONING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "342",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": false
+   },
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.1,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "profil": "CW100",
+      "achsabstand_m": 0.625,
+      "uw_anschluss": true,
+      "querriegel": [],
+      "norm": "DIN 18183-1"
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "hlz-kerndammung-50-5-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "HLZ + Kerndämmung 50,5 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "331",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "IsExternal": true,
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "vormauerziegel-540",
+     "dicke_m": 0.115
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.14,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.24,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "hlz-luftschicht-wd-54-5-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "HLZ + Luftschicht + WD 54,5 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "331",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "IsExternal": true,
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "vormauerziegel-540",
+     "dicke_m": 0.115
+    },
+    {
+     "baustoff": "luftschicht-vertikal-205",
+     "dicke_m": 0.04,
+     "belueftet": true
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.14,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.24,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "ks-17-5-cm-zweifach-wohnungstrennwand",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "KS Wohnungstrennwand 0,40 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "341",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "IsExternal": false,
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.175,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "mineralwolle-1-615",
+     "dicke_m": 0.03,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.175,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "stb-kellerwand-wd-38-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "StB Kellerwand + WD 38 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "331",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "IsExternal": true,
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "xps-730",
+     "dicke_m": 0.14,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "wu-beton-690",
+     "dicke_m": 0.24,
+     "rolle": "LoadBearing"
+    }
+   ]
+  },
+  {
+   "schluessel": "ks-wdvs-42-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "KS + WDVS 42 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "331",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "IsExternal": true,
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "kunstharzputz-370",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "xps-730",
+     "dicke_m": 0.16,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.24,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "hlz-36-5-cm-beidseitig-gipsputz",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "HLZ 36,5 cm beidseitig Gipsputz",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "341",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.365,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "flachdach-warmdach-48-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "Flachdach Warmdach 48 cm",
+   "ifc": {
+    "klasse": "IfcSlab",
+    "predefined_type": "ROOF"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "361",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcSlab"
+   },
+   "pset_common": {},
+   "schichten": [
+    {
+     "baustoff": "kies-140",
+     "dicke_m": 0.03
+    },
+    {
+     "baustoff": "eps-750",
+     "dicke_m": 0.05,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "mineralwolle-3-740",
+     "dicke_m": 0.1,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "mineralwolle-3-740",
+     "dicke_m": 0.1,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "stahlbeton-670",
+     "dicke_m": 0.2,
+     "rolle": "LoadBearing"
+    }
+   ]
+  },
+  {
+   "schluessel": "holzrahmen-abgehangt-35-5-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "Holzrahmen abgehängt 35,5 cm",
+   "ifc": {
+    "klasse": "IfcSlab",
+    "predefined_type": "FLOOR"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "351",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcSlab"
+   },
+   "pset_common": {},
+   "schichten": [
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.05,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "folie-770",
+     "dicke_m": 0.0
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.03,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "osb-platte-350",
+     "dicke_m": 0.018
+    },
+    {
+     "baustoff": "luftschicht-horizontal-205",
+     "dicke_m": 0.12,
+     "belueftet": true
+    },
+    {
+     "baustoff": "mineralwolle-1-615",
+     "dicke_m": 0.1,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "bauholz-520",
+     "dicke_m": 0.024
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "ks-verblender-40-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "KS + Verblender 40 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "341",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "vormauerziegel-540",
+     "dicke_m": 0.115
+    },
+    {
+     "baustoff": "luftschicht-vertikal-205",
+     "dicke_m": 0.03,
+     "belueftet": true
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.08,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.175,
+     "rolle": "LoadBearing"
+    }
+   ]
+  },
+  {
+   "schluessel": "monolithisch-45-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "Monolithisch 45 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "341",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "kalkzementputz-370",
+     "dicke_m": 0.015,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.425,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "flachdach-kaltdach-49-5-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "Flachdach Kaltdach 49,5 cm",
+   "ifc": {
+    "klasse": "IfcSlab",
+    "predefined_type": "ROOF"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "361",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcSlab"
+   },
+   "pset_common": {},
+   "schichten": [
+    {
+     "baustoff": "kies-140",
+     "dicke_m": 0.03
+    },
+    {
+     "baustoff": "spanplatte-360",
+     "dicke_m": 0.025
+    },
+    {
+     "baustoff": "luftschicht-horizontal-205",
+     "dicke_m": 0.08,
+     "belueftet": true
+    },
+    {
+     "baustoff": "mineralwolle-3-740",
+     "dicke_m": 0.16,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "stahlbeton-670",
+     "dicke_m": 0.2,
+     "rolle": "LoadBearing"
+    }
+   ]
+  },
+  {
+   "schluessel": "estrich-15-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "Boden 15 cm",
+   "ifc": {
+    "klasse": "IfcCovering",
+    "predefined_type": "FLOORING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "352",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcCovering"
+   },
+   "pset_common": {
+    "IsExternal": false
+   },
+   "schichten": [
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.065,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.085,
+     "rolle": "Insulation"
+    }
+   ]
+  },
+  {
+   "schluessel": "holzrahmenbau-24-5-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "Holzrahmenbau 24,5 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "342",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": false
+   },
+   "schichten": [
+    {
+     "baustoff": "lehmputz-370",
+     "dicke_m": 0.004,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "holzwolledammplatte-640",
+     "dicke_m": 0.05,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "mineralwolle-1-615",
+     "dicke_m": 0.12,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "osb-platte-350",
+     "dicke_m": 0.018
+    },
+    {
+     "baustoff": "mineralwolle-1-615",
+     "dicke_m": 0.04,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "hlz-11-5-cm-beidseitig-gipsputz",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "HLZ 11,5 cm beidseitig Gipsputz",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "341",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.115,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "hlz-17-5-cm-beidseitig-gipsputz",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "HLZ 17,5 cm beidseitig Gipsputz",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "341",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.175,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "hlz-24-cm-beidseitig-gipsputz",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "HLZ 24 cm beidseitig Gipsputz",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "341",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.24,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "hlz-30-cm-beidseitig-gipsputz",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "HLZ 30 cm beidseitig Gipsputz",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "341",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.3,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "ks-11-5-cm-beidseitig-gipsputz",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "KS 11,5 cm zweiseitig Gipsputz",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "341",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "IsExternal": false,
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.115,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "ks-17-5-cm-beidseitig-gipsputz",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "KS 17,5 cm beidseitig Gipsputz",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "341",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.175,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "ks-24-cm-beidseitig-gipsputz",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "KS 24 cm beidseitig Gipsputz",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "341",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.24,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "ks-30-cm-beidseitig-gipsputz",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "KS 30 cm beidseitig Gipsputz",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "341",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.3,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "ks-36-5-cm-beidseitig-gipsputz",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "KS 36,5 cm beidseitig Gipsputz",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "341",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.365,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "abgehangte-decke-40-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "Abgehängte Decke 40 cm",
+   "ifc": {
+    "klasse": "IfcCovering",
+    "predefined_type": "CEILING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "353",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcCovering"
+   },
+   "pset_common": {},
+   "schichten": [
+    {
+     "baustoff": "luftschicht-horizontal-205",
+     "dicke_m": 0.375,
+     "belueftet": true
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "gk-3-lagen-15-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "GK 15 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "PARTITIONING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "342",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "IsExternal": false,
+    "LoadBearing": false
+   },
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.075,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "profil": "CW75",
+      "achsabstand_m": 0.625,
+      "uw_anschluss": true,
+      "querriegel": [],
+      "norm": "DIN 18183-1"
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "gk-2-lagen-15-5-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "GK 2-Lagen 15,5 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "PARTITIONING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "342",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": false
+   },
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.05,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "profil": "CW50",
+      "achsabstand_m": 0.625,
+      "uw_anschluss": true,
+      "querriegel": [],
+      "norm": "DIN 18183-1"
+     }
+    },
+    {
+     "baustoff": "luftschicht-vertikal-205",
+     "dicke_m": 0.005,
+     "belueftet": true
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.05,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "profil": "CW50",
+      "achsabstand_m": 0.625,
+      "uw_anschluss": true,
+      "querriegel": [],
+      "norm": "DIN 18183-1"
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "gk-2-lagen-20-5-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "GK 2-Lagen 20,5 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "PARTITIONING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "342",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": false
+   },
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.075,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "profil": "CW75",
+      "achsabstand_m": 0.625,
+      "uw_anschluss": true,
+      "querriegel": [],
+      "norm": "DIN 18183-1"
+     }
+    },
+    {
+     "baustoff": "luftschicht-vertikal-205",
+     "dicke_m": 0.005,
+     "belueftet": true
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.075,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "profil": "CW75",
+      "achsabstand_m": 0.625,
+      "uw_anschluss": true,
+      "querriegel": [],
+      "norm": "DIN 18183-1"
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "gk-2-lagen-25-5-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "GK 2-Lagen 25,5 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "PARTITIONING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "342",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": false
+   },
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.1,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "profil": "CW100",
+      "achsabstand_m": 0.625,
+      "uw_anschluss": true,
+      "querriegel": [],
+      "norm": "DIN 18183-1"
+     }
+    },
+    {
+     "baustoff": "luftschicht-vertikal-205",
+     "dicke_m": 0.005,
+     "belueftet": true
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.1,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "profil": "CW100",
+      "achsabstand_m": 0.625,
+      "uw_anschluss": true,
+      "querriegel": [],
+      "norm": "DIN 18183-1"
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ]
+  },
+  {
+   "schluessel": "estrich-parkett-15-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "Boden+Parkett 15 cm",
+   "ifc": {
+    "klasse": "IfcCovering",
+    "predefined_type": "FLOORING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "352",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcCovering"
+   },
+   "pset_common": {
+    "IsExternal": false
+   },
+   "schichten": [
+    {
+     "baustoff": "parkett-350",
+     "dicke_m": 0.015,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.065
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.07,
+     "rolle": "Insulation"
+    }
+   ]
+  },
+  {
+   "schluessel": "estrich-fliesen-15-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "Boden+Fliesen 15 cm",
+   "ifc": {
+    "klasse": "IfcCovering",
+    "predefined_type": "FLOORING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "352",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcCovering"
+   },
+   "pset_common": {
+    "IsExternal": false
+   },
+   "schichten": [
+    {
+     "baustoff": "fliesen-anthrazit-350",
+     "dicke_m": 0.015,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.065
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.07,
+     "rolle": "Insulation"
+    }
+   ]
+  },
+  {
+   "schluessel": "estrich-pvc-15-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "Estrich + PVC 15 cm",
+   "ifc": {
+    "klasse": "IfcCovering",
+    "predefined_type": "FLOORING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "352",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcCovering"
+   },
+   "pset_common": {},
+   "schichten": [
+    {
+     "baustoff": "pvc-350",
+     "dicke_m": 0.005,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.065
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.08,
+     "rolle": "Insulation"
+    }
+   ]
+  },
+  {
+   "schluessel": "estrich-linoleum-15-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "Estrich + Linoleum 15 cm",
+   "ifc": {
+    "klasse": "IfcCovering",
+    "predefined_type": "FLOORING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "352",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcCovering"
+   },
+   "pset_common": {},
+   "schichten": [
+    {
+     "baustoff": "linoleum-350",
+     "dicke_m": 0.005,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.065
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.08,
+     "rolle": "Insulation"
+    }
+   ]
+  },
+  {
+   "schluessel": "estrich-teppich-15-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "Boden+Teppich 15 cm",
+   "ifc": {
+    "klasse": "IfcCovering",
+    "predefined_type": "FLOORING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "352",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcCovering"
+   },
+   "pset_common": {
+    "IsExternal": false
+   },
+   "schichten": [
+    {
+     "baustoff": "teppich-grau-310",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.065
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.075,
+     "rolle": "Insulation"
+    }
+   ]
+  },
+  {
+   "schluessel": "gk-2-lagen-12-5-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "GK 2-Lagen 12,5 cm",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "PARTITIONING"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "342",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {
+    "LoadBearing": false
+   },
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.075,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "profil": "CW75",
+      "achsabstand_m": 0.625,
+      "uw_anschluss": true,
+      "querriegel": [],
+      "norm": "DIN 18183-1"
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ]
+  }
+ ]
+}

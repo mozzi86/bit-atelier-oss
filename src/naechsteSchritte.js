@@ -84,6 +84,11 @@ export const NAECHSTE_SCHRITTE = Object.freeze({
     { text: "Kostenkontrolle", ziel: "/AVA?tab=control" },
     { text: "Tickets", ziel: "/BimViewer" },
   ],
+  // 106-10: after the review the model goes on to the checks and the tickets
+  "/Modellfreigabe": [
+    { text: "Im Modell prüfen", ziel: "/ModelCheck" },
+    { text: "Tickets", ziel: "/BimViewer" },
+  ],
   "/AVA": [
     { text: "Im Modell prüfen", ziel: "/ModelCheck" },
     { text: "Nachträge entscheiden", ziel: "/Finance" },

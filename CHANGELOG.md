@@ -10,6 +10,33 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.11.0] - 2026-11-06
+
+### Neu
+
+- **Einfamilienhaus mit Satteldach:** Am obersten Geschoss lässt sich ein Kniestock eintragen. Das Dach sitzt dann auf der Traufe (Oberkante Rohdecke plus Kniestock), die Räume im Dachgeschoss behalten ihre volle Geschosshöhe, und die Decke über dem Dachgeschoss bleibt als Kehlbalkenlage, beschnitten auf die Dachschräge. Eine Anzeige prüft, ob das Dachgeschoss ein Vollgeschoss ist (Annahme: zwei Drittel der Fläche mit 2,30 m lichter Höhe; Landesrecht prüfen).
+- **Satteldach im Schnitt:** Bildschirm- und PDF-Schnitt zeigen das Dach mit Trauf- und Firstkote. Der Schnitt lässt sich zwischen A-A und B-B umschalten und steht bei Steildach von Anfang an quer zum First.
+- **Massing-Studio mit Dach:** Die Iso und das kleine 3D-Massenmodell zeigen das Dach des Gebäudemodells statt einer Kiste. Die Kennzahlen nennen die Höhe bis zum First, den umbauten Raum mit Dach und die Abstandsflächen je Seite (Regeln für Giebel und steile Dächer als Annahme markiert).
+- **Haus startet auf dem Grundstück:** Im Massing-Studio liegt der Baukörper an der Stelle aus der Baufeld-Planung (sonst in der Grundstücksmitte), und seine Lage zum Grundstück wird gespeichert. Die Kennzahl heißt „außerhalb des Baufelds“.
+- **Untergeschosse im Grundriss:** Keller als eigene Geschosse in Grundriss, Tragwerk, Haustechnik, Möblierung, Brandschutz und IFC.
+- **Bauteil-Kern:** Mehrschichtige Wände mit Schichtbändern im Plan und echten Verschneidungen in 3D (Schichtrangfolge, Wand unter Dach, Keller mit Geländeabzug), Raumvorschläge aus den Wänden mit Flächen nach DIN 277 und Wohnfläche aus der Dachschräge, Ansichtsausschnitte, die 3D, Plan, PDF und DXF gleich steuern (auch 1:20).
+- **Massing-Studio zeichnet genauer:** Push/Pull an Seiten und Basis, Hilfslinien und Spurstrahlen, Reihen und Kopien, Körper werden auf Wunsch zu Bauteilen mit Typ und GUID.
+- **Mehrere Geräte, ein Modell:** Änderungen erscheinen in Echtzeit auf gekoppelten Geräten; im Headset lässt sich das Modell über WebXR ansehen (am Gerät noch nicht abgenommen).
+- **Prüfen und Freigeben:** Die Seite „Modellfreigabe“ listet jeden bestätigten Änderungsschritt mit Herkunft, vorher/nachher und Prüfung; Pläne tragen den Modellstand und vermerken ungeprüfte KI-Änderungen.
+- **Bauteilkatalog für den KI-Harness (Python):** 113 Baustoffe und 42 Bauteiltypen; daraus entstehen Material- und Typbibliothek sowie Muster-Projekte als IFC4/IFC4X3, geprüft gegen die IFC-Regeln. Installation über das optionale Extra `[katalog]`.
+
+### Geändert
+
+- **3D-Verschneidung:** Der Rechenkern für Verschneidungen ist ausgetauscht und wird erst geladen, wenn er gebraucht wird.
+- **Eingangstür:** Liegt bei einem neuen Projekt eine eigene Tür im Erdgeschoss, entfällt die automatische Eingangstür; bei bestehenden Projekten erscheint ein Hinweis.
+- **Baufeld-Planung:** Eine Baufeld-Fläche überschreibt das gezeichnete Haus nicht mehr ungefragt; bei Änderungen fragt das Programm nach.
+- **Werkzeugleiste und Karte:** Die Leiste im Gebäudemodell bricht bei schmalen Fenstern um, der Grundriss füllt das Panel; die Karte zeigt einen Hinweis, wenn keine Kacheln geladen werden können.
+
+### Behoben
+
+- **Geschosszahl:** „Rückgängig“ im Gebäudemodell setzte Geschosse und Untergeschosse zurück, die auf einem anderen Gerät geändert worden waren. Gespeichert werden jetzt nur noch die Felder, die tatsächlich geändert wurden.
+- **Massing-Studio:** Rückgängig/Wiederholen wird gespeichert, und beim Verschieben einer Ecke mit den Pfeiltasten geht kein Schritt mehr verloren.
+
 ## [1.10.2] - 2026-11-01
 
 ### Sicherheit

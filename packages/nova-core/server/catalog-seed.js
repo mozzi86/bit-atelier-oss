@@ -166,10 +166,13 @@ const einheitenKatalog = EINHEITEN.map(([code, name, dimension, vorhaltung, verg
 // Die Pipeline schreibt "Bestand"/"Neubau"/"Abbruch" und kennt zusätzlich "?".
 // bimClassification erwartet klein. IFC nutzt NEW/EXISTING/DEMOLISH.
 // Ein Mismatch ergibt 0 Treffer OHNE Fehlermeldung — deshalb GENAU EINE Stelle.
+// 107-08 review: the same rows as the built-in DEFAULT_STATUS of kataloge.js — the spec words Existing/New/Demolition as aliases
+// and "temporaer" (IFC4 TEMPORARY). Before, a catalogue snapshot normalised "temporaer" to null while the IFC export wrote TEMPORARY.
 const statusKonvention = [
-  buero({ intern: 'bestand', pipeline: 'Bestand', ifc_enum: 'EXISTING', anzeige: 'Bestand', aliase: ['bestand', 'Bestand', 'EXISTING', 'existing'] }),
-  buero({ intern: 'neubau', pipeline: 'Neubau', ifc_enum: 'NEW', anzeige: 'Neubau', aliase: ['neubau', 'Neubau', 'NEW', 'new'] }),
-  buero({ intern: 'abbruch', pipeline: 'Abbruch', ifc_enum: 'DEMOLISH', anzeige: 'Abbruch', aliase: ['abbruch', 'Abbruch', 'DEMOLISH', 'demolish'] }),
+  buero({ intern: 'bestand', pipeline: 'Bestand', ifc_enum: 'EXISTING', anzeige: 'Bestand', aliase: ['bestand', 'Bestand', 'EXISTING', 'existing', 'Existing'] }),
+  buero({ intern: 'neubau', pipeline: 'Neubau', ifc_enum: 'NEW', anzeige: 'Neubau', aliase: ['neubau', 'Neubau', 'NEW', 'new', 'New'] }),
+  buero({ intern: 'abbruch', pipeline: 'Abbruch', ifc_enum: 'DEMOLISH', anzeige: 'Abbruch', aliase: ['abbruch', 'Abbruch', 'DEMOLISH', 'demolish', 'Demolition', 'demolition'] }),
+  buero({ intern: 'temporaer', pipeline: 'Temporär', ifc_enum: 'TEMPORARY', anzeige: 'Temporär', aliase: ['temporaer', 'Temporär', 'temporär', 'TEMPORARY', 'temporary', 'Temporary'] }),
   buero({ intern: null, pipeline: '?', ifc_enum: null, anzeige: 'unbekannt', aliase: ['?', '', 'unbekannt', 'unknown', null] }),
 ];
 

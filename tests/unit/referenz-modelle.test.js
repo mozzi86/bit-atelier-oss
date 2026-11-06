@@ -77,7 +77,9 @@ describe('Projektmodelle — NDA-Schutz (läuft immer)', () => {
         f.startsWith('public/beispiel/')
         || f.startsWith('tests/e2e/fixtures/')
         || f.startsWith('harness/examples/')
-        || f.startsWith('tests/unit/fixtures/ifc-golden-107'),
+        || f.startsWith('tests/unit/fixtures/ifc-golden-107')
+        // 108-02: IFC golden of the knee wall, generated from the invented test house (fixtures/efh-108.js, ifcKniestockModell-10802.js)
+        || f.startsWith('tests/unit/fixtures/ifc-golden-108-'),
         `unerwartete .ifc im Repo: ${f}`,
       );
     }

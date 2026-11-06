@@ -14,25 +14,13 @@
 // - Fläche ist NUF aus den BaseQuantities des Modells, nicht geschätzt.
 
 import { guidKey } from "@ifc/lib/ifcGuid";
+import { DIN277_ZU_NUTZUNG } from "@core/lib/bauteil/raeume.js";
 
 // DIN 277 Nutzungsgruppen → Nutzungsarten des Raumprogramms (USES in spaceProgram.js).
-//
-// WICHTIG zu Gruppe 1: Sie heißt normgerecht „Wohnen und Aufenthalt" und umfasst
-// AUCH reine Aufenthaltsflächen (Pausen-, Warte-, Sozialräume). Sie deshalb auf
-// `wohnen` abzubilden, machte aus jedem Bürobau optisch ein Wohnprojekt — genau der
-// Befund des Nutzers am 26.08. Sie wird auf `gemeinschaft` abgebildet und im UI als
-// „Aufenthalt (NUF 01)" beschriftet.
-export const DIN277_ZU_NUTZUNG = {
-  "01": { use: "gemeinschaft", label: "Aufenthalt (NUF 01)" },
-  "02": { use: "buero", label: "Büroarbeit (NUF 02)" },
-  "03": { use: "gewerbe", label: "Produktion / Werkstatt (NUF 03)" },
-  "04": { use: "handel", label: "Lagern / Verkaufen (NUF 04)" },
-  "05": { use: "gemeinschaft", label: "Bildung / Kultur (NUF 05)" },
-  "06": { use: "gemeinschaft", label: "Heilen / Pflegen (NUF 06)" },
-  "07": { use: "gemeinschaft", label: "Sonstige Nutzung (NUF 07)" },
-  "08": { use: "technik", label: "Technikfläche (TF 08)" },
-  "09": { use: "technik", label: "Verkehrsfläche (VF 09)" },
-};
+// 107-11: the table moved to @core/lib/bauteil/raeume.js (the DIN 277 areas of the BIM studio need it in @core); it is
+// imported and re-exported here, so every old import of DIN277_ZU_NUTZUNG from this file stays valid.
+// Group 1 ("Wohnen und Aufenthalt") is mapped to `gemeinschaft`, see the comment at the table.
+export { DIN277_ZU_NUTZUNG };
 
 /** Erste DIN-277-Gruppe aus dem `klassifikation`-Feld — Position im Array variiert. */
 export function dinGruppe(klassifikation) {

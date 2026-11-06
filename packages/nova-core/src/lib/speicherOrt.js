@@ -50,6 +50,9 @@ export const SPEICHER_PROFILE = Object.freeze({
   befunde: { waechst: true },
   prueflauf: { waechst: true, inListen: true },
   einstellungen: { mitDatensatz: true },
+  // 107-14: computed solids of the CSG core (csg_cache_layer) — one per component, so it grows with the project; the grey
+  // zone goes to the object store. A cache entry is never the source (D-BK-08a).
+  meshCache: { waechst: true },
 });
 
 /**

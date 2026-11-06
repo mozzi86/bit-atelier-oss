@@ -8,7 +8,7 @@
 // look until somebody decides (D-BW-03).
 //
 // In: nothing. Out: BRILLEN, brilleVon(), brilleSicht(), zeigtStatus(), sichtbarUnter(),
-// planDarstellung(). No I/O.
+// planDarstellung(), dunkler() (107-12, shared with the graphic rules of plan/ansichtszustand.js). No I/O.
 
 import { statusDarstellung } from "./statusDarstellung.js";
 
@@ -95,8 +95,13 @@ export function sichtbarUnter(brille, liste) {
   return liste.filter((el) => zeigtStatus(brille, el?.status));
 }
 
-/** Mix a hex colour with black (anteil 0..1) — the outline is a darker shade of the status fill. */
-function dunkler(hex, anteil) {
+/**
+ * Mix a hex colour with black — the outline is a darker shade of the status fill; 107-12: also the fill of the rule "tragend".
+ * @param {string} hex colour "#rrggbb"
+ * @param {number} anteil share of black, 0..1
+ * @returns {string} "#rrggbb"
+ */
+export function dunkler(hex, anteil) {
   const n = parseInt(hex.slice(1), 16);
   const k = (v) => Math.round(v * (1 - anteil)).toString(16).padStart(2, "0");
   return `#${k((n >> 16) & 255)}${k((n >> 8) & 255)}${k(n & 255)}`;

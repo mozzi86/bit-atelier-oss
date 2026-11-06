@@ -229,7 +229,7 @@ test("Befehle: Parser, Register, Menü und Schalter", () => {
   assert.ok(meldungen.some((m) => m.startsWith("Polar an, 30")), meldungen.join(" | "));
   const t = (/** @type {string} */ s) => s;
   const menue = fangKontextEintraege(fangEinstellungenNormalisieren({ polar: true, polarSchritt_grad: 30 }), t);
-  assert.equal(menue.length, 9);
+  assert.equal(menue.length, 12); // 107-07 appended Parallel, Senkrecht, Verlängerung to the 9 entries of 104-05
   assert.equal(menue[0].gruppe, "Fang");
   assert.ok(menue.every((e) => typeof e.an === "boolean"));
   assert.equal(menue.find((e) => e.label.startsWith("Polar"))?.label, "Polar 30°");

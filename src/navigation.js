@@ -22,6 +22,7 @@ import {
   Briefcase,
   Calculator,
   CalendarClock,
+  ClipboardCheck,
   ClipboardList,
   HardHat,
   Cloud,
@@ -137,6 +138,8 @@ export const navGroups = [
       // KRITIK-14: the page stores nine key figures per stage and restores
       // nothing, so it must not promise "versions" or "commits".
       { title: 'Projektstände', url: seite('ModelVersions'), modul: 'modell', icon: History, phase: 4 },
+      // 106-10: review workplace - release or undo changes made by agents and speech input, the office's command library.
+      { title: 'Modellfreigabe', url: seite('Modellfreigabe'), modul: 'modell', icon: ClipboardCheck, phase: 4 },
     ],
   },
   {

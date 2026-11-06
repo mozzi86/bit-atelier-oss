@@ -8,6 +8,7 @@
 // Out: rendering and wiring only; every rule lives in @designer/lib/brandschutzPlan and fire.js.
 
 import React, { useMemo, useRef, useState } from "react";
+import { ebenenLevels, levelKlemmen, geschossLabel } from "@core/lib/bauteil/ebenen.js";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Badge } from "@core/components/ui/badge";
 import { Button } from "@core/components/ui/button";
@@ -29,6 +30,7 @@ import {
   brandabschnittFlaeche, melderRaster, symbolLegende, brandschutzPlanChecks,
 } from "@designer/lib/brandschutzPlan";
 import { svgZuPng, feuerwehrplanPdf } from "@designer/lib/feuerwehrplanPdf";
+import { aktuellenModellStandLaden } from "@core/lib/zeigen/planStandLaden.js";
 import BimPlan2D from "./BimPlan2D";
 import KatalogPanel from "./KatalogPanel";
 import FeuerwehrSymbol, { SymbolLegende } from "./FeuerwehrSymbol";
@@ -36,7 +38,8 @@ import FeuerwehrSymbol, { SymbolLegende } from "./FeuerwehrSymbol";
 const B_STATUS = { ...STATUS_STYLE, offen: { color: "bg-slate-100 text-slate-600", dot: "bg-slate-400", label: "offen" } };
 const de1 = (n) => (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 1 });
 const de0 = (n) => Math.round(Number(n) || 0).toLocaleString("de-DE");
-const geschoss = (lvl, t) => (lvl === 0 ? t("EG") : `${lvl}. ${t("OG")}`);
+// 107-13: storey names incl. basements ("1. UG", also in the fire-brigade plan PDF) from the one helper of @core
+const geschoss = (lvl, t) => geschossLabel(lvl, t);
 const centroid = (pts) => ({ x: pts.reduce((s, p) => s + p.x, 0) / pts.length, z: pts.reduce((s, p) => s + p.z, 0) / pts.length });
 
 /**
@@ -55,7 +58,10 @@ export default function BrandschutzPlanEditor({ maxFluchtweg, onUebernehmen, pdf
 
   const storeys = Math.max(1, Math.round(plan?.storeys || 1));
   const [level, setLevel] = useState(0);
-  const lvl = Math.min(level, storeys - 1);
+  // 107-13 (D-BK-20): levels from the model's storey list (basements included); `storeys` stays the count above ground
+  // (ebenenLevels/levelKlemmen hold the one fallback 0 … storeys − 1 while no model is there)
+  const levels = ebenenLevels(plan?.model, storeys);
+  const lvl = levelKlemmen(levels, level);
   const [werkzeug, setWerkzeug] = useState("auswahl"); // auswahl | fluchtweg | brandabschnitt | symbol
   const [symbolTyp, setSymbolTyp] = useState("feuerloescher");
   const [draft, setDraft] = useState([]); // [{x,z}] for fluchtweg / brandabschnitt
@@ -121,11 +127,14 @@ export default function BrandschutzPlanEditor({ maxFluchtweg, onUebernehmen, pdf
         ...legende.map((l) => ({ farbe: l.farbe, label: `${l.label} — ${SYMBOLE_DIN14034[l.typ].kurz}`, anzahl: l.anzahl, art: "symbol" })),
       ];
       const hinweise = checks.filter((c) => c.status === "warn").map((c) => `${c.label}: ${c.detail}`);
+      // 106-11 review: the sheet draws the model's walls, so it carries the model state and the note of unreleased AI changes
+      // (fresh read of the stored model and the change log; never throws - a failure prints "nicht ermittelt")
+      const modellstand = await aktuellenModellStandLaden(project?.id);
       const r = await feuerwehrplanPdf({
         png, projekt: project?.name || "BIT-Atelier", geschoss: geschoss(lvl, t),
-        datum: new Date().toLocaleDateString("de-DE"), legende: legendeZeilen, hinweise,
+        datum: new Date().toLocaleDateString("de-DE"), legende: legendeZeilen, hinweise, modellstand,
       });
-      setPdfStatus(`${t("PDF erzeugt")}: ${r.dateiname} (${r.seiten} ${t("Seite")})`);
+      setPdfStatus(`${t("PDF erzeugt")}: ${r.dateiname} (${r.seiten} ${t("Seite")})${r.vermerk ? ` ${t("Mit Vermerk „enthält ungeprüfte KI-Änderungen“.")}` : ""}`);
     } catch (e) {
       setPdfStatus(`${t("PDF fehlgeschlagen")}: ${e?.message || e}`);
     }
@@ -143,7 +152,7 @@ export default function BrandschutzPlanEditor({ maxFluchtweg, onUebernehmen, pdf
             <Select value={String(lvl)} onValueChange={(v) => { setLevel(+v); setDraft([]); setSel(null); }}>
               <SelectTrigger aria-label={t("Geschoss")} className="h-8 w-28 text-xs" data-testid="bs-level"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {Array.from({ length: storeys }, (_, i) => <SelectItem key={i} value={String(i)}>{geschoss(i, t)}</SelectItem>)}
+                {levels.map((i) => <SelectItem key={i} value={String(i)}>{geschoss(i, t)}</SelectItem>)}
               </SelectContent>
             </Select>
             <Button size="sm" variant="outline" onClick={exportPdf} data-testid="bs-pdf" title={t("Feuerwehrplan als PDF (A4 quer, Konzeptblatt nach DIN 14095)")}>

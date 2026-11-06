@@ -16,26 +16,44 @@ from harness.tools.registry import ToolContext
 EXAMPLE = HARNESS_DIR / "examples" / "efh-satteldach"
 
 
+#: Install line of the reference venv (all extras the offline suite needs).
+INSTALLATION = "Installation: .venv\\Scripts\\python -m pip install -e \".[dev,ifc,katalog]\""
+
+
 def pytest_configure(config):
     """H-1 (Review 67-03): without the [ifc] extra every IFC test skips
     silently and pytest still exits 0 — a green-looking suite that tested
-    nothing. Make the hole LOUD: a session warning plus a non-zero-visible
-    hint line in the terminal summary."""
+    nothing. Make the hole LOUD: a terminal summary banner per missing extra
+    (ifcopenshell for the IFC tests, elmonkey-core [katalog] for the component
+    catalogue tests of 109-01)."""
     try:
         import ifcopenshell  # noqa: F401
     except ImportError:
-        config.pluginmanager.register(_IfcMissingReporter(), "ifc-missing-reporter")
+        config.pluginmanager.register(
+            _ExtraMissingReporter("IFC-TESTS ÜBERSPRUNGEN",
+                                  "ifcopenshell fehlt — alle IFC-Tests wurden still übersprungen."),
+            "ifc-missing-reporter")
+    try:
+        import elmonkey.katalog  # noqa: F401
+    except ImportError:
+        config.pluginmanager.register(
+            _ExtraMissingReporter("KATALOG-TESTS ÜBERSPRUNGEN",
+                                  "Extra [katalog] (elmonkey-core 0.3.0) fehlt — alle Bauteilkatalog-Tests "
+                                  "wurden übersprungen."),
+            "katalog-missing-reporter")
 
 
-class _IfcMissingReporter:
-    """Terminal summary line when ifcopenshell is absent (H-1)."""
+class _ExtraMissingReporter:
+    """Terminal summary banner when an optional extra is absent (H-1)."""
+
+    def __init__(self, titel: str, text: str) -> None:
+        self.titel = titel
+        self.text = text
 
     def pytest_terminal_summary(self, terminalreporter, exitstatus, config):
-        terminalreporter.write_sep("!", "IFC-TESTS ÜBERSPRUNGEN")
-        terminalreporter.write_line(
-            "ifcopenshell fehlt — alle IFC-Tests wurden still übersprungen.")
-        terminalreporter.write_line(
-            "Installation: .venv\\Scripts\\python -m pip install -e \".[dev,ifc]\"")
+        terminalreporter.write_sep("!", self.titel)
+        terminalreporter.write_line(self.text)
+        terminalreporter.write_line(INSTALLATION)
 
 
 @pytest.fixture

@@ -41,6 +41,7 @@ describe('88-06 Planverwaltung', () => {
     assert.equal(patch?.status, 'in_arbeit');
     assert.equal(patch?.freigabe, null);
     assert.equal(patch?.datei_ref, null);
+    assert.equal(patch?.modellstand, null, '106-11 review: the state of the old sheet goes with its file');
     assert.deepEqual(patch?.indizes.at(-1), { index: 'B', datum: '2026-10-12', aenderung: 'Türen angepasst' });
     assert.equal(indexPatch(alt, ''), null);
   });

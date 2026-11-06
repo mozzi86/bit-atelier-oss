@@ -22,7 +22,8 @@ import { fehlplanungPruefen } from "../bauteil/pruefregeln.js";
 import { steckbrief, typFuerWand } from "../bauteil/steckbrief.js";
 import { wandGeometrie } from "../bauteil/referenz.js";
 import { unterkante, wandHoehe, stuetzenHoehe } from "../bauteil/hoehen.js";
-import { bauteilImModell, modellMitAenderung, elementArt, satzAusVorlage, zahlText, wertText, zielName, gleich, stabil, geometrieVon, ifcWertAktuell } from "./aenderungen.js";
+import { bauteilImModell, modellMitAenderung, elementArt, satzAusVorlage, zahlText, wertText, zielName, gleich, stabil, geometrieVon, ifcWertAktuell, eigenschaftFeld } from "./aenderungen.js";
+import { erlaubteWerte } from "./befehlsBibliothek.js";
 
 /** Radius of the neighbourhood check in m [ASSUMED: 3 m catches the walls and columns a moved element can run into]. */
 export const NACHBARSCHAFT_RADIUS_M = 3;
@@ -57,9 +58,10 @@ export const PRUEF_VORLAGEN = Object.freeze({
   veraltetWert: "{eigenschaft} ist jetzt {jetzt}, der Vorschlag ging von {vorschlag} aus",
   veraltetLage: "Lage oder Maße",
   veraltetTeilen: "Bauteil oder Öffnungen",
+  bibliothekWert: "{wert} steht nicht in der Befehlsbibliothek des Büros für {eigenschaft} (erlaubt: {werte})",
 });
 
-/** @typedef {{stufe: "ok"|"warn"|"fehler", quelle: "regel"|"attribut"|"kollision"|"geometrie"|"verweis", code: string, satz: string}} PruefBefund */
+/** @typedef {{stufe: "ok"|"warn"|"fehler", quelle: "regel"|"attribut"|"kollision"|"geometrie"|"verweis"|"bibliothek", code: string, satz: string}} PruefBefund */
 
 /**
  * One line of the check as the preview shows it. `stufe` carries the FORM of the line (guard rail 5): "fehler" (solid
@@ -214,11 +216,12 @@ const ATTRIBUT_SATZ = { kg_abgeleitet: "kgOffen", feuer_fehlt: "feuerOffen", tra
  * @param {{art: string, ziel: {guid: string, quelle?: string, modell?: string, name?: string, klasse?: string|null}, params: any, vorher?: any, nachher?: any}} vorschlag  Proposal without check.
  * @param {{projektId?: string|number|null, bauart?: "neubau"|"bestand", werkstatt?: any, durchbrueche?: any[], huelle?: any[], geschosshoehe_m?: number, geschosse?: Array<{level: number, name?: string, hoehe_m: number}>,
  *   attributPruefung?: (elemente: any[], position?: any) => {geprueft: number, befunde: Array<{key: string, status: string, anzahl: number}>},
- *   ifcBauteil?: any, eintraege?: any[], t?: (s: string) => string}} [opt]
+ *   ifcBauteil?: any, eintraege?: any[], t?: (s: string) => string, bibliothek?: ReadonlyArray<any>}} [opt]
  *   werkstatt/durchbrueche/bauart: as the studio hands them to fehlplanungPruefen; huelle: hull walls of the building model (`model.walls`), for check 12; geschosshoehe_m: storey height in m
  *   (default 3); attributPruefung: pruefeAttributeVorUebernahme of the IFC viewer (skipped, and said so, when absent);
  *   ifcBauteil: the parsed IFC element (psets, ifcType) for an IFC property change; t: translator of the sentence templates;
- *   eintraege: stored journal entries (current value of an IFC property, for the staleness check).
+ *   eintraege: stored journal entries (current value of an IFC property, for the staleness check);
+ *   bibliothek: the office's command library (normalised templates, befehlsBibliothek.js) - a property value outside its allowed values is a warning.
  * @returns {{stufe: "ok"|"warn"|"fehler", saetze: string[], zeilen: PruefZeile[], befunde: PruefBefund[],
  *   geprueft: {regeln: boolean, attribute: boolean, kollision: boolean}}}
  *   stufe: the worst finding (fehler blocks confirming); saetze: one German sentence per finding (a single "no finding"
@@ -346,6 +349,18 @@ export function pruefeAenderung(modell, vorschlag, opt = {}) {
   if (vorschlag.art === "teilen" && ergebnis.entfernt.length) {
     const betroffen = (opt.durchbrueche || []).filter((/** @type {any} */ d) => d && ergebnis.entfernt.includes(String(d.bauteil_guid || ""))).length;
     if (betroffen) befunde.push({ stufe: "warn", quelle: "verweis", code: "durchbruch_guid", satz: fuell("durchbruchGuid", { n: betroffen }) });
+  }
+
+  // --- 5. office command library (106-10 review): a property value outside the allowed values of the library ------------------
+  // warn, not fehler: the library steers grammar and prompt; a value outside it may be right (a new product, a special case) - the
+  // person decides on the card and again in the review workplace. Applies to every origin, the agent's proposals included.
+  if (vorschlag.art === "eigenschaft" && Array.isArray(opt.bibliothek) && opt.bibliothek.length) {
+    const p = vorschlag.params || {};
+    const erlaubt = erlaubteWerte(opt.bibliothek, String(p.name ?? ""));
+    if (erlaubt && p.wert != null && p.wert !== "" && !erlaubt.some((w) => gleich(w, p.wert))) {
+      befunde.push({ stufe: "warn", quelle: "bibliothek", code: "bibliothek_wert",
+        satz: fuell("bibliothekWert", { wert: wertText(p.wert, t), eigenschaft: t(eigenschaftFeld(String(p.name))?.label ?? String(p.name)), werte: erlaubt.join(", ") }) });
+    }
   }
   return fertig();
 }

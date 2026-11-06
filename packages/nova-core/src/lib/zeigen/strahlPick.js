@@ -15,7 +15,7 @@
 // front of ALL planes wins (same rule as ersterSichtbarerTreffer in IfcViewer.jsx).
 //
 // In:  targets (Object3D[]), ray ({ursprung, richtung} in m, or THREE.Ray), options.
-// Out: strahlPick() → hit or null; strahlAusZeiger(), ndcAusEreignis(), identitaetAus(), pickDrossel().
+// Out: strahlPick() → hit or null; strahlAusZeiger(), ndcAusEreignis(), identitaetAus(), pickDrossel(), weltNormale() (106-08).
 import * as THREE from "three";
 
 /**
@@ -113,6 +113,18 @@ export function strahlAusZeiger(kamera, ndcX, ndcY) {
   RAYCASTER.setFromCamera(ZEIGER_NDC.set(ndcX, ndcY), kamera);
   const { origin: o, direction: d } = RAYCASTER.ray;
   return { ursprung: [o.x, o.y, o.z], richtung: [d.x, d.y, d.z] };
+}
+
+/**
+ * 106-08: world normal of the face a ray hit (unit), e.g. to tell a floor (normal up) from a wall for a VR teleport.
+ * @param {StrahlTreffer|null} treffer  Result of strahlPick().
+ * @returns {[number, number, number]|null}  null when the hit has no face (lines, points, sprites).
+ */
+export function weltNormale(treffer) {
+  const n = treffer?.roh?.face?.normal;
+  if (!n) return null;
+  const w = n.clone().transformDirection(treffer.objekt.matrixWorld);
+  return [w.x, w.y, w.z];
 }
 
 /**

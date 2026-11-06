@@ -5,7 +5,7 @@
 //
 // In:  netz_layer = { version, knoten: [{ id, gewerk, art, level, x, z, name?, levelBis? }],
 //                     kanten: [{ id, gewerk, level, dn, von, nach, points: [{x,z}, …] }] }
-//      x/z in metres (plan coordinates of BimPlan2D), level = storey (0 = EG), dn in mm
+//      x/z in metres (plan coordinates of BimPlan2D), level = storey (0 = EG, negative = UG; 107-13), dn in mm
 //      (Elektro: conductor cross-section in mm² — same field, unit per Gewerk),
 //      store zones [{ points:[{x,z}], level, name }], concept inputs of the Haustechnik panel.
 // Out: hardened network, graph queries (strand of a node, path to a source), zone assignment
@@ -447,10 +447,12 @@ export function netzMengen(netz) {
  * Data for the auto-generated riser diagram: one column per strand head, one row per storey,
  * per cell the incident edges and the outlets served on that storey. The SVG component only draws.
  * @param {object} netz
- * @param {number} storeys number of storeys (rows 0…storeys−1)
+ * @param {number} storeys number of storeys above ground (rows 0…storeys−1)
+ * @param {number} [untergeschosse] 107-13: number of basements; the rows then start at −untergeschosse (ascending). 0 = rows and
+ *   cells exactly as before.
  * @returns {{spalten: Array<{strangId:string, gewerk:string, art:string, name:string, levelVon:number, levelBis:number}>, zeilen: number[], zellen: Array<{strangId:string, level:number, kanten:number, auslaesse:number}>}}
  */
-export function strangschema(netz, storeys) {
+export function strangschema(netz, storeys, untergeschosse = 0) {
   const n = netzHardened(netz);
   const rows = Math.max(1, Math.round(storeys || 1));
   const koepfe = n.knoten.filter((k) => KNOTEN_ARTEN[k.art].strang)
@@ -465,5 +467,6 @@ export function strangschema(netz, storeys) {
       zellen.push({ strangId: sp.strangId, level, kanten, auslaesse });
     }
   }
-  return { spalten, zeilen: Array.from({ length: rows }, (_, i) => i), zellen };
+  const U = Math.max(0, Math.round(Number(untergeschosse) || 0));
+  return { spalten, zeilen: Array.from({ length: rows + U }, (_, i) => i - U), zellen };
 }

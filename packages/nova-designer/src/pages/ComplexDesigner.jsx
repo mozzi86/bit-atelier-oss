@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { bitApi } from "@core/api/bitApi";
 import { toast } from "sonner";
-import { useBimModelSync } from "@core/lib/useBimModelSync";
+import { useBimModelSync, storeGehoertZu } from "@core/lib/useBimModelSync";
 import { buildingProgram, useBuildingProgram } from "@core/lib/useBuildingProgram";
 import { footprintToMeters } from "@core/lib/buildingModel";
 import { polygonAreaM2, metersPerPixel } from "@core/lib/geo";
@@ -24,40 +24,59 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@core/components/ui/ta
 import { MapPin, Building, Calculator, Droplets, CheckSquare, Sofa, Boxes, Sparkles, Sun, Plug, CalendarRange, LifeBuoy, ClipboardList, ShieldCheck, Mountain, Frame, Trees, Thermometer, Flame, Accessibility, ClipboardCheck, HandCoins, LayoutTemplate, Volume2, ThermometerSnowflake, Layers, ThermometerSun, Puzzle } from "lucide-react";
 
 import { useProject } from "@core/lib/ProjectContext";
+import { useI18n, englischErgaenzen } from "@core/lib/i18n";
 import { bauartVon, herkunftZeile } from "@core/lib/bauart";
 import { aufbauGrundlage } from "@core/lib/bimClassification";
-import { footprintQuelleText } from "@core/lib/footprintQuelle";
+import { footprintQuelleText, footprintQuelleBaufeldPlanung, footprintUebernahme, flaechenHash } from "@core/lib/footprintQuelle";
+import { EN as EN_EFH_108 } from "@core/lib/i18nTeile/efh-108.js"; // 108-01: lazy part (footprint note)
 import MassingStudio from "../components/MassingStudio";
 import SpaceProgram from "../components/SpaceProgram";
 import UnitMixCompliance from "../components/UnitMixCompliance";
 import LocationSelector from "../components/LocationSelector";
 import SiteDesigner from "../components/SiteDesigner";
 import BuildingConfig from "../components/BuildingConfig";
-import EnergyPlanner from "../components/EnergyPlanner";
-import NachhaltigkeitKarte from "../components/NachhaltigkeitKarte";
 import BauaufnahmePanel from "../components/BauaufnahmePanel";
 import CostCalculator from "../components/CostCalculator";
-import FloodRiskAnalyzer from "../components/FloodRiskAnalyzer";
-import ProjectPlanner from "../components/ProjectPlanner";
 import InteriorDesigner from "../components/InteriorDesigner";
-import GenerativeLayout from "../components/GenerativeLayout";
 import TerrainView3D from "../components/TerrainView3D";
 import BitBimStudio from "../components/BitBimStudio";
-import IntegrationsPanel from "../components/IntegrationsPanel";
-import SupportPanel from "../components/SupportPanel";
-import ClimaAnalysis from "../components/ClimaAnalysis";
-import StaticsPlanner from "../components/StaticsPlanner";
-import LandscapePlanner from "../components/LandscapePlanner";
-import HaustechnikPlanner from "../components/HaustechnikPlanner";
 import BrandschutzPlanner from "../components/BrandschutzPlanner";
-import AsrRaumdatenblatt from "../components/AsrRaumdatenblatt";
-import BarrierefreiheitPlanner from "../components/BarrierefreiheitPlanner";
-import SchallschutzPlanner from "../components/SchallschutzPlanner";
-import WaermebrueckenPlanner from "../components/WaermebrueckenPlanner";
-import BauphysikStudio from "../components/BauphysikStudio";
-import RaumklimaPlanner from "../components/RaumklimaPlanner";
-import FoerderPlanner from "../components/FoerderPlanner";
 import ApartmentPlanner from "../components/ApartmentPlanner";
+// 107-10 (size budget): rarely used tab panels load on demand — the designer chunk was at 100 % of chunk_max after 107-09.
+// Only the active TabsContent mounts, so each panel's chunk is fetched when its tab is opened; the tab bar stays usable meanwhile.
+const FoerderPlanner = React.lazy(() => import("../components/FoerderPlanner"));
+const FloodRiskAnalyzer = React.lazy(() => import("../components/FloodRiskAnalyzer"));
+const SupportPanel = React.lazy(() => import("../components/SupportPanel"));
+const IntegrationsPanel = React.lazy(() => import("../components/IntegrationsPanel"));
+const ProjectPlanner = React.lazy(() => import("../components/ProjectPlanner"));
+const WaermebrueckenPlanner = React.lazy(() => import("../components/WaermebrueckenPlanner"));
+const BauphysikStudio = React.lazy(() => import("../components/BauphysikStudio"));
+const RaumklimaPlanner = React.lazy(() => import("../components/RaumklimaPlanner"));
+const AsrRaumdatenblatt = React.lazy(() => import("../components/AsrRaumdatenblatt"));
+const LandscapePlanner = React.lazy(() => import("../components/LandscapePlanner"));
+const ClimaAnalysis = React.lazy(() => import("../components/ClimaAnalysis"));
+const StaticsPlanner = React.lazy(() => import("../components/StaticsPlanner"));
+const BarrierefreiheitPlanner = React.lazy(() => import("../components/BarrierefreiheitPlanner"));
+const SchallschutzPlanner = React.lazy(() => import("../components/SchallschutzPlanner"));
+const HaustechnikPlanner = React.lazy(() => import("../components/HaustechnikPlanner"));
+const GenerativeLayout = React.lazy(() => import("../components/GenerativeLayout"));
+const EnergyPlanner = React.lazy(() => import("../components/EnergyPlanner"));
+const NachhaltigkeitKarte = React.lazy(() => import("../components/NachhaltigkeitKarte"));
+
+englischErgaenzen(EN_EFH_108); // 108-01: lazy i18n part of phase 108
+
+/**
+ * Suspense boundary of one lazy tab panel (107-10): a quiet status line while the panel's chunk is on the wire.
+ * @param {{children: React.ReactNode}} props
+ */
+function ReiterLaden({ children }) {
+  const { t } = useI18n();
+  return (
+    <React.Suspense fallback={<div role="status" aria-live="polite" className="py-8 text-sm text-muted-foreground">{t("Wird geladen …")}</div>}>
+      {children}
+    </React.Suspense>
+  );
+}
 
 /** 101-05: tabs that work as a full-height drawing surface (no page scroll from lg up). */
 const ARBEITSFLAECHE_REITER = new Set(["site", "massing", "studio", "bim"]);
@@ -68,8 +87,13 @@ const AUFBAU_REITER = new Set(["acoustics", "waermebruecken", "bauphysik", "ener
 /** 73-05: tabs that work on the building outline and show its provenance. */
 const UMRISS_REITER = new Set(["studio", "massing", "bim", "buildings", "program"]);
 
-export default function ComplexDesigner() {
-  const [complexData, setComplexData] = useState({
+/**
+ * Start values of the design record (BuildingComplex) — the state of a project without a stored record. 108-01 review: also the
+ * state a project switch resets to, so no area (or anything else) of the previous project stays in the new one.
+ * @returns start values, a new object on every call (type inferred from the literal, as the useState initialiser before)
+ */
+function komplexStart() {
+  return {
     name: "",
     location: null,
     // 72-01 A-2: kein 1-km²-Werkzeugwert mehr — die Startfläche wird beim
@@ -106,7 +130,11 @@ export default function ComplexDesigner() {
     // Eigene Möbeltypen des Projekts (Phase 43): [{ id, name, b, t, kategorie, benutzerseite }]
     moebel_eigene: [],
     map_context: { center: [51.1657, 10.4515], zoom: 6, style: 'normal' } // Add map_context
-  });
+  };
+}
+
+export default function ComplexDesigner() {
+  const [complexData, setComplexData] = useState(komplexStart);
 
   const { project } = useProject();
   // 72-01 A-13: Deep-Link ?tab=<reiter> setzt den Start-Tab (z. B. Redirect
@@ -158,18 +186,30 @@ export default function ComplexDesigner() {
   const geladenAls = useRef(/** @type {string|null} */ (null));
   const speichertGerade = useRef(Promise.resolve());
 
+  // 108-01 review: the project whose BuildingComplex record (or the knowledge that it has none) is in complexData — the footprint takeover
+  // below waits for it, so the areas of the previous project can never be taken over into the next one
+  const [complexGeladenFuer, setComplexGeladenFuer] = useState(/** @type {string|null} */ (null));
+  const komplexProjekt = useRef(/** @type {string|null} */ (null));
+
   // Beim Mount / Projektwechsel: vorhandenen Entwurf aus der DB rehydrieren,
   // damit Standort, Baufelder, Gebäude & Kosten einen Reload überleben.
   useEffect(() => {
     if (!project?.id) return;
     complexRecordId.current = null;
     geladenAls.current = null;
+    setComplexGeladenFuer(null);
+    // 108-01 review: a real project switch inside the mounted designer starts from the start values (before, everything of the previous
+    // project stayed when the new one has no record, and a record without a field kept the previous project's value). The autosave
+    // stays quiet on them (no name / location), like on a fresh mount.
+    if (komplexProjekt.current && komplexProjekt.current !== project.id) setComplexData(komplexStart());
+    komplexProjekt.current = project.id;
+    const pid = project.id;
     let cancelled = false;
     (async () => {
       try {
-        const rows = await bitApi.entities.BuildingComplex.filter({ project_id: project.id });
+        const rows = await bitApi.entities.BuildingComplex.filter({ project_id: pid });
         if (cancelled) return;
-        if (!rows?.length) { geladenAls.current = "leer"; return; }
+        if (!rows?.length) { geladenAls.current = "leer"; setComplexGeladenFuer(pid); return; }
         const { id, ...rest } = rows[0];
         complexRecordId.current = id;
         setComplexData((prev) => {
@@ -177,6 +217,7 @@ export default function ComplexDesigner() {
           geladenAls.current = JSON.stringify(neu);
           return neu;
         });
+        setComplexGeladenFuer(pid);
       } catch (error) {
         console.error("BuildingComplex laden fehlgeschlagen:", error);
         if (!cancelled) toast.error("Gespeicherter Entwurf konnte nicht geladen werden");
@@ -191,7 +232,7 @@ export default function ComplexDesigner() {
   // back) reloads the persisted zones but keeps the session-only zones of the
   // Wohnungsplaner (·W) and the Wohnungs-Werkstatt (·WT) — the same markers as
   // the KD-18 merge in BitBimStudio. On a real project switch nothing survives.
-  useBimModelSync(project?.id, { zonenBehalten: (z) => istGeneriert(z) || istWerkstattZone(z) });
+  const bimGeladen = useBimModelSync(project?.id, { zonenBehalten: (z) => istGeneriert(z) || istWerkstattZone(z) }); // 108-01: reactive load flag
   // MSB-9 (D-P75-08): zones live only in the store — regenerate them from the
   // layer after a reload, also when the workshop tab was never mounted.
   useWerkstattRehydrate(project?.id);
@@ -202,15 +243,44 @@ export default function ComplexDesigner() {
   // building-envelope reference for the Massing checks. Filtering on
   // "footprint" keeps body and envelope distinct; without the filter the body
   // would equal the envelope by construction and "outside" could never be > 0.
+  // 108-01 (D-EFH-05): the area overwrites footprintM only after the project's BimModel record is loaded (before, the load order decided by
+  // chance) and only when the outline has no provenance or came from the site planning itself and the area changed (hash); an outline
+  // drawn or measured in the model is kept and a note offers "Übernehmen" (footprintQuelle.footprintUebernahme). Asked once per area.
+  // 108-01 review: BOTH records must belong to the open project — the BimModel (bimGeladen, useBimModelSync) and the BuildingComplex
+  // (complexGeladenFuer); with only the first one, a switch let the previous project's area overwrite the new outline. The note's
+  // "Übernehmen" checks again on click that the same project is still open (storeGehoertZu), it can stay on screen for 20 s.
+  const gefragtFuer = useRef(/** @type {string|null} */ (null));
+  useEffect(() => { gefragtFuer.current = null; }, [project?.id]);
+  const { t: tf } = useI18n();
   useEffect(() => {
+    const pid = project?.id || null;
+    if (!bimGeladen || !pid || complexGeladenFuer !== pid) return;
     const drawn = (complexData.designated_areas || []).find(
       (a) => Array.isArray(a?.points) && a.points.length >= 3 && a?.type === "footprint"
     );
     if (!drawn) return;
     const fp = footprintToMeters(drawn.points, complexData.site_parcel);
-    if (fp) buildingProgram.set({ footprintM: fp });
+    if (!fp) return;
+    const mpp = metersPerPixel(complexData.site_parcel);
+    const hash = flaechenHash(drawn.points, mpp);
+    const stand = buildingProgram.get();
+    const uebernehmen = () => buildingProgram.set({ footprintM: fp, footprintQuelle: footprintQuelleBaufeldPlanung(drawn.points, new Date(), mpp) });
+    const regel = footprintUebernahme(stand.footprintQuelle, hash, stand.footprintM, fp);
+    if (regel === "uebernehmen") uebernehmen();
+    else if (regel === "rueckfrage" && gefragtFuer.current !== hash) {
+      gefragtFuer.current = hash;
+      toast(tf("Umriss der Baufeld-Planung weicht ab"), {
+        description: tf("Das Gebäudemodell hat einen eigenen Umriss ({{quelle}}). Die Fläche der Baufeld-Planung wird erst nach „Übernehmen“ verwendet.")
+          .replace("{{quelle}}", footprintQuelleText(stand.footprintQuelle) || "—"),
+        action: { label: tf("Übernehmen"), onClick: () => {
+          if (storeGehoertZu(pid)) uebernehmen();
+          else toast.error(tf("Projekt gewechselt — der Umriss wurde nicht übernommen."));
+        } },
+        duration: 20000,
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [complexData.designated_areas]);
+  }, [complexData.designated_areas, bimGeladen, complexGeladenFuer, project?.id]);
 
   // KD-11 + 72-01 A-2: echter Grundstücksbezug für alle Dichtekennwerte.
   // Null nur, solange GAR keine Parzelle da ist. Das generische Startquadrat
@@ -613,6 +683,8 @@ export default function ComplexDesigner() {
                   /* 75-06 Task 3 (MSB-3): the three site levels as props;
                      baufeld/grundstueck edits flow back into complexData. */
                   baufelder={complexData.designated_areas}
+                  /* 108-08 (D-EFH-09): blocks of the site planning = fallback start position of the body */
+                  buildings={complexData.buildings}
                   grundstueck={complexData.grundstueck}
                   nordwinkel={complexData.nordwinkel}
                   onBaufeldChange={(points) => {
@@ -687,15 +759,15 @@ export default function ComplexDesigner() {
               </TabsContent>
 
               <TabsContent value="statics" className="px-0 py-2">
-                <StaticsPlanner />
+                <ReiterLaden><StaticsPlanner /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="landscape" className="px-0 py-2">
-                <LandscapePlanner complexData={complexData} />
+                <ReiterLaden><LandscapePlanner complexData={complexData} /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="haustechnik" className="px-0 py-2">
-                <HaustechnikPlanner complexData={complexData} />
+                <ReiterLaden><HaustechnikPlanner complexData={complexData} /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="brandschutz" className="px-0 py-2">
@@ -703,31 +775,31 @@ export default function ComplexDesigner() {
               </TabsContent>
 
               <TabsContent value="asr" className="px-0 py-2">
-                <AsrRaumdatenblatt complexData={complexData} />
+                <ReiterLaden><AsrRaumdatenblatt complexData={complexData} /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="barrierefreiheit" className="px-0 py-2">
-                <BarrierefreiheitPlanner />
+                <ReiterLaden><BarrierefreiheitPlanner /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="acoustics" className="px-0 py-2">
-                <SchallschutzPlanner />
+                <ReiterLaden><SchallschutzPlanner /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="waermebruecken" className="px-0 py-2">
-                <WaermebrueckenPlanner />
+                <ReiterLaden><WaermebrueckenPlanner /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="bauphysik" className="px-0 py-2">
-                <BauphysikStudio />
+                <ReiterLaden><BauphysikStudio /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="raumklima" className="px-0 py-2">
-                <RaumklimaPlanner />
+                <ReiterLaden><RaumklimaPlanner /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="funding" className="px-0 py-2">
-                <FoerderPlanner />
+                <ReiterLaden><FoerderPlanner /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="apartments" className="px-0 py-2">
@@ -758,19 +830,19 @@ export default function ComplexDesigner() {
               </TabsContent>
 
               <TabsContent value="analysis" className="px-0 py-2">
-                <ClimaAnalysis complexData={complexData} />
+                <ReiterLaden><ClimaAnalysis complexData={complexData} /></ReiterLaden>
               </TabsContent>
               
               <TabsContent value="generative" className="px-0 py-2">
-                <GenerativeLayout complexData={complexData} siteArea={siteAreaM2} />
+                <ReiterLaden><GenerativeLayout complexData={complexData} siteArea={siteAreaM2} /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="energy" className="px-0 py-2">
-                <EnergyPlanner 
+                <ReiterLaden><EnergyPlanner 
                   complexData={complexData}
                   onEnergySystemsChange={(systems) => updateComplexData('energy_systems', systems)}
-                />
-                <div className="mt-6"><NachhaltigkeitKarte complexData={complexData} /></div>
+                /></ReiterLaden>
+                <div className="mt-6"><ReiterLaden><NachhaltigkeitKarte complexData={complexData} /></ReiterLaden></div>
               </TabsContent>
 
               <TabsContent value="costs" className="px-0 py-2">
@@ -781,24 +853,24 @@ export default function ComplexDesigner() {
               </TabsContent>
 
               <TabsContent value="integrations" className="px-0 py-2">
-                <IntegrationsPanel />
+                <ReiterLaden><IntegrationsPanel /></ReiterLaden>
               </TabsContent>
               
               <TabsContent value="planner" className="px-0 py-2">
-                <ProjectPlanner 
+                <ReiterLaden><ProjectPlanner 
                   selectedProject={complexData}
-                />
+                /></ReiterLaden>
               </TabsContent>
               
               <TabsContent value="flood_risk" className="px-0 py-2">
-                <FloodRiskAnalyzer
+                <ReiterLaden><FloodRiskAnalyzer
                   selectedProject={complexData}
                   onHochwasserChange={(hw) => updateComplexData('hochwasser', hw)}
-                />
+                /></ReiterLaden>
               </TabsContent>
               
               <TabsContent value="support" className="px-0 py-2">
-                <SupportPanel />
+                <ReiterLaden><SupportPanel /></ReiterLaden>
               </TabsContent>
             </Tabs>
           </div>

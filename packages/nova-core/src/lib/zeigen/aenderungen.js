@@ -536,6 +536,18 @@ const ARRAYS = [
 const OEFFNUNG_ARRAYS = [{ name: "customWindows", env: false }, { name: "envOpenings", env: true }];
 
 /**
+ * GUID of an opening record, derived like the IFC export and the selection (@designer/lib/auswahlBim.js): source
+ * "oeffnung|<host key>|<kind>|<_idx or u>", host key "env:<level>:<edge>" for an opening in a hull wall, "cw:<wallIdx>" for one
+ * in a drawn wall. A stored `guid` wins (bauteilGuid).
+ * @param {string|number|null} projektId @param {any} o  Opening record. @param {boolean} env  true = in a hull wall (envOpenings).
+ * @returns {string}  22-character GlobalId.
+ */
+export function oeffnungGuid(projektId, o, env) {
+  const key = env ? `env:${o?.level}:${o?.edge}` : `cw:${o?.wallIdx}`;
+  return bauteilGuid(projektId, `oeffnung|${key}|${o?.kind}|${o?._idx ?? o?.u ?? 0}`, o);
+}
+
+/**
  * The drawn element of a model with this GUID: a stored `guid` wins, else the GUID is derived from project, source
  * and `_idx` exactly as the IFC export and the studio do (same source names as @designer/lib/auswahlBim.js).
  * Hull walls and workshop components are derived, regenerated on every tessellation, and are not found here.
@@ -555,8 +567,7 @@ export function bauteilImModell(modell, guid, opt = {}) {
   }
   for (const a of OEFFNUNG_ARRAYS) {
     for (const o of Array.isArray(modell[a.name]) ? modell[a.name] : []) {
-      const key = a.env ? `env:${o.level}:${o.edge}` : `cw:${o.wallIdx}`;
-      if (bauteilGuid(pid, `oeffnung|${key}|${o.kind}|${o._idx ?? o.u ?? 0}`, o) === guid) {
+      if (oeffnungGuid(pid, o, a.env) === guid) {
         return { art: "oeffnung", arrayName: a.name, element: o, guid, kurzname: `${o.kind === "door" ? "Tür" : o.kind === "oeffnung" ? "Öffnung" : "Fenster"} ${o._idx ?? ""}`.trim() };
       }
     }
@@ -745,7 +756,7 @@ const markiert = (el, marke) => (marke ? { ...el, [MARKE_FELD]: marke } : el);
  * @param {any} modell  Model record (see bauteilImModell).
  * @param {{art: string, ziel: {guid: string, quelle?: string, modell?: string}, params: any, vorher?: any, nachher?: any, herkunft?: any}} vorschlag
  * @param {{projektId?: string|number|null, naechsteIdx?: number, geschosshoehe_m?: number, zeit?: string, bestaetigt_durch?: string,
- *   marke?: {herkunft: string, herkunft_quellen?: string[], befehl_text: string|null, zeit: string, vorschlag_id: string}}} [opt]
+ *   marke?: {herkunft: string, herkunft_quellen?: string[], befehl_text: string|null, zeit: string, vorschlag_id: string, bestaetigt_durch?: string, satz?: string|null}}} [opt]
  *   naechsteIdx: free `_idx` for the second part of a split (default: naechsteFreieIdx(modell)); marke: origin mark written
  *   onto the changed element(s) as MARKE_FELD (only the real execution passes it, the check works on an unmarked copy).
  * @returns {{modell: any, journal?: ReturnType<typeof journalEintragAus>, warnungen: string[], neu: string[], entfernt: string[],

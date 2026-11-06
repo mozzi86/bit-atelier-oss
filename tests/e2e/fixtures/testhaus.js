@@ -95,6 +95,20 @@ export async function testhausSollSchreiben(request) {
     const r = await request.put(`${API}/BimModel/${modell.id}`, { data: { achseM: null } });
     if (!r.ok()) throw new Error(`Testhaus: Achse entfernen ${r.status()}`);
   }
+  // 107-13: the number of basements (programme field untergeschosse) is no part of the test house either — a run that stopped
+  // before its clean-up would freeze `untergeschosse: 1` into the snapshot of every later spec. Start every run without it.
+  if (modell.untergeschosse) {
+    console.warn("[testhaus] liegengebliebene Untergeschosse (untergeschosse) beim Start entfernt");
+    const r = await request.put(`${API}/BimModel/${modell.id}`, { data: { untergeschosse: 0 } });
+    if (!r.ok()) throw new Error(`Testhaus: Untergeschosse entfernen ${r.status()}`);
+  }
+  // 108-08: the position of the massing body (programme field footprintLageM) is no part of the test house either — a spec that
+  // moved the body and stopped before its clean-up would freeze that position into the snapshot (trap of 107-13). Start without it.
+  if (modell.footprintLageM != null) {
+    console.warn("[testhaus] liegengebliebene Massing-Lage (footprintLageM) beim Start entfernt");
+    const r = await request.put(`${API}/BimModel/${modell.id}`, { data: { footprintLageM: null } });
+    if (!r.ok()) throw new Error(`Testhaus: Massing-Lage entfernen ${r.status()}`);
+  }
   // 73-05: an outline edit stamps footprintQuelle "gezeichnet" — the test house carries no provenance
   // (73-02 expects no "Umriss" line on the new-build house). Start every run without it.
   if (modell.footprintQuelle != null) {
@@ -139,7 +153,15 @@ export async function testhausFootprintSetzen(request, footprintM) {
 export async function testhausZuruecksetzen(request, soll = testhausSoll()) {
   const { modell } = await testhausLaden(request);
   const { id, created_date, updated_date, ...felder } = soll; // eslint-disable-line no-unused-vars
-  const r = await request.put(`${API}/BimModel/${modell.id}`, { data: felder });
+  // 107-13: the server merges flat, so a field missing in the snapshot would stay as a spec left it — a basement count a spec left
+  // behind is written back as 0 (0 = no basement, the app treats it like an absent field). Only then: a record that never had the
+  // field does not get it (review 107-13, "a project without basements never gets the field written").
+  const ugZurueck = !("untergeschosse" in felder) && !!modell.untergeschosse;
+  // 108-08: the same for the position of the massing body — a spec that moved it leaves footprintLageM; it is cleared (null = no
+  // position, the app treats it like an absent field) only when the record carries one
+  const lageZurueck = !("footprintLageM" in felder) && modell.footprintLageM != null;
+  const daten = { ...felder, ...(ugZurueck ? { untergeschosse: 0 } : {}), ...(lageZurueck ? { footprintLageM: null } : {}) };
+  const r = await request.put(`${API}/BimModel/${modell.id}`, { data: daten });
   if (!r.ok()) throw new Error(`Testhaus: Reset ${r.status()} ${await r.text()}`);
   const { modell: danach } = await testhausLaden(request);
   const d = footprintAbweichung(danach.footprintM, soll.footprintM);

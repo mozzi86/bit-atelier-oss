@@ -12,7 +12,8 @@
 //
 // Storey source `geschosse` (the second argument of every function) is either
 //   - a number  = one storey height in m for all storeys (the project's `storeyHeight`), or
-//   - an array  = storey table [{level, name?, hoehe_m}] (programme field `geschosse`, D-BK-05), or
+//   - an array  = storey table [{level, name?, hoehe_m, kniestock_m?}] (programme field `geschosse`, D-BK-05; `kniestock_m` in m,
+//                 108-02, valid only on the row of the top storey), or
 //   - missing   = 3 m.
 // The number path multiplies exactly like the old code (`level * h`), so old projects produce the same digits.
 //
@@ -25,7 +26,11 @@
 // Roofs additionally `firsthoehe_m` (ridge rise above the eaves, m) and `neigung_grad` (degrees), kept apart because
 // the old field `pitch` held a rise in metres in the editor (until D-BK-25 the IFC export read it as degrees by mistake).
 //
+// 108-02 (D-EFH-01): knee wall of the top storey — kniestockAus / kniestockVerwaist / patchKniestock / MAX_KNIESTOCK_M.
+//
 // In:  element records, storey source. Out: plain numbers and objects; pure, no I/O, node-testable.
+
+import { dachRahmen } from "./dachRahmen.js";
 
 /** Storey height in m when nothing is known. [ASSUMED] 3.0 m: the long-standing default of the building programme. */
 export const STANDARD_GESCHOSSHOEHE_M = 3;
@@ -62,9 +67,27 @@ export const MAX_NEIGUNG_GRAD = 85;
 export const FLACHDACH_BIS_GRAD = 10;
 
 /**
- * @typedef {{level: number, name?: string, hoehe_m: number}} Geschoss  one row of the storey table (height in m)
+ * @typedef {{level: number, name?: string, hoehe_m: number, kniestock_m?: number}} Geschoss  one row of the storey table (height in m).
+ *   108-02 (D-EFH-01): `kniestock_m` (m, ≥ 0, optional) = knee wall of the TOP storey: height of the eaves above the top of the
+ *   structural slab below that storey. Only valid on the row of level `storeys − 1` (kniestockAus); absent = the roof sits on the top storey.
  * @typedef {number|Geschoss[]|null|undefined} Geschosse  storey source: one height in m, a storey table, or nothing (3 m)
  */
+
+/**
+ * Highest knee wall the input accepts, m. [ASSUMED] 2.5 m: above that the "knee wall" is a full storey wall; UI limit, no norm value.
+ */
+export const MAX_KNIESTOCK_M = 2.5;
+
+/**
+ * A stored knee wall value as a number in m, or null when it is missing or invalid (not finite, negative).
+ * @param {unknown} v
+ * @returns {number|null} m
+ */
+function kniestockWert(v) {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
 
 const zahl = (/** @type {unknown} */ v, /** @type {number} */ d) => (Number.isFinite(Number(v)) && v !== null && v !== "" ? Number(v) : d);
 
@@ -91,6 +114,8 @@ export function geschosshoehe(level, geschosse) {
     if (zeilen.length) {
       const treffer = zeilen.find((g) => Math.round(Number(g.level)) === l);
       if (treffer) return Number(treffer.hoehe_m);
+      // [ASSUMED] for a basement (l < 0) without its own row this is the nearest row too, usually the ground floor (107-13
+      // assumption A1, the plan text says `storeyHeight`; open decision of the user, see buildingModel.js basement loop)
       const nah = zeilen.reduce((b, g) => (Math.abs(Number(g.level) - l) < Math.abs(Number(b.level) - l) ? g : b));
       return Number(nah.hoehe_m);
     }
@@ -101,9 +126,11 @@ export function geschosshoehe(level, geschosse) {
 
 /**
  * Elevation of the lower edge of storey `level` above ±0.00, in m (the structural level, as `model.storeys[].elevation`).
- * Number/missing: `level * height` — the exact arithmetic of the old code. Table: the sum of the storey heights from
- * level 0 up to `level` (negative levels sum downwards, so level −1 lies one storey height below ±0).
- * @param {number} level storey index (integer; 0 = ground floor)
+ * Number/missing: `level * height` — the exact arithmetic of the old code; a negative level gives −|level| · height (107-13:
+ * level −1 lies at −3 m with 3 m storeys). Table: the sum of the storey heights from level 0 up to `level` (negative levels sum
+ * downwards over the rows −1 … level, so level −1 lies one storey height below ±0; a basement without its own row takes the
+ * height of the nearest row, see geschosshoehe()). Verified for basements in 107-13 (tests/unit/keller-grundriss-10713.test.js).
+ * @param {number} level storey index (integer; 0 = ground floor, negative = basement −1 … −U, 107-13)
  * @param {Geschosse} [geschosse]
  * @returns {number} metres
  */
@@ -247,16 +274,33 @@ export function dachHalbspannweite_m(points) {
 }
 
 /**
+ * Horizontal run of a drawn roof in m — the distance over which the ridge rise is reached: the half span for every form with a
+ * ridge in the middle (gable, hip, and a roof without `form`, the gable the 3D view has always drawn), the FULL span for a shed
+ * roof (107-10: `form: "pult"` rises from one eave to the other). The one place that knows the run; slope ↔ rise below use it.
+ * Review 107-10 (D-BK-25): the span is measured across the ridge of the roof's FRAME (dachRahmen.js: an exact rectangle in its own,
+ * possibly rotated frame, otherwise the bounding box; `firstrichtung: "quer"` turns it) — the frame the roof library builds the faces
+ * on. For an axis-aligned outline with the ridge along its longer side (every roof before 107-10) this is the half shorter side of
+ * the bounding box exactly as before (dachHalbspannweite_m).
+ * @param {{form?: string, firstrichtung?: string, points?: Array<{x: number, z: number}>}} rf
+ * @returns {number} metres (0 for no outline)
+ */
+export function dachLauf_m(rf) {
+  const r = dachRahmen(rf?.points, rf?.firstrichtung === "quer" ? "quer" : "laengs");
+  const halb = r ? r.halbB_m : 0;
+  return rf?.form === "pult" ? 2 * halb : halb;
+}
+
+/**
  * Ridge rise of a drawn roof in m. One of the two fields leads: a stored `neigung_grad` (the user fixed the slope, so the
- * rise follows the outline: half span × tan) wins over `firsthoehe_m`; without either the old field `pitch`, which the
+ * rise follows the outline: run × tan, dachLauf_m) wins over `firsthoehe_m`; without either the old field `pitch`, which the
  * editor always wrote in metres (label "Firsthöhe (m)"); else 2.5 m [ASSUMED editor default].
- * @param {{firsthoehe_m?: number, pitch?: number, neigung_grad?: number, points?: Array<{x: number, z: number}>}} rf
+ * @param {{firsthoehe_m?: number, pitch?: number, neigung_grad?: number, form?: string, firstrichtung?: string, points?: Array<{x: number, z: number}>}} rf
  * @returns {number} metres
  */
 export function dachFirsthoehe_m(rf) {
   const g = zahl(rf?.neigung_grad, NaN);
-  const halb = dachHalbspannweite_m(rf?.points);
-  if (g >= 0 && halb > 0) return firsthoeheAusNeigung(rf?.points, g);
+  const lauf = dachLauf_m(rf);
+  if (g >= 0 && lauf > 0) return lauf * Math.tan((Math.max(0, Math.min(MAX_NEIGUNG_GRAD, g)) * Math.PI) / 180);
   const f = zahl(rf?.firsthoehe_m, NaN);
   if (f >= 0) return f;
   const p = zahl(rf?.pitch, NaN);
@@ -268,26 +312,30 @@ export function dachFirsthoehe_m(rf) {
  * builds. The ONE derivation for 3D view, inspector, IFC class and IFC data sheet (D-BK-25): a roof that only has the old
  * `pitch` gets its real slope from that rise in metres, never the metres read as degrees (the old IFC reading, which called
  * nearly every roof flat).
- * @param {{firsthoehe_m?: number, pitch?: number, neigung_grad?: number, points?: Array<{x: number, z: number}>}} rf
+ * 107-10: the run is dachLauf_m (full span for a shed roof `form: "pult"`, half span otherwise, both across the ridge of the roof frame —
+ * unchanged for every axis-aligned roof without `form`/`firstrichtung`; a rotated rectangle and a ridge "quer" follow their frame, review 107-10).
+ * @param {{firsthoehe_m?: number, pitch?: number, neigung_grad?: number, form?: string, firstrichtung?: string, points?: Array<{x: number, z: number}>}} rf
  * @returns {number} degrees, 0…MAX_NEIGUNG_GRAD (0 when the outline is unknown)
  */
 export function dachNeigung_grad(rf) {
   const g = zahl(rf?.neigung_grad, NaN);
   if (g >= 0) return Math.min(MAX_NEIGUNG_GRAD, g);
-  const halb = dachHalbspannweite_m(rf?.points);
-  if (!(halb > 0)) return 0;
-  return (Math.atan2(dachFirsthoehe_m(rf), halb) * 180) / Math.PI;
+  const lauf = dachLauf_m(rf);
+  if (!(lauf > 0)) return 0;
+  return (Math.atan2(dachFirsthoehe_m(rf), lauf) * 180) / Math.PI;
 }
 
 /**
- * Ridge rise in m for a slope in degrees over the half span of an outline (inverse of dachNeigung_grad).
+ * Ridge rise in m for a slope in degrees over the half span of an outline (inverse of dachNeigung_grad for a gable with the ridge
+ * along the longest side). Review 107-10: the half span of the roof frame (dachLauf_m), the same as the bounding box for every
+ * axis-aligned outline. For a roof record with form or ridge direction use dachFirsthoehe_m({...rf, neigung_grad}).
  * @param {Array<{x: number, z: number}>|undefined} points roof outline in m
  * @param {number} grad slope in degrees (clamped to 0…MAX_NEIGUNG_GRAD)
  * @returns {number} metres
  */
 export function firsthoeheAusNeigung(points, grad) {
   const g = Math.max(0, Math.min(MAX_NEIGUNG_GRAD, zahl(grad, 0)));
-  return dachHalbspannweite_m(points) * Math.tan((g * Math.PI) / 180);
+  return dachLauf_m({ points }) * Math.tan((g * Math.PI) / 180);
 }
 
 /**
@@ -337,7 +385,12 @@ export function geschosseAus(programm) {
   if (Array.isArray(roh)) {
     const sauber = roh
       .filter((g) => g && Number.isFinite(Number(g.level)) && Number(g.hoehe_m) > 0)
-      .map((g) => ({ level: Math.round(Number(g.level)), name: typeof g.name === "string" ? g.name : undefined, hoehe_m: Number(g.hoehe_m) }))
+      .map((g) => {
+        // 108-02: the knee wall survives the cleaning (only a finite value ≥ 0; anything else is dropped); a row without it keeps
+        // exactly the old three keys
+        const k = kniestockWert(g.kniestock_m);
+        return { level: Math.round(Number(g.level)), name: typeof g.name === "string" ? g.name : undefined, hoehe_m: Number(g.hoehe_m), ...(k != null ? { kniestock_m: k } : {}) };
+      })
       .sort((a, b) => a.level - b.level);
     if (sauber.length) return sauber;
   }
@@ -356,10 +409,13 @@ export function geschosseAus(programm) {
  */
 export function geschossHoeheAusModell(model, level = 0) {
   const liste = Array.isArray(model?.storeys) ? model.storeys : [];
-  const i = liste.findIndex((st) => Math.round(Number(st?.level)) === Math.round(level));
-  if (i < 0) return 0;
-  const oben = liste[i + 1] ? Number(liste[i + 1].elevation) : Number(model?.totalHeight);
-  const h = oben - Number(liste[i].elevation);
+  const l = Math.round(level);
+  const st = liste.find((x) => Math.round(Number(x?.level)) === l);
+  if (!st) return 0;
+  // 107-13: the storey above is found by its LEVEL, not by the next list index (basements are appended after the top storey)
+  const ueber = liste.find((x) => Math.round(Number(x?.level)) === l + 1);
+  const oben = ueber ? Number(ueber.elevation) : Number(model?.totalHeight);
+  const h = oben - Number(st.elevation);
   return Number.isFinite(h) && h > 0 ? h : 0;
 }
 
@@ -406,5 +462,62 @@ export function patchGeschosshoehe(programm, level, hoehe_m) {
   const zeilen = hat
     ? basis.map((g) => (Math.round(Number(g.level)) === l ? { ...g, hoehe_m: Number(hoehe_m) } : g))
     : [...basis, { level: l, name: l === 0 ? "EG" : l > 0 ? `${l}. OG` : `${-l}. UG`, hoehe_m: Number(hoehe_m) }].sort((a, b) => a.level - b.level);
+  return { geschosse: zeilen };
+}
+
+/**
+ * 108-02 (D-EFH-01): knee wall of the top storey in m, from the storey table. Only the row of the top storey `storeys − 1` counts — when a
+ * storey is added later, the value of the old top storey no longer applies (the studio says so, kniestockVerwaist). Rows ABOVE the top
+ * storey (left in the table after the storey count was lowered, the studio does not shorten it) are ignored, so a knee wall set on the
+ * new top storey takes effect (108-02 review fix). A number or no table gives null.
+ * @param {Geschosse} geschosse storey source
+ * @param {number} storeys number of storeys above ground (integer ≥ 1)
+ * @returns {number|null} m (≥ 0), null = no knee wall
+ */
+export function kniestockAus(geschosse, storeys) {
+  if (!istTabelle(geschosse)) return null;
+  const top = Math.max(1, Math.round(zahl(storeys, 1))) - 1;
+  const zeile = geschosse.find((g) => g && Number.isFinite(Number(g.level)) && Math.round(Number(g.level)) === top);
+  return zeile ? kniestockWert(zeile.kniestock_m) : null;
+}
+
+/**
+ * 108-02: does a row carry a knee wall that does not apply (it is not the row of the top storey `storeys − 1`)? The studio then shows
+ * "Kniestock gilt nur für das oberste Geschoss — neu setzen"; setting it again (patchKniestock) removes the field from every other row.
+ * @param {Geschosse} geschosse storey source
+ * @param {number} storeys number of storeys above ground (integer ≥ 1)
+ * @returns {boolean}
+ */
+export function kniestockVerwaist(geschosse, storeys) {
+  if (!istTabelle(geschosse)) return false;
+  const top = Math.max(1, Math.round(zahl(storeys, 1))) - 1;
+  return geschosse.some((g) => g && kniestockWert(g.kniestock_m) != null && Math.round(Number(g.level)) !== top);
+}
+
+/**
+ * 108-02: programme patch "the top storey gets this knee wall" (or loses it: null, empty, negative or not a number removes the field).
+ * Without a table it is created from `storeys × storeyHeight` (geschosseErzeugen); a top storey that is no row yet gets one with its
+ * current height (geschosshoehe). The field is removed from every OTHER row, so a stale value of a former top storey disappears with
+ * the new input. Rows stay sorted by level; every other field of a row is kept. Removing without a table returns an empty patch.
+ * @param {{geschosse?: unknown, storeys?: number, storeyHeight?: number}|null|undefined} programm current programme
+ * @param {number|null|undefined} kniestock_m knee wall in m (≥ 0) or null to remove it
+ * @returns {{geschosse?: Geschoss[]}} patch for `buildingProgram.set` (`{}` = nothing to change)
+ */
+export function patchKniestock(programm, kniestock_m) {
+  const k = kniestockWert(kniestock_m);
+  const roh = programm?.geschosse;
+  // removing a knee wall where no table exists changes nothing: no table is created (the record keeps `geschosse: null`)
+  if (k == null && !(Array.isArray(roh) && roh.length)) return {};
+  const n = Math.max(1, Math.round(zahl(programm?.storeys, 1)));
+  const top = n - 1;
+  const sh = zahl(programm?.storeyHeight, 0) > 0 ? Number(programm?.storeyHeight) : STANDARD_GESCHOSSHOEHE_M;
+  /** @type {Geschoss[]} */
+  const basis = Array.isArray(roh) && roh.length ? /** @type {Geschoss[]} */ (roh) : geschosseErzeugen(n, sh);
+  const quelle = Array.isArray(roh) && roh.length ? /** @type {Geschosse} */ (roh) : sh;
+  const ohne = (/** @type {Geschoss} */ g) => { const rest = { ...g }; delete rest.kniestock_m; return rest; };
+  const hat = basis.some((g) => Math.round(Number(g.level)) === top);
+  const zeilen = (hat ? basis : [...basis, { level: top, name: top === 0 ? "EG" : `${top}. OG`, hoehe_m: geschosshoehe(top, quelle) }])
+    .map((g) => (Math.round(Number(g.level)) === top && k != null ? { ...ohne(g), kniestock_m: k } : ohne(g)))
+    .sort((a, b) => a.level - b.level);
   return { geschosse: zeilen };
 }

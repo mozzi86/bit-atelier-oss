@@ -17,7 +17,7 @@
  * @type {Record<string, number>}
  */
 export const LAYER_VERSION = {
-  werkstatt_layer: 5,
+  werkstatt_layer: 6, // 107-11: optional `dachschraege_quelle`, `kniestock_m` at a unit type (einheiten[])
   netz_layer: 1,
   aussenanlagen_layer: 1,
   entwaesserung_layer: 1,
@@ -34,8 +34,11 @@ export const LAYER_VERSION = {
   barrierefreiheit_layer: 1, // 73-13 rest (BarrierefreiheitPlanner, { abweichungen })
   schallschutz_vermerke_layer: 1, // 73-13 rest (SchallschutzPlanner summary, { abweichungen })
   bauteil_attribute_layer: 1, // 97-02: { attribute: { [wt-/hull-id]: {status, kg, gewerk, …} } }
-  massing_layer: 1, // 98-01: { koerper[], gruppen{nr → definition}, naechsteId } (massing/massingModell.js)
+  massing_layer: 6, // 98-01: { koerper[], gruppen{nr → definition}, naechsteId } (massing/massingModell.js); 107-05: optional `loecher`; 107-06: optional `oeffnungen`; 107-07: optional `hilfslinien`; 107-08: optional body fields `guid`, `spiegel`, `massstab`, `bauteil_typ`, `bauteil_typ_quelle`, `status`; 107-10: optional `dach`
   aufbauten_layer: 1, // 107-03: { aufbauten: { "<id>": { name, skins[] } } } project build-ups (bauteil/aufbauten.js, D-BK-22)
+  solidrelationen_layer: 1, // 107-10: { relationen: [{ id, ziel_guid, operator_guid, operation, aktiv }] } stored solid element operations (bauteil/seo.js); the target stays unchanged, the result is derived
+  csg_cache_layer: 1, // 107-14: { eintraege: { "<guid>|<art>": { pruefsumme, ort, objekt_id, inhalt, groesse_bytes, dreiecke, volumen_m3, quelle, warnung, erzeugt } } } — mesh CACHE of the CSG core, never a source (csg/cache.js, D-BK-08a)
+  ansicht_layer: 1, // 107-12: { ausschnitte: [{ id, name, type, level, scale, combo, ebenen_sichtbar?, cutHeight, brille, sw, strukturdarstellung, optionen, regeln, ki_vermerk }], ebenen: [{ id, visible, locked, farbe?, linientyp?, drucken? }], kombinationen: { name: [ids] } } saved views of the BIM studio (plan/ansichtszustand.js) - parameters only, never geometry (D-BK-08a)
 };
 
 /**
@@ -56,7 +59,10 @@ export const MIGRATIONEN = {
   // "auto") and `geschosseJeRiegel` ({ "<k>": n }, missing = every bar has `storeys`).
   // werkstatt_layer 4 → 5 (75-10): one OPTIONAL field — `bewertungsGewichte` (project weights of
   // the variant evaluation; missing = office standard).
-  werkstatt_layer: [(wert) => wert, (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert })],
+  // werkstatt_layer 5 → 6 (107-11, D-BK-14): a unit type in `einheiten[]` may carry OPTIONAL `dachschraege_quelle` ("geometrie" |
+  // "hand"; missing = "hand" = the typed-in `dachschraege` as before) and `kniestock_m` (m, knee wall of the roof storey; missing =
+  // KNIESTOCK_STANDARD_M of dachschraegenAnteile.js). A v5 blob is a valid v6 blob — nothing to rewrite.
+  werkstatt_layer: [(wert) => wert, (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert })],
   // lieferung_layer 1 → 2 (66-15): each delivery may carry `geschosse` (storey names the
   // section covers; missing/empty = same-named storey or whole building). A v1 blob is a
   // valid v2 blob — lieferplan.normalisiereLayer fills the missing list with [].
@@ -64,6 +70,24 @@ export const MIGRATIONEN = {
   // sketch_layer 1 → 2 (72-05): optional `strokes` (freehand ink, [x m, y m, pressure] points).
   // A v1 sketch is a valid v2 sketch without ink — nothing to rewrite.
   sketch_layer: [(wert) => wert, (wert) => ({ ...wert })],
+  // massing_layer 1 → 2 (107-05): a body (`koerper[].loecher`) and a group definition (`gruppen[nr].loecher`) may carry
+  // OPTIONAL inner rings (courtyards, Pkt[][] in m, same frame as `profil`); missing = no holes. A v1 blob is a valid v2 blob —
+  // nothing to rewrite (the orientation is normalised on reading, massingModell.geometrie, never in the store).
+  // massing_layer 2 → 3 (107-06): a body and a group definition may carry OPTIONAL `oeffnungen` [{kante, u, width, height, sill}]
+  // (openings pushed through a wall-like body; kante = edge i of the STORED outer ring, profil[i] → profil[i+1], independent of the
+  // orientation convention; u/width/height/sill in m like the wall openings); missing = no openings. A v2 blob is a valid v3 blob — nothing to rewrite.
+  // massing_layer 3 → 4 (107-07): the layer may carry an OPTIONAL list `hilfslinien` [{id, art: "gerade"|"strecke"|"punkt", a{x,y}, b?{x,y}}]
+  // (guide lines / points of the modeller, site m; snap targets only, never printed or exported, D-BK-16); missing = none. A v3 blob
+  // is a valid v4 blob — nothing to rewrite.
+  // massing_layer 4 → 5 (107-08): a body may carry OPTIONAL `guid` (22 characters IFC base-64, written lazily, never copied),
+  // `spiegel` (boolean, mirror of the instance about its local y axis), `massstab` {x, y, z} (instance scale, default 1),
+  // `bauteil_typ` (key of BAUTEIL_TYPEN), `bauteil_typ_quelle` ("automatisch" | "nutzer" | "zurueckgenommen") and `status`
+  // (bestand/neubau/abbruch/temporaer); missing = untyped body as before, identity transform, derived GUID. A v4 blob is a valid
+  // v5 blob — nothing to rewrite (old bodies stay untyped until their next change of form, D-BK-09).
+  // massing_layer 5 → 6 (107-10): a body and a group definition may carry an OPTIONAL roof `dach` {form, neigung_grad, firstrichtung}
+  // (form "flach" | "sattel" | "walm" | "pult", slope in degrees, ridge "laengs" | "quer" to the longest side; faces derived by
+  // bauteil/dachGeometrie.js, never stored); missing = no roof, the body reads as before. A v5 blob is a valid v6 blob.
+  massing_layer: [(wert) => wert, (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert })],
 };
 
 /** @param {unknown} feld @returns {feld is string} true for a registered layer field */

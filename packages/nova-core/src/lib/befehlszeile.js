@@ -9,12 +9,14 @@
 export const BEFEHLE = Object.freeze({
   auswahl: "Auswahl", linie: "Linie", pushpull: "Push/Pull", verschieben: "Verschieben", drehen: "Drehen",
   skalieren: "Skalieren", folgemir: "Folge mir", gelaende: "Gelände", riegel: "Riegel",
+  hilfslinie: "Hilfslinie", // 107-07
 });
 
 /**
  * What the modeller expects next.
  * @param {string|null} werkzeug active tool id (null = none)
- * @param {{punkte?: Array<any>, auswahl?: Array<any>, start?: any}} [zustand] step state of the modeller
+ * @param {{punkte?: Array<any>, auswahl?: Array<any>, start?: any, hlArt?: string, kopie?: boolean}} [zustand] step state of the modeller;
+ *   107-07: hlArt = kind of the guide being drawn (gerade/strecke/punkt), kopie = the rotate tool makes copies
  * @returns {{befehl: string, aufforderung: string}}
  */
 export function befehlsAufforderung(werkzeug, zustand = {}) {
@@ -41,7 +43,16 @@ export function befehlsAufforderung(werkzeug, zustand = {}) {
           : "Ziel klicken (Strg = Kopie) oder Abstand tippen + Enter";
       break;
     case "drehen":
-      a = gewaehlt ? "Winkel in Grad tippen + Enter" : "Körper anklicken";
+      // 107-07: a click beside the bodies sets the centre; Ctrl+Enter (or the "Kopie" switch) = rotated copy, then *n or /n
+      a = !gewaehlt ? "Körper anklicken"
+        : zustand.kopie ? "Winkel tippen + Enter = gedrehte Kopie, danach *4 oder /4 · Klick daneben = Drehpunkt"
+          : "Winkel in Grad tippen + Enter (Strg+Enter = Kopie) · Klick daneben = Drehpunkt";
+      break;
+    case "hilfslinie":
+      // 107-07: guide line (infinite), guide piece or guide point; snap targets, never printed
+      a = zustand.hlArt === "punkt" ? "Hilfspunkt klicken"
+        : n === 0 ? (zustand.hlArt === "strecke" ? "Anfang der Hilfsstrecke klicken" : "Ersten Punkt der Hilfslinie klicken")
+          : "Zweiten Punkt klicken oder Länge tippen + Enter";
       break;
     case "skalieren":
       a = gewaehlt ? "Faktor tippen + Enter" : "Körper anklicken";

@@ -5,7 +5,11 @@
 //      "brandschutz_layer"). Der Server merged flach — zwei Schreiber auf
 //      DEMSELBEN Feld überschreiben sich still. Feld-Registry (Stand 45):
 //      Programmfelder (useBimModelSync; 86-07: + achseM, the centre line drawn in the
-//      massing studio) · Elementfelder (BitBimStudio) ·
+//      massing studio; 107-02: + geschosse; 107-13: + untergeschosse, the number of
+//      basements 0 … 3, written only when not 0 or was not 0; 108-08: + footprintLageM, the
+//      position of the massing body on the site in m, written only when the body was moved or
+//      the field exists; since 108-08 the write-back sends only the changed programme fields) ·
+//      Elementfelder (BitBimStudio) ·
 //      brandschutz_layer (BrandschutzPlanner) · sketch_layer (BIT Sketcher via
 //      useSketchLayer UND Grundriss-Sketch-Editor in BitBimStudio — beide über
 //      saveBimModel, nie gleichzeitig gemountet [eigene Route vs. Tab]) ·
@@ -18,7 +22,8 @@
 //      raumGrenzen { "<level>|<zoneA>|<zoneB>": m } — written by the workshop only, the
 //      focus reaches it through the onRaumGrenzenChange callback; 86-04: zerlegung
 //      "auto"|"rand" (86-07 "achse", 86-06 "skelett") + geschosseJeRiegel { "<k>": n }; 75-10:
-//      bewertungsGewichte { "<dimension>": weight } via the proposals panel callback — all
+//      bewertungsGewichte { "<dimension>": weight } via the proposals panel callback; 107-11 (v6):
+//      per unit type optional dachschraege_quelle "geometrie"|"hand" + kniestock_m — all
 //      written by the workshop) ·
 //      netz_layer (TgaNetzEditor, Phase 41: knoten/kanten des TGA-Netzes je Gewerk,
 //      mengen — Phase 63 erweitert dasselbe Feld additiv, kein zweites Leitungsmodell) ·
@@ -56,22 +61,42 @@
 //      eigenes Feld, schallschutz_layer bleibt bei der Plankarte) ·
 //      aufbauten_layer (BitBimStudio via useFachlayer, 107-03/D-BK-22: { aufbauten: { "<id>": { name, skins[{name, material, thickness (mm),
 //      funktion?, prioritaet?}] } } } — projektbezogene Wand-/Deckenaufbauten; Schema und Nachschlagen in @core/lib/bauteil/aufbauten.js,
-//      die Leser (usePlanModel, AVA, Studio) übergeben den Layer an setzeProjektAufbauten).
-//      Neue Layer hier ergänzen — UND in @core/lib/fachlayerSchema.js (LAYER_VERSION) und
-//      .planning/FACHLAYER-SCHEMA.md (87-07: jeder Layer trägt `v` + `updatedAt`; Migration
+//      die Leser (usePlanModel, AVA, Studio) übergeben den Layer an setzeProjektAufbauten) ·
+//      csg_cache_layer (107-14/D-BK-08a: { eintraege: { "<guid>|<art>": { pruefsumme, ort, objekt_id, inhalt, groesse_bytes,
+//      dreiecke, volumen_m3, quelle, warnung, erzeugt } } } — computed solids of the CSG core as a discardable CACHE, never a
+//      source; ONE writer: useCsgCache (@designer/lib/useCsgCache.js), mounted in the BIM studio by the first caller (107-09),
+//      with its own debounce, never inside the input effects of the element fields; schema in @core/lib/csg/cache.js) ·
+//      solidrelationen_layer (BitBimStudio via useFachlayer, 107-10: { relationen: [{ id, ziel_guid, operator_guid, operation,
+//      aktiv }] } — stored solid element operations; the target stays unchanged, the result is derived by @core/lib/bauteil/seo.js;
+//      switching off = aktiv: false). massing_layer v6 (107-10): optional `dach` {form, neigung_grad, firstrichtung} per body.
+//      ansicht_layer (BitBimStudio via useFachlayer, 107-12/D-BK-21: { ausschnitte: [{ id, name, type, level, scale, combo,
+//      cutHeight, brille, sw, strukturdarstellung, optionen, regeln, ki_vermerk }], ebenen: [{ id, visible, locked, farbe?, linientyp?,
+//      drucken? }], kombinationen: {} } — saved views (parameters only, never geometry, D-BK-08a); ONE writer: the BIM studio;
+//      schema in @core/lib/plan/ansichtszustand.js; the lens choice in localStorage stays only the last used value).
+//      Neue Layer hier ergänzen — UND in @core/lib/fachlayerSchema.js (LAYER_VERSION), in
+//      @core/lib/abgleich/modellAbgleich.js (FELD_NAMEN, deutscher Name für die Konfliktkarte; Test in
+//      fachlayerSchema.test.js) und .planning/FACHLAYER-SCHEMA.md (87-07: jeder Layer trägt `v` + `updatedAt`; Migration
 //      und Stempel laufen in loadBimModel/saveBimModel, nicht hier).
 //   2. Lesen NUR über loadBimModel, Schreiben NUR über saveBimModel (ein
 //      serialisierter Schreibpfad, create-on-miss geschützt) — nie bitApi
 //      direkt, sonst entstehen Duplikat-Datensätze.
 //   3. loadingRef/lastSaved-Guard: sonst schreibt der Debounce den frisch
 //      geladenen Stand sofort wieder zurück.
+//   5. 106-09 review — another device changed the layer: while this tab has not changed it (local value = the base the
+//      change started from) the layer follows live and the field is taken care of (aufFremdenStand). When this tab
+//      changed it as well, it is NOT taken over: saveBimModel compares the next save of the field three ways against the
+//      old base and shows a conflict card instead of overwriting (no silent loss in either direction).
 //   4. Raum-verankerte Einträge nutzen roomKey aus @designer/lib/asr
 //      (`level:name`). Dokumentierte Einschränkung wie dort: Umbenennen
 //      eines Raums verwaist die Einträge, Namenskollision im selben Geschoss
 //      teilt einen Key.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadBimModel, saveBimModel } from "@core/lib/useBimModelSync";
+import { loadBimModel, saveBimModel, aufFremdenStand } from "@core/lib/useBimModelSync";
+import { gleichWert } from "@core/lib/abgleich/dreiWege";
 import { pendingNachSave } from "@designer/lib/fachlayerPending";
+
+/** @param {any} x @returns {any} a layer without its schema stamp `v` (updatedAt is ignored by gleichWert anyway) */
+const ohneStempel = (x) => (x && typeof x === "object" && !Array.isArray(x) ? { ...x, v: undefined } : x);
 
 /**
  * Persistenter Fachlayer-State je Projekt.
@@ -90,6 +115,27 @@ export function useFachlayer(projectId, feld, defaultValue) {
   // Unmount und Projektwechsel geflusht, damit der 1,2-s-Debounce Eingaben
   // kurz vor einem Tab-/Projektwechsel nicht verliert.
   const pendingRef = useRef(null);
+  // 106-09 review: the current value for the live merge (read inside the holder callback, not in a stale closure)
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // 106-09 review: another device changed this layer (change stream) - follow it while this tab has not changed it.
+  useEffect(() => {
+    if (!projectId) return undefined;
+    return aufFremdenStand((pid, f) => {
+      if (pid !== projectId || loadingRef.current || !(feld in f.patch)) return [];
+      const lokal = stateRef.current;
+      const fremd = f.patch[feld] ?? defaultRef.current;
+      // the schema stamp (v, updatedAt) is set on save only, so it does not count as a change here
+      const gleich = (/** @type {any} */ a, /** @type {any} */ b) => gleichWert(ohneStempel(a), ohneStempel(b));
+      if (!gleich(lokal, f.vorher[feld] ?? defaultRef.current) && !gleich(lokal, fremd)) return []; // changed here too: the save compares
+      lastSaved.current = JSON.stringify(fremd); // arrived, not changed here: nothing to write back
+      pendingRef.current = null;
+      stateRef.current = fremd;
+      setState(fremd);
+      return [feld];
+    });
+  }, [projectId, feld]);
 
   const setUser = useCallback((v) => {
     // Eingaben WÄHREND des Ladens ignorieren (Fenster = ein Netz-Request):
@@ -175,5 +221,9 @@ export function useFachlayer(projectId, feld, defaultValue) {
     }
   }, []);
 
-  return [state, setUser];
+  // 107-14 review: the third element tells an async writer (useCsgCache) whether the layer is loading right now — setUser
+  // drops a value then, so the writer must not count it as written. Additive: callers that destructure two keep working.
+  const istLadend = useCallback(() => loadingRef.current, []);
+
+  return [state, setUser, istLadend];
 }

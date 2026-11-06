@@ -14,7 +14,13 @@
 //                lazily loaded page (dynamic entries below a pages/ folder, from dist/.vite/manifest.json)
 //   chunks.<n>   each named manual chunk (three, charts, map, motion, planegcs, ifc, …)
 //   chunk_max    the largest JS chunk that has no limit of its own
-//   gesamt       all files of dist/ together
+//   assets.<n>   each WebAssembly file by name (107-18: the CSG library's binary "manifold"); RAW bytes, because groessen.mjs
+//                does not gzip binaries — the conservative value (a server that compresses it transfers less)
+//   gesamt       all files of dist/ together EXCEPT the assets with a limit of their own (assets.<n>, since 107-18): those
+//                are checked on their own line only. The report prints this line as "gesamt (ohne assets.*)" and names
+//                the total with them. OPEN user decision (107-18 review, 01.11.2026): keep this reading, or count the
+//                binary in gesamt and raise gesamt deliberately by its measured size with --schreiben. Until decided it is
+//                a release blocker in STATE.md/ROADMAP.md.
 // Limits live in budget.json (repo root, unit "Byte (gzip)"). `--schreiben` sets them to today's
 // measurement plus the buffer (puffer_prozent, rounded UP to whole KB) — only after a deliberate decision
 // that the growth is worth it; the commit then shows the raise.
@@ -68,8 +74,9 @@ export function statischeHuelle(manifest, schluessel, dateien = new Set()) {
  * @param {Record<string, {file: string, src?: string, name?: string, isEntry?: boolean, isDynamicEntry?: boolean, imports?: string[], css?: string[]}>} manifest
  * @returns {{
  *   entry: number, css: number, vendor: number|null, erste_runde: number, route_max: number, route_max_name: string,
- *   routen: Record<string, number>, chunks: Record<string, number>, gesamt: number,
- * }} gzip bytes; `routen` = sum before each route; `chunks` = every JS chunk by name (largest file if a name repeats)
+ *   routen: Record<string, number>, chunks: Record<string, number>, assets: Record<string, number>, gesamt: number,
+ * }} gzip bytes; `routen` = sum before each route; `chunks` = every JS chunk by name (largest file if a name repeats);
+ *   `assets` = every WebAssembly file by name (raw bytes)
  */
 export function messwerteAus(messung, manifest) {
   const gz = new Map(messung.zeilen.map((z) => [z.rel, z.gz ?? z.roh]));
@@ -92,7 +99,14 @@ export function messwerteAus(messung, manifest) {
 
   /** @type {Record<string, number>} */
   const chunks = {};
+  /** @type {Record<string, number>} WebAssembly files by name (raw bytes, see file head) */
+  const assets = {};
   for (const z of messung.zeilen) {
+    if (/\.wasm$/.test(z.rel)) {
+      const n = chunkName(z.rel);
+      assets[n] = Math.max(assets[n] ?? 0, z.gz ?? z.roh);
+      continue;
+    }
     if (!/\.m?js$/.test(z.rel)) continue;
     const n = chunkName(z.rel);
     chunks[n] = Math.max(chunks[n] ?? 0, z.gz ?? z.roh);
@@ -108,6 +122,7 @@ export function messwerteAus(messung, manifest) {
     route_max_name: routeMaxName,
     routen,
     chunks,
+    assets,
     gesamt: messung.gesamtGz,
   };
 }
@@ -115,7 +130,7 @@ export function messwerteAus(messung, manifest) {
 /**
  * Limits of budget.json.
  * @typedef {{entry?: number, css?: number, vendor?: number, erste_runde?: number, route_max?: number,
- *   chunk_max?: number, gesamt?: number, chunks?: Record<string, number>}} Grenzen
+ *   chunk_max?: number, gesamt?: number, chunks?: Record<string, number>, assets?: Record<string, number>}} Grenzen
  */
 
 /**
@@ -124,9 +139,23 @@ export function messwerteAus(messung, manifest) {
  */
 
 /**
+ * The total of the build without the WebAssembly assets that have a limit of their own (see pruefeBudget, 107-18).
+ * @param {{gesamt: number, assets?: Record<string, number>}} werte measured values (bytes)
+ * @param {Grenzen} grenzen
+ * @returns {number} bytes
+ */
+export function gesamtOhneEigeneAssets(werte, grenzen) {
+  return Object.keys(grenzen.assets || {}).reduce((s, n) => s - (werte.assets?.[n] ?? 0), werte.gesamt);
+}
+
+/**
  * Compares the measured values with the limits (pure). A named chunk with a limit that no longer exists is
  * "fehlt" — reported, but no failure (a removed chunk is shrinkage; update the budget). `chunk_max` applies to
  * every JS chunk that has no own limit (keyed "chunk:<name>" in the result).
+ * 107-18: a WebAssembly asset with a limit of its own (grenzen.assets) is checked against that limit and is NOT counted a
+ * second time in `gesamt` (gesamtOhneEigeneAssets) — the asset is budgeted on its own line, the total keeps its limit for
+ * everything else. [ASSUMED] reading of the plan rule "measured budget entry for the binary, no other limit raised"; the
+ * alternative (binary inside `gesamt`) would need the total raised by the binary's size (decision of the user).
  * @param {ReturnType<typeof messwerteAus>} werte
  * @param {Grenzen} grenzen gzip bytes
  * @returns {{vergleiche: Vergleich[], ueber: Vergleich[]}}
@@ -138,9 +167,12 @@ export function pruefeBudget(werte, grenzen) {
     if (typeof grenze !== 'number') return;
     vergleiche.push({ schluessel, wert, grenze, status: wert == null ? 'fehlt' : wert > grenze ? 'ueber' : 'ok' });
   };
-  for (const k of /** @type {const} */ (['entry', 'css', 'vendor', 'erste_runde', 'route_max', 'gesamt'])) vergleiche1(k, werte[k], grenzen[k]);
+  for (const k of /** @type {const} */ (['entry', 'css', 'vendor', 'erste_runde', 'route_max'])) vergleiche1(k, werte[k], grenzen[k]);
+  vergleiche1('gesamt', gesamtOhneEigeneAssets(werte, grenzen), grenzen.gesamt);
   const eigene = grenzen.chunks || {};
   for (const [name, grenze] of Object.entries(eigene)) vergleiche1(`chunks.${name}`, werte.chunks[name] ?? null, grenze);
+  // 107-18: WebAssembly files with a limit of their own (a missing one is "fehlt", like a named chunk)
+  for (const [name, grenze] of Object.entries(grenzen.assets || {})) vergleiche1(`assets.${name}`, werte.assets?.[name] ?? null, grenze);
   if (typeof grenzen.chunk_max === 'number') {
     for (const [name, wert] of Object.entries(werte.chunks)) {
       if (Object.prototype.hasOwnProperty.call(eigene, name) || name === 'vendor') continue;
@@ -166,17 +198,21 @@ export function grenzeAus(wert, pufferProzent) {
 
 /**
  * New limits from today's measurement (for --schreiben): every top-level value, every named manual chunk
- * of vite.config.js that exists, and chunk_max over the remaining chunks.
+ * of vite.config.js that exists, chunk_max over the remaining chunks, and every named WebAssembly asset that exists.
  * @param {ReturnType<typeof messwerteAus>} werte
  * @param {number} pufferProzent
  * @param {ReadonlyArray<string>} benannte chunk names that get their own limit
+ * @param {ReadonlyArray<string>} [benannteAssets] WebAssembly asset names that get their own limit
  * @returns {Grenzen}
  */
-export function grenzenAus(werte, pufferProzent, benannte) {
+export function grenzenAus(werte, pufferProzent, benannte, benannteAssets = []) {
   /** @type {Record<string, number>} */
   const chunks = {};
   for (const n of benannte) if (typeof werte.chunks[n] === 'number' && n !== 'vendor') chunks[n] = grenzeAus(werte.chunks[n], pufferProzent);
   const rest = Object.entries(werte.chunks).filter(([n]) => !(n in chunks) && n !== 'vendor').reduce((m, [, w]) => Math.max(m, w), 0);
+  /** @type {Record<string, number>} */
+  const assets = {};
+  for (const n of benannteAssets) if (typeof werte.assets?.[n] === 'number') assets[n] = grenzeAus(werte.assets[n], pufferProzent);
   return {
     entry: grenzeAus(werte.entry, pufferProzent),
     css: grenzeAus(werte.css, pufferProzent),
@@ -184,13 +220,17 @@ export function grenzenAus(werte, pufferProzent, benannte) {
     erste_runde: grenzeAus(werte.erste_runde, pufferProzent),
     route_max: grenzeAus(werte.route_max, pufferProzent),
     chunk_max: grenzeAus(rest, pufferProzent),
-    gesamt: grenzeAus(werte.gesamt, pufferProzent),
+    gesamt: grenzeAus(gesamtOhneEigeneAssets(werte, { assets }), pufferProzent), // the budgeted assets on their own lines
     chunks,
+    ...(Object.keys(assets).length ? { assets } : {}),
   };
 }
 
 /** Named manual chunks of vite.config.js (manualChunks) that get a limit of their own. */
-export const BENANNTE_CHUNKS = Object.freeze(['three', 'charts', 'map', 'motion', 'planegcs', 'ifc']);
+export const BENANNTE_CHUNKS = Object.freeze(['three', 'charts', 'map', 'motion', 'planegcs', 'ifc', 'csg']); // 107-14: + csg (since 107-18 the JS part of manifold-3d, lazy)
+
+/** WebAssembly assets that get a limit of their own (107-18: the binary of the CSG library manifold-3d, lazy). */
+export const BENANNTE_ASSETS = Object.freeze(['manifold']);
 
 /** @param {string[]} argv @returns {{dist: string, budget: string, schreiben: boolean}} */
 function argumente(argv) {
@@ -218,9 +258,9 @@ function main() {
       puffer_prozent: puffer,
       gemessen: {
         datum: new Date().toISOString().slice(0, 10),
-        werte: { entry: werte.entry, css: werte.css, vendor: werte.vendor, erste_runde: werte.erste_runde, route_max: werte.route_max, route_max_name: werte.route_max_name, gesamt: werte.gesamt, chunks: werte.chunks },
+        werte: { entry: werte.entry, css: werte.css, vendor: werte.vendor, erste_runde: werte.erste_runde, route_max: werte.route_max, route_max_name: werte.route_max_name, gesamt: werte.gesamt, chunks: werte.chunks, assets: werte.assets },
       },
-      grenzen: grenzenAus(werte, puffer, BENANNTE_CHUNKS),
+      grenzen: grenzenAus(werte, puffer, BENANNTE_CHUNKS, BENANNTE_ASSETS),
     };
     fs.writeFileSync(budgetAbs, `${JSON.stringify(neu, null, 2)}\n`);
     console.log(`Budget geschrieben: ${budgetAbs} (Messung + ${puffer} %, auf volle KB aufgerundet).`);
@@ -233,10 +273,17 @@ function main() {
   }
   const { vergleiche, ueber } = pruefeBudget(werte, datei.grenzen);
   console.log(`Größen-Budget (${path.relative(process.cwd(), budgetAbs) || budget}) — gzip:`);
+  const eigeneAssets = Object.keys(datei.grenzen.assets || {});
   for (const v of vergleiche) {
     const marke = v.status === 'ok' ? 'ok   ' : v.status === 'ueber' ? 'ÜBER ' : 'fehlt';
     const anteil = v.wert == null ? '' : ` (${Math.round((v.wert / v.grenze) * 100)} %)`;
-    console.log(`  ${marke} ${v.schluessel.padEnd(22)} ${v.wert == null ? '—' : kb(v.wert)} / ${kb(v.grenze)}${anteil}`);
+    // 107-18: the total without the separately budgeted assets is labelled as such, so nobody reads it as "all of dist/"
+    const name = v.schluessel === 'gesamt' && eigeneAssets.length ? 'gesamt (ohne assets.*)' : v.schluessel;
+    console.log(`  ${marke} ${name.padEnd(22)} ${v.wert == null ? '—' : kb(v.wert)} / ${kb(v.grenze)}${anteil}`);
+  }
+  if (eigeneAssets.length && typeof datei.grenzen.gesamt === 'number') {
+    const mit = werte.gesamt;
+    console.log(`  Hinweis: dist/ gesamt MIT ${eigeneAssets.map((n) => `assets.${n}`).join(', ')} = ${kb(mit)} / ${kb(datei.grenzen.gesamt)} (${Math.round((mit / datei.grenzen.gesamt) * 100)} %) — zur Info: assets.* zählen nicht in gesamt, sie haben eigene Grenzen (Entscheidung 01.11.2026).`);
   }
   if (werte.route_max_name) console.log(`  größte Route: ${werte.route_max_name}`);
   if (ueber.length) {

@@ -10,6 +10,7 @@
 // Kein zweiter Plan-Editor: Zoom/Pan/Hülle/Innenwände kommen aus BimPlan2D.
 
 import React, { useMemo, useRef, useState } from "react";
+import { ebenenLevels, levelKlemmen, geschossLabel } from "@core/lib/bauteil/ebenen.js";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Badge } from "@core/components/ui/badge";
 import { Button } from "@core/components/ui/button";
@@ -45,7 +46,8 @@ const N_STATUS = {
 };
 const de1 = (n) => (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 1 });
 const de2 = (n) => (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 2 });
-const geschoss = (lvl, t) => (lvl === 0 ? t("EG") : `${lvl}. ${t("OG")}`);
+// 107-13: storey names incl. basements ("1. UG") from the one helper of @core
+const geschoss = (lvl, t) => geschossLabel(lvl, t);
 
 /** Node symbol per kind — SVG shape around (cx, cy), r in SVG units. */
 function KnotenSymbol({ art, cx, cy, r, farbe, sel, spannt }) {
@@ -94,7 +96,11 @@ export default function TgaNetzEditor() {
 
   const storeys = Math.max(1, Math.round(plan?.storeys || 1));
   const [level, setLevel] = useState(0);
-  const lvl = Math.min(level, storeys - 1);
+  // 107-13 (D-BK-20): the levels of the model's storey list (basements included); `storeys` stays the count above ground
+  // (ebenenLevels/levelKlemmen hold the one fallback while no model is there; the basement count is the plan model's own)
+  const levels = ebenenLevels(plan?.model, storeys);
+  const untergeschosse = plan?.untergeschosse || 0;
+  const lvl = levelKlemmen(levels, level);
   const [werkzeug, setWerkzeug] = useState("auswahl"); // auswahl | knoten | leitung
   const [gewerk, setGewerk] = useState("heizung");
   const [art, setArt] = useState("auslass");
@@ -115,7 +121,7 @@ export default function TgaNetzEditor() {
     [netz, zones, qHeizlast, plan?.storeyHeight, luftwechsel, vaM2],
   );
   const mengen = useMemo(() => netzMengen(netz), [netz]);
-  const schema = useMemo(() => strangschema(netz, storeys), [netz, storeys]);
+  const schema = useMemo(() => strangschema(netz, storeys, untergeschosse), [netz, storeys, untergeschosse]);
 
   // ---- editing ----
   const knotenSetzen = (p) => {
@@ -210,7 +216,7 @@ export default function TgaNetzEditor() {
                 <label className="block text-xs text-slate-600">
                   {t("Steigstrang bis")}
                   <select className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-1 text-sm" value={Math.max(lvl, levelBis)} onChange={(e) => setLevelBis(Number(e.target.value))} data-testid="tn-levelbis">
-                    {Array.from({ length: storeys }, (_, i) => i).filter((i) => i >= lvl).map((i) => <option key={i} value={i}>{geschoss(i, t)}</option>)}
+                    {levels.filter((i) => i >= lvl).map((i) => <option key={i} value={i}>{geschoss(i, t)}</option>)}
                   </select>
                 </label>
               )}
@@ -227,7 +233,7 @@ export default function TgaNetzEditor() {
               <div>
                 <div className="text-xs text-slate-600 mb-1">{t("Geschoss")}</div>
                 <div className="flex flex-wrap gap-1">
-                  {Array.from({ length: storeys }, (_, i) => (
+                  {levels.map((i) => (
                     <button key={i} type="button" data-testid={`tn-level-${i}`} onClick={() => { setLevel(i); setDraft(null); setSel(null); }}
                       className={`rounded border px-2 py-0.5 text-xs ${i === lvl ? "border-sky-400 bg-sky-50 text-sky-800" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
                       {geschoss(i, t)} <span className="text-slate-400">({kantenImLevel(netz, i).length})</span>
@@ -267,7 +273,7 @@ export default function TgaNetzEditor() {
                         {t("Steigstrang bis")}
                         <select className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs" value={selKnoten.levelBis}
                           onChange={(e) => setNetz((n) => aendereKnoten(n, selKnoten.id, { levelBis: Number(e.target.value) }))}>
-                          {Array.from({ length: storeys }, (_, i) => i).filter((i) => i >= selKnoten.level).map((i) => <option key={i} value={i}>{geschoss(i, t)}</option>)}
+                          {levels.filter((i) => i >= selKnoten.level).map((i) => <option key={i} value={i}>{geschoss(i, t)}</option>)}
                         </select>
                       </label>
                     )}

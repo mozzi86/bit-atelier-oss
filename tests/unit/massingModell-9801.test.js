@@ -157,3 +157,77 @@ test("Aufstocken: neuer Körper mit gleichem Umriss auf der Oberkante, Quelle un
   assert.equal(geometrie(r.layer, r.layer.koerper[0]).hoehe, 9);
   assert.equal(aufstocken(layer, id, 0).id, null);
 });
+
+test("107-05 Bestand: ein v1-Layer liest sich unverändert, gespeicherte Punkte werden nie umgeschrieben", () => {
+  // a body saved before 107-05 in the click order that is now the "reversed" one (negative area), plus a group
+  const alt = {
+    koerper: [
+      { id: "k1", name: "", profil: [{ x: 0, y: 0 }, { x: 0, y: 3 }, { x: 4, y: 3 }, { x: 4, y: 0 }], hoehe: 3, basis: 0, pos: { x: 0, y: 0 }, drehung: 0, gruppe: null },
+      { id: "k2", name: "", basis: 0, pos: { x: 10, y: 0 }, drehung: 0, gruppe: "1" },
+    ],
+    gruppen: { "1": { profil: Q, hoehe: 6 } }, naechsteId: 3,
+  };
+  const json = JSON.stringify(alt);
+  assert.deepEqual(geometrie(alt, alt.koerper[1]), { profil: Q.map((p) => ({ x: p.x + 10, y: p.y })), hoehe: 6, basis: 0 });
+  const g = geometrie(alt, alt.koerper[0]);
+  assert.deepEqual(new Set(g.profil.map((p) => `${p.x},${p.y}`)), new Set(Q.map((p) => `${p.x},${p.y}`)), "dieselben Ecken");
+  const v = verschieben(alt, ["k1"], { x: 1, y: 0 });
+  assert.deepEqual(v.koerper[0].profil, alt.koerper[0].profil, "Verschieben schreibt das Profil nicht um");
+  assert.equal(JSON.stringify(alt), json, "Lesen mutiert nichts");
+});
+
+// 107-07: Rotate + Copy as an array, the same typed "*n" / "/n" as Move (shared core reihenFaktoren)
+import { drehKopien } from "@core/lib/massing/massingModell.js";
+
+test("107-07 Drehen mit Kopie: *3 = drei Kopien zu 90°, 180°, 270°; /3 = drei Kopien zu 30°, 60°, 90°; Original bleibt", () => {
+  const { layer, id } = koerperAnlegen(leererLayer(), Q, 3);
+  const um = { x: 0, y: 10 };
+  const mal = drehKopien(layer, [id], um, 90, { anzahl: 3, modus: "mal" });
+  assert.equal(mal.layer.koerper.length, 4);
+  assert.deepEqual(mal.neu, ["k2", "k3", "k4"]);
+  assert.deepEqual(mal.layer.koerper[0], layer.koerper[0], "Original unverändert");
+  assert.deepEqual(mal.layer.koerper.slice(1).map((k) => k.drehung), [90, 180, 270]);
+  // position (0, 0) turned about (0, 10): 90° → (10, 10), 180° → (0, 20), 270° → (−10, 10) (mathematical sense in x/y)
+  assert.deepEqual(mal.layer.koerper.slice(1).map((k) => [k.pos.x + 0, k.pos.y + 0]), [[10, 10], [0, 20], [-10, 10]]);
+  const teilen = drehKopien(layer, [id], um, 90, { anzahl: 3, modus: "teilen" });
+  assert.deepEqual(teilen.layer.koerper.slice(1).map((k) => k.drehung), [30, 60, 90]);
+  // the area stays (copies are congruent)
+  const fl = (/** @type {any} */ l, /** @type {any} */ k) => { const p = geometrie(l, k).profil; let f = 0; for (let i = 0; i < p.length; i++) { const q = p[(i + 1) % p.length]; f += p[i].x * q.y - q.x * p[i].y; } return Math.abs(f) / 2; };
+  for (const k of teilen.layer.koerper) assert.ok(Math.abs(fl(teilen.layer, k) - 12) < 1e-6);
+  // drehen with {kopie: true} is the same as drehKopien(...).layer; without it nothing is copied
+  assert.deepEqual(drehen(layer, [id], um, 90, { kopie: true, anzahl: 3 }), mal.layer);
+  assert.equal(drehen(layer, [id], um, 90).koerper.length, 1);
+});
+
+test("107-07 Drehen mit Kopie: Gruppeninstanzen bleiben Instanzen ihrer Nummer", () => {
+  let { layer, id } = koerperAnlegen(leererLayer(), Q, 3);
+  layer = gruppeBilden(layer, [id]).layer;
+  const r = drehKopien(layer, [id], { x: 0, y: 0 }, 45, { anzahl: 2 });
+  assert.deepEqual(r.layer.koerper.map((k) => k.gruppe), ["1", "1", "1"]);
+  assert.equal("profil" in r.layer.koerper[1], false, "Instanz ohne eigenes Profil");
+});
+
+// 107-08 (review: the plan named this file for the extension): instance fields on top of the 98-01 core — a group instance keeps its
+// own mirror/scale while the definition stays shared, and a copy row never carries the stored guid of its source.
+test("107-08: Gruppen-Instanz mit Spiegel und Maßstab; *3-Kopie ohne gespeicherte guid", async () => {
+  const { spiegeln, skalieren, instanzNeutral } = await import("@core/lib/massing/massingModell.js");
+  let { layer, id } = koerperAnlegen(leererLayer(), Q, 3);
+  layer = gruppeBilden(layer, [id]).layer;
+  layer = kopieren(layer, [id], { x: 10, y: 0 }, { anzahl: 1 }).layer;
+  const [k1, k2] = layer.koerper;
+  // stretch only the copy (instance scale 2 about its own corner): the definition (4 × 3 m) and the first instance stay
+  layer = skalieren(layer, [k2.id], { x: 10, y: 0 }, 2, { instanz: true });
+  layer = spiegeln(layer, [k2.id]);
+  assert.deepEqual(geometrie(layer, layer.koerper[0]), geometrie({ ...layer, koerper: [k1] }, k1));
+  const g2 = geometrie(layer, layer.koerper[1]);
+  const xs = g2.profil.map((p) => p.x), ys = g2.profil.map((p) => p.y);
+  assert.deepEqual([Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), g2.hoehe], [8, 6, 3]); // 4 × 2, 3 × 2, z 1
+  assert.equal(instanzNeutral(layer.koerper[0]), true);
+  assert.equal(instanzNeutral(layer.koerper[1]), false);
+  // a body with a stored guid copied *3: the copies have no guid field at all
+  const mitGuid = { ...layer, koerper: layer.koerper.map((k, i) => (i === 0 ? { ...k, guid: "0123456789abcdefABCDEF" } : k)) };
+  const r = kopieren(mitGuid, [k1.id], { x: 0, y: 10 }, { anzahl: 3 }).layer;
+  assert.equal(r.koerper.length, 5);
+  assert.deepEqual(r.koerper.slice(2).map((k) => "guid" in k), [false, false, false]);
+  assert.equal(r.koerper[0].guid, "0123456789abcdefABCDEF");
+});

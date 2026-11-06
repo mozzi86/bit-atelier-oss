@@ -10,6 +10,11 @@
 // an Produktivcode funktioniert.
 //
 // Registriert wird er über tests/alias-register.mjs (`node --import`).
+//
+// Redirects of bare package specifiers (none at the moment). 107-14 redirected "three-bvh-csg" to its ESM source here;
+// 107-18 replaced that library with manifold-3d, which is an ES module with an `exports` map and needs no redirect.
+/** @type {Record<string, string>} bare specifier → file relative to the repo root */
+const UMLEITUNGEN = {};
 
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
@@ -31,6 +36,9 @@ const ALIASES = {
 const EXTENSIONS = ["", ".js", ".jsx", ".mjs", "/index.js", "/index.jsx"];
 
 export async function resolve(specifier, context, nextResolve) {
+  if (Object.prototype.hasOwnProperty.call(UMLEITUNGEN, specifier)) {
+    return nextResolve(pathToFileURL(path.join(ROOT, UMLEITUNGEN[specifier])).href, context);
+  }
   for (const [prefix, target] of Object.entries(ALIASES)) {
     if (!specifier.startsWith(prefix)) continue;
     const base = path.join(ROOT, target, specifier.slice(prefix.length));

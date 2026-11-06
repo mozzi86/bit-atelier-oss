@@ -222,6 +222,7 @@ test("verbindliche Namenstabelle: Gruppen, Reihenfolge und Titel je Route", () =
       ["/BimViewer", "BIM-Viewer & Tickets"],
       ["/IfcViewer", "IFC-Viewer (LV-gekoppelt)"],
       ["/ModelVersions", "Projektstände"],
+      ["/Modellfreigabe", "Modellfreigabe"],
     ]],
     // Variant A of the plan: the former "Werkplanung & Baustelle" is two pages.
     ["Ausführungsplanung", [

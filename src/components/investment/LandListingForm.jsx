@@ -12,6 +12,7 @@ import {
 } from "@core/components/ui/select";
 import { Save } from "lucide-react";
 import { useI18n } from "@core/lib/i18n";
+import { formularAusInserat } from "@/lib/investment/inserate.js";
 
 const STATUSES = ["active", "in_negotiation", "under_contract", "completed", "cancelled"];
 
@@ -23,18 +24,20 @@ const STATUS_LABELS = {
   cancelled: "Storniert",
 };
 
-export default function LandListingForm({ onSubmit, onCancel }) {
+const LEER = {
+  title: "",
+  address: "",
+  city: "",
+  land_area: 0,
+  asking_price: 0,
+  minimum_investment: 0,
+  profit_share_percentage: 10,
+  status: "active",
+};
+
+export default function LandListingForm({ onSubmit, onCancel, listing = null, titel = "Grundstück inserieren" }) {
   const { t } = useI18n();
-  const [formData, setFormData] = useState({
-    title: "",
-    address: "",
-    city: "",
-    land_area: 0,
-    asking_price: 0,
-    minimum_investment: 0,
-    profit_share_percentage: 10,
-    status: "active",
-  });
+  const [formData, setFormData] = useState(() => (listing ? formularAusInserat(listing) : { ...LEER }));
   const [saving, setSaving] = useState(false);
 
   const change = (field, value) =>
@@ -70,7 +73,7 @@ export default function LandListingForm({ onSubmit, onCancel }) {
   );
 
   return (
-    <FormModal title="Grundstück inserieren" onClose={onCancel}>
+    <FormModal title={titel} onClose={onCancel}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1">
           <Label htmlFor="title">Titel *</Label>

@@ -8,22 +8,28 @@ import { useKontextmenue, KontextmenueAnzeige } from "@core/components/Kontextme
 import KnotenEditor from "@designer/components/KnotenEditor";
 import { useBuildingProgram, rectFootprint, polygonAreaM } from "@core/lib/useBuildingProgram";
 import { geschosseAus, okfObersterGeschoss } from "@core/lib/bauteil/hoehen.js"; // 107-02: one derivation of the top-storey level and one writer of the storey height
+import { createBuildingModel } from "@core/lib/buildingModel"; // 107-10: basement walls and fusshoehe_m of 107-13 for the terrain subtraction
 import { useProject } from "@core/lib/ProjectContext";
 import { useOsmBuildings } from "@designer/lib/useOsmBuildings";
 import { metersPerPixel } from "@core/lib/geo";
-import { kennzahlenJeTyp } from "@designer/lib/kennzahlen";
+import { kennzahlenJeTyp, nufFuerKennzahlen } from "@designer/lib/kennzahlen";
+import { werkstattBauteile } from "@core/lib/werkstattBauteile";
 import { usePlanViewport } from "@core/lib/usePlanViewport";
 import { useSvgDrag } from "@core/lib/useSvgDrag";
 import { FADENKREUZ_CURSOR, ECKE_CURSOR, PLUS_CURSOR, kantenCursor } from "@core/lib/planCursor";
 import { phiSnap, proportionHinweis, istAchsparallelesRechteck } from "@core/lib/proportion";
 import { kantenNormale, projektionAufNormale, verschiebeKante, kantenLaenge, kantenWinkelGrad, himmelsrichtung } from "@core/lib/polygonKante";
 import { abstandsStreifen } from "@core/lib/massing/baurecht";
+import { hauptkoerperDach, abstandsHoehenJeKante, GIEBEL_ANRECHNUNG, dachZuschlagAnteil } from "@core/lib/massing/hauptdach.js"; // 108-11: main body with the roof of the building model
+import { useModellDach, modellDachAus } from "@designer/lib/useModellDach.js"; // 108-11: roof form/slope of the BimModel record, live
+// 108-08 (D-EFH-09, finding 12): drawing field, px <-> site metres, start position and stored position of the body, write rule
+import { siteAusParzelle, pxZuSite, siteZuPx, baukoerperLageSite, startLageSite, lageAusPoly, lageGeaendert, massingSchreibPatch, echoSchluessel, echoMerken, echoPruefen } from "@core/lib/massing/lage.js";
 import { snapKette, grenzSnap, abstandSnap, rasterSnap } from "@core/lib/snapKette";
 import LehrlingPalette from "@designer/components/LehrlingPalette";
 import { leererStack, merke, zurueck, vor } from "@core/lib/undoStack";
 import { useNavigate } from "react-router-dom";
 import { ScaleBar } from "@designer/components/BimPlan2D";
-import { MASSING_MASSSTAEBE, autoMassstab, lodFuer, roemisch, weGruppen, labelKollision, weLabelText, weLabelZeilen } from "@designer/lib/massstab";
+import { MASSING_MASSSTAEBE, autoMassstab, detailgradFuer, roemisch, weGruppen, labelKollision, weLabelText, weLabelZeilen } from "@core/lib/plan/massstab.js";
 // 75-06 Task 3/5 (MS-06): convex hull approximates the parcel union for the
 // Grundstueck level; containment geometry for the envelope checks.
 import { konvexeHuelle, flaecheAusserhalb, istKonvex, clipSutherlandHodgman, laengsteKante } from "@core/lib/polygonInnen";
@@ -35,7 +41,8 @@ import { WERKSTATT_DEFAULT, einheitenAnreichern, zerlegungsArt } from "@designer
 import { tesseliere, RETTUNGSWEG_INNEN_NAEHERUNG } from "@designer/lib/tesselierung";
 import ZonenTueren from "./ZonenTueren";
 import { nordwinkelFuer } from "@designer/lib/nordwinkel";
-import { useI18n } from "@core/lib/i18n";
+import { useI18n, englischErgaenzen } from "@core/lib/i18n";
+import { EN as EN_EFH_108 } from "@core/lib/i18nTeile/efh-108.js"; // 108-08: lazy part of phase 108 (key figure "außerhalb")
 // 75-08 Task 5 (MSB-1): the app's ONE solar formula — the local copy lived
 // here since Phase 3 and was removed. Additive exports: presets, plan azimuth
 // conversion (geographic = plan + north angle) for shadow and north arrow.
@@ -45,7 +52,7 @@ import { sunPosition, SONNEN_PRESETS, planAzimut } from "@designer/lib/sonnensta
 /** @param {{icon: any, label: string, value: any, sub?: any, tint?: string, testid?: string}} props */
 const KPI = ({ icon: Icon, label, value, sub, tint, testid }) => (
   <div className="rounded-lg bg-slate-50 px-2 py-1.5 min-w-0" data-testid={testid}>
-    <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-0.5"><Icon className={`w-3 h-3 shrink-0 ${tint}`} /> <span className="truncate">{label}</span></div>
+    <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-0.5"><Icon className={`w-3 h-3 shrink-0 ${tint}`} /> <span className="truncate" title={label}>{label}</span></div>
     <div className="text-base font-bold text-slate-800 leading-tight break-words">{value}</div>
     {sub && <div className="text-[10px] leading-snug text-slate-400">{sub}</div>}
   </div>
@@ -62,6 +69,8 @@ const MONTHS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", 
 // list is never reassigned or mutated — not from immutability.
 const KEINE = [];
 
+englischErgaenzen(EN_EFH_108); // 108-08: lazy i18n part of phase 108
+
 // Massing studio: drag the footprint on the site, tune storeys,
 // see GRZ/GFZ/BGF and the shadow update live, plus a 3D massing preview.
 // `parcel` (optional): site_parcel aus der Baufeld-Planung (Canvas-Pixel) —
@@ -70,6 +79,8 @@ const KEINE = [];
 // ({ flurstuecke }) and `nordwinkel` (degrees) arrive additively — every
 // default keeps an existing caller rendering exactly as before.
 // `onBaufeldChange`/`onGrundstueckChange` receive canvas-px polygons back.
+// 108-08 (D-EFH-09): `buildings` (BuildingComplex.buildings[], canvas px + metre mirror) is the fallback source of the start
+// position after the footprint area of `baufelder`; default empty, existing callers render as before.
 export default function MassingStudio({
   lat = 50.1,
   projectName = "",
@@ -80,6 +91,7 @@ export default function MassingStudio({
   onBaufeldChange = null,
   onGrundstueckChange = null,
   onNordwinkelChange = null,
+  buildings = KEINE,
 }) {
   // --- Gemeinsamer Store (eine Quelle der Wahrheit) ---
   const store = useBuildingProgram();
@@ -102,24 +114,37 @@ export default function MassingStudio({
   };
   const shoelace = (pts) => Math.abs(pts.reduce((a, p, i) => { const q = pts[(i + 1) % pts.length]; return a + (p.x * q.y - q.x * p.y); }, 0) / 2);
 
+  // 108-08 (finding 12): display value only — the studio never writes it (massingSchreibPatch writes storeys only from the slider)
   const initFloors = store.storeys || 6;
-  // 72-01 A-4 (Befund N-04): EINE Parzellen-Quelle — das Zeichenfeld kommt aus
-  // dem site_parcel der Baufeld-Planung (Bbox in Metern), die zwei
-  // „Zeichenfeld"-Slider entfallen. Fallback ohne Parzelle: 70 × 50 m
-  // [ASSUMED] Werkzeugmaß, im KPI sichtbar als Annahme gekennzeichnet.
-  const site = useMemo(() => {
-    const pts = parcel?.points;
-    if (!Array.isArray(pts) || pts.length < 3) return { w: 70, d: 50, hatParzelle: false };
-    const mpp = metersPerPixel(parcel);
-    const xs = pts.map((p) => p.x);
-    const ys = pts.map((p) => p.y);
-    return {
-      w: Math.max(20, (Math.max(...xs) - Math.min(...xs)) * mpp),
-      d: Math.max(20, (Math.max(...ys) - Math.min(...ys)) * mpp),
-      hatParzelle: true,
-    };
-  }, [parcel]);
-  const [poly, setPoly] = useState(() => fromStore(store.footprintM, { x: 35, y: 25 }));
+  // 72-01 A-4 (Befund N-04): one parcel source — the drawing field is the bbox of the site_parcel of the site planning (metres);
+  // without a parcel 70 × 50 m [ASSUMED] tool size, marked as an assumption in the key figures.
+  // 108-08: the rule lives in @core/lib/massing/lage.js (siteAusParzelle, unchanged numbers).
+  const site = useMemo(() => siteAusParzelle(parcel), [parcel]);
+  // 108-08 (D-EFH-09): where the site planning puts the body (footprint area, else first block, else parcel centre; without parcel
+  // the stand-in centre (35, 25) m as before) — origin of footprintM in site metres. The stored position (store.footprintLageM) wins.
+  const footprintFlaechePx = useMemo(() => {
+    const f = (Array.isArray(baufelder) ? baufelder : []).find((a) => a?.type === "footprint" && Array.isArray(a?.points) && a.points.length >= 3);
+    return f ? f.points : null;
+  }, [baufelder]);
+  const planLage = useMemo(() => baukoerperLageSite({ footprintFlaechePx, buildings, parcel }), [footprintFlaechePx, buildings, parcel]);
+  const startLage = () => startLageSite({ footprintLageM: store.footprintLageM, footprintFlaechePx, buildings, parcel });
+  // 108-08: the polygon set automatically (first render, load, change of another tab or device). It is never written back — only a
+  // change by the person is (finding 12: opening the studio wrote footprintM and storeys).
+  // A set, not one reference: React StrictMode runs initialisers and updaters twice in development, both results must count as automatic.
+  // Identity marks ONLY the polygon object the placement produced: undo/redo and the undo snapshots always work on copies (108-08
+  // review: a snapshot that was the automatic object itself made Ctrl+Z to the opened state count as automatic, so it was not saved).
+  const autoPolys = useRef(/** @type {WeakSet<object>} */ (new WeakSet()));
+  // 108-08 review: the last automatic placement - its position (m, lageAusPoly) and the stored footprintLageM at that moment. A body
+  // back at that place writes the record value of that moment (massingSchreibPatch `auto`), so Esc, a drag back or undo to the
+  // opened state leave an old record without the field.
+  const autoStandRef = useRef(/** @type {{lage: {x:number,z:number}|null, gespeichert: {x:number,z:number}|null}|null} */ (null));
+  /** @param {Array<{x:number,y:number}>} p @returns {Array<{x:number,y:number}>} */
+  const alsAuto = (p) => {
+    autoPolys.current.add(p);
+    autoStandRef.current = { lage: lageAusPoly(p, parcel), gespeichert: store.footprintLageM ?? null };
+    return p;
+  };
+  const [poly, setPoly] = useState(() => alsAuto(fromStore(store.footprintM, startLage())));
   const [floors, setFloors] = useState(initFloors);
   const [floorH, setFloorH] = useState(store.storeyHeight || 3.2);
   const [month, setMonth] = useState(6);
@@ -161,7 +186,7 @@ export default function MassingStudio({
   useEffect(() => {
     if (!massstabManuell.current) setMassstab((m) => { const a = autoMassstab(Math.hypot(site.w, site.d)); return MASSING_MASSSTAEBE.includes(a) ? a : (a === 1000 ? 500 : m); });
   }, [site.w, site.d]);
-  const lod = lodFuer(massstab);
+  const lod = detailgradFuer(massstab); // 107-12: the one level-of-detail function (same flags as lodFuer at 1:500 / 1:200)
   const navigate = useNavigate();
 
   // --- OSM-Nachbargebäude (read-only Kontext im 2D-Plan) ---------------------
@@ -187,35 +212,12 @@ export default function MassingStudio({
   // envelope/parcel levels keep their true OFFSET inside the drawing field.
   // (Referencing each polygon's own centroid instead would silently centre
   // every level — an off-centre envelope would look "inside" forever.)
-  const mppPx = useMemo(() => metersPerPixel(parcel), [parcel]);
-  const pxReferenz = useMemo(() => {
-    const pts = parcel?.points;
-    if (Array.isArray(pts) && pts.length >= 3) {
-      return {
-        cx: pts.reduce((s, p) => s + (Number(p.x) || 0), 0) / pts.length,
-        cy: pts.reduce((s, p) => s + (Number(p.y) || 0), 0) / pts.length,
-      };
-    }
-    // Without a parcel fall back to the canvas-centre convention (600/400,
-    // maplibreStyles CANVAS_CENTER) — levels are then centred like the site.
-    return { cx: 600, cy: 400 };
-  }, [parcel]);
-  /** Canvas px {x,y} -> site metres {x,y} (parcel-centroid reference). */
-  const pxZuSiteM = (pts) => {
-    if (!Array.isArray(pts) || pts.length < 3) return null;
-    return pts.map((p) => ({
-      x: +(site.w / 2 + ((Number(p.x) || 0) - pxReferenz.cx) * mppPx).toFixed(2),
-      y: +(site.d / 2 + ((Number(p.y) || 0) - pxReferenz.cy) * mppPx).toFixed(2),
-    }));
-  };
-  /** Site metres {x,y} -> canvas px {x,y}, rounded like the drawing tools. */
-  const siteMzuPx = (pts) => {
-    if (!Array.isArray(pts) || pts.length < 3) return null;
-    return pts.map((p) => ({
-      x: Math.round(pxReferenz.cx + ((Number(p.x) || 0) - site.w / 2) / mppPx),
-      y: Math.round(pxReferenz.cy + ((Number(p.y) || 0) - site.d / 2) / mppPx),
-    }));
-  };
+  // 108-08: the conversions moved to @core/lib/massing/lage.js (same reference: parcel vertex mean, without parcel 600/400 px).
+  const mppPx = site.mpp;
+  /** Canvas px {x,y} -> site metres {x,y} (parcel-centroid reference). @param {any} pts */
+  const pxZuSiteM = (pts) => pxZuSite(pts, site);
+  /** Site metres {x,y} -> canvas px {x,y}, rounded like the drawing tools. @param {any} pts */
+  const siteMzuPx = (pts) => siteZuPx(pts, site);
 
   // Baufeld (MSB-3): the FIRST designated_areas polygon with type "baufeld" is
   // the check reference. Several envelopes are drawn, but only the first is
@@ -295,38 +297,82 @@ export default function MassingStudio({
   const bb = polyBBox(poly);
   const foot = { x: bb.minX, y: bb.minY, w: +(bb.maxX - bb.minX).toFixed(1), d: +(bb.maxY - bb.minY).toFixed(1) };
 
-  // Ref um Ping-Pong-Schleifen zu vermeiden: wenn wir selbst in den Store schreiben,
-  // ignorieren wir die darauffolgende externe Änderung.
-  const writingToStore = useRef(false);
-
   // --- Store → Lokalen State synchronisieren (externe Änderungen, z.B. aus Gebäudemodell) ---
-  useEffect(() => {
-    if (writingToStore.current) return; // eigene Schreiboperation, ignorieren
-    if (store.footprintM && store.footprintM.length >= 3) {
-      setPoly((cur) => {
-        if (JSON.stringify(toStore(cur)) === JSON.stringify(store.footprintM.map((p) => ({ x: +p.x.toFixed(2), z: +p.z.toFixed(2) })))) return cur;
-        const b = polyBBox(cur);
-        return fromStore(store.footprintM, { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 });
-      });
+  // 108-08: the echo of an own write is recognised by its VALUES (eigenesEchoRef: the last own writes), not by a tick flag — the old
+  // flag could swallow the load when that arrived in the same tick, and without a guard a fast edit (arrow keys) was replaced by the
+  // echo of the previous step. Several writes are kept: a store render of step n can arrive after step n + 1 was already written. Where a changed shape goes: the stored position (footprintLageM) first; a body the person placed in this session keeps its
+  // place; else the position of the site planning (which also follows a parcel or design record that arrives after the studio opened).
+  // 108-08 review: an echo consumes its entry (echoPruefen), a foreign state clears the buffer — before, the last 20 own values
+  // counted as own forever and a foreign state equal to an earlier own value was ignored (screen and store drifted apart).
+  const eigenesEchoRef = useRef(/** @type {string[]} */ ([]));
+  const letzterStandRef = useRef(/** @type {string|null} */ (null));
+  /**
+   * Where the polygon goes after a change of the store, or null when it stays (pure; `cur` = the polygon of this render).
+   * @param {Array<{x:number,y:number}>} cur @returns {Array<{x:number,y:number}>|null}
+   */
+  const abgleichZiel = (cur) => {
+    if (!(store.footprintM && store.footprintM.length >= 3)) {
+      // no stored outline yet (new project): the stand-in rectangle follows the start position while nobody moved it
+      if (!autoPolys.current.has(cur)) return null;
+      const next = fromStore(null, startLage());
+      return JSON.stringify(next) === JSON.stringify(cur) ? null : next;
     }
-    setFloors((prev) => (prev === store.storeys ? prev : store.storeys));
+    const vonHand = !autoPolys.current.has(cur);
+    const gespeichert = store.footprintLageM || null;
+    const formGleich = JSON.stringify(toStore(cur)) === JSON.stringify(store.footprintM.map((p) => ({ x: +p.x.toFixed(2), z: +p.z.toFixed(2) })));
+    const b = polyBBox(cur);
+    const mitte = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+    let ziel;
+    if (gespeichert) {
+      if (formGleich && !lageGeaendert(gespeichert, lageAusPoly(cur, parcel))) return null;
+      ziel = startLage();
+    } else if (vonHand) {
+      if (formGleich) return null;
+      ziel = mitte;
+    } else {
+      ziel = planLage;
+    }
+    const next = fromStore(store.footprintM, ziel);
+    return JSON.stringify(next) === JSON.stringify(cur) ? null : next;
+  };
+  // State is set only when something really changes: a no-op updater per own write counted as a nested update and, after ~25 fast
+  // steps (arrow keys), hit React's limit of 50 nested updates ("Maximum update depth exceeded"), which dropped a key press.
+  useEffect(() => {
+    if (store.storeys !== floors) setFloors(store.storeys);
+    const schluessel = echoSchluessel(store.footprintM, store.footprintLageM);
+    const echo = echoPruefen(eigenesEchoRef.current, schluessel, letzterStandRef.current);
+    eigenesEchoRef.current = echo.puffer;
+    letzterStandRef.current = schluessel;
+    if (echo.eigen) return; // own write (or own writes still in flight)
+    const next = abgleichZiel(poly);
+    if (next) setPoly(alsAuto(next));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.footprintM, store.storeys]);
+  }, [store.footprintM, store.storeys, store.footprintLageM, planLage.x, planLage.y, site.w, site.d]);
+
+  // 108-11 review: the storey-height slider follows the store (a deep link mounts the studio before the record is loaded — the slider
+  // kept the store default 3.0 m while the roofed body, the focus zones and the bars of another source used the loaded 2.90 m). The
+  // slider itself writes the store (setAlleGeschosshoehen), so its own echo is a no-op here.
+  useEffect(() => {
+    const h = Number(store.storeyHeight);
+    if (h > 0) setFloorH((alt) => (Math.abs(alt - h) > 1e-9 ? h : alt));
+  }, [store.storeyHeight]);
 
   // 86-07: axis frame = footprint bbox centre (the same centring as footprintM).
   const polyMitte = (pts) => { const b = polyBBox(pts); return { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 }; };
   const vorherPoly = useRef(poly);
 
   // --- Lokale Änderungen → Store schreiben (Polygon bleibt Polygon!) ---------
+  // 108-08 (finding 12): only a change by the person is written, and only the fields that changed (massingSchreibPatch) — an
+  // automatic placement (open, load, another tab) writes nothing; the storey count comes from the slider (setFloorsVonHand).
   useEffect(() => {
-    writingToStore.current = true;
+    const alt = vorherPoly.current;
+    vorherPoly.current = poly;
+    if (autoPolys.current.has(poly)) return;
     /** @type {any} */
-    const patch = { footprintM: toStore(poly), storeys: floors };
+    const patch = massingSchreibPatch({ footprintM: toStore(poly), footprintLageM: lageAusPoly(poly, parcel) }, store, { form: true }, autoStandRef.current);
     // 86-07: a corner/edge edit moves the bbox centre — shift the stored axis by the opposite
     // amount so it stays where it was drawn. A rigid move of the whole body takes the axis along
     // (pure translation → nothing to do); a reload keeps the site centre (fromStore) → no shift.
-    const alt = vorherPoly.current;
-    vorherPoly.current = poly;
     if (Array.isArray(store.achseM) && store.achseM.length >= 2 && alt && alt !== poly) {
       const ca = polyMitte(alt), cn = polyMitte(poly);
       const dx = cn.x - ca.x, dy = cn.y - ca.y;
@@ -335,11 +381,19 @@ export default function MassingStudio({
         patch.achseM = store.achseM.map((q) => ({ x: +(q.x - dx).toFixed(2), z: +(q.z - dy).toFixed(2) }));
       }
     }
-    store.set(patch);
-    const t = setTimeout(() => { writingToStore.current = false; }, 0);
-    return () => clearTimeout(t);
+    if (Object.keys(patch).length) {
+      // the own writes until their echo arrives (buffer size ECHO_PUFFER_MAX in massing/lage.js, marked as an assumption there)
+      eigenesEchoRef.current = echoMerken(eigenesEchoRef.current, patch, store);
+      store.set(patch);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poly, floors]);
+  }, [poly]);
+  /** 108-08: the storey slider — the one place the studio writes `storeys` (a change by the person). @param {number} v */
+  const setFloorsVonHand = (v) => {
+    setFloors(v);
+    const patch = massingSchreibPatch({ storeys: v }, store, { geschosse: true });
+    if (Object.keys(patch).length) store.set(patch);
+  };
 
   // 86-07: the axis in SITE metres for drawing — the store is the only truth outside the draw
   // mode (no second copy that could drift on load); while drawing, the draft is local.
@@ -455,7 +509,8 @@ export default function MassingStudio({
   const kantenZiele = (start, idx, n) => {
     const a = start[idx], b = start[(idx + 1) % start.length];
     const mitte = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    const tiefe = Math.max(abstandMin, abstandFaktor * height);
+    // 108-11: with a roof the edge's own wall height (eaves / gable side)
+    const tiefe = Math.max(abstandMin, abstandFaktor * (abstandHoehen?.[idx]?.hoehe_m ?? height));
     const raster = Object.assign((dd) => rasterSnap(dd, 0.5), { zielName: "raster" });
     if (ebene !== "baukoerper") return [raster];
     const phi = Object.assign((dd) => {
@@ -604,11 +659,15 @@ export default function MassingStudio({
   polyNow.current = poly;
   const [undoStand, setUndoStand] = useState({ p: 0, f: 0 });
   const undoSync = () => setUndoStand({ p: undoRef.current.past.length, f: undoRef.current.future.length });
-  const merkePoly = (snap) => { undoRef.current = merke(undoRef.current, snap); undoSync(); };
-  const undo = () => { const r = zurueck(undoRef.current, polyNow.current); if (!r) return; undoRef.current = r.stack; setPoly(r.snapshot); undoSync(); };
+  // 108-08 review: snapshots are copies and a restored snapshot is a fresh copy — undo/redo is a change by the person and must be
+  // written (a reference to the automatically placed polygon was skipped by the write effect).
+  /** @param {Array<{x:number,y:number}>} pts @returns {Array<{x:number,y:number}>} */
+  const kopie = (pts) => pts.map((p) => ({ ...p }));
+  const merkePoly = (snap) => { undoRef.current = merke(undoRef.current, kopie(snap)); undoSync(); };
+  const undo = () => { const r = zurueck(undoRef.current, polyNow.current); if (!r) return; undoRef.current = r.stack; setPoly(kopie(r.snapshot)); undoSync(); };
   // F1 (102): a project switch starts a fresh history (no undo into the previous project's outline).
   useEffect(() => { undoRef.current = leererStack(); undoSync(); }, [project?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const redo = () => { const r = vor(undoRef.current, polyNow.current); if (!r) return; undoRef.current = r.stack; setPoly(r.snapshot); undoSync(); };
+  const redo = () => { const r = vor(undoRef.current, polyNow.current); if (!r) return; undoRef.current = r.stack; setPoly(kopie(r.snapshot)); undoSync(); };
   const merkeDragEnde = () => {
     const start = dragStartRef.current;
     if (start && JSON.stringify(start) !== JSON.stringify(polyNow.current)) merkePoly(start);
@@ -794,8 +853,59 @@ export default function MassingStudio({
     () => (baufeldBekannt ? flaecheAusserhalb(poly, baufeldPts) : null),
     [poly, baufeldPts, baufeldBekannt]
   );
+  // 108-08: without a drawn envelope the body is checked against the PARCEL (same function, own label) — an EFH that starts or is
+  // moved outside its plot shows it, before only an envelope was a reference.
+  const ausserhalbParzelle = useMemo(
+    () => (!baufeldBekannt && Array.isArray(parcelPts) && parcelPts.length >= 3 ? flaecheAusserhalb(poly, parcelPts) : null),
+    [poly, parcelPts, baufeldBekannt]
+  );
   const height = floors * floorH;
-  const nuf = bgf * 0.8;
+  // 108-11: the main body WITH the global roof of the building model (roof form/slope of the record, knee wall of the storey table):
+  // eaves, ridge and roof faces from massing/hauptdach.js — the same createBuildingModel + globalesDach call as the BIM studio. The
+  // live polygon goes in as site metres {x, z: y}, so the faces come back in the frame of the 3D view. Flat roof / no roof form → null:
+  // iso, key figures and setbacks stay exactly as before (box of storeys × storey height).
+  const modellDachFelder = useModellDach(project?.id || null);
+  const hauptdach = useMemo(() => hauptkoerperDach({
+    footprintM: poly.map((p) => ({ x: p.x, z: p.y })), storeys: floors, storeyHeight: store.storeyHeight || floorH,
+    geschosse: store.geschosse, untergeschosse: store.untergeschosse, ...modellDachAus(modellDachFelder),
+  }), [modellDachFelder, poly, floors, store.storeyHeight, floorH, store.geschosse, store.untergeschosse]);
+  // height of the body for camera, shadow and the key figure: the ridge with a roof, else the box height
+  const hoeheKoerper = hauptdach ? hauptdach.firsthoehe_m : height;
+  // 108-11: the small 3D massing model (BimModelViewer) — without a roof exactly the old object {floors, area_net} (schematic stack);
+  // with a roof it draws THIS body to scale: outline, storey planes, eaves and the faces of hauptkoerperDach (review: no own roof
+  // computation in the viewer any more). Outline and faces in site metres, the viewer centres them.
+  const bimViewerGebaeude = useMemo(() => (hauptdach
+    ? {
+      floors, area_net: footArea,
+      dach: {
+        form: hauptdach.form, traufhoehe_m: hauptdach.traufhoehe_m, firsthoehe_m: hauptdach.firsthoehe_m,
+        geschossEbenen_m: hauptdach.geschossEbenen_m, umriss: poly.map((p) => ({ x: p.x, z: p.y })),
+        flaechen: hauptdach.dach.flaechen, wandFlaechen: hauptdach.wandFlaechen,
+      },
+    }
+    : { floors, area_net: footArea }), [floors, footArea, hauptdach, poly]);
+  // 108-11: wall height H of the setback rule per edge — eaves sides with the eaves height, gable sides with the gable share [ASSUMED]
+  const abstandHoehen = useMemo(() => abstandsHoehenJeKante(poly, hauptdach), [poly, hauptdach]);
+  const hauptdach3d = useMemo(() => (hauptdach ? {
+    form: hauptdach.form, traufhoehe_m: hauptdach.traufhoehe_m, firsthoehe_m: hauptdach.firsthoehe_m,
+    flaechen: hauptdach.dach.flaechen, wandFlaechen: hauptdach.wandFlaechen, geschossEbenen_m: hauptdach.geschossEbenen_m,
+  } : null), [hauptdach]);
+  // 107-11 (BK-54): NUF per storey — storeys with zones after DIN 277 (KGF from the workshop shell, D-BW-02, or else from the hull
+  // walls of the building model), storeys without zones the old 80 % of their BGF (nufFuerKennzahlen in kennzahlen.js). The footprint
+  // is the LIVE polygon `poly` (centred like footprintM, m) — the same one the BGF tile comes from (one computation path, MS-03), so
+  // NUF follows a drag and never exceeds the BGF shown. Hull walls: createBuildingModel default thickness 0.3 m [ASSUMED]: the
+  // massing studio has no hull build-up of its own (that lives in the BIM studio's model data).
+  const nuf = useMemo(() => {
+    const zonen = Array.isArray(store.zones) ? store.zones : [];
+    if (!zonen.length || poly.length < 3) return nufFuerKennzahlen({ bgf }).nuf;
+    const footprint = toStore(poly);
+    const rohbau = werkstattBauteile(zonen, { storeyHeight: store.storeyHeight, geschosse: store.geschosse }).rohbau;
+    const huelle = createBuildingModel({ footprintM: footprint, storeys: floors, storeyHeight: store.storeyHeight, geschosse: store.geschosse }).walls
+      .filter((w) => !(/** @type {any} */ (w)).unterirdisch)
+      .map((w) => ({ schluessel: `env:${w.level}:${w.edge}`, wand: w }));
+    return nufFuerKennzahlen({ bgf, zonen, footprint, storeys: floors, rohbau, waende: huelle }).nuf;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toStore is a pure helper re-created each render; `poly` is its input
+  }, [bgf, store.zones, poly, store.storeyHeight, store.geschosse, floors]);
   // 72-01 A-5 (Befund N-05): Kennzahlen je Projekttyp — Gewerbe zeigt
   // Arbeitsplätze + BGF-Stellplätze, Wohnen zeigt WE + Schlüssel 1,0.
   const dichteKpis = kennzahlenJeTyp(project?.type ?? null, { nuf, bgf });
@@ -866,13 +976,13 @@ export default function MassingStudio({
     // north angle 0 planAzimut returns the input UNCHANGED → byte-identical
     // shadow polygon (plan acceptance).
     const shadowAz = (planAzimut(sun.azimuth, nordWinkel) + 180) % 360;
-    const Lm = Math.min(height / Math.tan(sun.elevation * rad), site.w + site.d); // cap
+    const Lm = Math.min(hoeheKoerper / Math.tan(sun.elevation * rad), site.w + site.d); // cap (108-11: ridge height with a roof)
     const dx = Math.sin(shadowAz * rad) * Lm;
     const dy = -Math.cos(shadowAz * rad) * Lm;
     // Freie Form: das versetzte Polygon als Schattenfläche (Näherung)
     return poly.map((p) => `${mx(p.x + dx)},${my(p.y + dy)}`).join(" ");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sun, height, poly, site, scale, offX, offY, nordWinkel]);
+  }, [sun, hoeheKoerper, poly, site, scale, offX, offY, nordWinkel]);
 
   // --- Abstandsflächen je Fassade: Streifen mit Tiefe max(Faktor x H, Min) ---
   // Außenseite per Punkt-in-Polygon-Test (robust auch für konkave Formen).
@@ -888,10 +998,30 @@ export default function MassingStudio({
   // 95-06: the strip logic lives in @core/lib/massing/baurecht.js — the site plan checks its
   // blocks with the same function (one rule set, no second editor).
   const setbacks = useMemo(
-    () => abstandsStreifen(poly, height, { faktor: abstandFaktor, min: abstandMin, grenze: boundaryKnown ? boundaryPts : null }),
-    [poly, height, abstandFaktor, abstandMin, boundaryPts, boundaryKnown],
+    () => abstandsStreifen(poly, height, { faktor: abstandFaktor, min: abstandMin, grenze: boundaryKnown ? boundaryPts : null, hoehen: abstandHoehen ? abstandHoehen.map((k) => k.hoehe_m) : null }),
+    [poly, height, abstandFaktor, abstandMin, boundaryPts, boundaryKnown, abstandHoehen],
   );
   const conflictCount = boundaryKnown ? setbacks.filter((s) => s.conflict).length : 0;
+  // 108-11: with a roof the strips have one depth per side kind — text "Traufe H 3.90 → 3.0 m · Giebel H 5.43 → 3.0 m" for the key figure,
+  // the depth range for the slider label, and the gable rule as a visible assumption (GIEBEL_ANRECHNUNG, state law)
+  const abstandsTiefenText = (() => {
+    if (!abstandHoehen) return null;
+    const namen = { traufe: t("Traufe"), giebel: t("Giebel"), hochseite: t("Hochseite") };
+    /** @type {Map<string, number>} */
+    const je = new Map();
+    for (const k of abstandHoehen) if (!je.has(k.art)) je.set(k.art, k.hoehe_m);
+    return [...je].map(([art, h]) => `${namen[art]} H ${h.toFixed(2)} → ${Math.max(abstandMin, abstandFaktor * h).toFixed(1)} m`).join(" · ");
+  })();
+  const giebelAnnahmeText = t("Giebel: Wandhöhe + {{anteil}} des Giebeldreiecks [ASSUMED], Regel nach Landesrecht").replace("{{anteil}}", `1/${Math.round(1 / GIEBEL_ANRECHNUNG)}`);
+  // 108-11 review: roofs steeper than 45° add a share of the rise on the eaves sides too (DACH_ZUSCHLAG [ASSUMED]) — visible when it applies
+  const zuschlagAnteil = hauptdach ? dachZuschlagAnteil(hauptdach.neigung_grad) : 0;
+  const zuschlagText = zuschlagAnteil >= 1
+    ? t("Dach über 70°: ganzer Anstieg zur Wandhöhe [ASSUMED]")
+    : zuschlagAnteil > 0 ? t("Dach über 45°: 1/3 des Anstiegs zur Wandhöhe [ASSUMED]") : null;
+  const tiefen = setbacks.map((sb) => sb.depth);
+  const tiefeLabel = abstandHoehen && tiefen.length && Math.max(...tiefen) - Math.min(...tiefen) > 0.05
+    ? `${Math.min(...tiefen).toFixed(1)}–${Math.max(...tiefen).toFixed(1)}`
+    : Math.max(abstandMin, abstandFaktor * (abstandHoehen ? abstandHoehen[0].hoehe_m : height)).toFixed(1);
 
   const Slider = ({ label, value, min, max, step, set, unit }) => (
     <div>
@@ -932,11 +1062,20 @@ export default function MassingStudio({
   const modellKoerper3d = useMemo(() => (modell.vorschau.length ? [...modell.aufgeloest, ...modell.vorschau] : modell.aufgeloest), [modell.aufgeloest, modell.vorschau]);
   const riegel3d = useMemo(() => modell.riegelAbgeleitet.flatMap((r) => Array.from({ length: r.kennzahlen.geschosse }, (_, g) =>
     r.einheiten.map((e) => ({ profil: e.profil, basis: g * (r.opt.geschossHoehe || floorH), hoehe: (r.opt.geschossHoehe || floorH) - 0.15, farbe: e.typ }))).flat()), [modell.riegelAbgeleitet, floorH]);
+  // 107-10 (D-BK-20): the basement of the building model (107-13: programme field `untergeschosse`, fusshoehe_m, basement hull walls) for the
+  // 3D body with the terrain subtraction; the main body `poly` is its footprint in site metres, `bezugMitte` the model origin (model = site − bezug)
+  const untergeschoss3d = useMemo(() => {
+    if (!(Number(store.untergeschosse) > 0) || !Array.isArray(store.footprintM) || store.footprintM.length < 3) return null;
+    const m = createBuildingModel({ footprintM: store.footprintM, storeys: store.storeys, storeyHeight: store.storeyHeight, geschosse: store.geschosse, untergeschosse: store.untergeschosse });
+    if (!(Number(m.fusshoehe_m) < 0)) return null;
+    return { profil: poly, fusshoehe_m: m.fusshoehe_m, waende: m.walls.filter((w) => /** @type {any} */ (w).unterirdisch), bezug: bezugMitte, geschosse: geschosseAus(store) };
+  }, [store.untergeschosse, store.footprintM, store.storeys, store.storeyHeight, store.geschosse, poly, bezugMitte]);
   const isoProps = {
     poly,
     siteW: site.w,
     siteD: site.d,
-    height,
+    height: hoeheKoerper, // 108-11: ridge with a roof (camera fit), else the box height as before
+    hauptdach: hauptdach3d, // 108-11: global roof of the building model on the main body (null = box as before)
     setbacks: showAbstand ? setbacks : KEINE,
     sonne: sun,
     schatten: showShadow,
@@ -947,10 +1086,13 @@ export default function MassingStudio({
     kameraRef: isoKameraRef,
     weitereKoerper: modellKoerper3d, // 98-02/07: bodies + parametric preview (memoised — the 3D effects key on identity)
     gelaende: modell.gelaende, // 98-06: sandbox terrain
+    untergeschoss: untergeschoss3d, // 107-10: basement body + terrain after the excavation (null without basement = as before)
     // 98-09: residential bars — one coloured box per unit and storey
     riegel3d: riegel3d,
     // 98-03: push/pull by dragging a body in 3D while the tool is active
-    pushPull: { aktiv: modell.werkzeug === "pushpull", anwenden: (id, delta, strg) => modell.pushPullAnwenden([id], delta, strg) },
+    // 107-06: the hit picks a face (waehlen), the drag pushes that face along its normal (anwenden with the face)
+    pushPull: { aktiv: modell.werkzeug === "pushpull", tippziel: modell.auswahl.length > 0 || !!modell.eingabe, waehlen: modell.flaecheTreffen, anwenden: (id, delta, strg, wahl) => modell.pushPullAnwenden([id], delta, strg, wahl) },
+    flaecheMarke: modell.werkzeug === "pushpull" ? modell.flaecheMarke : null, // 107-06: outline + normal arrow of the picked face
   };
 
   return (
@@ -1338,7 +1480,7 @@ export default function MassingStudio({
                   lie on top of each other here, so only level 0 is drawn. */}
               {lod.zonen && (
                 <ZonenTueren zonen={zones.filter((z) => Math.round(Number(z?.level) || 0) === 0)}
-                  X={(x) => mx(cxM + x)} Z={(z) => my(cyM + z)} SCALE={scale} px={px} nurOeffnung prefix="ms" />
+                  X={(x) => mx(cxM + x)} Z={(z) => my(cyM + z)} SCALE={scale} px={px} detailgrad={lod} prefix="ms" />
               )}
               {/* 75-13: escape routes as thin red lines (toggle "Rettungsweg zeigen"), warn = dashed + label. */}
               {lod.zonen && rettungswegAktiv && (
@@ -1585,7 +1727,7 @@ export default function MassingStudio({
                   ? <>Kein Grundstück übernommen — Zeichenfeld {site.w} × {site.d} m [ASSUMED]. Standort im Baufeld-Reiter übernehmen.</>
                   : <>Grundstücksfläche ({flaechenQuelleText}): <b>{Math.round(siteArea).toLocaleString("de-DE")} m²</b> — GRZ/GFZ rechnen auf dieser Fläche.</>}
               </div>
-              <Slider label="Geschosse" value={floors} min={1} max={25} step={1} unit=" OG" set={setFloors} />
+              <Slider label="Geschosse" value={floors} min={1} max={25} step={1} unit=" OG" set={setFloorsVonHand} />
               {/* 107-02: the slider sets ALL storeys (also the rows of an existing storey table), like the height input of the BIM studio */}
               <Slider label="Geschosshöhe" value={floorH} min={2.5} max={4.5} step={0.1} unit=" m" set={(v) => { setFloorH(v); store.setAlleGeschosshoehen(v); }} />
               <div className="border-t pt-2 mt-1 space-y-3">
@@ -1631,7 +1773,7 @@ export default function MassingStudio({
                       : "innerhalb der Parzelle"}
                   </span>
                 </div>
-                <Slider label={`Faktor (x H) — Tiefe ${Math.max(abstandMin, abstandFaktor * height).toFixed(1)} m`} value={abstandFaktor} min={0.2} max={1} step={0.05} unit=" H" set={setAbstandFaktor} />
+                <Slider label={`Faktor (x H) — Tiefe ${tiefeLabel} m`} value={abstandFaktor} min={0.2} max={1} step={0.05} unit=" H" set={setAbstandFaktor} />
                 <Slider label="Mindesttiefe" value={abstandMin} min={2.5} max={6} step={0.5} unit=" m" set={setAbstandMin} />
                 {/* Persistenter Hinweis: Studie, kein bauordnungsrechtlicher Nachweis (KD-05) */}
                 <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] leading-snug text-amber-800">
@@ -1704,7 +1846,7 @@ export default function MassingStudio({
                 <div className="rounded bg-amber-50 p-2 text-center" data-testid="ms-sonne-hoehe"><div className="text-sm font-bold text-amber-700">{sun.elevation.toFixed(0)}°</div><div className="text-[10px] text-slate-500">{t("Sonnenhöhe")}</div></div>
                 <div className="rounded bg-amber-50 p-2 text-center" data-testid="ms-sonne-azimut"><div className="text-sm font-bold text-amber-700">{sun.azimuth.toFixed(0)}°</div><div className="text-[10px] text-slate-500">{t("Azimut (v. N)")}</div></div>
               </div>
-              <p className="text-[11px] text-slate-400">{sun.elevation <= 3 ? t("Sonne unter dem Horizont — kein Schattenwurf.") : `${t("Schattenlänge")} ≈ ${(height / Math.tan(sun.elevation * Math.PI / 180)).toFixed(0)} m`}</p>
+              <p className="text-[11px] text-slate-400">{sun.elevation <= 3 ? t("Sonne unter dem Horizont — kein Schattenwurf.") : `${t("Schattenlänge")} ≈ ${(hoeheKoerper / Math.tan(sun.elevation * Math.PI / 180)).toFixed(0)} m`}</p>
             </CardContent>
           </Card>
         </div>
@@ -1755,13 +1897,26 @@ export default function MassingStudio({
             {baufeldBekannt && (
               <KPI
                 icon={Maximize2}
-                label={t("außerhalb")}
+                label={t("außerhalb des Baufelds")}
                 testid="ms-kpi-ausserhalb"
                 value={ausserhalb?.m2 == null ? t("Anteil außerhalb") : `${Math.round(ausserhalb.m2).toLocaleString("de-DE")} m²`}
                 sub={ausserhalb?.m2 == null
                   ? t("Baufeld nicht konvex — Fläche nicht berechenbar [ASSUMED]")
                   : ausserhalb?.hatAnteilAusserhalb ? t("Baukörper ragt über das Baufeld") : t("innerhalb des Baufelds")}
                 tint={ausserhalb?.hatAnteilAusserhalb ? "text-rose-500" : "text-emerald-500"}
+              />
+            )}
+            {/* 108-08: no envelope drawn → the same figure against the parcel */}
+            {ausserhalbParzelle && (
+              <KPI
+                icon={Maximize2}
+                label={t("außerhalb der Parzelle")}
+                testid="ms-kpi-ausserhalb-parzelle"
+                value={ausserhalbParzelle.m2 == null ? t("Anteil außerhalb") : `${Math.round(ausserhalbParzelle.m2).toLocaleString("de-DE")} m²`}
+                sub={ausserhalbParzelle.m2 == null
+                  ? t("Parzelle nicht konvex — Fläche nicht berechenbar [ASSUMED]")
+                  : ausserhalbParzelle.hatAnteilAusserhalb ? t("Baukörper ragt über die Parzelle") : t("innerhalb der Parzelle")}
+                tint={ausserhalbParzelle.hatAnteilAusserhalb ? "text-destructive" : "text-erfolg"}
               />
             )}
             {/* 75-02 (MS-02): Proportion nach der φ-Hausregel — Bürostandard, kein Normbezug */}
@@ -1773,7 +1928,30 @@ export default function MassingStudio({
               tint={proportion.status === "gruen" ? "text-emerald-500" : "text-amber-500"}
             />
             <KPI icon={Building2} label="BGF" value={`${Math.round(bgf).toLocaleString("de-DE")} m²`} tint="text-emerald-500" testid="ms-kpi-bgf" />
-            <KPI icon={Ruler} label="Höhe" value={`${height.toFixed(1)} m`} tint="text-slate-500" />
+            {/* 108-11: with the roof of the building model the ridge height, the eaves as second value */}
+            <KPI
+              icon={Ruler}
+              label="Höhe"
+              value={`${hoeheKoerper.toFixed(1)} m`}
+              sub={hauptdach
+                ? t("First · Traufe {{traufe}} m").replace("{{traufe}}", hauptdach.traufhoehe_m.toFixed(2))
+                : modellDachFelder?.ladeFehler ? t("Dach des Gebäudemodells nicht geladen") : undefined}
+              tint="text-slate-500"
+              testid="ms-kpi-hoehe"
+            />
+            {/* 108-11: gross volume of the body with its roof (only with a pitched roof; the BGF above stays per storey) */}
+            {hauptdach && (
+              <KPI
+                icon={Building2}
+                label={t("BRI (Studie)")}
+                value={`${Math.round(hauptdach.bri_m3).toLocaleString("de-DE")} m³`}
+                sub={(hauptdach.fusshoehe_m < 0 ? t("davon Dach {{dach}} m³, ab Unterkante Untergeschoss") : t("davon Dach {{dach}} m³, ab ±0,00"))
+                  .replace("{{dach}}", Math.round(hauptdach.dachVolumen_m3).toLocaleString("de-DE"))
+                  + (hauptdach.dachUeberRahmen ? ` · ${t("Näherung (Dach über Rahmen)")}` : "")}
+                tint="text-muted-foreground"
+                testid="ms-kpi-bri"
+              />
+            )}
             {/* 72-01 A-5: Dichte-Kennzahlen je Projekttyp — bei Gewerbe stehen
                 hier Arbeitsplätze statt „Wohneinheiten" (Befund N-05). */}
             {dichteKpis.map((kpi) => (
@@ -1792,10 +1970,18 @@ export default function MassingStudio({
               label="Abstandsflächen (Studie)"
               value={!boundaryKnown ? "nicht prüfbar" : conflictCount ? `${conflictCount} ⚠` : "in Parzelle"}
               sub={
-                !boundaryKnown
-                  ? "kein Grundstück gezeichnet"
+                abstandsTiefenText
+                  ? [
+                    !boundaryKnown ? t("kein Grundstück gezeichnet") : null,
+                    `${abstandsTiefenText} (${abstandFaktor.toFixed(2)} H)`,
+                    abstandHoehen?.some((k) => k.art === "giebel") ? giebelAnnahmeText : null,
+                    zuschlagText,
+                  ].filter(Boolean).join(" · ")
+                  : !boundaryKnown
+                  ? t("kein Grundstück gezeichnet")
                   : `Tiefe ${Math.max(abstandMin, abstandFaktor * height).toFixed(1)} m (${abstandFaktor.toFixed(2)} H)`
               }
+              testid="ms-kpi-abstand"
               tint={!boundaryKnown ? "text-amber-500" : conflictCount ? "text-rose-500" : "text-emerald-500"}
             />
           </CardContent>
@@ -1803,8 +1989,9 @@ export default function MassingStudio({
 
         <Card>
           <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Building2 className="w-4 h-4" /> 3D-Massenmodell</CardTitle></CardHeader>
-          <CardContent className="h-72 p-0 rounded-lg overflow-hidden">
-            <BimModelViewer building={{ floors, area_net: footArea }} />
+          {/* 108-11: with a roof the main body to scale with the roof of the building model; data-modelldach = load state of the record */}
+          <CardContent className="h-72 p-0 rounded-lg overflow-hidden" data-modelldach={modellDachFelder?.ladeFehler ? "fehler" : modellDachFelder ? "geladen" : ""}>
+            <BimModelViewer building={bimViewerGebaeude} />
           </CardContent>
         </Card>
       </div>

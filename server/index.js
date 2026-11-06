@@ -45,6 +45,7 @@ import { typesafeRouter } from '../packages/nova-core/server/typesafe.js';
 import { pricesRouter } from '../packages/nova-ausschreibung/server/routes.js';
 import { geoRouter } from '../packages/nova-designer/server/routes.js';
 import { ifcTestPfad } from './ifcTestDatei.js';
+import { aenderungsStrom, aenderungenMelden, aenderungsRouter } from './aenderungsStrom.js';
 
 /** Path notation of this machine for the path rule (104-10). */
 const PLATTFORM = process.platform === 'win32' ? 'win32' : 'posix';
@@ -153,9 +154,23 @@ if (neuGeseedet.length > 0) {
 
 // 83-03 run mode, needed by the office-mode status (the app shell is only on this port in app mode).
 const APP_MODUS = istAppModus();
+// 106-09: the change stream of the model record / IFC journal (created before the office routes: revoking a device or
+// switching office mode off closes that device's open streams at once).
+const strom = aenderungsStrom();
+const geraetVonAnfrage = (/** @type {any} */ req) => req.bitZugang?.geraet ?? null;
+/** May the holder of an open stream still read? This computer always; a device only while office mode is on and its pairing is valid. */
+const stromNochGueltig = (/** @type {any} */ req) => req.bitZugang?.lokal === true
+  || (buero.istAktiv() && buero.geraetGueltig(req.bitZugang?.geraet?.id));
+/** @param {{geraet?: string, alle?: boolean}} w */
+const stromEntziehen = (w) => {
+  strom.schliessenFuer((quelle) => (w.alle ? quelle.startsWith('geraet:') : quelle === `geraet:${w.geraet}`));
+};
 // 93-03: before authRouter — it answers /auth/me for paired devices ("Gerät: <Name>").
-app.use('/api', bueroRouter(buero, { port: PORT, appModus: APP_MODUS, origins: ERLAUBTE_ORIGINS, lan }));
+app.use('/api', bueroRouter(buero, { port: PORT, appModus: APP_MODUS, origins: ERLAUBTE_ORIGINS, lan, beiEntzug: stromEntziehen }));
 app.use('/api', authRouter());
+// 106-09: every write of the model record / IFC journal becomes one event of the project's change stream (before entitiesRouter).
+app.use('/api', aenderungenMelden(strom, db, { geraetVon: geraetVonAnfrage }));
+app.use('/api', aenderungsRouter(strom, { db, geraetVon: geraetVonAnfrage, nochGueltig: stromNochGueltig }));
 app.use('/api', entitiesRouter(db));
 app.use('/api', personalRouter(personalDb, personalBlobs, { lokalGebunden, anfrageEntfernt }));
 app.use('/api', blobsRouter(blobs));

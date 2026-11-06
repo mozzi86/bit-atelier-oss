@@ -1,0 +1,3382 @@
+{
+ "quelle": "Erstbestand BIT-Atelier, 05.11.2026",
+ "anzahl": 113,
+ "baustoffe": [
+  {
+   "schluessel": "aluminium-760",
+   "name": "Aluminium_760",
+   "kurz": null,
+   "werkstoffklasse": "metall",
+   "kategorie_ifc": "steel",
+   "verschneidungsprioritaet": 760,
+   "kennwerte": {
+    "lambda_W_mK": 160,
+    "dichte_kg_m3": 2800,
+    "waermekapazitaet_J_kgK": 880,
+    "graue_energie_MJ_kg": 155,
+    "co2_kg_kg": 9.16
+   },
+   "farbe": "#6b6d72",
+   "textur": "ambientcg:Metal032",
+   "schraffur": {
+    "klasse": "metall",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0008,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Metall (voll/eng geschraffert)"
+   }
+  },
+  {
+   "schluessel": "asphalt-grau-340",
+   "name": "Asphalt grau_340",
+   "kurz": null,
+   "werkstoffklasse": "bitumen",
+   "kategorie_ifc": "asphalt",
+   "verschneidungsprioritaet": 340,
+   "kennwerte": {
+    "lambda_W_mK": 0.7,
+    "dichte_kg_m3": 2100,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 3.93,
+    "co2_kg_kg": 0.076
+   },
+   "farbe": "#7d848a",
+   "textur": "ambientcg:Plastic010",
+   "schraffur": {
+    "klasse": "bitumen",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.002,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.004,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Asphalt, genähert"
+   }
+  },
+  {
+   "schluessel": "asphalt-dunkel-340",
+   "name": "Asphalt dunkel_340",
+   "kurz": null,
+   "werkstoffklasse": "bitumen",
+   "kategorie_ifc": "asphalt",
+   "verschneidungsprioritaet": 340,
+   "kennwerte": {
+    "lambda_W_mK": 0.7,
+    "dichte_kg_m3": 2100,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 3.93,
+    "co2_kg_kg": 0.076
+   },
+   "farbe": "#55585e",
+   "textur": "ambientcg:Plastic010",
+   "schraffur": {
+    "klasse": "bitumen",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.002,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.004,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Asphalt, genähert"
+   }
+  },
+  {
+   "schluessel": "ausbauplatte-gkbi-355",
+   "name": "Ausbauplatte GKBI_355",
+   "kurz": "GKBI",
+   "werkstoffklasse": "gipsplatte",
+   "kategorie_ifc": "gypsum",
+   "verschneidungsprioritaet": 355,
+   "kennwerte": {
+    "lambda_W_mK": 0.25,
+    "dichte_kg_m3": 900,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 6.75,
+    "co2_kg_kg": 0.39
+   },
+   "farbe": "#7eb4a5",
+   "textur": "ambientcg:Plaster001",
+   "schraffur": {
+    "klasse": "gipsplatte",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.001,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Gips/Gipsplatte, enge Schraffur"
+   }
+  },
+  {
+   "schluessel": "ausbauplatte-gkb-355",
+   "name": "Ausbauplatte GKB_355",
+   "kurz": "GKB",
+   "werkstoffklasse": "gipsplatte",
+   "kategorie_ifc": "gypsum",
+   "verschneidungsprioritaet": 355,
+   "kennwerte": {
+    "lambda_W_mK": 0.25,
+    "dichte_kg_m3": 900,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 6.75,
+    "co2_kg_kg": 0.39
+   },
+   "farbe": "#ffffff",
+   "textur": "ambientcg:Plaster001",
+   "schraffur": {
+    "klasse": "gipsplatte",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.001,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Gips/Gipsplatte, enge Schraffur"
+   }
+  },
+  {
+   "schluessel": "bauholz-520",
+   "name": "Bauholz_520",
+   "kurz": null,
+   "werkstoffklasse": "holz",
+   "kategorie_ifc": "wood",
+   "verschneidungsprioritaet": 520,
+   "kennwerte": {
+    "lambda_W_mK": 0.13,
+    "dichte_kg_m3": 500,
+    "waermekapazitaet_J_kgK": 1600,
+    "graue_energie_MJ_kg": 6.95,
+    "co2_kg_kg": 0.29
+   },
+   "farbe": "#dacaad",
+   "textur": "ambientcg:Wood051",
+   "schraffur": {
+    "klasse": "holz",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0015,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Holz im Querschnitt"
+   }
+  },
+  {
+   "schluessel": "bauteil-500",
+   "name": "Bauteil_500",
+   "kurz": null,
+   "werkstoffklasse": "sonstiges",
+   "kategorie_ifc": "other",
+   "verschneidungsprioritaet": 500,
+   "kennwerte": {
+    "lambda_W_mK": 0.13,
+    "dichte_kg_m3": 500,
+    "waermekapazitaet_J_kgK": 1600,
+    "graue_energie_MJ_kg": 13.1,
+    "co2_kg_kg": 0.64
+   },
+   "farbe": "#ffffff",
+   "textur": null,
+   "schraffur": {
+    "klasse": "sonstiges",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": true
+     }
+    ],
+    "din": "keine Normschraffur — Modellier- bzw. Hilfsbaustoff"
+   }
+  },
+  {
+   "schluessel": "bekleidung-300",
+   "name": "Bekleidung_300",
+   "kurz": null,
+   "werkstoffklasse": "sonstiges",
+   "kategorie_ifc": "other",
+   "verschneidungsprioritaet": 300,
+   "kennwerte": {
+    "lambda_W_mK": 0.25,
+    "dichte_kg_m3": 900,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 6.75,
+    "co2_kg_kg": 0.39
+   },
+   "farbe": "#a8a8a8",
+   "textur": null,
+   "schraffur": {
+    "klasse": "sonstiges",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": true
+     }
+    ],
+    "din": "keine Normschraffur — Modellier- bzw. Hilfsbaustoff"
+   }
+  },
+  {
+   "schluessel": "beton-unbewehrt-330",
+   "name": "Beton unbewehrt_330",
+   "kurz": null,
+   "werkstoffklasse": "beton",
+   "kategorie_ifc": "concrete",
+   "verschneidungsprioritaet": 330,
+   "kennwerte": {
+    "lambda_W_mK": 0.8,
+    "dichte_kg_m3": 2300,
+    "waermekapazitaet_J_kgK": 800,
+    "graue_energie_MJ_kg": 0.92,
+    "co2_kg_kg": 0.15
+   },
+   "farbe": "#778478",
+   "textur": "ambientcg:Concrete034",
+   "schraffur": {
+    "klasse": "beton",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.005,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Beton unbewehrt (Punktierung), genähert als Strichschar"
+   }
+  },
+  {
+   "schluessel": "beton-unbewehrt-330-2",
+   "name": "Beton, unbewehrt_330",
+   "kurz": null,
+   "werkstoffklasse": "beton",
+   "kategorie_ifc": "concrete",
+   "verschneidungsprioritaet": 330,
+   "kennwerte": {
+    "lambda_W_mK": 0.8,
+    "dichte_kg_m3": 2300,
+    "waermekapazitaet_J_kgK": 800,
+    "graue_energie_MJ_kg": 0.92,
+    "co2_kg_kg": 0.15
+   },
+   "farbe": "#778478",
+   "textur": "ambientcg:Concrete034",
+   "schraffur": {
+    "klasse": "beton",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.005,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Beton unbewehrt (Punktierung), genähert als Strichschar"
+   }
+  },
+  {
+   "schluessel": "betonblock-640",
+   "name": "Betonblock_640",
+   "kurz": null,
+   "werkstoffklasse": "mauerwerk",
+   "kategorie_ifc": "masonry",
+   "verschneidungsprioritaet": 640,
+   "kennwerte": {
+    "lambda_W_mK": 0.6,
+    "dichte_kg_m3": 1400,
+    "waermekapazitaet_J_kgK": 880,
+    "graue_energie_MJ_kg": 0.72,
+    "co2_kg_kg": 0.088
+   },
+   "farbe": "#b6b4ad",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "mauerwerk",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Mauerwerk künstliche Steine, Schraffur 45°"
+   }
+  },
+  {
+   "schluessel": "betondachstein-780",
+   "name": "Betondachstein_780",
+   "kurz": null,
+   "werkstoffklasse": "dachdeckung",
+   "kategorie_ifc": "ceramic",
+   "verschneidungsprioritaet": 780,
+   "kennwerte": {
+    "lambda_W_mK": 1.5,
+    "dichte_kg_m3": 2100,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 0.75,
+    "co2_kg_kg": 0.107
+   },
+   "farbe": "#8a4837",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "dachdeckung",
+    "scharen": [
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Dachdeckung, genähert"
+   }
+  },
+  {
+   "schluessel": "brettschichtholz-620",
+   "name": "Brettschichtholz_620",
+   "kurz": null,
+   "werkstoffklasse": "holzwerkstoff",
+   "kategorie_ifc": "wood",
+   "verschneidungsprioritaet": 620,
+   "kennwerte": {
+    "lambda_W_mK": 0.09,
+    "dichte_kg_m3": 300,
+    "waermekapazitaet_J_kgK": 1600,
+    "graue_energie_MJ_kg": 11.9,
+    "co2_kg_kg": 0.52
+   },
+   "farbe": "#ceb18a",
+   "textur": "ambientcg:Wood051",
+   "schraffur": {
+    "klasse": "holzwerkstoff",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0015,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Holzwerkstoffplatte"
+   }
+  },
+  {
+   "schluessel": "dachziegel-grau-780",
+   "name": "Dachziegel grau_780",
+   "kurz": null,
+   "werkstoffklasse": "dachdeckung",
+   "kategorie_ifc": "ceramic",
+   "verschneidungsprioritaet": 780,
+   "kennwerte": {
+    "lambda_W_mK": 1.3,
+    "dichte_kg_m3": 2300,
+    "waermekapazitaet_J_kgK": 840,
+    "graue_energie_MJ_kg": 10,
+    "co2_kg_kg": 0.7
+   },
+   "farbe": "#aeaeae",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "dachdeckung",
+    "scharen": [
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Dachdeckung, genähert"
+   }
+  },
+  {
+   "schluessel": "dachziegel-rot-780",
+   "name": "Dachziegel rot_780",
+   "kurz": null,
+   "werkstoffklasse": "dachdeckung",
+   "kategorie_ifc": "ceramic",
+   "verschneidungsprioritaet": 780,
+   "kennwerte": {
+    "lambda_W_mK": 1.3,
+    "dichte_kg_m3": 2300,
+    "waermekapazitaet_J_kgK": 840,
+    "graue_energie_MJ_kg": 10,
+    "co2_kg_kg": 0.7
+   },
+   "farbe": "#cb7672",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "dachdeckung",
+    "scharen": [
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Dachdeckung, genähert"
+   }
+  },
+  {
+   "schluessel": "dachziegel-dunkel-780",
+   "name": "Dachziegel dunkel_780",
+   "kurz": null,
+   "werkstoffklasse": "dachdeckung",
+   "kategorie_ifc": "ceramic",
+   "verschneidungsprioritaet": 780,
+   "kennwerte": {
+    "lambda_W_mK": 1.3,
+    "dichte_kg_m3": 2300,
+    "waermekapazitaet_J_kgK": 840,
+    "graue_energie_MJ_kg": 10,
+    "co2_kg_kg": 0.7
+   },
+   "farbe": "#484848",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "dachdeckung",
+    "scharen": [
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Dachdeckung, genähert"
+   }
+  },
+  {
+   "schluessel": "eps-750",
+   "name": "EPS_750",
+   "kurz": "EPS",
+   "werkstoffklasse": "daemmung_hart",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 750,
+   "kennwerte": {
+    "lambda_W_mK": 0.042,
+    "dichte_kg_m3": 15,
+    "waermekapazitaet_J_kgK": 1450,
+    "graue_energie_MJ_kg": 76,
+    "co2_kg_kg": 3.18
+   },
+   "farbe": "#ffffff",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_hart",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht hart (Zickzack), genähert als Kreuzschar"
+   }
+  },
+  {
+   "schluessel": "eps-795",
+   "name": "EPS_795",
+   "kurz": "EPS",
+   "werkstoffklasse": "daemmung_hart",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 795,
+   "kennwerte": {
+    "lambda_W_mK": 0.032,
+    "dichte_kg_m3": 28,
+    "waermekapazitaet_J_kgK": 1450,
+    "graue_energie_MJ_kg": 87.4,
+    "co2_kg_kg": 3.42
+   },
+   "farbe": "#ffffff",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_hart",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht hart (Zickzack), genähert als Kreuzschar"
+   }
+  },
+  {
+   "schluessel": "edelstahl",
+   "name": "Edelstahl",
+   "kurz": null,
+   "werkstoffklasse": "metall",
+   "kategorie_ifc": "steel",
+   "verschneidungsprioritaet": 760,
+   "kennwerte": {
+    "lambda_W_mK": 17,
+    "dichte_kg_m3": 7900,
+    "waermekapazitaet_J_kgK": 460,
+    "graue_energie_MJ_kg": 56.7,
+    "co2_kg_kg": 6.15
+   },
+   "farbe": "#b5b6c1",
+   "textur": "ambientcg:Metal032",
+   "schraffur": {
+    "klasse": "metall",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0008,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Metall (voll/eng geschraffert)"
+   }
+  },
+  {
+   "schluessel": "entkopplungsmatte",
+   "name": "Entkopplungsmatte",
+   "kurz": null,
+   "werkstoffklasse": "daemmung_hart",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 902,
+   "kennwerte": {
+    "lambda_W_mK": 0.032,
+    "dichte_kg_m3": 28,
+    "waermekapazitaet_J_kgK": 1450,
+    "graue_energie_MJ_kg": 87.4,
+    "co2_kg_kg": 3.42
+   },
+   "farbe": "#7eb4a5",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_hart",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht hart (Zickzack), genähert als Kreuzschar"
+   }
+  },
+  {
+   "schluessel": "erdreich",
+   "name": "Erdreich",
+   "kurz": null,
+   "werkstoffklasse": "erdreich",
+   "kategorie_ifc": "soil",
+   "verschneidungsprioritaet": 160,
+   "kennwerte": {
+    "lambda_W_mK": 2.3,
+    "dichte_kg_m3": 1100,
+    "waermekapazitaet_J_kgK": 1200,
+    "graue_energie_MJ_kg": 0.008,
+    "co2_kg_kg": 0.005
+   },
+   "farbe": "#564327",
+   "textur": "ambientcg:Ground037",
+   "schraffur": {
+    "klasse": "erdreich",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.012,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: gewachsener Boden / Schüttung"
+   }
+  },
+  {
+   "schluessel": "erdreich-160",
+   "name": "Erdreich_160",
+   "kurz": null,
+   "werkstoffklasse": "erdreich",
+   "kategorie_ifc": "soil",
+   "verschneidungsprioritaet": 160,
+   "kennwerte": {
+    "lambda_W_mK": 2.3,
+    "dichte_kg_m3": 1100,
+    "waermekapazitaet_J_kgK": 1200,
+    "graue_energie_MJ_kg": 0.008,
+    "co2_kg_kg": 0.005
+   },
+   "farbe": "#564327",
+   "textur": "ambientcg:Ground037",
+   "schraffur": {
+    "klasse": "erdreich",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.012,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: gewachsener Boden / Schüttung"
+   }
+  },
+  {
+   "schluessel": "estrich-330",
+   "name": "Estrich_330",
+   "kurz": "Estrich",
+   "werkstoffklasse": "estrich",
+   "kategorie_ifc": "concrete",
+   "verschneidungsprioritaet": 330,
+   "kennwerte": {
+    "lambda_W_mK": 0.8,
+    "dichte_kg_m3": 2300,
+    "waermekapazitaet_J_kgK": 800,
+    "graue_energie_MJ_kg": 0.92,
+    "co2_kg_kg": 0.15
+   },
+   "farbe": "#a5a9ad",
+   "textur": "ambientcg:Concrete034",
+   "schraffur": {
+    "klasse": "estrich",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.0015,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Estrich, genähert als waagerechte Strichschar"
+   }
+  },
+  {
+   "schluessel": "faserzementplatte-780",
+   "name": "Faserzementplatte_780",
+   "kurz": null,
+   "werkstoffklasse": "dachdeckung",
+   "kategorie_ifc": "ceramic",
+   "verschneidungsprioritaet": 780,
+   "kennwerte": {
+    "lambda_W_mK": 1.5,
+    "dichte_kg_m3": 2100,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 0.75,
+    "co2_kg_kg": 0.107
+   },
+   "farbe": "#b6b4ad",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "dachdeckung",
+    "scharen": [
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Dachdeckung, genähert"
+   }
+  },
+  {
+   "schluessel": "fertigteil-390",
+   "name": "Fertigteil_390",
+   "kurz": null,
+   "werkstoffklasse": "stahlbeton",
+   "kategorie_ifc": "concrete",
+   "verschneidungsprioritaet": 390,
+   "kennwerte": {
+    "lambda_W_mK": 1.15,
+    "dichte_kg_m3": 1800,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 0.74,
+    "co2_kg_kg": 0.107
+   },
+   "farbe": "#938d88",
+   "textur": "ambientcg:Concrete034",
+   "schraffur": {
+    "klasse": "stahlbeton",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Stahlbeton, Kreuzschraffur"
+   }
+  },
+  {
+   "schluessel": "fliese-anthrazit-310",
+   "name": "Fliese anthrazit_310",
+   "kurz": null,
+   "werkstoffklasse": "keramik",
+   "kategorie_ifc": "ceramic",
+   "verschneidungsprioritaet": 310,
+   "kennwerte": {
+    "lambda_W_mK": 1.3,
+    "dichte_kg_m3": 1750,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 1.5,
+    "co2_kg_kg": 0.18
+   },
+   "farbe": "#585858",
+   "textur": "ambientcg:Tiles074",
+   "schraffur": {
+    "klasse": "keramik",
+    "scharen": [
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.003,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Keramik"
+   }
+  },
+  {
+   "schluessel": "fliesen-anthrazit-350",
+   "name": "Fliesen anthrazit_350",
+   "kurz": null,
+   "werkstoffklasse": "keramik",
+   "kategorie_ifc": "ceramic",
+   "verschneidungsprioritaet": 350,
+   "kennwerte": {
+    "lambda_W_mK": 1.3,
+    "dichte_kg_m3": 1750,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 1.5,
+    "co2_kg_kg": 0.18
+   },
+   "farbe": "#585858",
+   "textur": "ambientcg:Tiles074",
+   "schraffur": {
+    "klasse": "keramik",
+    "scharen": [
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.003,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Keramik"
+   }
+  },
+  {
+   "schluessel": "fliesen-weiss-350",
+   "name": "Fliesen weiß_350",
+   "kurz": null,
+   "werkstoffklasse": "keramik",
+   "kategorie_ifc": "ceramic",
+   "verschneidungsprioritaet": 350,
+   "kennwerte": {
+    "lambda_W_mK": 1.3,
+    "dichte_kg_m3": 1750,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 1.5,
+    "co2_kg_kg": 0.18
+   },
+   "farbe": "#ffffff",
+   "textur": "ambientcg:Tiles074",
+   "schraffur": {
+    "klasse": "keramik",
+    "scharen": [
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.003,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Keramik"
+   }
+  },
+  {
+   "schluessel": "folie-770",
+   "name": "Folie_770",
+   "kurz": null,
+   "werkstoffklasse": "abdichtung",
+   "kategorie_ifc": "membrane",
+   "verschneidungsprioritaet": 770,
+   "kennwerte": {
+    "lambda_W_mK": 0.14,
+    "dichte_kg_m3": 1200,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 77.2,
+    "co2_kg_kg": 3.1
+   },
+   "farbe": "#000000",
+   "textur": "ambientcg:Plastic010",
+   "schraffur": {
+    "klasse": "abdichtung",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.0005,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Abdichtung, dicke Linie"
+   }
+  },
+  {
+   "schluessel": "gelander-350",
+   "name": "Geländer_350",
+   "kurz": null,
+   "werkstoffklasse": "holz",
+   "kategorie_ifc": "wood",
+   "verschneidungsprioritaet": 350,
+   "kennwerte": {
+    "lambda_W_mK": 0.09,
+    "dichte_kg_m3": 300,
+    "waermekapazitaet_J_kgK": 1600,
+    "graue_energie_MJ_kg": 11.9,
+    "co2_kg_kg": 0.52
+   },
+   "farbe": "#ccbeac",
+   "textur": "ambientcg:Wood051",
+   "schraffur": {
+    "klasse": "holz",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0015,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Holz im Querschnitt"
+   }
+  },
+  {
+   "schluessel": "gipsputz-350",
+   "name": "Gipsputz_350",
+   "kurz": "Gipsputz",
+   "werkstoffklasse": "putz",
+   "kategorie_ifc": "plaster",
+   "verschneidungsprioritaet": 350,
+   "kennwerte": {
+    "lambda_W_mK": 0.4,
+    "dichte_kg_m3": 1000,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 1.6,
+    "co2_kg_kg": 0.11
+   },
+   "farbe": "#ffffff",
+   "textur": "ambientcg:Plaster001",
+   "schraffur": {
+    "klasse": "putz",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.001,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Putz, Mörtel (Punktierung), genähert"
+   }
+  },
+  {
+   "schluessel": "gipsputz-360",
+   "name": "Gipsputz_360",
+   "kurz": "Gipsputz",
+   "werkstoffklasse": "putz",
+   "kategorie_ifc": "plaster",
+   "verschneidungsprioritaet": 360,
+   "kennwerte": {
+    "lambda_W_mK": 0.4,
+    "dichte_kg_m3": 1000,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 1.6,
+    "co2_kg_kg": 0.11
+   },
+   "farbe": "#ffffff",
+   "textur": "ambientcg:Plaster001",
+   "schraffur": {
+    "klasse": "putz",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.001,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Putz, Mörtel (Punktierung), genähert"
+   }
+  },
+  {
+   "schluessel": "glaswolle-weich-220",
+   "name": "Glaswolle weich_220",
+   "kurz": "GW",
+   "werkstoffklasse": "daemmung_weich",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 220,
+   "kennwerte": {
+    "lambda_W_mK": 0.04,
+    "dichte_kg_m3": 14,
+    "waermekapazitaet_J_kgK": 1030,
+    "graue_energie_MJ_kg": 26,
+    "co2_kg_kg": 1.3
+   },
+   "farbe": "#fcfb00",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_weich",
+    "scharen": [
+     {
+      "winkel": 60.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 120.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht weich (Wellenlinie), genähert als Zickzack-Scharen"
+   }
+  },
+  {
+   "schluessel": "glaswolle-220",
+   "name": "Glaswolle_220",
+   "kurz": "GW",
+   "werkstoffklasse": "daemmung_weich",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 220,
+   "kennwerte": {
+    "lambda_W_mK": 0.04,
+    "dichte_kg_m3": 14,
+    "waermekapazitaet_J_kgK": 1030,
+    "graue_energie_MJ_kg": 26,
+    "co2_kg_kg": 1.3
+   },
+   "farbe": "#f7e29b",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_weich",
+    "scharen": [
+     {
+      "winkel": 60.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 120.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht weich (Wellenlinie), genähert als Zickzack-Scharen"
+   }
+  },
+  {
+   "schluessel": "gummi-770",
+   "name": "Gummi_770",
+   "kurz": null,
+   "werkstoffklasse": "kunststoff",
+   "kategorie_ifc": "plastic",
+   "verschneidungsprioritaet": 770,
+   "kennwerte": {
+    "lambda_W_mK": 0.17,
+    "dichte_kg_m3": 1200,
+    "waermekapazitaet_J_kgK": 1400,
+    "graue_energie_MJ_kg": 110,
+    "co2_kg_kg": 3.8
+   },
+   "farbe": "#36393f",
+   "textur": "ambientcg:Plastic010",
+   "schraffur": {
+    "klasse": "kunststoff",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.002,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.002,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Kunststoff"
+   }
+  },
+  {
+   "schluessel": "haustechnikbereich-0",
+   "name": "Haustechnikbereich_0",
+   "kurz": null,
+   "werkstoffklasse": "sonstiges",
+   "kategorie_ifc": "other",
+   "verschneidungsprioritaet": 0,
+   "kennwerte": {
+    "lambda_W_mK": 0,
+    "dichte_kg_m3": 0,
+    "waermekapazitaet_J_kgK": 0,
+    "graue_energie_MJ_kg": 0,
+    "co2_kg_kg": 0
+   },
+   "farbe": "#ff4646",
+   "textur": null,
+   "schraffur": {
+    "klasse": "sonstiges",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": true
+     }
+    ],
+    "din": "keine Normschraffur — Modellier- bzw. Hilfsbaustoff"
+   }
+  },
+  {
+   "schluessel": "hochlochziegel-640",
+   "name": "Hochlochziegel_640",
+   "kurz": "HLZ",
+   "werkstoffklasse": "mauerwerk",
+   "kategorie_ifc": "masonry",
+   "verschneidungsprioritaet": 640,
+   "kennwerte": {
+    "lambda_W_mK": 0.125,
+    "dichte_kg_m3": 742,
+    "waermekapazitaet_J_kgK": 920,
+    "graue_energie_MJ_kg": 6,
+    "co2_kg_kg": 0.48
+   },
+   "farbe": "#c49f8a",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "mauerwerk",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Mauerwerk künstliche Steine, Schraffur 45°"
+   }
+  },
+  {
+   "schluessel": "holzwolledammplatte-640",
+   "name": "Holzwolledämmplatte_640",
+   "kurz": null,
+   "werkstoffklasse": "daemmung_weich",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 640,
+   "kennwerte": {
+    "lambda_W_mK": 0.075,
+    "dichte_kg_m3": 200,
+    "waermekapazitaet_J_kgK": 1510,
+    "graue_energie_MJ_kg": 10.8,
+    "co2_kg_kg": 0.12
+   },
+   "farbe": "#aaac99",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_weich",
+    "scharen": [
+     {
+      "winkel": 60.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 120.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht weich (Wellenlinie), genähert als Zickzack-Scharen"
+   }
+  },
+  {
+   "schluessel": "kalkputz-370",
+   "name": "Kalkputz_370",
+   "kurz": null,
+   "werkstoffklasse": "putz",
+   "kategorie_ifc": "plaster",
+   "verschneidungsprioritaet": 370,
+   "kennwerte": {
+    "lambda_W_mK": 0.8,
+    "dichte_kg_m3": 1600,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 1.45,
+    "co2_kg_kg": 0.22
+   },
+   "farbe": "#ffffff",
+   "textur": "ambientcg:Plaster001",
+   "schraffur": {
+    "klasse": "putz",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.001,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Putz, Mörtel (Punktierung), genähert"
+   }
+  },
+  {
+   "schluessel": "kalksandstein-635",
+   "name": "Kalksandstein_635",
+   "kurz": "KS",
+   "werkstoffklasse": "mauerwerk",
+   "kategorie_ifc": "masonry",
+   "verschneidungsprioritaet": 635,
+   "kennwerte": {
+    "lambda_W_mK": 0.93,
+    "dichte_kg_m3": 1800,
+    "waermekapazitaet_J_kgK": 840,
+    "graue_energie_MJ_kg": 1.2,
+    "co2_kg_kg": 0.07
+   },
+   "farbe": "#f0f0f0",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "mauerwerk",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Mauerwerk künstliche Steine, Schraffur 45°"
+   }
+  },
+  {
+   "schluessel": "kalksandstein-750",
+   "name": "Kalksandstein_750",
+   "kurz": "KS",
+   "werkstoffklasse": "mauerwerk",
+   "kategorie_ifc": "masonry",
+   "verschneidungsprioritaet": 750,
+   "kennwerte": {
+    "lambda_W_mK": 0.93,
+    "dichte_kg_m3": 1800,
+    "waermekapazitaet_J_kgK": 840,
+    "graue_energie_MJ_kg": 1.2,
+    "co2_kg_kg": 0.07
+   },
+   "farbe": "#f0f0f0",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "mauerwerk",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Mauerwerk künstliche Steine, Schraffur 45°"
+   }
+  },
+  {
+   "schluessel": "kalkzementputz-370",
+   "name": "Kalkzementputz_370",
+   "kurz": "KZ-Putz",
+   "werkstoffklasse": "putz",
+   "kategorie_ifc": "plaster",
+   "verschneidungsprioritaet": 370,
+   "kennwerte": {
+    "lambda_W_mK": 0.8,
+    "dichte_kg_m3": 1600,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 1.45,
+    "co2_kg_kg": 0.22
+   },
+   "farbe": "#ffffff",
+   "textur": "ambientcg:Plaster001",
+   "schraffur": {
+    "klasse": "putz",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.001,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Putz, Mörtel (Punktierung), genähert"
+   }
+  },
+  {
+   "schluessel": "keramik-grau-755",
+   "name": "Keramik grau_755",
+   "kurz": null,
+   "werkstoffklasse": "keramik",
+   "kategorie_ifc": "ceramic",
+   "verschneidungsprioritaet": 755,
+   "kennwerte": {
+    "lambda_W_mK": 1,
+    "dichte_kg_m3": 2000,
+    "waermekapazitaet_J_kgK": 800,
+    "graue_energie_MJ_kg": 3,
+    "co2_kg_kg": 0.24
+   },
+   "farbe": "#595959",
+   "textur": "ambientcg:Tiles074",
+   "schraffur": {
+    "klasse": "keramik",
+    "scharen": [
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.003,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Keramik"
+   }
+  },
+  {
+   "schluessel": "keramik-rotbraun-755",
+   "name": "Keramik rotbraun_755",
+   "kurz": null,
+   "werkstoffklasse": "keramik",
+   "kategorie_ifc": "ceramic",
+   "verschneidungsprioritaet": 755,
+   "kennwerte": {
+    "lambda_W_mK": 1,
+    "dichte_kg_m3": 2000,
+    "waermekapazitaet_J_kgK": 800,
+    "graue_energie_MJ_kg": 3,
+    "co2_kg_kg": 0.24
+   },
+   "farbe": "#83522d",
+   "textur": "ambientcg:Tiles074",
+   "schraffur": {
+    "klasse": "keramik",
+    "scharen": [
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.003,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Keramik"
+   }
+  },
+  {
+   "schluessel": "kies-fein-100",
+   "name": "Kies fein_100",
+   "kurz": null,
+   "werkstoffklasse": "erdreich",
+   "kategorie_ifc": "soil",
+   "verschneidungsprioritaet": 100,
+   "kennwerte": {
+    "lambda_W_mK": 0.55,
+    "dichte_kg_m3": 1600,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 1,
+    "co2_kg_kg": 0.06
+   },
+   "farbe": "#cfbda5",
+   "textur": "ambientcg:Ground037",
+   "schraffur": {
+    "klasse": "erdreich",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.012,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: gewachsener Boden / Schüttung"
+   }
+  },
+  {
+   "schluessel": "kies-grob-100",
+   "name": "Kies grob_100",
+   "kurz": null,
+   "werkstoffklasse": "erdreich",
+   "kategorie_ifc": "soil",
+   "verschneidungsprioritaet": 100,
+   "kennwerte": {
+    "lambda_W_mK": 0.55,
+    "dichte_kg_m3": 1600,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 1,
+    "co2_kg_kg": 0.06
+   },
+   "farbe": "#c7b39e",
+   "textur": "ambientcg:Ground037",
+   "schraffur": {
+    "klasse": "erdreich",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.012,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: gewachsener Boden / Schüttung"
+   }
+  },
+  {
+   "schluessel": "kies-140",
+   "name": "Kies_140",
+   "kurz": null,
+   "werkstoffklasse": "erdreich",
+   "kategorie_ifc": "soil",
+   "verschneidungsprioritaet": 140,
+   "kennwerte": {
+    "lambda_W_mK": 1.4,
+    "dichte_kg_m3": 1800,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 0.063,
+    "co2_kg_kg": 0.004
+   },
+   "farbe": "#cfbda5",
+   "textur": "ambientcg:Ground037",
+   "schraffur": {
+    "klasse": "erdreich",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.012,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: gewachsener Boden / Schüttung"
+   }
+  },
+  {
+   "schluessel": "kunstharzputz-370",
+   "name": "Kunstharzputz_370",
+   "kurz": "KH-Putz",
+   "werkstoffklasse": "putz",
+   "kategorie_ifc": "plaster",
+   "verschneidungsprioritaet": 370,
+   "kennwerte": {
+    "lambda_W_mK": 0.18,
+    "dichte_kg_m3": 600,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 0,
+    "co2_kg_kg": 0
+   },
+   "farbe": "#ffffff",
+   "textur": "ambientcg:Plaster001",
+   "schraffur": {
+    "klasse": "putz",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.001,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Putz, Mörtel (Punktierung), genähert"
+   }
+  },
+  {
+   "schluessel": "kupfer-760",
+   "name": "Kupfer_760",
+   "kurz": null,
+   "werkstoffklasse": "metall",
+   "kategorie_ifc": "steel",
+   "verschneidungsprioritaet": 760,
+   "kennwerte": {
+    "lambda_W_mK": 380,
+    "dichte_kg_m3": 8900,
+    "waermekapazitaet_J_kgK": 380,
+    "graue_energie_MJ_kg": 42,
+    "co2_kg_kg": 2.71
+   },
+   "farbe": "#aac2af",
+   "textur": "ambientcg:Metal032",
+   "schraffur": {
+    "klasse": "metall",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0008,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Metall (voll/eng geschraffert)"
+   }
+  },
+  {
+   "schluessel": "lehm-120",
+   "name": "Lehm_120",
+   "kurz": null,
+   "werkstoffklasse": "erdreich",
+   "kategorie_ifc": "soil",
+   "verschneidungsprioritaet": 120,
+   "kennwerte": {
+    "lambda_W_mK": 3.5,
+    "dichte_kg_m3": 2550,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 10.5,
+    "co2_kg_kg": 0.65
+   },
+   "farbe": "#ffd17d",
+   "textur": "ambientcg:Ground037",
+   "schraffur": {
+    "klasse": "erdreich",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.012,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: gewachsener Boden / Schüttung"
+   }
+  },
+  {
+   "schluessel": "lehmputz-370",
+   "name": "Lehmputz_370",
+   "kurz": null,
+   "werkstoffklasse": "putz",
+   "kategorie_ifc": "plaster",
+   "verschneidungsprioritaet": 370,
+   "kennwerte": {
+    "lambda_W_mK": 1,
+    "dichte_kg_m3": 1800,
+    "waermekapazitaet_J_kgK": 800,
+    "graue_energie_MJ_kg": 2.2,
+    "co2_kg_kg": 0.4
+   },
+   "farbe": "#bfa58c",
+   "textur": "ambientcg:Plaster001",
+   "schraffur": {
+    "klasse": "putz",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.001,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Putz, Mörtel (Punktierung), genähert"
+   }
+  },
+  {
+   "schluessel": "leichtbeton-655",
+   "name": "Leichtbeton_655",
+   "kurz": null,
+   "werkstoffklasse": "leichtbeton",
+   "kategorie_ifc": "concrete",
+   "verschneidungsprioritaet": 655,
+   "kennwerte": {
+    "lambda_W_mK": 0.12,
+    "dichte_kg_m3": 450,
+    "waermekapazitaet_J_kgK": 800,
+    "graue_energie_MJ_kg": 6.2,
+    "co2_kg_kg": 0.46
+   },
+   "farbe": "#a5a9ad",
+   "textur": "ambientcg:Concrete034",
+   "schraffur": {
+    "klasse": "leichtbeton",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.004,
+      "gestrichelt": true
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.008,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Leichtbeton, genähert"
+   }
+  },
+  {
+   "schluessel": "linoleum-300",
+   "name": "Linoleum_300",
+   "kurz": null,
+   "werkstoffklasse": "kunststoff",
+   "kategorie_ifc": "plastic",
+   "verschneidungsprioritaet": 300,
+   "kennwerte": {
+    "lambda_W_mK": 0.17,
+    "dichte_kg_m3": 1390,
+    "waermekapazitaet_J_kgK": 900,
+    "graue_energie_MJ_kg": 77.2,
+    "co2_kg_kg": 3.1
+   },
+   "farbe": "#8f8c87",
+   "textur": "ambientcg:Plastic010",
+   "schraffur": {
+    "klasse": "kunststoff",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.002,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.002,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Kunststoff"
+   }
+  },
+  {
+   "schluessel": "linoleum-350",
+   "name": "Linoleum_350",
+   "kurz": null,
+   "werkstoffklasse": "kunststoff",
+   "kategorie_ifc": "plastic",
+   "verschneidungsprioritaet": 350,
+   "kennwerte": {
+    "lambda_W_mK": 0.17,
+    "dichte_kg_m3": 1390,
+    "waermekapazitaet_J_kgK": 900,
+    "graue_energie_MJ_kg": 77.2,
+    "co2_kg_kg": 3.1
+   },
+   "farbe": "#8f8c87",
+   "textur": "ambientcg:Plastic010",
+   "schraffur": {
+    "klasse": "kunststoff",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.002,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.002,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Kunststoff"
+   }
+  },
+  {
+   "schluessel": "luftschicht-horizontal-205",
+   "name": "Luftschicht horizontal_205",
+   "kurz": "Luft",
+   "werkstoffklasse": "luft",
+   "kategorie_ifc": "air",
+   "verschneidungsprioritaet": 205,
+   "kennwerte": {
+    "lambda_W_mK": 0.18,
+    "dichte_kg_m3": 1.2,
+    "waermekapazitaet_J_kgK": 1008,
+    "graue_energie_MJ_kg": 0,
+    "co2_kg_kg": 0
+   },
+   "farbe": "#ffffff",
+   "textur": null,
+   "schraffur": {
+    "klasse": "luft",
+    "scharen": [],
+    "din": "keine Schraffur (Hohlraum)"
+   }
+  },
+  {
+   "schluessel": "luftschicht-vertikal-durchgehend-765",
+   "name": "Luftschicht vertikal durchgehend_765",
+   "kurz": "Luft",
+   "werkstoffklasse": "luft",
+   "kategorie_ifc": "air",
+   "verschneidungsprioritaet": 765,
+   "kennwerte": {
+    "lambda_W_mK": 0.16,
+    "dichte_kg_m3": 1.2,
+    "waermekapazitaet_J_kgK": 1008,
+    "graue_energie_MJ_kg": 0,
+    "co2_kg_kg": 0
+   },
+   "farbe": "#ffffff",
+   "textur": null,
+   "schraffur": {
+    "klasse": "luft",
+    "scharen": [],
+    "din": "keine Schraffur (Hohlraum)"
+   }
+  },
+  {
+   "schluessel": "luftschicht-vertikal-205",
+   "name": "Luftschicht vertikal_205",
+   "kurz": "Luft",
+   "werkstoffklasse": "luft",
+   "kategorie_ifc": "air",
+   "verschneidungsprioritaet": 205,
+   "kennwerte": {
+    "lambda_W_mK": 0.16,
+    "dichte_kg_m3": 1.2,
+    "waermekapazitaet_J_kgK": 1008,
+    "graue_energie_MJ_kg": 0,
+    "co2_kg_kg": 0
+   },
+   "farbe": "#ffffff",
+   "textur": null,
+   "schraffur": {
+    "klasse": "luft",
+    "scharen": [],
+    "din": "keine Schraffur (Hohlraum)"
+   }
+  },
+  {
+   "schluessel": "marmor-510",
+   "name": "Marmor_510",
+   "kurz": null,
+   "werkstoffklasse": "naturstein",
+   "kategorie_ifc": "stone",
+   "verschneidungsprioritaet": 510,
+   "kennwerte": {
+    "lambda_W_mK": 3.5,
+    "dichte_kg_m3": 2800,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 2,
+    "co2_kg_kg": 0.13
+   },
+   "farbe": "#f7f7f7",
+   "textur": "ambientcg:Tiles074",
+   "schraffur": {
+    "klasse": "naturstein",
+    "scharen": [
+     {
+      "winkel": 30.0,
+      "abstand_m": 0.003,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 120.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Naturstein"
+   }
+  },
+  {
+   "schluessel": "mineralwolle-1-615",
+   "name": "Mineralwolle 1_615",
+   "kurz": "MW",
+   "werkstoffklasse": "daemmung_weich",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 615,
+   "kennwerte": {
+    "lambda_W_mK": 0.037,
+    "dichte_kg_m3": 40,
+    "waermekapazitaet_J_kgK": 840,
+    "graue_energie_MJ_kg": 14.3,
+    "co2_kg_kg": 1.08
+   },
+   "farbe": "#f7e29b",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_weich",
+    "scharen": [
+     {
+      "winkel": 60.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 120.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht weich (Wellenlinie), genähert als Zickzack-Scharen"
+   }
+  },
+  {
+   "schluessel": "mineralwolle-2-745",
+   "name": "Mineralwolle 2_745",
+   "kurz": "MW",
+   "werkstoffklasse": "daemmung_weich",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 745,
+   "kennwerte": {
+    "lambda_W_mK": 0.04,
+    "dichte_kg_m3": 160,
+    "waermekapazitaet_J_kgK": 840,
+    "graue_energie_MJ_kg": 23.4,
+    "co2_kg_kg": 1.73
+   },
+   "farbe": "#f7e29b",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_weich",
+    "scharen": [
+     {
+      "winkel": 60.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 120.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht weich (Wellenlinie), genähert als Zickzack-Scharen"
+   }
+  },
+  {
+   "schluessel": "mineralwolle-3-740",
+   "name": "Mineralwolle 3_740",
+   "kurz": "MW",
+   "werkstoffklasse": "daemmung_hart",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 740,
+   "kennwerte": {
+    "lambda_W_mK": 0.036,
+    "dichte_kg_m3": 115,
+    "waermekapazitaet_J_kgK": 840,
+    "graue_energie_MJ_kg": 21.4,
+    "co2_kg_kg": 1.69
+   },
+   "farbe": "#fcfb00",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_hart",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht hart (Zickzack), genähert als Kreuzschar"
+   }
+  },
+  {
+   "schluessel": "mortel-dunkel",
+   "name": "Mörtel dunkel",
+   "kurz": null,
+   "werkstoffklasse": "putz",
+   "kategorie_ifc": "plaster",
+   "verschneidungsprioritaet": 330,
+   "kennwerte": {
+    "lambda_W_mK": 0.8,
+    "dichte_kg_m3": 2300,
+    "waermekapazitaet_J_kgK": 800,
+    "graue_energie_MJ_kg": 0.92,
+    "co2_kg_kg": 0.15
+   },
+   "farbe": "#84888f",
+   "textur": "ambientcg:Plaster001",
+   "schraffur": {
+    "klasse": "putz",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.001,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Putz, Mörtel (Punktierung), genähert"
+   }
+  },
+  {
+   "schluessel": "mortel-hell-330",
+   "name": "Mörtel hell_330",
+   "kurz": null,
+   "werkstoffklasse": "putz",
+   "kategorie_ifc": "plaster",
+   "verschneidungsprioritaet": 330,
+   "kennwerte": {
+    "lambda_W_mK": 0.8,
+    "dichte_kg_m3": 2300,
+    "waermekapazitaet_J_kgK": 800,
+    "graue_energie_MJ_kg": 0.92,
+    "co2_kg_kg": 0.15
+   },
+   "farbe": "#c0c2c7",
+   "textur": "ambientcg:Plaster001",
+   "schraffur": {
+    "klasse": "putz",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.001,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Putz, Mörtel (Punktierung), genähert"
+   }
+  },
+  {
+   "schluessel": "nachbarbebauung-10",
+   "name": "Nachbarbebauung_10",
+   "kurz": null,
+   "werkstoffklasse": "sonstiges",
+   "kategorie_ifc": "other",
+   "verschneidungsprioritaet": 10,
+   "kennwerte": {
+    "lambda_W_mK": 0,
+    "dichte_kg_m3": 0,
+    "waermekapazitaet_J_kgK": 0,
+    "graue_energie_MJ_kg": 0,
+    "co2_kg_kg": 0
+   },
+   "farbe": "#ffffff",
+   "textur": null,
+   "schraffur": {
+    "klasse": "sonstiges",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": true
+     }
+    ],
+    "din": "keine Normschraffur — Modellier- bzw. Hilfsbaustoff"
+   }
+  },
+  {
+   "schluessel": "niedrige-prioritat-0",
+   "name": "Niedrige Priorität_0",
+   "kurz": null,
+   "werkstoffklasse": "sonstiges",
+   "kategorie_ifc": "other",
+   "verschneidungsprioritaet": 0,
+   "kennwerte": {
+    "lambda_W_mK": 0,
+    "dichte_kg_m3": 0,
+    "waermekapazitaet_J_kgK": 0,
+    "graue_energie_MJ_kg": 0,
+    "co2_kg_kg": 0
+   },
+   "farbe": "#ffffff",
+   "textur": null,
+   "schraffur": {
+    "klasse": "sonstiges",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": true
+     }
+    ],
+    "din": "keine Normschraffur — Modellier- bzw. Hilfsbaustoff"
+   }
+  },
+  {
+   "schluessel": "normalglas-530",
+   "name": "Normalglas_530",
+   "kurz": null,
+   "werkstoffklasse": "glas",
+   "kategorie_ifc": "glass",
+   "verschneidungsprioritaet": 530,
+   "kennwerte": {
+    "lambda_W_mK": 1.4,
+    "dichte_kg_m3": 2200,
+    "waermekapazitaet_J_kgK": 750,
+    "graue_energie_MJ_kg": 0.85,
+    "co2_kg_kg": 0.02
+   },
+   "farbe": "#f0f7f3",
+   "textur": "klasse:glas",
+   "schraffur": {
+    "klasse": "glas",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Glas, weite Schraffur"
+   }
+  },
+  {
+   "schluessel": "osb-platte-350",
+   "name": "OSB Platte_350",
+   "kurz": "OSB",
+   "werkstoffklasse": "holzwerkstoff",
+   "kategorie_ifc": "wood",
+   "verschneidungsprioritaet": 350,
+   "kennwerte": {
+    "lambda_W_mK": 0.13,
+    "dichte_kg_m3": 650,
+    "waermekapazitaet_J_kgK": 1700,
+    "graue_energie_MJ_kg": 15,
+    "co2_kg_kg": 0.9
+   },
+   "farbe": "#d9bc95",
+   "textur": "ambientcg:Wood051",
+   "schraffur": {
+    "klasse": "holzwerkstoff",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0015,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Holzwerkstoffplatte"
+   }
+  },
+  {
+   "schluessel": "pvc-350",
+   "name": "PVC_350",
+   "kurz": null,
+   "werkstoffklasse": "kunststoff",
+   "kategorie_ifc": "plastic",
+   "verschneidungsprioritaet": 350,
+   "kennwerte": {
+    "lambda_W_mK": 0.17,
+    "dichte_kg_m3": 1390,
+    "waermekapazitaet_J_kgK": 900,
+    "graue_energie_MJ_kg": 77.2,
+    "co2_kg_kg": 3.1
+   },
+   "farbe": "#ffffff",
+   "textur": "ambientcg:Plastic010",
+   "schraffur": {
+    "klasse": "kunststoff",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.002,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.002,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Kunststoff"
+   }
+  },
+  {
+   "schluessel": "parkett-350",
+   "name": "Parkett_350",
+   "kurz": "Parkett",
+   "werkstoffklasse": "holz",
+   "kategorie_ifc": "wood",
+   "verschneidungsprioritaet": 350,
+   "kennwerte": {
+    "lambda_W_mK": 0.13,
+    "dichte_kg_m3": 650,
+    "waermekapazitaet_J_kgK": 1700,
+    "graue_energie_MJ_kg": 15,
+    "co2_kg_kg": 0.9
+   },
+   "farbe": "#bfae8e",
+   "textur": "ambientcg:Wood051",
+   "schraffur": {
+    "klasse": "holz",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0015,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Holz im Querschnitt"
+   }
+  },
+  {
+   "schluessel": "pflaster-8-eck-180",
+   "name": "Pflaster 8-eck_180",
+   "kurz": null,
+   "werkstoffklasse": "mauerwerk",
+   "kategorie_ifc": "masonry",
+   "verschneidungsprioritaet": 180,
+   "kennwerte": {
+    "lambda_W_mK": 1.3,
+    "dichte_kg_m3": 1750,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 1.5,
+    "co2_kg_kg": 0.18
+   },
+   "farbe": "#bcc7c1",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "mauerwerk",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Mauerwerk künstliche Steine, Schraffur 45°"
+   }
+  },
+  {
+   "schluessel": "porenbeton-630",
+   "name": "Porenbeton_630",
+   "kurz": null,
+   "werkstoffklasse": "leichtbeton",
+   "kategorie_ifc": "concrete",
+   "verschneidungsprioritaet": 630,
+   "kennwerte": {
+    "lambda_W_mK": 0.13,
+    "dichte_kg_m3": 500,
+    "waermekapazitaet_J_kgK": 1290,
+    "graue_energie_MJ_kg": 0.59,
+    "co2_kg_kg": 0.063
+   },
+   "farbe": "#b5b2ae",
+   "textur": "ambientcg:Concrete034",
+   "schraffur": {
+    "klasse": "leichtbeton",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.004,
+      "gestrichelt": true
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.008,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Leichtbeton, genähert"
+   }
+  },
+  {
+   "schluessel": "profilitglas-530",
+   "name": "Profilitglas_530",
+   "kurz": null,
+   "werkstoffklasse": "glas",
+   "kategorie_ifc": "glass",
+   "verschneidungsprioritaet": 530,
+   "kennwerte": {
+    "lambda_W_mK": 1.2,
+    "dichte_kg_m3": 2000,
+    "waermekapazitaet_J_kgK": 750,
+    "graue_energie_MJ_kg": 11.5,
+    "co2_kg_kg": 0.59
+   },
+   "farbe": "#bbdfd3",
+   "textur": "klasse:glas",
+   "schraffur": {
+    "klasse": "glas",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Glas, weite Schraffur"
+   }
+  },
+  {
+   "schluessel": "projektspezifisch-800",
+   "name": "Projektspezifisch_800",
+   "kurz": null,
+   "werkstoffklasse": "sonstiges",
+   "kategorie_ifc": "other",
+   "verschneidungsprioritaet": 800,
+   "kennwerte": {
+    "lambda_W_mK": 0,
+    "dichte_kg_m3": 0,
+    "waermekapazitaet_J_kgK": 0,
+    "graue_energie_MJ_kg": 0,
+    "co2_kg_kg": 0
+   },
+   "farbe": "#a8a8a8",
+   "textur": null,
+   "schraffur": {
+    "klasse": "sonstiges",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": true
+     }
+    ],
+    "din": "keine Normschraffur — Modellier- bzw. Hilfsbaustoff"
+   }
+  },
+  {
+   "schluessel": "reet-770",
+   "name": "Reet_770",
+   "kurz": null,
+   "werkstoffklasse": "dachdeckung",
+   "kategorie_ifc": "ceramic",
+   "verschneidungsprioritaet": 770,
+   "kennwerte": {
+    "lambda_W_mK": 0.13,
+    "dichte_kg_m3": 500,
+    "waermekapazitaet_J_kgK": 1600,
+    "graue_energie_MJ_kg": 6.95,
+    "co2_kg_kg": 0.29
+   },
+   "farbe": "#ab9181",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "dachdeckung",
+    "scharen": [
+     {
+      "winkel": 90.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN ISO 128-50: Dachdeckung, genähert"
+   }
+  },
+  {
+   "schluessel": "sand-110",
+   "name": "Sand_110",
+   "kurz": null,
+   "werkstoffklasse": "erdreich",
+   "kategorie_ifc": "soil",
+   "verschneidungsprioritaet": 110,
+   "kennwerte": {
+    "lambda_W_mK": 2.3,
+    "dichte_kg_m3": 1100,
+    "waermekapazitaet_J_kgK": 1200,
+    "graue_energie_MJ_kg": 0.008,
+    "co2_kg_kg": 0.005
+   },
+   "farbe": "#94684b",
+   "textur": "ambientcg:Ground037",
+   "schraffur": {
+    "klasse": "erdreich",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.012,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: gewachsener Boden / Schüttung"
+   }
+  },
+  {
+   "schluessel": "sandstein-510",
+   "name": "Sandstein_510",
+   "kurz": null,
+   "werkstoffklasse": "naturstein",
+   "kategorie_ifc": "stone",
+   "verschneidungsprioritaet": 510,
+   "kennwerte": {
+    "lambda_W_mK": 2.3,
+    "dichte_kg_m3": 2600,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 1,
+    "co2_kg_kg": 0.06
+   },
+   "farbe": "#d3c5b6",
+   "textur": "ambientcg:Tiles074",
+   "schraffur": {
+    "klasse": "naturstein",
+    "scharen": [
+     {
+      "winkel": 30.0,
+      "abstand_m": 0.003,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 120.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Naturstein"
+   }
+  },
+  {
+   "schluessel": "schiefer-510",
+   "name": "Schiefer_510",
+   "kurz": null,
+   "werkstoffklasse": "naturstein",
+   "kategorie_ifc": "stone",
+   "verschneidungsprioritaet": 510,
+   "kennwerte": {
+    "lambda_W_mK": 2.2,
+    "dichte_kg_m3": 2400,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 5.5,
+    "co2_kg_kg": 0.035
+   },
+   "farbe": "#a6aaae",
+   "textur": "ambientcg:Tiles074",
+   "schraffur": {
+    "klasse": "naturstein",
+    "scharen": [
+     {
+      "winkel": 30.0,
+      "abstand_m": 0.003,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 120.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Naturstein"
+   }
+  },
+  {
+   "schluessel": "schuttung-110",
+   "name": "Schüttung_110",
+   "kurz": null,
+   "werkstoffklasse": "erdreich",
+   "kategorie_ifc": "soil",
+   "verschneidungsprioritaet": 110,
+   "kennwerte": {
+    "lambda_W_mK": 0.13,
+    "dichte_kg_m3": 330,
+    "waermekapazitaet_J_kgK": 880,
+    "graue_energie_MJ_kg": 6.5,
+    "co2_kg_kg": 0.48
+   },
+   "farbe": "#c0c2c7",
+   "textur": "ambientcg:Ground037",
+   "schraffur": {
+    "klasse": "erdreich",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.012,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: gewachsener Boden / Schüttung"
+   }
+  },
+  {
+   "schluessel": "spanplatte-360",
+   "name": "Spanplatte_360",
+   "kurz": null,
+   "werkstoffklasse": "holzwerkstoff",
+   "kategorie_ifc": "wood",
+   "verschneidungsprioritaet": 350,
+   "kennwerte": {
+    "lambda_W_mK": 0.14,
+    "dichte_kg_m3": 600,
+    "waermekapazitaet_J_kgK": 1700,
+    "graue_energie_MJ_kg": 12.1,
+    "co2_kg_kg": 0.79
+   },
+   "farbe": "#bdab91",
+   "textur": "ambientcg:Wood051",
+   "schraffur": {
+    "klasse": "holzwerkstoff",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0015,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Holzwerkstoffplatte"
+   }
+  },
+  {
+   "schluessel": "sperrschicht-770",
+   "name": "Sperrschicht_770",
+   "kurz": null,
+   "werkstoffklasse": "abdichtung",
+   "kategorie_ifc": "membrane",
+   "verschneidungsprioritaet": 770,
+   "kennwerte": {
+    "lambda_W_mK": 0.23,
+    "dichte_kg_m3": 1100,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 2.86,
+    "co2_kg_kg": 0.066
+   },
+   "farbe": "#000000",
+   "textur": "ambientcg:Plastic010",
+   "schraffur": {
+    "klasse": "abdichtung",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.0005,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Abdichtung, dicke Linie"
+   }
+  },
+  {
+   "schluessel": "stahl-lackiert-760",
+   "name": "Stahl lackiert_760",
+   "kurz": null,
+   "werkstoffklasse": "metall",
+   "kategorie_ifc": "steel",
+   "verschneidungsprioritaet": 760,
+   "kennwerte": {
+    "lambda_W_mK": 50,
+    "dichte_kg_m3": 7800,
+    "waermekapazitaet_J_kgK": 450,
+    "graue_energie_MJ_kg": 20.1,
+    "co2_kg_kg": 1.46
+   },
+   "farbe": "#868d8e",
+   "textur": "ambientcg:Metal032",
+   "schraffur": {
+    "klasse": "metall",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0008,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Metall (voll/eng geschraffert)"
+   }
+  },
+  {
+   "schluessel": "stahl-verzinkt-760",
+   "name": "Stahl verzinkt_760",
+   "kurz": null,
+   "werkstoffklasse": "metall",
+   "kategorie_ifc": "steel",
+   "verschneidungsprioritaet": 760,
+   "kennwerte": {
+    "lambda_W_mK": 50,
+    "dichte_kg_m3": 7800,
+    "waermekapazitaet_J_kgK": 450,
+    "graue_energie_MJ_kg": 20.1,
+    "co2_kg_kg": 1.46
+   },
+   "farbe": "#98a0a5",
+   "textur": "ambientcg:Metal032",
+   "schraffur": {
+    "klasse": "metall",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0008,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Metall (voll/eng geschraffert)"
+   }
+  },
+  {
+   "schluessel": "stahlbeton-fertigteil-1-670",
+   "name": "Stahlbeton Fertigteil 1_670",
+   "kurz": "StB",
+   "werkstoffklasse": "stahlbeton",
+   "kategorie_ifc": "concrete",
+   "verschneidungsprioritaet": 670,
+   "kennwerte": {
+    "lambda_W_mK": 1.15,
+    "dichte_kg_m3": 1800,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 0.74,
+    "co2_kg_kg": 0.107
+   },
+   "farbe": "#c7c7c7",
+   "textur": "ambientcg:Concrete034",
+   "schraffur": {
+    "klasse": "stahlbeton",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Stahlbeton, Kreuzschraffur"
+   }
+  },
+  {
+   "schluessel": "stahlbeton-fertigteil-2-670",
+   "name": "Stahlbeton Fertigteil 2_670",
+   "kurz": "StB",
+   "werkstoffklasse": "stahlbeton",
+   "kategorie_ifc": "concrete",
+   "verschneidungsprioritaet": 670,
+   "kennwerte": {
+    "lambda_W_mK": 1.15,
+    "dichte_kg_m3": 1800,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 0.74,
+    "co2_kg_kg": 0.107
+   },
+   "farbe": "#c7c7c7",
+   "textur": "ambientcg:Concrete034",
+   "schraffur": {
+    "klasse": "stahlbeton",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Stahlbeton, Kreuzschraffur"
+   }
+  },
+  {
+   "schluessel": "stahlbeton-sichtbeton-670",
+   "name": "Stahlbeton Sichtbeton_670",
+   "kurz": "StB",
+   "werkstoffklasse": "stahlbeton",
+   "kategorie_ifc": "concrete",
+   "verschneidungsprioritaet": 670,
+   "kennwerte": {
+    "lambda_W_mK": 1.15,
+    "dichte_kg_m3": 1800,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 0.74,
+    "co2_kg_kg": 0.107
+   },
+   "farbe": "#938d88",
+   "textur": "ambientcg:Concrete034",
+   "schraffur": {
+    "klasse": "stahlbeton",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Stahlbeton, Kreuzschraffur"
+   }
+  },
+  {
+   "schluessel": "stahlbeton-670",
+   "name": "Stahlbeton_670",
+   "kurz": "StB",
+   "werkstoffklasse": "stahlbeton",
+   "kategorie_ifc": "concrete",
+   "verschneidungsprioritaet": 670,
+   "kennwerte": {
+    "lambda_W_mK": 1.15,
+    "dichte_kg_m3": 1800,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 0.74,
+    "co2_kg_kg": 0.107
+   },
+   "farbe": "#a5a9ad",
+   "textur": "ambientcg:Concrete034",
+   "schraffur": {
+    "klasse": "stahlbeton",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Stahlbeton, Kreuzschraffur"
+   }
+  },
+  {
+   "schluessel": "stahlbeton-800",
+   "name": "Stahlbeton_800",
+   "kurz": "StB",
+   "werkstoffklasse": "stahlbeton",
+   "kategorie_ifc": "concrete",
+   "verschneidungsprioritaet": 800,
+   "kennwerte": {
+    "lambda_W_mK": 1.15,
+    "dichte_kg_m3": 1800,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 0.74,
+    "co2_kg_kg": 0.107
+   },
+   "farbe": "#a5a9ad",
+   "textur": "ambientcg:Concrete034",
+   "schraffur": {
+    "klasse": "stahlbeton",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Stahlbeton, Kreuzschraffur"
+   }
+  },
+  {
+   "schluessel": "stahlbeton-wu-800",
+   "name": "Stahlbeton_WU_800",
+   "kurz": "StB",
+   "werkstoffklasse": "stahlbeton",
+   "kategorie_ifc": "concrete",
+   "verschneidungsprioritaet": 800,
+   "kennwerte": {
+    "lambda_W_mK": 1.7,
+    "dichte_kg_m3": 2300,
+    "waermekapazitaet_J_kgK": 800,
+    "graue_energie_MJ_kg": 0.88,
+    "co2_kg_kg": 0.132
+   },
+   "farbe": "#a5a9ad",
+   "textur": "ambientcg:Concrete034",
+   "schraffur": {
+    "klasse": "stahlbeton",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Stahlbeton, Kreuzschraffur"
+   }
+  },
+  {
+   "schluessel": "staubschutzelemente",
+   "name": "Staubschutzelemente",
+   "kurz": null,
+   "werkstoffklasse": "sonstiges",
+   "kategorie_ifc": "other",
+   "verschneidungsprioritaet": 0,
+   "kennwerte": {
+    "lambda_W_mK": 0,
+    "dichte_kg_m3": 0,
+    "waermekapazitaet_J_kgK": 0,
+    "graue_energie_MJ_kg": 0,
+    "co2_kg_kg": 0
+   },
+   "farbe": "#ff4646",
+   "textur": null,
+   "schraffur": {
+    "klasse": "sonstiges",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": true
+     }
+    ],
+    "din": "keine Normschraffur — Modellier- bzw. Hilfsbaustoff"
+   }
+  },
+  {
+   "schluessel": "stehfalz-780",
+   "name": "Stehfalz_780",
+   "kurz": null,
+   "werkstoffklasse": "metall",
+   "kategorie_ifc": "steel",
+   "verschneidungsprioritaet": 780,
+   "kennwerte": {
+    "lambda_W_mK": 60,
+    "dichte_kg_m3": 7800,
+    "waermekapazitaet_J_kgK": 460,
+    "graue_energie_MJ_kg": 25.1,
+    "co2_kg_kg": 1.66
+   },
+   "farbe": "#cacaca",
+   "textur": "ambientcg:Metal032",
+   "schraffur": {
+    "klasse": "metall",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0008,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Metall (voll/eng geschraffert)"
+   }
+  },
+  {
+   "schluessel": "teppich-beige-310",
+   "name": "Teppich beige_310",
+   "kurz": null,
+   "werkstoffklasse": "textil",
+   "kategorie_ifc": "textile",
+   "verschneidungsprioritaet": 310,
+   "kennwerte": {
+    "lambda_W_mK": 0.06,
+    "dichte_kg_m3": 200,
+    "waermekapazitaet_J_kgK": 1300,
+    "graue_energie_MJ_kg": 74,
+    "co2_kg_kg": 3.9
+   },
+   "farbe": "#b8a798",
+   "textur": "ambientcg:Carpet016",
+   "schraffur": {
+    "klasse": "textil",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.002,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN ISO 128-50: Textil, genähert"
+   }
+  },
+  {
+   "schluessel": "teppich-blau-310",
+   "name": "Teppich blau_310",
+   "kurz": null,
+   "werkstoffklasse": "textil",
+   "kategorie_ifc": "textile",
+   "verschneidungsprioritaet": 310,
+   "kennwerte": {
+    "lambda_W_mK": 0.06,
+    "dichte_kg_m3": 200,
+    "waermekapazitaet_J_kgK": 1300,
+    "graue_energie_MJ_kg": 74,
+    "co2_kg_kg": 3.9
+   },
+   "farbe": "#59729b",
+   "textur": "ambientcg:Carpet016",
+   "schraffur": {
+    "klasse": "textil",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.002,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN ISO 128-50: Textil, genähert"
+   }
+  },
+  {
+   "schluessel": "teppich-braun-310",
+   "name": "Teppich braun_310",
+   "kurz": null,
+   "werkstoffklasse": "textil",
+   "kategorie_ifc": "textile",
+   "verschneidungsprioritaet": 310,
+   "kennwerte": {
+    "lambda_W_mK": 0.06,
+    "dichte_kg_m3": 200,
+    "waermekapazitaet_J_kgK": 1300,
+    "graue_energie_MJ_kg": 74,
+    "co2_kg_kg": 3.9
+   },
+   "farbe": "#7a6763",
+   "textur": "ambientcg:Carpet016",
+   "schraffur": {
+    "klasse": "textil",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.002,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN ISO 128-50: Textil, genähert"
+   }
+  },
+  {
+   "schluessel": "teppich-grau-310",
+   "name": "Teppich grau_310",
+   "kurz": null,
+   "werkstoffklasse": "textil",
+   "kategorie_ifc": "textile",
+   "verschneidungsprioritaet": 310,
+   "kennwerte": {
+    "lambda_W_mK": 0.06,
+    "dichte_kg_m3": 200,
+    "waermekapazitaet_J_kgK": 1300,
+    "graue_energie_MJ_kg": 74,
+    "co2_kg_kg": 3.9
+   },
+   "farbe": "#757575",
+   "textur": "ambientcg:Carpet016",
+   "schraffur": {
+    "klasse": "textil",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.002,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN ISO 128-50: Textil, genähert"
+   }
+  },
+  {
+   "schluessel": "tragende-bauteile-600",
+   "name": "Tragende Bauteile_600",
+   "kurz": null,
+   "werkstoffklasse": "sonstiges",
+   "kategorie_ifc": "other",
+   "verschneidungsprioritaet": 600,
+   "kennwerte": {
+    "lambda_W_mK": 0.8,
+    "dichte_kg_m3": 2300,
+    "waermekapazitaet_J_kgK": 800,
+    "graue_energie_MJ_kg": 0.92,
+    "co2_kg_kg": 0.15
+   },
+   "farbe": "#ffffff",
+   "textur": null,
+   "schraffur": {
+    "klasse": "sonstiges",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": true
+     }
+    ],
+    "din": "keine Normschraffur — Modellier- bzw. Hilfsbaustoff"
+   }
+  },
+  {
+   "schluessel": "trennschicht-aussen-700",
+   "name": "Trennschicht Aussen_700",
+   "kurz": null,
+   "werkstoffklasse": "sonstiges",
+   "kategorie_ifc": "other",
+   "verschneidungsprioritaet": 700,
+   "kennwerte": {
+    "lambda_W_mK": 0.033,
+    "dichte_kg_m3": 64,
+    "waermekapazitaet_J_kgK": 1030,
+    "graue_energie_MJ_kg": 37,
+    "co2_kg_kg": 1.48
+   },
+   "farbe": "#5b5b5b",
+   "textur": null,
+   "schraffur": {
+    "klasse": "sonstiges",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": true
+     }
+    ],
+    "din": "keine Normschraffur — Modellier- bzw. Hilfsbaustoff"
+   }
+  },
+  {
+   "schluessel": "trennschicht-400",
+   "name": "Trennschicht_400",
+   "kurz": null,
+   "werkstoffklasse": "sonstiges",
+   "kategorie_ifc": "other",
+   "verschneidungsprioritaet": 400,
+   "kennwerte": {
+    "lambda_W_mK": 1.4,
+    "dichte_kg_m3": 2200,
+    "waermekapazitaet_J_kgK": 750,
+    "graue_energie_MJ_kg": 0.85,
+    "co2_kg_kg": 0.02
+   },
+   "farbe": "#ffffff",
+   "textur": null,
+   "schraffur": {
+    "klasse": "sonstiges",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": true
+     }
+    ],
+    "din": "keine Normschraffur — Modellier- bzw. Hilfsbaustoff"
+   }
+  },
+  {
+   "schluessel": "trittschalldammung-210",
+   "name": "Trittschalldämmung_210",
+   "kurz": "TSD",
+   "werkstoffklasse": "daemmung_hart",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 210,
+   "kennwerte": {
+    "lambda_W_mK": 0.033,
+    "dichte_kg_m3": 64,
+    "waermekapazitaet_J_kgK": 1030,
+    "graue_energie_MJ_kg": 37,
+    "co2_kg_kg": 1.48
+   },
+   "farbe": "#fcfb00",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_hart",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht hart (Zickzack), genähert als Kreuzschar"
+   }
+  },
+  {
+   "schluessel": "umgebung-100",
+   "name": "Umgebung_100",
+   "kurz": null,
+   "werkstoffklasse": "sonstiges",
+   "kategorie_ifc": "other",
+   "verschneidungsprioritaet": 100,
+   "kennwerte": {
+    "lambda_W_mK": 2.3,
+    "dichte_kg_m3": 1100,
+    "waermekapazitaet_J_kgK": 1200,
+    "graue_energie_MJ_kg": 0.008,
+    "co2_kg_kg": 0.005
+   },
+   "farbe": "#7eb4a5",
+   "textur": null,
+   "schraffur": {
+    "klasse": "sonstiges",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": true
+     }
+    ],
+    "din": "keine Normschraffur — Modellier- bzw. Hilfsbaustoff"
+   }
+  },
+  {
+   "schluessel": "unterlage-200",
+   "name": "Unterlage_200",
+   "kurz": null,
+   "werkstoffklasse": "sonstiges",
+   "kategorie_ifc": "other",
+   "verschneidungsprioritaet": 200,
+   "kennwerte": {
+    "lambda_W_mK": 0.033,
+    "dichte_kg_m3": 64,
+    "waermekapazitaet_J_kgK": 1030,
+    "graue_energie_MJ_kg": 37,
+    "co2_kg_kg": 1.48
+   },
+   "farbe": "#ffffff",
+   "textur": null,
+   "schraffur": {
+    "klasse": "sonstiges",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": true
+     }
+    ],
+    "din": "keine Normschraffur — Modellier- bzw. Hilfsbaustoff"
+   }
+  },
+  {
+   "schluessel": "vollholz-350",
+   "name": "Vollholz_350",
+   "kurz": null,
+   "werkstoffklasse": "holz",
+   "kategorie_ifc": "wood",
+   "verschneidungsprioritaet": 350,
+   "kennwerte": {
+    "lambda_W_mK": 0.13,
+    "dichte_kg_m3": 500,
+    "waermekapazitaet_J_kgK": 1600,
+    "graue_energie_MJ_kg": 6.95,
+    "co2_kg_kg": 0.29
+   },
+   "farbe": "#ccbeac",
+   "textur": "ambientcg:Wood051",
+   "schraffur": {
+    "klasse": "holz",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0015,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Holz im Querschnitt"
+   }
+  },
+  {
+   "schluessel": "vollziegel-625",
+   "name": "Vollziegel_625",
+   "kurz": null,
+   "werkstoffklasse": "mauerwerk",
+   "kategorie_ifc": "masonry",
+   "verschneidungsprioritaet": 625,
+   "kennwerte": {
+    "lambda_W_mK": 0.139,
+    "dichte_kg_m3": 824,
+    "waermekapazitaet_J_kgK": 920,
+    "graue_energie_MJ_kg": 4.5,
+    "co2_kg_kg": 0.36
+   },
+   "farbe": "#bb786f",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "mauerwerk",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Mauerwerk künstliche Steine, Schraffur 45°"
+   }
+  },
+  {
+   "schluessel": "vormauerziegel-540",
+   "name": "Vormauerziegel_540",
+   "kurz": "VMZ",
+   "werkstoffklasse": "mauerwerk",
+   "kategorie_ifc": "masonry",
+   "verschneidungsprioritaet": 540,
+   "kennwerte": {
+    "lambda_W_mK": 0.109,
+    "dichte_kg_m3": 600,
+    "waermekapazitaet_J_kgK": 920,
+    "graue_energie_MJ_kg": 6,
+    "co2_kg_kg": 0.48
+   },
+   "farbe": "#b7b6b3",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "mauerwerk",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Mauerwerk künstliche Steine, Schraffur 45°"
+   }
+  },
+  {
+   "schluessel": "wu-beton-690",
+   "name": "WU-Beton_690",
+   "kurz": "WU-Beton",
+   "werkstoffklasse": "stahlbeton",
+   "kategorie_ifc": "concrete",
+   "verschneidungsprioritaet": 690,
+   "kennwerte": {
+    "lambda_W_mK": 1.7,
+    "dichte_kg_m3": 2300,
+    "waermekapazitaet_J_kgK": 800,
+    "graue_energie_MJ_kg": 0.88,
+    "co2_kg_kg": 0.132
+   },
+   "farbe": "#c7c7c7",
+   "textur": "ambientcg:Concrete034",
+   "schraffur": {
+    "klasse": "stahlbeton",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Stahlbeton, Kreuzschraffur"
+   }
+  },
+  {
+   "schluessel": "wand-bestand-640",
+   "name": "Wand Bestand_640",
+   "kurz": null,
+   "werkstoffklasse": "mauerwerk",
+   "kategorie_ifc": "masonry",
+   "verschneidungsprioritaet": 640,
+   "kennwerte": {
+    "lambda_W_mK": 0.125,
+    "dichte_kg_m3": 742,
+    "waermekapazitaet_J_kgK": 920,
+    "graue_energie_MJ_kg": 6,
+    "co2_kg_kg": 0.48
+   },
+   "farbe": "#a8a8a8",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "mauerwerk",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Mauerwerk künstliche Steine, Schraffur 45°"
+   }
+  },
+  {
+   "schluessel": "wand-neubau-640",
+   "name": "Wand Neubau_640",
+   "kurz": null,
+   "werkstoffklasse": "mauerwerk",
+   "kategorie_ifc": "masonry",
+   "verschneidungsprioritaet": 640,
+   "kennwerte": {
+    "lambda_W_mK": 0.125,
+    "dichte_kg_m3": 742,
+    "waermekapazitaet_J_kgK": 920,
+    "graue_energie_MJ_kg": 6,
+    "co2_kg_kg": 0.48
+   },
+   "farbe": "#f90000",
+   "textur": "ambientcg:Bricks054",
+   "schraffur": {
+    "klasse": "mauerwerk",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.0025,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Mauerwerk künstliche Steine, Schraffur 45°"
+   }
+  },
+  {
+   "schluessel": "wasser-105",
+   "name": "Wasser_105",
+   "kurz": null,
+   "werkstoffklasse": "erdreich",
+   "kategorie_ifc": "soil",
+   "verschneidungsprioritaet": 105,
+   "kennwerte": {
+    "lambda_W_mK": 0.6,
+    "dichte_kg_m3": 1000,
+    "waermekapazitaet_J_kgK": 4200,
+    "graue_energie_MJ_kg": 0.01,
+    "co2_kg_kg": 0.001
+   },
+   "farbe": "#78b1c7",
+   "textur": "ambientcg:Ground037",
+   "schraffur": {
+    "klasse": "erdreich",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.006,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.012,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: gewachsener Boden / Schüttung"
+   }
+  },
+  {
+   "schluessel": "warmedammung-210",
+   "name": "Wärmedämmung_210",
+   "kurz": null,
+   "werkstoffklasse": "daemmung_hart",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 210,
+   "kennwerte": {
+    "lambda_W_mK": 0.035,
+    "dichte_kg_m3": 25,
+    "waermekapazitaet_J_kgK": 1450,
+    "graue_energie_MJ_kg": 86.6,
+    "co2_kg_kg": 3.29
+   },
+   "farbe": "#fcfb00",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_hart",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht hart (Zickzack), genähert als Kreuzschar"
+   }
+  },
+  {
+   "schluessel": "xps-hart-400",
+   "name": "XPS hart_400",
+   "kurz": "XPS",
+   "werkstoffklasse": "daemmung_hart",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 400,
+   "kennwerte": {
+    "lambda_W_mK": 0.032,
+    "dichte_kg_m3": 28,
+    "waermekapazitaet_J_kgK": 1450,
+    "graue_energie_MJ_kg": 87.4,
+    "co2_kg_kg": 3.42
+   },
+   "farbe": "#a2c5d7",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_hart",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht hart (Zickzack), genähert als Kreuzschar"
+   }
+  },
+  {
+   "schluessel": "xps-730",
+   "name": "XPS_730",
+   "kurz": "XPS",
+   "werkstoffklasse": "daemmung_hart",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 730,
+   "kennwerte": {
+    "lambda_W_mK": 0.032,
+    "dichte_kg_m3": 28,
+    "waermekapazitaet_J_kgK": 1450,
+    "graue_energie_MJ_kg": 87.4,
+    "co2_kg_kg": 3.42
+   },
+   "farbe": "#a2c5d7",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_hart",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 135.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht hart (Zickzack), genähert als Kreuzschar"
+   }
+  },
+  {
+   "schluessel": "zellulose-610",
+   "name": "Zellulose_610",
+   "kurz": null,
+   "werkstoffklasse": "daemmung_weich",
+   "kategorie_ifc": "insulation",
+   "verschneidungsprioritaet": 610,
+   "kennwerte": {
+    "lambda_W_mK": 0.046,
+    "dichte_kg_m3": 151.33,
+    "waermekapazitaet_J_kgK": 900,
+    "graue_energie_MJ_kg": 13.5,
+    "co2_kg_kg": 0.9
+   },
+   "farbe": "#fcfb00",
+   "textur": "ambientcg:Fabric030",
+   "schraffur": {
+    "klasse": "daemmung_weich",
+    "scharen": [
+     {
+      "winkel": 60.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     },
+     {
+      "winkel": 120.0,
+      "abstand_m": 0.004,
+      "gestrichelt": false
+     }
+    ],
+    "din": "DIN 1356-1: Dämmschicht weich (Wellenlinie), genähert als Zickzack-Scharen"
+   }
+  },
+  {
+   "schluessel": "zementputz-370",
+   "name": "Zementputz_370",
+   "kurz": null,
+   "werkstoffklasse": "putz",
+   "kategorie_ifc": "plaster",
+   "verschneidungsprioritaet": 370,
+   "kennwerte": {
+    "lambda_W_mK": 1,
+    "dichte_kg_m3": 1800,
+    "waermekapazitaet_J_kgK": 1000,
+    "graue_energie_MJ_kg": 1.34,
+    "co2_kg_kg": 0.213
+   },
+   "farbe": "#ffffff",
+   "textur": "ambientcg:Plaster001",
+   "schraffur": {
+    "klasse": "putz",
+    "scharen": [
+     {
+      "winkel": 0.0,
+      "abstand_m": 0.001,
+      "gestrichelt": true
+     }
+    ],
+    "din": "DIN 1356-1: Putz, Mörtel (Punktierung), genähert"
+   }
+  },
+  {
+   "schluessel": "uberbau-volumenverschneidung-900",
+   "name": "Überbau + Volumenverschneidung_900",
+   "kurz": null,
+   "werkstoffklasse": "sonstiges",
+   "kategorie_ifc": "other",
+   "verschneidungsprioritaet": 900,
+   "kennwerte": {
+    "lambda_W_mK": 0,
+    "dichte_kg_m3": 0,
+    "waermekapazitaet_J_kgK": 0,
+    "graue_energie_MJ_kg": 0,
+    "co2_kg_kg": 0
+   },
+   "farbe": "#5b5b5b",
+   "textur": null,
+   "schraffur": {
+    "klasse": "sonstiges",
+    "scharen": [
+     {
+      "winkel": 45.0,
+      "abstand_m": 0.01,
+      "gestrichelt": true
+     }
+    ],
+    "din": "keine Normschraffur — Modellier- bzw. Hilfsbaustoff"
+   }
+  }
+ ]
+}

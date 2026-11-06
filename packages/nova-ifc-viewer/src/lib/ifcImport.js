@@ -571,7 +571,7 @@ export function statusRohFromPsets(psets) {
 /**
  * Status eines Bauteils aus seinen Psets — `null`, wenn nicht belegt.
  * Bewusst OHNE Default: siehe Kopfkommentar L8.
- * @returns {"bestand"|"neubau"|"abbruch"|null}
+ * @returns {"bestand"|"neubau"|"abbruch"|"temporaer"|null} temporaer = IFC TEMPORARY (catalogue row since 107-08)
  */
 export function statusFromPsets(psets, katalogSnapshot = null) {
   const roh = statusRohFromPsets(psets);

@@ -7,27 +7,44 @@
 //      unit-tested; rasterising and jsPDF need a browser (svgZuPng, feuerwehrplanPdf).
 // Pattern: BitBimStudio plan export (SVG → canvas → jsPDF) + title block; extended by legend
 // and the honesty line — this is a CONCEPT plan, never a checked Feuerwehrplan.
+// 106-11 review: the sheet draws the walls of the BIM model, so it carries the model state like the
+// vector plans: a title block line "Modellstand", the machine-readable state line in the PDF keywords,
+// and - while AI changes are unreleased or the state is unknown (null) - the dashed note box
+// "Enthält ungeprüfte KI-Änderungen" above the liability line (@core/lib/zeigen/planStand.js). The
+// raster plan carries no marks, so the note says "0 von n Bauteilen auf diesem Blatt markiert".
+import { VERMERK_DRUCK, modellstandMetadaten, modellstandText, vermerkZeilen } from "@core/lib/zeigen/planStand.js";
+import { ersetzeNichtWinAnsi } from "@core/lib/brief/winAnsi.js";
 
 /** A4 landscape in mm. */
 export const A4_QUER = { w: 297, h: 210 };
-/** Sheet margins and block heights in mm. [ASSUMED] DIN 14095 prescribes content, not this layout. */
-export const BLATT = { rand: 10, titelH: 22, hinweisH: 10, legendeB: 72, luecke: 4 };
+/**
+ * Sheet margins and block heights in mm. [ASSUMED] DIN 14095 prescribes content, not this layout.
+ * 106-11 review: title block 22 -> 27 mm for the line "Modellstand"; vermerkKopfH / vermerkZeileH: height of the note box
+ * = head + lines × line height.
+ */
+export const BLATT = { rand: 10, titelH: 27, hinweisH: 10, legendeB: 72, luecke: 4, vermerkKopfH: 10, vermerkZeileH: 4 };
 
 /**
  * Sheet layout in mm — frame, title block, plan field (image fitted, aspect kept, centred),
- * legend column (right), liability/hint line (bottom).
- * @param {{ pageW?: number, pageH?: number, imgW: number, imgH: number, legendeZeilen?: number }} p imgW/imgH in px
- * @returns {{ rahmen: object, titel: object, plan: object, planFeld: object, legende: object, hinweis: object, zeilenHoehe: number }} all in mm
+ * legend column (right), note box of unreleased AI changes (106-11, below the plan field, only
+ * with note lines), liability/hint line (bottom).
+ * @param {{ pageW?: number, pageH?: number, imgW: number, imgH: number, legendeZeilen?: number, vermerkZeilen?: number }} p
+ *   imgW/imgH in px; vermerkZeilen: lines of the note (0 = no note box)
+ * @returns {{ rahmen: any, titel: any, plan: any, planFeld: any, legende: any, hinweis: any, vermerk: any, zeilenHoehe: number }}
+ *   all in mm; vermerk null without note lines
  */
-export function feuerwehrplanLayout({ pageW = A4_QUER.w, pageH = A4_QUER.h, imgW, imgH, legendeZeilen = 0 }) {
-  const { rand, titelH, hinweisH, legendeB, luecke } = BLATT;
+export function feuerwehrplanLayout({ pageW = A4_QUER.w, pageH = A4_QUER.h, imgW, imgH, legendeZeilen = 0, vermerkZeilen = 0 }) {
+  const { rand, titelH, hinweisH, legendeB, luecke, vermerkKopfH, vermerkZeileH } = BLATT;
   const rahmen = { x: rand, y: rand, w: pageW - 2 * rand, h: pageH - 2 * rand };
   const titel = { x: rahmen.x, y: rahmen.y, w: rahmen.w, h: titelH };
   const hinweis = { x: rahmen.x, y: rahmen.y + rahmen.h - hinweisH, w: rahmen.w, h: hinweisH };
   const innenY = titel.y + titel.h + luecke;
   const innenH = hinweis.y - luecke - innenY;
   const legende = { x: rahmen.x + rahmen.w - legendeB, y: innenY, w: legendeB, h: innenH };
-  const planFeld = { x: rahmen.x + luecke, y: innenY, w: legende.x - luecke - (rahmen.x + luecke), h: innenH };
+  const feldB = legende.x - luecke - (rahmen.x + luecke);
+  const vh = vermerkZeilen > 0 ? vermerkKopfH + vermerkZeilen * vermerkZeileH : 0;
+  const vermerk = vh ? { x: rahmen.x + luecke, y: hinweis.y - luecke - vh, w: feldB, h: vh } : null;
+  const planFeld = { x: rahmen.x + luecke, y: innenY, w: feldB, h: innenH - (vh ? vh + luecke : 0) };
   // fit the image into the plan field, keep aspect, centre
   const ar = imgW > 0 && imgH > 0 ? imgW / imgH : 4 / 3;
   let w = planFeld.w, h = w / ar;
@@ -35,7 +52,7 @@ export function feuerwehrplanLayout({ pageW = A4_QUER.w, pageH = A4_QUER.h, imgW
   const plan = { x: planFeld.x + (planFeld.w - w) / 2, y: planFeld.y + (planFeld.h - h) / 2, w, h };
   // legend rows: 6 mm each, shrink when many rows must fit
   const zeilenHoehe = legendeZeilen > 0 ? Math.min(6, Math.max(3.5, (legende.h - 14) / legendeZeilen)) : 6;
-  return { rahmen, titel, plan, planFeld, legende, hinweis, zeilenHoehe };
+  return { rahmen, titel, plan, planFeld, legende, hinweis, vermerk, zeilenHoehe };
 }
 
 /**
@@ -66,14 +83,23 @@ const hexZuRgb = (hex) => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2}
 
 /**
  * Build and save the sheet. Browser only (jsPDF loaded on demand like the BitBimStudio export).
+ * 106-11 review: `modellstand` (planStand.js ModellStand; null/undefined = not determined -> the note says so) goes into the
+ * title block, the keywords and the note box; there is no option to print without it.
  * @param {{ png: {dataUrl:string, w:number, h:number}, projekt: string, geschoss: string, datum: string,
- *   legende: Array<{farbe:string,label:string,anzahl?:number,art?:string}>, hinweise?: string[], dateiname?: string }} p
- * @returns {Promise<{ seiten: number, dateiname: string }>}
+ *   legende: Array<{farbe:string,label:string,anzahl?:number,art?:string}>, hinweise?: string[], dateiname?: string,
+ *   modellstand?: import("@core/lib/zeigen/planStand.js").ModellStand|null, t?: (s: string) => string }} p
+ *   t: translator of the note (default German, like the vector plans)
+ * @returns {Promise<{ seiten: number, dateiname: string, vermerk: boolean }>}  vermerk: the sheet carries the note
  */
-export async function feuerwehrplanPdf({ png, projekt, geschoss, datum, legende = [], hinweise = [], dateiname }) {
+export async function feuerwehrplanPdf({ png, projekt, geschoss, datum, legende = [], hinweise = [], dateiname, modellstand = null, t = (s) => s }) {
   const { jsPDF } = await import("jspdf");
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-  const L = feuerwehrplanLayout({ imgW: png.w, imgH: png.h, legendeZeilen: legende.length + hinweise.length });
+  // the raster plan carries no marks: "0 von n Bauteilen auf diesem Blatt markiert"
+  const vz = vermerkZeilen(modellstand, t, { markiert: 0 });
+  const L = feuerwehrplanLayout({ imgW: png.w, imgH: png.h, legendeZeilen: legende.length + hinweise.length, vermerkZeilen: vz ? vz.zeilen.length : 0 });
+  pdf.setProperties({ keywords: modellstandMetadaten(modellstand) });
+  // element names come from people and agents: characters outside WinAnsi become "?" (jsPDF's standard fonts)
+  const druck = (/** @type {string} */ s) => ersetzeNichtWinAnsi(String(s)).text;
 
   // frame + title block
   pdf.setDrawColor(30); pdf.setLineWidth(0.5); pdf.rect(L.rahmen.x, L.rahmen.y, L.rahmen.w, L.rahmen.h);
@@ -82,6 +108,7 @@ export async function feuerwehrplanPdf({ png, projekt, geschoss, datum, legende 
   pdf.setFontSize(9); pdf.setTextColor(70);
   pdf.text(`${projekt} · Stand ${datum} · Geschossplan nach DIN 14095 — Konzeptstufe, nicht geprüft`, L.titel.x + 4, L.titel.y + 14);
   pdf.text("Maßstab: nicht maßstäblich — Maßstabsbalken und Nordpfeil im Plan · Quelle: BIT-Atelier Gebäudemodell", L.titel.x + 4, L.titel.y + 19);
+  pdf.text(druck(`Modellstand: ${modellstandText(modellstand, t)}`), L.titel.x + 4, L.titel.y + 24);
 
   // plan
   pdf.addImage(png.dataUrl, "PNG", L.plan.x, L.plan.y, L.plan.w, L.plan.h);
@@ -107,6 +134,25 @@ export async function feuerwehrplanPdf({ png, projekt, geschoss, datum, legende 
     hinweise.forEach((h) => { pdf.text(pdf.splitTextToSize(`• ${h}`, L.legende.w - 6), L.legende.x + 3, y); y += L.zeilenHoehe; });
   }
 
+  // 106-11: note box - dashed border, "?" in a dashed square, title and lines (light warning tokens, VERMERK_DRUCK)
+  if (vz && L.vermerk) {
+    const V = L.vermerk;
+    const [lr, lg, lb] = hexZuRgb(VERMERK_DRUCK.linie), [fr, fg, fb] = hexZuRgb(VERMERK_DRUCK.flaeche);
+    pdf.setLineDashPattern(VERMERK_DRUCK.strich.split(/\s+/).map((n) => Number(n) * 1.5), 0);
+    pdf.setDrawColor(lr, lg, lb); pdf.setFillColor(fr, fg, fb); pdf.setLineWidth(0.6);
+    pdf.rect(V.x, V.y, V.w, V.h, "FD");
+    pdf.setLineWidth(0.4); pdf.rect(V.x + 2, V.y + 2, 6, 6, "S");
+    pdf.setLineDashPattern([], 0);
+    pdf.setFont("helvetica", "bold"); pdf.setFontSize(11); pdf.setTextColor(lr, lg, lb);
+    pdf.text(VERMERK_DRUCK.zeichen, V.x + 3.6, V.y + 6.8);
+    pdf.text(druck(vz.titel), V.x + 11, V.y + 6.5);
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(20);
+    vz.zeilen.forEach((z, i) => {
+      const zeile = pdf.splitTextToSize(druck(z), V.w - 14)[0] ?? "";
+      pdf.text(zeile, V.x + 11, V.y + BLATT.vermerkKopfH + 1.5 + i * BLATT.vermerkZeileH);
+    });
+  }
+
   // liability line
   pdf.setDrawColor(200, 30, 30); pdf.setLineWidth(0.4); pdf.rect(L.hinweis.x, L.hinweis.y, L.hinweis.w, L.hinweis.h);
   pdf.setFontSize(8); pdf.setTextColor(160, 20, 20);
@@ -114,5 +160,5 @@ export async function feuerwehrplanPdf({ png, projekt, geschoss, datum, legende 
 
   const name = dateiname || `Feuerwehrplan_${String(projekt || "BIT-Atelier").replace(/[^\w-]+/g, "_")}_${String(geschoss).replace(/[^\w-]+/g, "_")}.pdf`;
   pdf.save(name);
-  return { seiten: pdf.getNumberOfPages(), dateiname: name };
+  return { seiten: pdf.getNumberOfPages(), dateiname: name, vermerk: !!vz };
 }

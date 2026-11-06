@@ -7,6 +7,12 @@
 // (tests/unit/i18nAbdeckung.test.js via tests/unit/helpers/woerterbuch.mjs)
 // reads every file of this folder and refuses a key defined twice anywhere.
 //
+// Sanctioned exception (107-11, entry chunk near its size budget): a LAZY part is NOT listed below. Its file is imported by every
+// module that shows its texts, and that module calls englischErgaenzen(EN) of ../i18n.jsx once at module level (existing keys win).
+// Today: raeume-107-11.js — imported by BitBimStudio.jsx and WohnungsWerkstatt.jsx; ansicht-107-12.js — imported by BitBimStudio.jsx;
+// efh-108.js (all plans of phase 108) — imported by BitBimStudio.jsx, BimPlan2D.jsx, MapLibreMap.jsx, ComplexDesigner.jsx, MassingStudio.jsx and WohnungsWerkstatt.jsx. A NEW consumer of these keys must import the
+// part the same way, else it shows German in EN mode. Move the part into the list below once the entry chunk has headroom.
+//
 // In:  the part files. Out: TEILE_EN, all English entries of the parts merged.
 
 import { EN as BUCHHALTUNG_FUNDAMENT } from "./buchhaltung-fundament.js";
@@ -171,6 +177,8 @@ import { EN as SCHLUESSEL_105 } from "./schluessel-105.js";
 import { EN as ZEIGEN_106 } from "./zeigen-106.js";
 // 106-03: sentences of the change proposals (zeigen/aenderungen.js, pruefung.js)
 import { EN as AENDERUNGEN_106 } from "./aenderungen-106.js";
+// 106-09: sync between devices (conflict card, note from another device).
+import { EN as ABGLEICH_106 } from "./abgleich-106.js";
 // 107-01: texts of the component core (reference line values; later 107 plans add keys to the same file)
 import { EN as BAUTEILKERN_107 } from "./bauteilkern-107.js";
 
@@ -285,6 +293,7 @@ export const TEILE_EN = Object.freeze({
   ...SCHLUESSEL_105,
   ...ZEIGEN_106,
   ...AENDERUNGEN_106,
+  ...ABGLEICH_106,
   ...BAUTEILKERN_107,
   ...SONDERWUNSCH_99,
 });

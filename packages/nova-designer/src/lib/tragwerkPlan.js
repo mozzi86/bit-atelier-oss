@@ -182,6 +182,8 @@ export function lasteinzug(footprint, stuetzen, raster = LASTEINZUG_RASTER_M) {
 /**
  * Per-column pre-sizing on one storey. Columns carry the storeys above them ([ASSUMED] Skelettbau:
  * the whole floor load goes to columns, walls carry nothing). A_c through statics.stuetzenVordim.
+ * 107-13: a basement level −k carries `storeys − level` = storeys + k slabs (every basement ceiling plus the storeys above ground;
+ * `storeys` is the count above ground), so level −1 of a 4-storey building carries 5.
  * @param {{ footprint?: Array<object>, stuetzen?: Array<object>, level?: number, storeys?: number, qFlaeche?: number, fcd?: number }} p
  *   qFlaeche = gk + Δg + qk in kN/m² per storey, fcd in kN/m²; missing footprint/stuetzen → empty result
  * @returns {Array<{idx:number, x:number, z:number, size:number, einzug_m2:number, geschosse:number, N_kN:number, Ac_erf_cm2:number|null, Ac_vorh_cm2:number, auslastung:number|null, status:"pass"|"warn"|"offen"}>}

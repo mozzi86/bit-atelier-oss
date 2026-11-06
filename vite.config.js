@@ -17,6 +17,9 @@ function lizenzdateien() {
   const quellen = [
     ['THIRD-PARTY-LICENSES.md', path.resolve(__dirname, 'THIRD-PARTY-LICENSES.md')],
     ['LICENSES/planegcs-LGPL-2.1.txt', path.resolve(__dirname, 'node_modules/@salusoft89/planegcs/LICENSE')],
+    // 107-18 (D-BK-08c): the Apache-2.0 text of the CSG library travels with the build (Apache-2.0 § 4 a). The package has
+    // no NOTICE file (checked in tests/unit/csg-backend-10718.test.js; a NOTICE in a later version fails that test).
+    ['LICENSES/manifold-3d-Apache-2.0.txt', path.resolve(__dirname, 'node_modules/manifold-3d/LICENSE')],
   ];
   return {
     name: 'lizenzdateien',
@@ -120,6 +123,10 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('vite/preload-helper')) return 'vendor';
           if (!id.includes('node_modules')) return undefined;
           const p = id.replace(/\\/g, '/');
+          // 107-14/107-18 (D-BK-08c): the JS part of the CSG library (manifold-3d) gets its own chunk. Only the lazily loaded
+          // csg/kern.js imports it, so the chunk is never on the start path and is measured on its own (budget.json
+          // chunks.csg); its WebAssembly binary is a separate asset (budget.json assets.manifold).
+          if (p.includes('/node_modules/manifold-3d/')) return 'csg';
           if (p.includes('/node_modules/three/') || p.includes('three-stdlib')) return 'three';
           if (p.includes('/node_modules/recharts/') || p.includes('victory-vendor') || /\/node_modules\/d3-/.test(p)) return 'charts';
           if (p.includes('/node_modules/maplibre-gl/')) return 'map';
@@ -146,6 +153,10 @@ export default defineConfig(({ mode }) => ({
     },
     chunkSizeWarningLimit: 900,
   },
+  // 107-14/107-18: pre-bundle the CSG library at dev start. It is reached only through a dynamic import (csg/laden.js), so the
+  // optimizer would discover it on first use and reload the page. Its WebAssembly binary is not part of the pre-bundle: the
+  // URL comes from csg/manifoldWasm.js (`?url`). Dev server only — the build is unaffected.
+  optimizeDeps: { include: ['manifold-3d'] },
   // 69-21: the IFC reading worker imports the WASM bootstrap dynamically (code splitting) —
   // only the ES worker format supports that.
   worker: { format: 'es' },

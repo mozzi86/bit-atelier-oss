@@ -12,6 +12,16 @@
 # alle Modulseiten, rot nur bei neuen Verstößen gegen tests/e2e/axe-basis.json). Ohne
 # die devDependency @axe-core/playwright überspringt sie sich — siehe
 # docs/BARRIEREFREIHEIT-PRUEFUNG.md.
+#
+# Laufzeit (31.10.2026): der letzte grüne Lauf (24.10., 223 passed / 104 skipped)
+# brauchte 35,5 min bei einem Job-Limit von 40. Seitdem sind die Specs der Phasen
+# 106 und 107 dazu (~19 min allein die Dateien vor form-86-02) und dieselben alten
+# Specs liefen 1,43× langsamer. Der Nachtlauf 41185652431 wurde nicht von einem
+# hängenden Spec abgebrochen, sondern vom Job-Timeout, mitten in form-86-03, nach
+# Test 132. Vier Shards teilen die Dateien (Playwright lässt eine Datei beisammen).
+# Jeder Job hat eigenen Checkout, eigenen Dev-Server und eigene db.json — die
+# Testhaus-Serialität gilt weiter innerhalb eines Shards. Der Heap des Dev-Servers
+# steht in playwright.config.js (dieselbe 4-GB-Grenze wie vite build in gates.yml).
 name: E2E
 
 on:
@@ -25,9 +35,13 @@ concurrency:
 
 jobs:
   e2e:
-    name: Playwright (seriell)
+    name: Playwright (Shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     env:
       CI: "1"
     steps:
@@ -48,13 +62,13 @@ jobs:
         run: npm run seed
 
       - name: E2E
-        run: npm run test:e2e
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/4
 
       - name: Report sichern
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             playwright-report
             test-results

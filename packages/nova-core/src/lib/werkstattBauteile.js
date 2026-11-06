@@ -307,6 +307,10 @@ export function werkstattTueren(zonen) {
 
 /**
  * Rooms of the workshop (IfcSpace): every zone of a unit plus corridors/cores, clear area m².
+ * 107-11: the net area (minus columns and stair/lift shafts) is added by bauteil/raeume.js raeumeMitNetto — this module is on the
+ * start path (entry chunk, size budget), so it stays as it is and its output stays byte-identical. Its only reader today is the IFC
+ * Qto (option raumGrenzen); workshop zones carry no `messregel` (D-BW-02: always clear) and the workshop inspector shows no net area
+ * (named narrowing of 107-11, open).
  * @param {Array<any>} zonen
  * @returns {Array<{guid: string, typ: "raum", level: number, name: string, we: string|null, raumart: string|null, flaeche_m2: number, points: Array<{x:number,z:number}>, status: null}>}
  */

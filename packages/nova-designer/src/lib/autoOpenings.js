@@ -20,6 +20,53 @@ export const AUTO_WINDOW = { spacing: 3.5, width: 1.4, height: 1.4, sill: 0.9 };
 // Gebäudemodell (KD-19) — vorher waren 1,20 x 2,10 m mittig fest verdrahtet.
 export const ENTRANCE_DEFAULT = { width: 1.2, height: 2.1, uRel: 0.5, edge: null, enabled: true };
 
+/**
+ * 108-01 (D-EFH-04): start value of the entrance settings in the BIM studio — ENTRANCE_DEFAULT WITHOUT `enabled`, so "not set" stays
+ * distinguishable from a stored choice (the studio writes `enabled` only when the checkbox is used; eingangWirksam decides the rest).
+ * @type {{width: number, height: number, uRel: number, edge: number|null}}
+ */
+export const ENTRANCE_START = (({ enabled, ...rest }) => rest)(ENTRANCE_DEFAULT); // eslint-disable-line no-unused-vars
+
+/**
+ * 108-01 (D-EFH-04): is the automatic entrance door in effect?
+ *  - `cfg.enabled === false` → off, `=== true` → on (a stored choice wins, old projects keep theirs: no silent migration);
+ *  - not set (new projects) → off as soon as an own door lies in the hull on the ground floor (`envOpenings` with kind "door" on
+ *    level 0), else on.
+ * Only hull doors count: [ASSUMED] a door placed on a drawn wall is usually an interior door, the entrance sits in the hull. Way to a
+ * decided value: the opening model of 108-04 (one list for rule windows and entrance).
+ * @param {{enabled?: boolean}|null|undefined} cfg stored entrance settings (entranceCfg)
+ * @param {Array<{level?: number, kind?: string}>|null|undefined} envOpenings placed hull openings
+ * @returns {boolean}
+ */
+export function eingangWirksam(cfg, envOpenings) {
+  if (cfg?.enabled === false) return false;
+  if (cfg?.enabled === true) return true;
+  return !eigeneEgTuer(envOpenings);
+}
+
+/**
+ * 108-01 review: the entrance settings IN EFFECT of a stored BimModel record, for the readers outside the studio (usePlanModel → room
+ * climate, sound insulation, workshop, interiors). A record without entranceCfg (made through the API, studio never opened) gets the
+ * studio's start values (ENTRANCE_START) — before, the readers fell back to ENTRANCE_DEFAULT with `enabled: true` while the studio had
+ * the entrance off next to an own ground-floor door. No record → null (readers keep their default, the studio does the same).
+ * @param {{entranceCfg?: object|null, envOpenings?: Array<{level?: number, kind?: string}>|null}|null|undefined} datensatz BimModel record
+ * @returns {{width: number, height: number, uRel: number, edge: number|null, enabled: boolean}|null} sizes in m, uRel share 0…1
+ */
+export function eingangDesDatensatzes(datensatz) {
+  if (!datensatz) return null;
+  const cfg = datensatz.entranceCfg || null;
+  return { ...ENTRANCE_START, ...(cfg || {}), enabled: eingangWirksam(cfg, datensatz.envOpenings) };
+}
+
+/**
+ * 108-01: does an own hull door lie on the ground floor (level 0)?
+ * @param {Array<{level?: number, kind?: string}>|null|undefined} envOpenings placed hull openings
+ * @returns {boolean}
+ */
+export function eigeneEgTuer(envOpenings) {
+  return (Array.isArray(envOpenings) ? envOpenings : []).some((o) => o?.kind === "door" && Math.round(Number(o?.level) || 0) === 0);
+}
+
 export const wallLength = (w) => (w ? Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) : 0);
 
 // Auto-Fenster einer Wand: gleichmäßig verteilt, je ~spacing Meter eines.
@@ -32,6 +79,21 @@ export function autoWindowUVs(w, cfg = AUTO_WINDOW) {
     out.push({ u: ((k + 0.5) / count) * len, width: c.width, height: c.height, sill: c.sill, kind: "window" });
   }
   return out;
+}
+
+/**
+ * 108-02: does the rule window fit into this hull wall? A knee wall (hull wall of the top storey under a pitched roof, buildingModel
+ * `kniestock: true`) only takes a rule window whose top (sill + height, m) stays below the wall top — the 0.90 + 1.40 m window would cut
+ * into the roof. Basement walls (level < 0) never take one (107-13). The ONE rule for autoEnvOpenings (3D, IFC, quantities, room climate)
+ * and the drawn copies (BimPlan2D plan, dimension chains and section; vektorPlan PDF plan and section).
+ * @param {{level?: number, kniestock?: boolean, height?: number}} w hull wall of the building model (height in m)
+ * @param {{sill?: number, height?: number}} [cfg] window part like AUTO_WINDOW (m)
+ * @returns {boolean}
+ */
+export function regelfensterPasst(w, cfg = AUTO_WINDOW) {
+  if (!w || Number(w.level) < 0) return false;
+  const c = { ...AUTO_WINDOW, ...(cfg || {}) };
+  return !(w.kniestock && c.sill + c.height > (Number(w.height) || 0) + 1e-9);
 }
 
 // Wand, auf der die Eingangstür sitzt: gewählte EG-Kante, sonst die erste.
@@ -72,6 +134,11 @@ export function autoEnvOpenings(walls, cfg = {}, placed = []) {
   const belegt = (w, o) => [...placed, ...(door ? [door] : [])]
     .some((p) => p.level === w.level && p.edge === w.edge && ueberlappt(p, o));
   (walls || []).forEach((w) => {
+    // 107-13 (assumption A3): no rule windows below ground — basement hull walls (level < 0) get light wells only as placed
+    // openings. This one guard covers 3D, plan, IFC, sound insulation, room climate and the workshop (all read this list).
+    if (w.level < 0) return;
+    // 108-02: no rule window that would cut through a knee wall into the roof (regelfensterPasst); gable and roof windows: 108-03/-04
+    if (!regelfensterPasst(w, cfg.window)) return;
     autoWindowUVs(w, cfg.window).forEach((o) => {
       if (belegt(w, o)) return;
       out.push({ level: w.level, edge: w.edge, kind: "window", u: o.u, width: o.width, height: o.height, sill: o.sill });

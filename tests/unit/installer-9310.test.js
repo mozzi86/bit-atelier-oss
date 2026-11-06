@@ -124,4 +124,46 @@ describe("installer: .bitproj association (93-10)", () => {
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
+
+  it("install.sh: uninstall keeps another desktop entry and its mimeapps line", (t) => {
+    if (!gibt("sh", ["-c", "exit 0"])) { t.skip("sh not available"); return; }
+    const block = SH.slice(SH.indexOf('MIME_XML="'), SH.indexOf("\nentfernen() {"));
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "bit-9310-fremd-"));
+    try {
+      const ziel = path.join(tmp, "BIT-Atelier").replace(/\\/g, "/");
+      fs.mkdirSync(path.join(tmp, "BIT-Atelier", "tools"), { recursive: true });
+      fs.writeFileSync(path.join(tmp, "BIT-Atelier", "tools", "datei-oeffnen.sh"), "#!/bin/sh\n");
+      const home = path.join(tmp, "home").replace(/\\/g, "/");
+      const apps = path.join(home, ".local/share/applications");
+      fs.mkdirSync(apps, { recursive: true });
+      fs.writeFileSync(path.join(apps, "fremd.desktop"), "[Desktop Entry]\nType=Application\nName=Fremd\nExec=true\nMimeType=application/x-fremd;\n");
+      fs.mkdirSync(path.join(home, ".config"), { recursive: true });
+      fs.writeFileSync(path.join(home, ".config/mimeapps.list"), "[Default Applications]\napplication/x-fremd=fremd.desktop\napplication/x-bitproj=bit-atelier-datei.desktop\n");
+      const r = spawnSync("sh", ["-c", skriptFuer(block)], { encoding: "utf8", env: { ...process.env, HOME: home, ZIEL: ziel } });
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(fs.existsSync(path.join(apps, "bit-atelier-datei.desktop")), false);
+      assert.equal(fs.existsSync(path.join(apps, "fremd.desktop")), true);
+      // The script only refreshes mimeinfo.cache when update-desktop-database exists.
+      // GitHub-hosted Ubuntu does not ship that tool, so the cache file is never created there.
+      const cacheErwartet = hatDesktopDb();
+      assert.equal(fs.existsSync(path.join(apps, "mimeinfo.cache")), cacheErwartet, cacheErwartet
+        ? "cache of the remaining entry stays"
+        : "without update-desktop-database no cache file is created");
+      const liste = fs.readFileSync(path.join(home, ".config/mimeapps.list"), "utf8");
+      assert.match(liste, /application\/x-fremd=fremd\.desktop/);
+      assert.doesNotMatch(liste, /application\/x-bitproj=/);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
 });
+
+/** Shell that registers and then removes the association. The function block is the script's own text. */
+function skriptFuer(block) {
+  return `say() { echo "$*"; }\nPATH=/usr/bin:/bin\n${block}\ndatei_zuordnen\ndatei_entfernen\n`;
+}
+
+/** Same PATH the uninstall script uses. Runners without desktop-file-utils have no cache to keep. */
+function hatDesktopDb() {
+  return spawnSync("sh", ["-c", "PATH=/usr/bin:/bin command -v update-desktop-database"], { encoding: "utf8" }).status === 0;
+}

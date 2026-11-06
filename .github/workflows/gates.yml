@@ -7,7 +7,7 @@
 # Projekt-/Kundennamen, tests/unit/projektneutral.test.js) läuft als Teil der
 # Unit-Tests über die Hash-Datei im Repo — die Klartextliste wird nicht gebraucht.
 #
-# E2E (Playwright, ~8 min seriell) läuft getrennt und nachts: .github/workflows/e2e.yml.
+# E2E (Playwright, vier Shards, nachts) läuft getrennt: .github/workflows/e2e.yml.
 name: Gates
 
 on:
@@ -41,7 +41,12 @@ jobs:
       - name: Unit-Tests (inkl. Sperrliste und i18n-Abdeckung)
         run: npm run test:unit
 
+      # Node 22 caps the V8 old space at about 2 GB. Rendering chunks aborts with
+      # exit 134 ("Ineffective mark-compacts near heap limit") once the CSG graph
+      # is part of this build (since 107-09). Runners have 7 GB; 4 GB is enough.
       - name: Build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: |
           npx vite build > build.log 2>&1; EXIT=$?
           tail -n 30 build.log
@@ -51,6 +56,12 @@ jobs:
       # largest route, named chunks). Raising a limit is a deliberate commit: --schreiben.
       - name: Größen-Budget
         run: node scripts/groessen-budget.mjs
+
+      # 107-14: the lazy CSG chunk is not emitted by the app build until 107-09 calls the core (groessen-budget reports
+      # "fehlt chunks.csg", no failure); a small measuring build checks it against budget.json chunks.csg meanwhile.
+      # 107-18: the same build also checks the WebAssembly binary of manifold-3d against budget.json assets.manifold.
+      - name: Größen-Budget csg-Chunk
+        run: node scripts/csg-chunk-budget.mjs
 
       - name: tsc-Baseline (Fehlerzahl darf nicht steigen)
         run: node scripts/tsc-baseline.mjs --je-datei

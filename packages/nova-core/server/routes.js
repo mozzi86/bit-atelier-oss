@@ -13,6 +13,7 @@ import { istLoopbackUrl } from '../src/lib/kiLokal.js';
 import { mitProjektKontext } from './llmKontext.js';
 import { KATALOG_ENTITAETEN } from './catalog-seed.js';
 import { PERSONAL_ENTITAETEN } from '../src/api/personalEntitaeten.js';
+import { NUR_PERSON_SCHREIBT } from '../src/lib/verlauf/entitaeten.js';
 
 // --- Auth (local single-user mock) -----------------------------------------
 // 83-02: neutral name instead of the old product name; no e-mail, so the
@@ -71,6 +72,25 @@ export function veralteterStand(gespeichert, body) {
   return geladen < gespeichert.updated_date;
 }
 
+/**
+ * 106-09 (part of 105-20): the strict form of the check above. The client names the `updated_date` of the record it
+ * built its write on (query `?stand=<ISO>`); when the stored record is newer, somebody else wrote in between and the
+ * write must NOT happen - the route answers 409 with the stored record, the client compares both versions and either
+ * merges (different fields / elements) or shows the conflict to the person. An unreadable or missing stand says
+ * nothing (false), so callers without the query keep the old behaviour (last write wins, hint header).
+ * @param {{updated_date?: string}|null} gespeichert stored record
+ * @param {unknown} stand ISO timestamp from the query
+ * @returns {boolean} true = the stored record is newer than the client's base
+ */
+export function standVeraltet(gespeichert, stand) {
+  if (typeof stand !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(stand)) return false;
+  if (typeof gespeichert?.updated_date !== 'string') return false;
+  return stand < gespeichert.updated_date;
+}
+
+/** Text of the 409 answer of a strict write on an outdated base (106-09). */
+export const STAND_KONFLIKT_TEXT = 'Zwischenzeitlich auf einem anderen Gerät geändert — nicht überschrieben.';
+
 // --- 106-06: guarded project fields ----------------------------------------
 /** Entity of the projects. */
 const PROJEKT_ENTITY = 'Project';
@@ -91,6 +111,19 @@ export function personImBrowser(req) {
   if (seite) return seite === 'same-origin';
   if (!h.origin || !h.host) return false;
   try { return new URL(String(h.origin)).host === String(h.host); } catch { return false; }
+}
+
+/** 106-10: refusal of a write by a program on the change log or the command library (D-IM-04: a person releases, never an agent). */
+export const NUR_PERSON_TEXT = 'Änderungsprotokoll und Befehlsbibliothek schreibt nur die Person in der App — Freigeben und Zurücknehmen sind Handlungen eines Menschen, nie eines Agenten';
+
+/**
+ * Whether an entity name (decoded, any case) is one of NUR_PERSON_SCHREIBT (review 106-10: the lock must not depend on the spelling
+ * of the path).
+ * @param {unknown} name @returns {boolean}
+ */
+export function nurPersonSchreibt(name) {
+  const n = String(name ?? '').toLowerCase();
+  return NUR_PERSON_SCHREIBT.some((e) => e.toLowerCase() === n);
 }
 
 /** 403 texts of the entities the generic CRUD never serves - each has its own masked / guarded routes. */
@@ -186,13 +219,24 @@ export function entitiesRouter(db) {
     });
   }
 
-  // B-106-10-01: the prefix locks above compare the RAW path, while the routes below decode `:entity` - so
-  // "/entities/Llm%43onnection" (plain API key) and "/entities/%4Ditarbeiter" (HR data) slipped past them. This check
-  // runs on the DECODED name of every route with :entity (Express router.param, before the handler), case-insensitive,
-  // for every method including bulk.
-  r.param('entity', (_req, res, next, entity) => {
+  // 106-10 (D-IM-04): the change log and the office's command library are written only by the person in the app's own page.
+  // Release / reversal notes are human actions; a program (an agent over the MCP server's create_record/update_record, curl)
+  // may read both, never write them. Also before the bulk path, like the locks above.
+  for (const name of NUR_PERSON_SCHREIBT) {
+    r.use(`/entities/${name}`, (req, res, next) => {
+      if (req.method === 'GET' || req.method === 'HEAD' || personImBrowser(req)) return next();
+      res.status(403).json({ error: NUR_PERSON_TEXT });
+    });
+  }
+  // Review 106-10 / B-106-10-01: the prefix locks above compare the RAW path, while the routes below decode `:entity` -
+  // so "/entities/Aenderungs%53chritt" and "/entities/Llm%43onnection" (plain API key) slipped past them. This check runs
+  // on the DECODED name of every route with :entity (Express router.param, before the handler), case-insensitive.
+  r.param('entity', (req, res, next, entity) => {
     const gesperrt = gesperrteEntitaet(entity);
     if (gesperrt) return res.status(403).json({ error: gesperrt });
+    if (nurPersonSchreibt(entity) && !(req.method === 'GET' || req.method === 'HEAD' || personImBrowser(req))) {
+      return res.status(403).json({ error: NUR_PERSON_TEXT });
+    }
     next();
   });
 
@@ -265,6 +309,10 @@ export function entitiesRouter(db) {
 
   r.put('/entities/:entity/:id', (req, res) => {
     const vorher = db.get(req.params.entity, req.params.id);
+    // 106-09 (105-20): a strict write on an outdated base is refused with both versions instead of overwriting
+    if (vorher && standVeraltet(vorher, req.query?.stand)) {
+      return res.status(409).json({ error: STAND_KONFLIKT_TEXT, konflikt: true, gespeichert: vorher });
+    }
     const hinweis = vorher && veralteterStand(vorher, req.body);
     const person = personImBrowser(req), verworfen = /** @type {string[]} */ ([]);
     const record = db.update(req.params.entity, req.params.id, projektFelderSchuetzen(req.params.entity, req.body || {}, person, verworfen));

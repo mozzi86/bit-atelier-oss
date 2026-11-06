@@ -1,0 +1,231 @@
+{
+ "quelle": "Erstbestand BIT-Atelier, 05.11.2026",
+ "typen": [
+  {
+   "schluessel": "rohdecke-stb-20-cm",
+   "version": 1,
+   "rohling": false,
+   "kurzname_fest": "Rohdecke StB 20 cm",
+   "ifc": {
+    "klasse": "IfcSlab",
+    "predefined_type": "FLOOR"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "351",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcSlab"
+   },
+   "pset_common": {
+    "IsExternal": false,
+    "LoadBearing": true
+   },
+   "schichten": [
+    {
+     "baustoff": "stahlbeton-670",
+     "dicke_m": 0.2,
+     "rolle": "LoadBearing"
+    }
+   ]
+  },
+  {
+   "schluessel": "tuer-innen-1-flg-uz-holz-88-5x213-5",
+   "version": 1,
+   "rohling": false,
+   "bezeichnung": "Innen 1-flg. UZ Holz",
+   "kurzname_fest": "T Innen 1Fl UZ 88,5x213,5",
+   "ifc": {
+    "klasse": "IfcDoor",
+    "predefined_type": "DOOR"
+   },
+   "oeffnungsart": "SINGLE_SWING_LEFT",
+   "breite_m": 0.885,
+   "hoehe_m": 2.135,
+   "zarge": {
+    "art": "Umfassungszarge (UZ)",
+    "baustoff": "vollholz-350",
+    "tiefe_m": 0.135,
+    "spiegel_m": 0.03,
+    "falz_breite_m": 0.015,
+    "falz_tiefe_m": 0.04
+   },
+   "blatt": {
+    "baustoff": "spanplatte-360",
+    "dicke_m": 0.056,
+    "breite_m": 0.871,
+    "hoehe_m": 2.118,
+    "spalt_unten_m": 0.005
+   },
+   "durchgang": {
+    "breite_m": 0.815,
+    "hoehe_m": 2.095
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "344",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcDoor"
+   },
+   "pset_common": {
+    "IsExternal": false,
+    "HandicapAccessible": false,
+    "FireRating": "",
+    "AcousticRating": ""
+   }
+  },
+  {
+   "schluessel": "fenster-1-flg-126x151",
+   "version": 1,
+   "rohling": false,
+   "bezeichnung": "1-flg.",
+   "kurzname_fest": "F 1 1,26x1,51",
+   "ifc": {
+    "klasse": "IfcWindow",
+    "predefined_type": "WINDOW"
+   },
+   "oeffnungsart": "SINGLE_PANEL",
+   "breite_m": 1.26,
+   "hoehe_m": 1.51,
+   "bruestung_m": 0.9,
+   "zarge": {
+    "art": "Blendrahmen",
+    "baustoff": "vollholz-350",
+    "tiefe_m": 0.08,
+    "spiegel_m": 0.07
+   },
+   "fluegel": {
+    "baustoff": "vollholz-350",
+    "breite_rahmen_m": 0.06,
+    "tiefe_m": 0.07
+   },
+   "verglasung": {
+    "baustoff": "normalglas-530",
+    "dicke_m": 0.024,
+    "aufbau": "2-fach Isolierglas (Vorgabe Katalog)"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "334",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWindow"
+   },
+   "pset_common": {
+    "IsExternal": true
+   }
+  },
+  {
+   "schluessel": "rohling-wand",
+   "version": 1,
+   "rohling": true,
+   "kurzname_fest": "Wand (Rohling)",
+   "ifc": {
+    "klasse": "IfcWall",
+    "predefined_type": "SOLIDWALL"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "340",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWall"
+   },
+   "pset_common": {},
+   "schichten": [
+    {
+     "baustoff": "bauteil-500",
+     "dicke_m": 0.2
+    }
+   ]
+  },
+  {
+   "schluessel": "rohling-decke",
+   "version": 1,
+   "rohling": true,
+   "kurzname_fest": "Decke (Rohling)",
+   "ifc": {
+    "klasse": "IfcSlab",
+    "predefined_type": "FLOOR"
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "350",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcSlab"
+   },
+   "pset_common": {},
+   "schichten": [
+    {
+     "baustoff": "bauteil-500",
+     "dicke_m": 0.2
+    }
+   ]
+  },
+  {
+   "schluessel": "rohling-tuer",
+   "version": 1,
+   "rohling": true,
+   "kurzname_fest": "Tür (Rohling)",
+   "ifc": {
+    "klasse": "IfcDoor",
+    "predefined_type": "DOOR"
+   },
+   "oeffnungsart": "SINGLE_SWING_LEFT",
+   "breite_m": 1.0,
+   "hoehe_m": 2.135,
+   "zarge": {
+    "art": "Umfassungszarge (UZ)",
+    "baustoff": "vollholz-350",
+    "tiefe_m": 0.135,
+    "spiegel_m": 0.03
+   },
+   "blatt": {
+    "baustoff": "spanplatte-360",
+    "dicke_m": 0.04
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "344",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcDoor"
+   },
+   "pset_common": {}
+  },
+  {
+   "schluessel": "rohling-fenster",
+   "version": 1,
+   "rohling": true,
+   "kurzname_fest": "Fenster (Rohling)",
+   "ifc": {
+    "klasse": "IfcWindow",
+    "predefined_type": "WINDOW"
+   },
+   "oeffnungsart": "SINGLE_PANEL",
+   "breite_m": 1.0,
+   "hoehe_m": 1.0,
+   "bruestung_m": 0.9,
+   "zarge": {
+    "art": "Blendrahmen",
+    "baustoff": "vollholz-350",
+    "tiefe_m": 0.08,
+    "spiegel_m": 0.07
+   },
+   "verglasung": {
+    "baustoff": "normalglas-530",
+    "dicke_m": 0.024
+   },
+   "klassifizierung": {
+    "din276": {
+     "kg": "334",
+     "norm": "DIN 276:2018-12"
+    },
+    "bsdd_klasse": "https://identifier.buildingsmart.org/uri/buildingsmart/ifc/4.3/class/IfcWindow"
+   },
+   "pset_common": {}
+  }
+ ]
+}

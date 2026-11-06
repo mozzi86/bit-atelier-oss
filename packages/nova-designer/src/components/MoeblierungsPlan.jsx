@@ -21,11 +21,12 @@ import {
   moebelById, moebelChecks, kollisionsWarnungen, verschiebeItem,
 } from "@designer/lib/moebel";
 import BimPlan2D from "./BimPlan2D";
+import { ebenenLevels, levelKlemmen, geschossLabel } from "@core/lib/bauteil/ebenen.js";
 import KatalogPanel from "./KatalogPanel";
 import MoebelSchicht from "./MoebelSchicht";
 import { MoebelLegende } from "./MoebelDraufsicht";
 
-const geschossLabel = (lvl, t) => (lvl === 0 ? t("EG") : `${lvl}. ${t("OG")}`);
+// 107-13: storey names incl. basements ("1. UG") come from @core (bauteil/ebenen.js geschossLabel), imported above
 
 // BBox-Mitte einer Zone (Meter) — Einfügepunkt neuer Möbel.
 function zonenMitte(zone) {
@@ -52,7 +53,11 @@ export default function MoeblierungsPlan({
 }) {
   const { t } = useI18n();
   const storeys = Math.max(1, Math.round(plan?.storeys || 1));
-  const lvl = Math.min(Math.max(0, level), storeys - 1);
+  // 107-13 (D-BK-20): the clamp to ≥ 0 is gone — the levels are the model's storey list (basements −1 … −U included), so a basement
+  // room lands on its own level instead of the ground floor; without basements level −1 still clamps to 0 as before
+  // (ebenenLevels/levelKlemmen hold the one fallback 0 … storeys − 1 while no model is there)
+  const levels = ebenenLevels(plan?.model, storeys);
+  const lvl = levelKlemmen(levels, level);
   const zonenImLevel = useMemo(
     () => (zones || []).filter((z) => (z.level ?? 0) === lvl && Array.isArray(z.points) && z.points.length >= 3),
     [zones, lvl],
@@ -113,7 +118,7 @@ export default function MoeblierungsPlan({
       {/* Geschoss-Tabs */}
       <div className="flex flex-wrap items-center gap-1.5">
         <LayoutGrid className="w-4 h-4 text-slate-500" />
-        {Array.from({ length: storeys }, (_, i) => {
+        {levels.map((i) => {
           const n = (zones || []).filter((z) => (z.level ?? 0) === i && z.points?.length >= 3).length;
           return (
             <button

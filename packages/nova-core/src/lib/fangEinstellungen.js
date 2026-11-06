@@ -4,6 +4,9 @@
 //
 // Also: the command records of the snap switches for a command register (befehlsregister.js) and the parser
 // for typed snap commands ("polar 15", "raster 0,5", "end" …) of the command line.
+// 107-07: one-shot tracks "par" / "senk" (parallel / perpendicular to a reference edge) and "verl" (extension), the
+// switches Parallel / Senkrecht / Verlängerung in the menu, and a help line ("fanghilfe") that names the keys:
+// Shift holds the axis for the running command, Alt draws free.
 //
 // In:  user toggles (keys, command line, context menu, chips). Out: the current FangEinstellungen, a React hook,
 //      the key handler, register helpers. Browser storage is optional: blocked storage keeps the store in memory.
@@ -52,7 +55,7 @@ export function fangEinstellungenSetzen(patch) {
 
 /**
  * Toggle one switch.
- * @param {'objektfang'|'endpunkt'|'mitte'|'schnitt'|'lot'|'naechster'|'polar'|'ortho'|'raster'} schalter
+ * @param {'objektfang'|'endpunkt'|'mitte'|'schnitt'|'lot'|'naechster'|'polar'|'ortho'|'raster'|'parallel'|'senkrecht'|'verlaengerung'} schalter
  * @returns {boolean} the new state
  */
 export function fangUmschalten(schalter) {
@@ -113,21 +116,28 @@ export function useFangTasten(aktiv = true) {
   }, [aktiv]);
 }
 
-/** One-shot snaps: typed short command → snap kind. */
-export const EINMAL_FAENGE = Object.freeze({ end: "endpunkt", mit: "mitte", sch: "schnitt", lot: "lot", nae: "naechster" });
+/** One-shot snaps: typed short command → snap kind (107-07: par, senk, verl appended). */
+export const EINMAL_FAENGE = Object.freeze({ end: "endpunkt", mit: "mitte", sch: "schnitt", lot: "lot", nae: "naechster", par: "parallel", senk: "senkrecht", verl: "verlaengerung" });
 
 /** Labels of the switches (German UI text, translated by the caller). */
 export const FANG_LABEL = Object.freeze({
   objektfang: "Objektfang", endpunkt: "Endpunkt", mitte: "Mitte", schnitt: "Schnittpunkt", lot: "Lot", naechster: "Nächster",
   ortho: "Ortho", polar: "Polar", raster: "Raster",
+  parallel: "Parallel", senkrecht: "Senkrecht", verlaengerung: "Verlängerung", hilfsgerade: "Hilfslinie",
 });
+
+/**
+ * 107-07: help line of the snap keys and one-shot commands (German UI text, translated by the caller). Shift = axis lock
+ * for the running command only (nothing is stored), Alt = no snapping.
+ */
+export const FANG_HILFE = "F3 Objektfang · F8 Ortho · F9 Raster · F10 Polar · Umschalt hält die Achse · Alt = ohne Fang · par/senk = parallel/senkrecht zur Bezugskante (Zeiger kurz auf der Kante halten) · verl = Verlängerung · hl/hs/hp = Hilfslinie/-strecke/-punkt";
 
 /**
  * Typed snap command → action. "fang" / "of" / "fa", "ortho", "polar [Grad]", "raster [Maß]", "end" / "mit" / "sch" /
  * "lot" / "nae". Only exact words (no prefixes), so a running command's typed input is never taken over by accident.
  * @param {string} text typed text
  * @returns {{id: string, wert?: number, art?: string}|{fehler: string}|null}
- *   id: command id in the register (fang, ortho, polar, raster, or the one-shot short form end/mit/sch/lot/nae);
+ *   id: command id in the register (fang, ortho, polar, raster, or the one-shot short form end/mit/sch/lot/nae/par/senk/verl);
  *   wert: degrees (polar) or metres (raster); art: snap kind of a one-shot; null = not a snap command
  */
 export function fangBefehlLesen(text) {
@@ -189,6 +199,8 @@ export function fangBefehleRegistrieren(reg, { einmal = undefined, einmalAktiv =
       }
       const v = fangUmschalten("raster"); melden(`Raster ${an(v)}`); return v;
     } }));
+  // 107-07: the help line of the keys (Shift = axis lock, Alt = free, one-shots)
+  weg.push(reg.registrieren({ id: "fanghilfe", label: "Fang-Hilfe", menue: "Fang", ausfuehren: () => { melden(FANG_HILFE); return FANG_HILFE; } }));
   if (einmal) {
     for (const [kurz, art] of Object.entries(EINMAL_FAENGE)) {
       weg.push(reg.registrieren({ id: kurz, label: `Einmal: ${/** @type {any} */ (FANG_LABEL)[art]}`, menue: "Fang", aktiv: einmalAktiv,
@@ -206,8 +218,9 @@ export function fangBefehleRegistrieren(reg, { einmal = undefined, einmalAktiv =
  */
 export function fangKontextEintraege(e, t) {
   /** @type {Array<[keyof typeof FANG_LABEL, string|undefined]>} */
+  // 107-07: Parallel / Senkrecht / Verlängerung appended (they act while a reference edge is set)
   const liste = [["objektfang", "F3"], ["endpunkt", undefined], ["mitte", undefined], ["schnitt", undefined], ["lot", undefined],
-    ["naechster", undefined], ["ortho", "F8"], ["polar", "F10"], ["raster", "F9"]];
+    ["naechster", undefined], ["ortho", "F8"], ["polar", "F10"], ["raster", "F9"], ["parallel", undefined], ["senkrecht", undefined], ["verlaengerung", undefined]];
   return liste.map(([k, taste], i) => ({
     label: k === "polar" && e.polar ? `${t(FANG_LABEL[k])} ${String(e.polarSchritt_grad).replace(".", ",")}°`
       : k === "raster" && e.raster ? `${t(FANG_LABEL[k])} ${String(e.raster_m).replace(".", ",")} m` : t(FANG_LABEL[k]),

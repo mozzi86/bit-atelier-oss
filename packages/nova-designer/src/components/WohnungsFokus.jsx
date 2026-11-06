@@ -26,7 +26,7 @@ import { Button } from "@core/components/ui/button";
 import { STATUS_STYLE } from "@designer/lib/compliance";
 import { useI18n } from "@core/lib/i18n";
 import { polygonAreaM } from "@core/lib/useBuildingProgram";
-import { kurzRaumname, lodFuer, labelKollision } from "@designer/lib/massstab";
+import { kurzRaumname, detailgradFuer, labelKollision } from "@core/lib/plan/massstab.js";
 import { CSS_PX_JE_M } from "@designer/lib/isoKamera";
 import BimPlan2D from "./BimPlan2D";
 import { usePlanHoehe } from "@designer/lib/usePlanHoehe";
@@ -783,11 +783,11 @@ export default function WohnungsFokus({
                       />
                       {/* 5-m-Balken + Maßstabsanzeige — NUR bei festem Maßstab,
                           unten links in der SICHT (sicht.x/y = viewBox-Ursprung).
-                          Länge: 5 m · SCALE viewBox-Einheiten (lodFuer(50).balkenM). */}
+                          Länge: 5 m · SCALE viewBox-Einheiten (detailgradFuer(50).balkenM, 107-12). */}
                       {massstab && sicht && (
                         <g data-testid="fk-balken" style={{ pointerEvents: "none" }}>
                           {(() => {
-                            const balkenM = lodFuer(massstab).balkenM; // 5 m at 1:50
+                            const balkenM = detailgradFuer(massstab).balkenM; // 5 m at 1:50
                             const laengeU = balkenM * SCALE;           // viewBox units
                             const xL = sicht.x + px2(16);
                             const yB = sicht.y + sicht.h - px2(18);

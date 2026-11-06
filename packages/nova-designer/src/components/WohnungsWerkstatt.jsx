@@ -10,7 +10,7 @@ import {
 } from "@core/components/ui/select";
 import { NumberField } from "@core/components/Field";
 import { STATUS_STYLE } from "@designer/lib/compliance";
-import { useI18n } from "@core/lib/i18n";
+import { useI18n, englischErgaenzen } from "@core/lib/i18n";
 import { useBuildingProgram, polygonAreaM } from "@core/lib/useBuildingProgram";
 import { geschosseAus, okfObersterGeschoss } from "@core/lib/bauteil/hoehen.js"; // 107-02: storey table and the one top-storey level
 import { useProject } from "@core/lib/ProjectContext";
@@ -55,6 +55,13 @@ import { vorschlagVeraltet } from "@designer/lib/bebauungsvorschlaege";
 // 91-02: rainwater plant — cistern under the garage (overlay) + services room in the cellar.
 import { useRegenwasser } from "@designer/lib/useRegenwasser";
 import { zisternenRechteck } from "@designer/lib/regenwassernutzung";
+// 107-11 (D-BK-14): WoFlV partial areas under the roof from the roof geometry; English texts of this plan load with this chunk.
+import { dachgeschossDach, dachschraegenJeRaum, KNIESTOCK_STANDARD_M, DACHFORM_NAMEN } from "@designer/lib/dachschraegenAnteile";
+import { EN as EN_RAEUME_10711 } from "@core/lib/i18nTeile/raeume-107-11.js";
+import { EN as EN_EFH_108 } from "@core/lib/i18nTeile/efh-108.js"; // 108-02: lazy part of phase 108
+
+englischErgaenzen(EN_RAEUME_10711);
+englischErgaenzen(EN_EFH_108); // 108-02: knee wall from the building model
 
 const de1 = (n) => (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 1 });
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -117,6 +124,8 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
   const { t } = useI18n();
   const { project } = useProject();
   const plan = usePlanModel(project?.id);
+  /** 108-02 (D-EFH-01): knee wall of the building model in m (pitched roof + `kniestock_m` on the top storey row), else null. */
+  const modellKniestock = plan.model?.kniestock_m ?? null;
   const store = useBuildingProgram();
   useWerkstattAngemeldet();
   const zones = Array.isArray(store.zones) ? store.zones : [];
@@ -542,8 +551,21 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
       // only. They are booked once against the unit's total, not repeated per
       // room (woflvFlaeche clamps them to the room area — per room they would
       // have been deducted several times).
+      // 107-11 (D-BK-14): with `dachschraege_quelle: "geometrie"` the partial areas come per ROOM from the roof (global roof form
+      // of the BIM studio over the footprint, eaves at the knee wall above the top storey's floor, dachschraegenAnteile.js); the hand
+      // input stays the override ("hand" or missing = the typed-in values as before). Same woflvFlaeche either way.
       const ds = eintrag.dachschraege;
-      if (nutzung === "wohnen" && w.level === oberstes && ds
+      let dsGeometrie = null;
+      if (nutzung === "wohnen" && w.level === oberstes && eintrag.dachschraege_quelle === "geometrie") {
+        // 108-02 (D-EFH-01): ONE source — the knee wall of the building model when it has one, the unit type's own field only as fallback
+        const dach = dachgeschossDach({ footprint: plan.model?.footprint, dachform: plan.dachform, dachneigung: plan.dachneigung, kniestock_m: modellKniestock ?? eintrag.kniestock_m });
+        raeume = dachschraegenJeRaum(raumZonen.map((z) => ({ name: z.name, flaeche_m2: num(z.flaeche_m2, polygonAreaM(z.points)), points: z.points })), dach);
+        dsGeometrie = {
+          unter1m_m2: raeume.reduce((s, r) => s + num(r.dachschraege?.unter1m_m2), 0),
+          zwischen1und2m_m2: raeume.reduce((s, r) => s + num(r.dachschraege?.zwischen1und2m_m2), 0),
+          dach: !!dach,
+        };
+      } else if (nutzung === "wohnen" && w.level === oberstes && ds
         && (num(ds.unter1m_m2) > 0 || num(ds.zwischen1und2m_m2) > 0)) {
         raeume = [{ name: w.we, flaeche_m2: brutto_m2, dachschraege: ds }];
       }
@@ -564,9 +586,9 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
         const balkonM2 = num(balkonCfg.m2, (eintrag.balkon?.anzahl || 0) > 0 ? num(eintrag.balkon?.m2, 8) : 0);
         balkone = balkonM2 > 0 ? [{ m2: balkonM2, anrechnung }] : [];
       }
-      return /** @type {any} */ ({ we: w.we, nutzung, brutto_m2, balkon_m2: balkone.reduce((s, b) => s + b.m2, 0), balkonGeometrie: balkonZonen.length > 0, ...woflvFlaeche({ raeume, balkone }) });
+      return /** @type {any} */ ({ we: w.we, typKey: w.typKey, nutzung, brutto_m2, balkon_m2: balkone.reduce((s, b) => s + b.m2, 0), balkonGeometrie: balkonZonen.length > 0, dsGeometrie, ...woflvFlaeche({ raeume, balkone }) });
     });
-  }, [ergebnis, cfg.einheiten, cfg.balkonJeTyp, maxLevel]);
+  }, [ergebnis, cfg.einheiten, cfg.balkonJeTyp, maxLevel, plan.model?.footprint, plan.dachform, plan.dachneigung, modellKniestock]);
   const wohnflaecheGesamt = woflvJeWe.reduce((s, w) => s + (w.wohnflaeche_m2 || 0), 0);
   const mfgGesamt = woflvJeWe.reduce((s, w) => s + (w.mfg_m2 || 0), 0);
   const bruttoGesamt = woflvJeWe.reduce((s, w) => s + (w.brutto_m2 || 0), 0);
@@ -1069,14 +1091,57 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                         value={Math.round((cfg.balkonJeTyp?.[sel.key]?.anrechnung ?? 0.25) * 100)}
                         onChange={(v) => setBalkon(sel.key, { anrechnung: Math.max(0, Math.min(50, v)) / 100 })} />
                     </div>
-                    {/* Dachschrägen je Typ (CITED WoFlV §4 Abs. 2) — v1 [ASSUMED]:
-                        gilt für die WE als Ganzes, nur im obersten Geschoss. */}
+                    {/* 107-11 (D-BK-14): source of the sloping areas — typed in (override, default) or from the roof geometry */}
+                    <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span>{t("Dachschrägen")}</span>
+                      <select className="h-7 rounded-md border border-border bg-background px-1 text-xs" data-testid="einheit-dachschraege-quelle"
+                        aria-label={t("Quelle der Dachschrägen")} value={sel.dachschraege_quelle === "geometrie" ? "geometrie" : "hand"}
+                        onChange={(e) => setSel({ dachschraege_quelle: e.target.value })}>
+                        <option value="hand">{t("von Hand")}</option>
+                        <option value="geometrie">{t("aus Dachgeometrie")}</option>
+                      </select>
+                    </label>
+                    {sel.dachschraege_quelle === "geometrie" ? (() => {
+                      const jeWe = woflvJeWe.filter((x) => x.typKey === sel.key && x.dsGeometrie);
+                      const u1 = jeWe.reduce((s, x) => s + num(x.dsGeometrie.unter1m_m2), 0);
+                      const z12 = jeWe.reduce((s, x) => s + num(x.dsGeometrie.zwischen1und2m_m2), 0);
+                      return (
+                        <div className="space-y-1" data-testid="einheit-dachschraege-geometrie">
+                          {/* 108-02: with a knee wall in the building model that value is shown read-only (one source) */}
+                          {modellKniestock != null ? (
+                            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground" data-testid="einheit-kniestock-modell">
+                              <span>{t("Kniestock")}</span>
+                              <span>{(Number(modellKniestock) || 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m · {t("aus dem Gebäudemodell")}</span>
+                            </div>
+                          ) : (
+                            <NumberField label={t("Kniestock")} suffix="m" min={0} value={sel.kniestock_m ?? KNIESTOCK_STANDARD_M}
+                              onChange={(v) => setSel({ kniestock_m: Math.max(0, v) })} />
+                          )}
+                          <div className="text-[10px] text-muted-foreground">
+                            {plan.dachform === "flach" || !plan.dachform
+                              ? t("Flachdach im BIM-Studio — keine Dachschrägen")
+                              : jeWe.length
+                                ? t("Aus der Dachform ({{form}}, {{grad}}°): < 1 m {{u1}} m² · 1–2 m {{z12}} m² im obersten Geschoss")
+                                  .replace("{{form}}", t(DACHFORM_NAMEN[plan.dachform] || plan.dachform)).replace("{{grad}}", String(plan.dachneigung)).replace("{{u1}}", de1(u1)).replace("{{z12}}", de1(z12))
+                                : t("Keine Wohnung dieses Typs im obersten Geschoss")}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">{t("Berechnungshilfe nach WoFlV § 4, keine Rechtsberatung. Kniestock = Traufe über dem Fußboden des obersten Geschosses [ASSUMED].")}</div>
+                          {/* 107-11 review: named deviation — the building model has no roof storey (roof on top of the top full storey) */}
+                          {plan.dachform && plan.dachform !== "flach" && modellKniestock == null && (
+                            <div className="text-[10px] text-warnung" data-testid="einheit-dachschraege-modell-hinweis">{t("Modell ohne Dachgeschoss: im BIM-Studio sitzt das Dach auf dem obersten Vollgeschoss — der Kniestock gilt nur für diese Rechnung, 3D und IFC zeigen ihn nicht.")}</div>
+                          )}
+                        </div>
+                      );
+                    })() : (
+                    /* Dachschrägen je Typ (CITED WoFlV §4 Abs. 2) — v1 [ASSUMED]:
+                        gilt für die WE als Ganzes, nur im obersten Geschoss. */
                     <div className="grid grid-cols-2 gap-2" data-testid="einheit-dachschraege">
                       <NumberField label={t("Dachschräge < 1 m")} suffix="m²" min={0} value={sel.dachschraege?.unter1m_m2 ?? 0}
                         onChange={(v) => setSel({ dachschraege: { ...(sel.dachschraege || {}), unter1m_m2: Math.max(0, v) } })} />
                       <NumberField label={t("Dachschräge 1–2 m")} suffix="m²" min={0} value={sel.dachschraege?.zwischen1und2m_m2 ?? 0}
                         onChange={(v) => setSel({ dachschraege: { ...(sel.dachschraege || {}), zwischen1und2m_m2: Math.max(0, v) } })} />
                     </div>
+                    )}
                     <div className="text-[10px] text-slate-400">
                       {t("Balkon 0 m² = kein Balkon. Dachschrägen-Teilflächen gelten je WE im obersten Geschoss [ASSUMED v1].")}
                     </div>
@@ -1256,6 +1321,8 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                 kellerAktiv={cfg.keller.aktiv}
                 onAnwenden={tgAnwenden}
                 onEntfernen={tgEntfernen}
+                /* 107-13 (D-BK-20): explicit step that puts the basement storey into the model (programme field) */
+                onUgAnlegen={() => store.set({ untergeschosse: 1 })}
                 mengenPersistiert={cfg.tiefgarage.mengen}
                 zisterne={tgZisterne}
               />
@@ -1271,6 +1338,8 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                 tesselierungAngewendet={cfg.angewendet}
                 onAnwenden={kellerAnwenden}
                 onEntfernen={kellerEntfernen}
+                /* 107-13 (D-BK-20): explicit step that puts the basement storey into the model (programme field) */
+                onUgAnlegen={() => store.set({ untergeschosse: 1 })}
                 mengenPersistiert={cfg.keller.mengen}
               />
             </TabsContent>

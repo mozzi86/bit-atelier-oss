@@ -57,6 +57,27 @@ datei_entfernen() {
   fi
   rm -f "$DATEI_DESKTOP" "$MIME_XML"
   if command -v update-mime-database >/dev/null 2>&1; then update-mime-database "$HOME/.local/share/mime" >/dev/null 2>&1 || true; fi
+  # Rebuild the per-user desktop cache. update-desktop-database keeps an empty
+  # mimeinfo.cache even when no .desktop file remains (the uninstall test counts
+  # that leftover). Drop the cache only then, so other applications stay listed.
+  if command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || true; fi
+  appsdir="$HOME/.local/share/applications"
+  rest=0
+  if [ -d "$appsdir" ]; then
+    for f in "$appsdir"/*.desktop; do
+      if [ -e "$f" ]; then rest=1; break; fi
+    done
+  fi
+  if [ "$rest" -eq 0 ]; then rm -f "$appsdir/mimeinfo.cache"; fi
+  # xdg-mime default writes one line into mimeapps.list. Remove that line only.
+  mimeapps="$HOME/.config/mimeapps.list"
+  if [ -f "$mimeapps" ] && grep -q 'application/x-bitproj=' "$mimeapps"; then
+    grep -v 'application/x-bitproj=' "$mimeapps" > "$mimeapps.bit-atelier"
+    mv "$mimeapps.bit-atelier" "$mimeapps"
+    # A list that only held our type (section heading, no key=value) was created
+    # for this association. Remove it. Any other default stays.
+    if ! grep -q '=' "$mimeapps"; then rm -f "$mimeapps"; fi
+  fi
   say "Removed the .bitproj file association."
 }
 

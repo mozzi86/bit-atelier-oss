@@ -27,6 +27,7 @@ import { sprechDienst } from "./sprechDienst.js";
 import { KEINE_AUSWAHL_TEXT } from "./auswahlKontext.js";
 import { BILD_GRUENDE, BILD_KANTE_MAX, bildZielText } from "./bildKontext.js";
 import { satzMarkeAusgeben, satzMarkeZuruecknehmen } from "./satzMarke.js";
+import { bibliothekPromptZeilen } from "./befehlsBibliothek.js";
 
 /** Longest transcript sent to the model in characters [ASSUMED: a spoken command is a sentence, not an essay; bounds what leaves the screen]. */
 export const AUFTRAG_MAX_ZEICHEN = 600;
@@ -50,8 +51,9 @@ export function zielGuids(auswahl) {
  * @param {string} text  The person's sentence.
  * @param {{anzahl?: number, bauteile?: Array<{guid?: string|null, klasse?: string|null, name?: string, geschoss?: string|null, steckbrief?: any}>}|null} [auswahl]
  *   Selection record of the viewer (auswahlKontext).
- * @param {{nda?: boolean, mitBild?: boolean}} [opt]  nda: the project carries the NDA marker (the task says: text and GUIDs only, never an image);
- *   mitBild (106-06): an image of the view goes along - the task says what it is for and that it never picks the element.
+ * @param {{nda?: boolean, mitBild?: boolean, bibliothek?: ReadonlyArray<any>}} [opt]  nda: the project carries the NDA marker (the task says: text and GUIDs
+ *   only, never an image); mitBild (106-06): an image of the view goes along - the task says what it is for and that it never picks the element;
+ *   bibliothek (106-10): the office's command library - its allowed values are named (text only).
  * @returns {string}
  */
 export function agentAuftrag(text, auswahl = null, opt = {}) {
@@ -80,6 +82,7 @@ export function agentAuftrag(text, auswahl = null, opt = {}) {
     "- Maße in Metern (verschiebung_m [dx, dy, dz]), Winkel in Grad. Antworte kurz auf Deutsch.",
     ...(opt.nda ? ["- Projekt mit NDA-Merker: nur Text und Bauteil-Kennungen, nie ein Bild — frage auch nicht nach einem Bild der Ansicht."] : []),
     ...(opt.mitBild ? ["- Dabei ist ein Bild der aktuellen Ansicht (das gewählte Bauteil ist hervorgehoben). Es zeigt nur, was die Person sieht: nutze es für räumliche Bezüge („links davon“, „die obere“). Welches Bauteil sich ändert, bestimmt trotzdem die Auswahl, nie das Bild."] : []),
+    ...bibliothekPromptZeilen(opt.bibliothek || []),
   ].join("\n");
 }
 
@@ -93,7 +96,8 @@ export const BILD_OHNE_ANSICHT = "Kein Bild der Ansicht: {grund} — nichts gese
  * @param {string} text  The sentence.
  * @param {any} auswahl  Selection record of the viewer, read at the moment of the sentence.
  * @param {{cloudOk?: boolean, nda?: boolean, bild?: ((o: {kante: number, breite: number}) => {png_base64: string, breite?: number, hoehe?: number})|null,
- *   projektId?: string|null, gesprochen?: boolean, dienst?: import("./sprechDienst.js").SprechDienst|null, onEvent?: (ev: any) => void}} [opt]
+ *   projektId?: string|null, gesprochen?: boolean, dienst?: import("./sprechDienst.js").SprechDienst|null, onEvent?: (ev: any) => void,
+ *   bibliothek?: ReadonlyArray<any>}} [opt]  bibliothek (106-10): the office's command library, named in the task text.
  *   cloudOk: the person clicked "send anyway" for a provider outside this computer; nda: the project carries the NDA marker;
  *   gesprochen (D-IM-07): the sentence came from the microphone - the agent's proposals then carry "sprache" + "agent" (satzMarke.js);
  *   bild (106-06): "mit Bild" is on - renders the current view (px edge limit); projektId: the open project (NDA, consent);
@@ -156,7 +160,7 @@ export async function modellFragen(text, auswahl, opt = {}) {
   // back here in the page; the model never sees it. Withdrawn when the turn is over.
   const satzMarke = satzMarkeAusgeben({ sprache: !!opt.gesprochen, bild: !!bilder });
   try {
-    const r = await dienst.agent(agentAuftrag(text, auswahl, { nda: !!opt.nda, mitBild }), {
+    const r = await dienst.agent(agentAuftrag(text, auswahl, { nda: !!opt.nda, mitBild, bibliothek: opt.bibliothek }), {
       profil: "sprechen", ziel: zielGuids(auswahl), onEvent: opt.onEvent, ...(bilder ? { bilder, projektId: opt.projektId ?? null } : {}),
       ...(satzMarke ? { satzMarke } : {}),
     });

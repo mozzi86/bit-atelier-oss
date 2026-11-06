@@ -16,15 +16,39 @@
 //   schicht_funktion / schicht_prioritaet (107-03: { "<layer index>": "kern"|"bekleidung"|"sonstig" } and { "<layer index>": 0-999 },
 //   same pattern; the build-up's own value or a proposal applies where the element states none, see aufbauten.js).
 //
+// 107-08: further optional fields — feuerwiderstand (text, e.g. "REI90"), schallschutz_rw_db (R'w in dB), u_wert (W/(m²·K)) and
+// bauteil_typ_quelle ("automatisch" | "nutzer" | "zurueckgenommen", D-BK-09). steckbrief() reports the three building-physics
+// values with their origin in `kennwerte` (never in `quelle`: a new `quelle` key would change the IFC "Herkunft" text of every
+// element). bauteilVorschlag() sets the type of a Massing box from its proportions (D-BK-09: automatically, marked as derived).
+// 107-09: optional `verschneidungsgruppe` (intersection group, integer ≥ 0, default 1, 0 = never intersects, D-BK-15) — reported in
+// `verschneidungsgruppe` with its origin (gesetzt / offen = default applies), and the result of the intersection of a wall or slab
+// (quantity from the solid or the hand rule, warning of the volume comparison) in `verschneidung` when the caller passes it. Neither
+// is a `quelle` key, so the IFC "Herkunft" text stays byte-identical.
+//
 // In: an element object plus its type key. Out: steckbrief() data sheet, BAUTEIL_TYPEN registry,
-// bauteilGuid(), typFuerWand(), typFuerNetz(). No I/O.
+// bauteilGuid(), typFuerWand(), typFuerNetz(), bauteilVorschlag(), kennwerteVon(). No I/O.
 
 import { stabileGuid } from "../werkstattBauteile.js";
-import { aufbauVon, kernLage } from "./aufbauten.js";
+import { aufbauVon, kernLage, aufbauById } from "./aufbauten.js";
+import { materialById } from "./materialien.js";
 import { kernFehlt, wandDicke_m, KERN_REF_LINIEN } from "./referenz.js";
 import { wandHoehe, oberkanteFolgtGeschoss, geschosshoehe } from "./hoehen.js";
 import { lbEintrag } from "./gewerke.js";
 import { normalizeStatus } from "../bimClassification.js";
+
+/** Intersection group of an element without the field (D-BK-15): 1 — every wall intersects with every other one by default. */
+export const STANDARD_VERSCHNEIDUNGSGRUPPE = 1;
+
+/**
+ * Intersection group of an element (107-09, D-BK-15): the stored integer ≥ 0 (0 = never intersects), else the default 1. The one
+ * rule for the 2D bands, the 3D solids and the data sheet.
+ * @param {any} el element record (optional field `verschneidungsgruppe`)
+ * @returns {number} integer ≥ 0
+ */
+export function verschneidungsgruppe(el) {
+  const g = Number(el?.verschneidungsgruppe);
+  return el?.verschneidungsgruppe != null && Number.isInteger(g) && g >= 0 ? g : STANDARD_VERSCHNEIDUNGSGRUPPE;
+}
 
 /**
  * @typedef {object} BauteilTyp
@@ -141,6 +165,143 @@ export function typFuerWand(w) {
   return { typ: d >= 0.175 ? "wand-tragend" : "wand-innen", abgeleitet: true };
 }
 
+/** Origins of a type stored on a Massing body (107-08, D-BK-09). */
+export const TYP_QUELLEN = Object.freeze(["automatisch", "nutzer", "zurueckgenommen"]);
+
+// Thresholds of the box heuristic (D-BK-09, spec IV "Box → Wand/Decke/Stütze"). All [ASSUMED] guide values chosen by the
+// planning of 107 (research §4 D-BK-09), not from a standard; a proven value would come from the planner's own modelling rules.
+/** Largest side of a column cross-section, m [ASSUMED: 0.60 × 0.60 m; the spec names 0.24 × 0.24 m as the lower end]. */
+export const BOX_STUETZE_MAX_M = 0.6;
+/** Smallest height of a column, m [ASSUMED: about one storey minus slab, 2.00 m]. */
+export const BOX_STUETZE_MIN_HOEHE_M = 2.0;
+/** Largest thickness (short side) of a wall, m [ASSUMED: 0.60 m, thicker is a block, not a wall]. */
+export const BOX_WAND_MAX_DICKE_M = 0.6;
+/** Smallest height of a wall, m [ASSUMED: 1.00 m, lower is a plinth or parapet left open]. */
+export const BOX_WAND_MIN_HOEHE_M = 1.0;
+/** Largest thickness (body height) of a slab, m [ASSUMED: 0.50 m]. */
+export const BOX_DECKE_MAX_DICKE_M = 0.5;
+/** Smallest plan area of a slab, m² [ASSUMED: 2.0 m², smaller flat boxes stay open]. */
+export const BOX_DECKE_MIN_FLAECHE_M2 = 2.0;
+/** Tolerance of a right angle in a rectangle profile, degrees [ASSUMED: 1°, drawing inaccuracy of a snapped corner]. */
+export const BOX_WINKEL_TOL_GRAD = 1;
+
+/** Comparison tolerance of the thresholds, m (profiles are rounded to 1e-6 m; 0.6 must stay ≤ 0.6). */
+const BOX_EPS = 1e-6;
+
+/**
+ * Sides of a rectangle profile (four corners, right angles within BOX_WINKEL_TOL_GRAD), or null for any other profile.
+ * @param {Array<{x: number, y?: number, z?: number}>} profil plan points in m ({x, y} of the Massing frame or {x, z} of the BIM model)
+ * @returns {{kurz: number, lang: number}|null} the two side lengths in m (mean of the opposite sides)
+ */
+export function rechteckSeiten(profil) {
+  if (!Array.isArray(profil) || profil.length !== 4) return null;
+  const p = profil.map((q) => ({ x: Number(q.x), y: Number(q.y ?? q.z) }));
+  if (!p.every((q) => Number.isFinite(q.x) && Number.isFinite(q.y))) return null;
+  const kanten = p.map((a, i) => { const b = p[(i + 1) % 4]; return { x: b.x - a.x, y: b.y - a.y, l: Math.hypot(b.x - a.x, b.y - a.y) }; });
+  if (kanten.some((k) => k.l < 1e-6)) return null;
+  const tol = Math.sin((BOX_WINKEL_TOL_GRAD * Math.PI) / 180);
+  for (let i = 0; i < 4; i++) {
+    const a = kanten[i], b = kanten[(i + 1) % 4];
+    // |cos| of the corner angle; a right angle has cos 0 (|cos| ≤ sin(tol) ⇔ angle within 90° ± tol)
+    if (Math.abs((a.x * b.x + a.y * b.y) / (a.l * b.l)) > tol) return null;
+  }
+  const s1 = (kanten[0].l + kanten[2].l) / 2, s2 = (kanten[1].l + kanten[3].l) / 2;
+  return { kurz: Math.min(s1, s2), lang: Math.max(s1, s2) };
+}
+
+/**
+ * Type of a Massing box from its proportions (D-BK-09, 24.10.: set AUTOMATICALLY, marked "abgeleitet (Annahme)", revertible).
+ * Only rectangle profiles; the first rule that holds wins (they exclude each other in this order):
+ *  1. column: long side ≤ BOX_STUETZE_MAX_M and height ≥ BOX_STUETZE_MIN_HOEHE_M;
+ *  2. wall: short side ≤ BOX_WAND_MAX_DICKE_M, long side > BOX_WAND_MAX_DICKE_M and height ≥ BOX_WAND_MIN_HOEHE_M — the wall type
+ *     follows the thickness rule of typFuerWand with the short side as thickness (never "wand-aussen": the box knows nothing about
+ *     its position in the building; outside position and build-up are set by the planner);
+ *  3. slab: height (= slab thickness) ≤ BOX_DECKE_MAX_DICKE_M and plan area > BOX_DECKE_MIN_FLAECHE_M2.
+ * Otherwise null ("Bauteiltyp offen").
+ * @param {Array<{x: number, y?: number, z?: number}>} profil plan profile in m
+ * @param {number} hoehe body height in m
+ * @returns {{typ: string, abgeleitet: true, annahme: string, kurz_m: number, lang_m: number}|null}
+ */
+export function bauteilVorschlag(profil, hoehe) {
+  const r = rechteckSeiten(profil);
+  const h = Number(hoehe);
+  if (!r || !(h > 0)) return null;
+  const { kurz, lang } = r;
+  const m = (/** @type {number} */ v) => v.toFixed(2).replace(".", ",");
+  if (lang <= BOX_STUETZE_MAX_M + BOX_EPS && h >= BOX_STUETZE_MIN_HOEHE_M - BOX_EPS) {
+    return { typ: "stuetze", abgeleitet: true, kurz_m: kurz, lang_m: lang,
+      annahme: `Bauteiltyp „Stütze“ aus den Proportionen abgeleitet (Querschnitt ${m(kurz)} × ${m(lang)} m, Höhe ${m(h)} m)` };
+  }
+  if (kurz <= BOX_WAND_MAX_DICKE_M + BOX_EPS && lang > BOX_WAND_MAX_DICKE_M + BOX_EPS && h >= BOX_WAND_MIN_HOEHE_M - BOX_EPS) {
+    const typ = typFuerWand({ thickness: kurz }).typ;
+    return { typ, abgeleitet: true, kurz_m: kurz, lang_m: lang,
+      annahme: `Bauteiltyp „${BAUTEIL_TYPEN[typ].label}“ aus den Proportionen abgeleitet (Dicke ${m(kurz)} m, Länge ${m(lang)} m, Höhe ${m(h)} m)` };
+  }
+  if (h <= BOX_DECKE_MAX_DICKE_M + BOX_EPS && kurz * lang > BOX_DECKE_MIN_FLAECHE_M2 + BOX_EPS) {
+    return { typ: "decke", abgeleitet: true, kurz_m: kurz, lang_m: lang,
+      annahme: `Bauteiltyp „Decke“ aus den Proportionen abgeleitet (Dicke ${m(h)} m, Fläche ${m(kurz * lang)} m²)` };
+  }
+  return null;
+}
+
+/** Mark of an automatically set type in the data sheet (D-BK-09; German UI string, EN in i18nTeile/bauteilkern-107.js). */
+export const TYP_ABGELEITET_TEXT = "abgeleitet (Annahme)";
+/** Text of an open type (no type, or the automatic type taken back). */
+export const TYP_OFFEN_TEXT = "Bauteiltyp offen";
+
+// Surface resistances for the U-value, m²K/W, DIN EN ISO 6946 Tab. 7 (horizontal heat flow): Rsi 0.13, Rse 0.04; behind a well
+// ventilated air layer the outer layers are left out and Rse = Rsi (DIN EN ISO 6946 6.9.4).
+const RSI = 0.13, RSE = 0.04;
+
+/**
+ * U-value of a build-up, W/(m²·K), DIN EN ISO 6946 (layers in series, no thermal bridges, no corrections): 1 / (Rsi + Σ d/λ + Rse).
+ * Null when a layer has no catalogue material with a λ (a thickness-only wall, an unknown material) — the value stays open then.
+ * @param {Array<{material: string|null, dicke_m: number}>} schichten outside → inside, thickness in m
+ * @returns {number|null} W/(m²·K), rounded to 0.01
+ */
+export function uWertAusSchichten(schichten) {
+  if (!Array.isArray(schichten) || !schichten.length) return null;
+  let start = 0, rse = RSE;
+  schichten.forEach((l, i) => { if (l.material === "luftbel") { start = i + 1; rse = RSI; } });
+  const innen = schichten.slice(start);
+  if (!innen.length) return null;
+  let r = RSI + rse;
+  for (const l of innen) {
+    const lambda = Number(materialById(l.material)?.lambda);
+    if (!(lambda > 0) || !(l.dicke_m > 0)) return null;
+    r += l.dicke_m / lambda;
+  }
+  return Math.round((1 / r) * 100) / 100;
+}
+
+/**
+ * @typedef {{wert: any, quelle: 'gesetzt'|'abgeleitet'|'offen'}} Kennwert
+ * @typedef {{feuerwiderstand: Kennwert, schallschutz_rw_db: Kennwert, u_wert: Kennwert}} Kennwerte
+ */
+
+/**
+ * Building-physics values of an element with their origin (107-08, spec V pset_common): fire resistance (only set, e.g. "REI90";
+ * "ohne" = none), sound insulation R'w in dB (set, else the build-up's `rw`, an [ASSUMED] guide value of aufbauten.js) and U-value
+ * in W/(m²·K) (set, else from λ and thickness of the build-up layers, uWertAusSchichten).
+ * @param {any} el element with optional feuerwiderstand / schallschutz_rw_db / u_wert / composite
+ * @param {{schichten: Array<{material: string|null, dicke_m: number}>, quelle: string}|null} [aufbau] its build-up (aufbauVon)
+ * @returns {Kennwerte}
+ */
+export function kennwerteVon(el, aufbau = null) {
+  const fw = typeof el?.feuerwiderstand === "string" && el.feuerwiderstand.trim() ? el.feuerwiderstand.trim() : null;
+  const rwGesetzt = Number(el?.schallschutz_rw_db);
+  const rwAufbau = el?.composite ? aufbauById(el.composite)?.rw : undefined;
+  const uGesetzt = Number(el?.u_wert);
+  const uAbgeleitet = aufbau && aufbau.quelle !== "dicke" && aufbau.quelle !== "keine" ? uWertAusSchichten(aufbau.schichten) : null;
+  return {
+    feuerwiderstand: fw ? { wert: fw, quelle: "gesetzt" } : { wert: null, quelle: "offen" },
+    schallschutz_rw_db: el?.schallschutz_rw_db != null && rwGesetzt > 0 ? { wert: rwGesetzt, quelle: "gesetzt" }
+      : Number.isFinite(rwAufbau) ? { wert: rwAufbau, quelle: "abgeleitet" } : { wert: null, quelle: "offen" },
+    u_wert: el?.u_wert != null && uGesetzt > 0 ? { wert: uGesetzt, quelle: "gesetzt" }
+      : uAbgeleitet != null ? { wert: uAbgeleitet, quelle: "abgeleitet" } : { wert: null, quelle: "offen" },
+  };
+}
+
 /**
  * Type key of a network element (phase 41 netz_layer). Edges by trade, nodes by trade × kind.
  * @param {{gewerk?: string, art?: string}} el edge (no `art`) or node
@@ -170,6 +331,30 @@ export function typFuerNetz(el) {
 export function bauteilGuid(projektId, quelle, el) {
   if (typeof el?.guid === "string" && el.guid.length === 22) return el.guid;
   return stabileGuid(`${projektId ?? "-"}|${quelle}|${el?.id ?? el?._idx ?? "?"}`);
+}
+
+/**
+ * 107-08 (spec V guid, BK-67): pins the GlobalId each element has in the IFC today onto the element (lazy: called at the first
+ * export or when its data sheet is opened). The value is exactly bauteilGuid() of the same source, so the export is byte-identical
+ * before and after; from then on the GUID survives a project copy or a change of the id scheme. Elements that already carry a
+ * 22-character guid keep it.
+ * @template T
+ * @param {T[]} liste element list (customWalls, customColumns, customSlabs, customRoofs, customZones)
+ * @param {string|number|null|undefined} projektId
+ * @param {string} quelle the source name the IFC export uses for this list ("customWalls" …)
+ * @param {((el: T) => boolean)|null} [nur] only elements this test accepts (default: all)
+ * @returns {T[]} the same array when nothing had to change, else a new one
+ */
+export function guidsAnheften(liste, projektId, quelle, nur = null) {
+  if (!Array.isArray(liste)) return liste;
+  let geaendert = false;
+  const neu = liste.map((el) => {
+    const e = /** @type {any} */ (el);
+    if (!e || (typeof e.guid === "string" && e.guid.length === 22) || (nur && !nur(el))) return el;
+    geaendert = true;
+    return /** @type {T} */ ({ ...e, guid: bauteilGuid(projektId, quelle, e) });
+  });
+  return geaendert ? neu : liste;
 }
 
 /** Area of a polygon in the x/z plane (m², shoelace). */
@@ -230,6 +415,13 @@ export function mengeVon(typ, el, ctx = {}) {
  * @property {boolean} tragend
  * @property {string|null} feuerwiderstand fire resistance class stored on the element (F30, F90, EI 90 ...; "ohne" = none), null = not set (106-03, additive)
  * @property {string|null} statik_vermerk  note on shoring / structure stored on the element, null = none (106-03, additive)
+ * @property {Kennwerte} kennwerte        107-08: fire resistance, R'w (dB), U-value (W/(m²·K)) with their origin
+ * @property {'automatisch'|'nutzer'|null} typQuelle 107-08: origin of a type stored on a Massing body (D-BK-09), null = none stated
+ * @property {{wert: number, quelle: 'gesetzt'|'offen'}} verschneidungsgruppe 107-09: intersection group with its origin (offen = default 1)
+ * @property {{quelle: 'solid'|'analytisch', menge_m3: number, warnung: any, jeSchicht?: Array<{name: string, material?: string|null, menge_m3: number}>}|null} verschneidung 107-09: result of the intersection
+ *   (ctx.verschneidung), null when the caller passes none
+ * @property {{quelle: 'solid'|'analytisch'|'offen', menge_m3: number|null, warnung: any, jeSchicht?: Array<{name: string, material?: string|null, menge_m3: number|null}>}} [abschraegung] 107-10 review:
+ *   volume of a wall cut under a roof (solid relation, bauteil/seo.js) — only present when the caller passes ctx.abschraegung
  * @property {Record<string, 'gesetzt'|'abgeleitet'|'offen'>} quelle  origin per field
  * @property {string[]} offen             fields nobody has decided yet (shown as hints)
  * @property {string[]} annahmen          assumptions behind derived values
@@ -259,10 +451,14 @@ export function steckbriefFelderAus(el) {
  * The data sheet of one element.
  * @param {any} el element (drawn, workshop, network, penetration …)
  * @param {string} typKey key of BAUTEIL_TYPEN; `el.bauteil_typ` overrides it
- * @param {{projektId?: string|number|null, quelle?: string, storeyHeight?: number, geschosse?: import("./hoehen.js").Geschosse, typAbgeleitet?: boolean, netzGewerk?: string, kern?: {aussen_m: number, kern_m: number}|null}} [ctx]
+ * @param {{projektId?: string|number|null, quelle?: string, storeyHeight?: number, geschosse?: import("./hoehen.js").Geschosse, typAbgeleitet?: boolean, netzGewerk?: string, kern?: {aussen_m: number, kern_m: number}|null, verschneidung?: {quelle: 'solid'|'analytisch', menge_m3: number, warnung: any, jeSchicht?: Array<{name: string, material?: string|null, menge_m3: number}>}|null, abschraegung?: {quelle: 'solid'|'analytisch'|'offen', menge_m3: number|null, warnung: any, jeSchicht?: Array<{name: string, material?: string|null, menge_m3: number|null}>}|null}} [ctx]
  *   quelle: source name for the GUID; typAbgeleitet: the type itself is an assumption;
  *   netzGewerk: trade of the penetrating line (penetration, fire stop) for the KG;
- *   kern: core split of the wall build-up in m (default: derived from the build-up, 107-03; null = no core known).
+ *   kern: core split of the wall build-up in m (default: derived from the build-up, 107-03; null = no core known);
+ *   verschneidung (107-09): quantity (m³) and source of the intersected solid with the warning of its volume comparison; review 107-09:
+ *   `jeSchicht` = volume per layer in m³ (same source), passed through unchanged.
+ *   abschraegung (107-10 review, truth "Mengen aus dem Solid"): quantity (m³, null = open) and source of a wall cut under a roof, per layer,
+ *   with the warning of its comparison; the key appears only when passed (every other data sheet stays as it was).
  * @returns {Steckbrief}
  */
 export function steckbrief(el, typKey, ctx = {}) {
@@ -279,8 +475,12 @@ export function steckbrief(el, typKey, ctx = {}) {
     return null;
   };
 
-  quelle.typ = el?.bauteil_typ && BAUTEIL_TYPEN[el.bauteil_typ] ? "gesetzt" : ctx.typAbgeleitet ? "abgeleitet" : "gesetzt";
-  if (quelle.typ === "abgeleitet") annahmen.push(`Bauteiltyp „${typ.label}“ aus Aufbau/Dicke abgeleitet`);
+  // 107-08 (D-BK-09): a type the box automatic set is stored, but still an assumption — its origin comes from the stored
+  // `bauteil_typ_quelle`, so the mark "abgeleitet (Annahme)" survives saving and reloading
+  const automatisch = el?.bauteil_typ_quelle === "automatisch" && !!el?.bauteil_typ && !!BAUTEIL_TYPEN[el.bauteil_typ];
+  quelle.typ = automatisch ? "abgeleitet" : el?.bauteil_typ && BAUTEIL_TYPEN[el.bauteil_typ] ? "gesetzt" : ctx.typAbgeleitet ? "abgeleitet" : "gesetzt";
+  if (automatisch) annahmen.push(`Bauteiltyp „${typ.label}“ ${TYP_ABGELEITET_TEXT} — aus den Proportionen des Körpers gesetzt, bitte bestätigen`);
+  else if (quelle.typ === "abgeleitet") annahmen.push(`Bauteiltyp „${typ.label}“ aus Aufbau/Dicke abgeleitet`);
   if (typ.annahme) annahmen.push(typ.annahme);
 
   const ifcKlasse = wahl("ifc", el?.ifc_klasse, typ.ifc);
@@ -318,7 +518,10 @@ export function steckbrief(el, typKey, ctx = {}) {
   const lbCode = wahl("gewerk", el?.gewerk_lb, typ.lb ?? (key === "hausanschluss" || key === "rohrformteil" ? { heizung: "041", trinkwasser: "042", abwasser: "044" }[ctx.netzGewerk ?? ""] : null));
   const gewerk = lbEintrag(lbCode);
   const bauabschnitt = wahl("bauabschnitt", el?.bauabschnitt, null);
-  quelle.guid = typeof el?.guid === "string" && el.guid.length === 22 ? "gesetzt" : "abgeleitet";
+  // 107-08: a GUID pinned lazily (guidsSichern / BIM studio) holds exactly the derived value — it stays "abgeleitet", so pinning never
+  // changes the IFC text; it counts as "gesetzt" once it differs from the derivation (project copy, imported or hand-set GUID)
+  const gespeichert = typeof el?.guid === "string" && el.guid.length === 22;
+  quelle.guid = gespeichert && el.guid !== stabileGuid(`${ctx.projektId ?? "-"}|${ctx.quelle || key}|${el?.id ?? el?._idx ?? "?"}`) ? "gesetzt" : "abgeleitet";
 
   const offen = Object.entries(quelle).filter(([, v]) => v === "offen").map(([k]) => k);
   return {
@@ -340,6 +543,11 @@ export function steckbrief(el, typKey, ctx = {}) {
     tragend: el?.tragend ?? typ.tragend ?? false,
     feuerwiderstand: typeof el?.feuerwiderstand === "string" && el.feuerwiderstand.trim() ? el.feuerwiderstand : null,
     statik_vermerk: typeof el?.statik_vermerk === "string" && el.statik_vermerk.trim() ? el.statik_vermerk : null,
+    kennwerte: kennwerteVon(el, aufbau),
+    typQuelle: el?.bauteil_typ_quelle === "automatisch" || el?.bauteil_typ_quelle === "nutzer" ? el.bauteil_typ_quelle : null,
+    verschneidungsgruppe: { wert: verschneidungsgruppe(el), quelle: el?.verschneidungsgruppe != null && verschneidungsgruppe(el) === Number(el.verschneidungsgruppe) ? "gesetzt" : "offen" },
+    verschneidung: ctx.verschneidung || null,
+    ...(ctx.abschraegung ? { abschraegung: ctx.abschraegung } : {}),
     quelle,
     offen,
     annahmen,

@@ -8,6 +8,18 @@
 //
 // In:  three {renderer, scene, camera} of the viewer, optional width in px. Out: {png_base64, breite, hoehe, format}.
 
+/** Refusal while a VR session presents (review 106-08): an image leaves only text and GUIDs in VR. */
+export const XR_KEIN_BILD_TEXT = "Kein Bild der Ansicht, solange die VR-Brille das Modell zeigt — nur Text und GUIDs";
+
+/**
+ * Does the viewer's renderer present to a VR headset right now?
+ * @param {{renderer?: any}|null|undefined} three  The viewer's three.js handles.
+ * @returns {boolean}
+ */
+export function xrZeigtGerade(three) {
+  return !!three?.renderer?.xr?.isPresenting;
+}
+
 /** Default image width in px when the caller gives none. */
 export const BILD_BREITE_STANDARD = 800;
 /** Upper bound of the image width in px: a 1600 px PNG of a model view stays far below the 4 MB answer limit of the control channel. */
@@ -47,6 +59,10 @@ const browserCanvas = (w, h) => {
 export function ansichtAlsPng(three, { breite, kante, erzeugeCanvas = browserCanvas } = {}) {
   const t = three || {};
   if (!t.renderer || !t.scene || !t.camera) throw new Error("Keine 3D-Ansicht bereit — erst ein Modell öffnen");
+  // 106-08 review: while a VR headset presents, no image of the view at all (D-IM-02 safe side). Rendering here would draw outside the
+  // XR frame into the headset's framebuffer and read the desktop canvas, which is not what the person sees. Read from the renderer's
+  // own state, so no flag can be forgotten - this covers the MCP tool ansicht_bild and the speech field alike.
+  if (xrZeigtGerade(t)) throw new Error(XR_KEIN_BILD_TEXT);
   const wunsch = bildBreite(breite);
   const quelle = t.renderer.domElement;
   const qb = Number(quelle?.width), qh = Number(quelle?.height);

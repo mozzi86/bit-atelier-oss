@@ -19,9 +19,9 @@ const K_STATUS = {
   offen: { color: "bg-slate-100 text-slate-600", dot: "bg-slate-400", label: "offen" },
 };
 
-// Colours per basement zone kind (overlay). D-P61-09: the basement is NOT
-// rendered through BimPlan2D's level prop — createBuildingModel knows no
-// basement — level 0 serves as hull orientation and the overlay draws level -1.
+// Colours per basement zone kind (overlay). 107-13: D-P61-09 is lifted by D-BK-20 — with `untergeschosse` > 0 the plan renders
+// level −1 as a model storey (hull of the basement); without it level 0 stays the hull orientation. The overlay draws the
+// level −1 zones in both cases (preview of the compartment layout).
 const FARBE = {
   abteil: { fill: "#ccfbf1", stroke: "#0f766e", text: "#134e4a" },
   gang: { fill: "#e2e8f0", stroke: "#64748b", text: "#334155" },
@@ -46,13 +46,18 @@ const FARBE = {
  * @param {boolean} p.tesselierungAngewendet storey tessellation applied (prerequisite)
  * @param {() => void} p.onAnwenden
  * @param {() => void} p.onEntfernen
+ * @param {(() => void)|undefined} [p.onUgAnlegen] 107-13: puts one basement storey into the model (programme field `untergeschosse`);
+ *   shown only while the model has no basement — the step is explicit, never silent (D-BW-03)
  * @param {object|null} p.mengenPersistiert layer.keller.mengen (hand-over to AVA / Phase 62)
  */
 export default function KellerabteilPlaner({
   plan, ergebnis, checks, optionen, setOptionen, aktiv, tesselierungAngewendet,
-  onAnwenden, onEntfernen, mengenPersistiert,
+  onAnwenden, onEntfernen, mengenPersistiert, onUgAnlegen,
 }) {
   const { t } = useI18n();
+  // 107-13 (D-BK-20, D-P61-09 lifted): with a basement in the model the plan shows the hull of level −1; the zones stay in the overlay
+  // (customZones={[]} keeps them from being drawn twice). Without one the ground-floor hull remains the orientation as before.
+  const ugImModell = (plan?.model?.untergeschosse || 0) > 0;
   const zonen = ergebnis?.zonen || [];
   const zuordnung = ergebnis?.zuordnung || [];
   const mengen = ergebnis?.mengen || {};
@@ -167,14 +172,20 @@ export default function KellerabteilPlaner({
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
-                {t("Kellergeschoss (UG, Geschoss −1)")} — {t("Hülle des EG als Orientierung")}
+                {t("Kellergeschoss (UG, Geschoss −1)")} — {ugImModell ? t("Hülle des UG") : t("Hülle des EG als Orientierung")}
               </CardTitle>
+              {!ugImModell && onUgAnlegen && (
+                <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+                  <span>{t("Das Modell hat noch kein Untergeschoss.")}</span>
+                  <Button size="sm" variant="outline" onClick={onUgAnlegen} data-testid="keller-ug-anlegen">{t("UG im Modell anlegen")}</Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               <BimPlan2D
                 model={plan.model}
                 mode="grundriss"
-                level={0}
+                level={ugImModell ? -1 : 0}
                 storeyHeight={plan.storeyHeight}
                 readOnly
                 customZones={[]}

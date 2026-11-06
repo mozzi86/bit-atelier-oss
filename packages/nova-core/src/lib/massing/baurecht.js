@@ -53,15 +53,20 @@ export function abstandsTiefe(hoehe, { faktor = 0.4, min = 3 } = {}) {
  * parcels an edge can cross the boundary with all corners inside — hence study only.
  * Without a boundary `conflict` is null ("not checkable") — callers must never show a green "ok"
  * then (KD-05).
+ * 108-11: `hoehen` (optional) = wall height H per edge (edge i from point i to i+1, m) — the main body with a pitched roof has
+ * other heights on its eaves and gable sides (massing/hauptdach.js abstandsHoehenJeKante); an edge without a finite entry takes
+ * `hoehe`. Absent = one depth for all edges exactly as before.
  * @param {Array<{x: number, y: number}>} poly footprint, m
  * @param {number} hoehe height H, m
- * @param {{faktor?: number, min?: number, grenze?: Array<{x: number, y: number}>|null}} [opt]
+ * @param {{faktor?: number, min?: number, grenze?: Array<{x: number, y: number}>|null, hoehen?: number[]|null}} [opt]
  * @returns {Array<{pts: Array<{x: number, y: number}>, conflict: boolean|null, depth: number}>}
  */
-export function abstandsStreifen(poly, hoehe, { faktor = 0.4, min = 3, grenze = null } = {}) {
-  const T = abstandsTiefe(hoehe, { faktor, min });
+export function abstandsStreifen(poly, hoehe, { faktor = 0.4, min = 3, grenze = null, hoehen = null } = {}) {
+  const T0 = abstandsTiefe(hoehe, { faktor, min });
   const bekannt = Array.isArray(grenze) && grenze.length >= 3;
   return poly.map((a, i) => {
+    const hi = Array.isArray(hoehen) ? Number(hoehen[i]) : NaN;
+    const T = Number.isFinite(hi) ? abstandsTiefe(hi, { faktor, min }) : T0;
     const b = poly[(i + 1) % poly.length];
     const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
     let nx = (b.y - a.y) / len, ny = -(b.x - a.x) / len; // normal candidate

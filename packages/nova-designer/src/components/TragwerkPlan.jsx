@@ -8,6 +8,7 @@
 // Out: Rendering + Verdrahtung; jede Zahl kommt aus @designer/lib/tragwerkPlan (Kern statics.js).
 
 import React, { useMemo, useRef, useState } from "react";
+import { ebenenLevels, levelKlemmen, geschossLabel } from "@core/lib/bauteil/ebenen.js";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Badge } from "@core/components/ui/badge";
 import { Button } from "@core/components/ui/button";
@@ -36,7 +37,8 @@ const T_STATUS = { ...STATUS_STYLE, offen: { color: "bg-slate-100 text-slate-600
 // Colour per column for the load take-down cells (cycled).
 const PALETTE = ["#0ea5e9", "#f59e0b", "#10b981", "#8b5cf6", "#ef4444", "#14b8a6", "#f97316", "#6366f1"];
 const de = (n, d = 0) => (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: d, minimumFractionDigits: d });
-const geschoss = (lvl, t) => (lvl === 0 ? t("EG") : `${lvl}. ${t("OG")}`);
+// 107-13: storey names incl. basements ("1. UG") from the one helper of @core (was a local "n. OG" that gave "-1. OG")
+const geschoss = (lvl, t) => geschossLabel(lvl, t);
 const ROHBAU_LAYER = { zones: false, labels: false, dimensions: false, openings: false };
 
 /**
@@ -62,7 +64,10 @@ export default function TragwerkPlan() {
 
   const storeys = Math.max(1, Math.round(plan?.storeys || 1));
   const [level, setLevel] = useState(0);
-  const lvl = Math.min(level, storeys - 1);
+  // 107-13 (D-BK-20): levels from the model's storey list (basements −1 … −U included); `storeys` stays the count above ground
+  // (ebenenLevels/levelKlemmen hold the one fallback 0 … storeys − 1 while no model is there)
+  const levels = ebenenLevels(plan?.model, storeys);
+  const lvl = levelKlemmen(levels, level);
   const [werkzeug, setWerkzeug] = useState("auswahl"); // auswahl | traeger
   const [draft, setDraft] = useState(null);           // first beam point {x,z}
   const [sel, setSel] = useState(null);               // beam id
@@ -110,7 +115,7 @@ export default function TragwerkPlan() {
           <div className="flex flex-wrap items-center gap-1">
             <Select value={String(lvl)} onValueChange={(v) => { setLevel(+v); setDraft(null); setSel(null); }}>
               <SelectTrigger aria-label={t("Geschoss")} className="h-8 w-28 text-xs" data-testid="tw-level"><SelectValue /></SelectTrigger>
-              <SelectContent>{Array.from({ length: storeys }, (_, i) => <SelectItem key={i} value={String(i)}>{geschoss(i, t)}</SelectItem>)}</SelectContent>
+              <SelectContent>{levels.map((l) => <SelectItem key={l} value={String(l)}>{geschoss(l, t)}</SelectItem>)}</SelectContent>
             </Select>
             <Button size="sm" variant={werkzeug === "auswahl" ? "default" : "outline"} onClick={() => { setWerkzeug("auswahl"); setDraft(null); }} data-testid="tw-tool-auswahl"><Move className="w-3.5 h-3.5 mr-1" /> {t("Auswahl")}</Button>
             <Button size="sm" variant={werkzeug === "traeger" ? "default" : "outline"} onClick={() => { setWerkzeug("traeger"); setSel(null); }} data-testid="tw-tool-traeger"><PenTool className="w-3.5 h-3.5 mr-1" /> {t("Träger")}</Button>

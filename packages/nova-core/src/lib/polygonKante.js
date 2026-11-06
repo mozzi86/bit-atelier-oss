@@ -5,6 +5,9 @@
 // perpendicular to the moved edge (rectangles). For skewed neighbours the
 // neighbour direction is NOT preserved (that would need an intersection
 // mode, deliberately not built here - see 75-03-SUMMARY).
+// 107-06: the intersection mode exists for the modelled bodies of the massing layer (massing/massingModell.js,
+// seiteVerschieben: neighbours keep their direction, corners re-intersected, a skew case is reported); this
+// module keeps its 75-03 behaviour for the studio's main polygon (MassingStudio).
 //
 // In:  polygons as [{x, y}] in metres (screen-y down, as in MassingStudio).
 // Out: normals, lengths, angles, moved polygons - all in metres / degrees.

@@ -13,11 +13,13 @@
 // Guide values are [ASSUMED] and commented per constant — minimum sizes of
 // storage rooms differ per LBO/funding programme, hence user-overridable.
 //
-// Level contract (D-P61-09): every zone carries level: -1. createBuildingModel
-// knows no basement storeys — the plan renders level 0 as hull orientation and
-// the overlay draws the level -1 zones itself; the 3D extrusion computes
-// elev = level * storeyHeight, i.e. below ±0. Phase 62 (Tiefgarage) continues
-// in the SAME basement: this module is the one storey -1.
+// Level contract: every zone carries level: -1. D-P61-09 ("basement only as an
+// overlay") is lifted by D-BK-20 (107-13): level -1 is a model storey once the
+// programme field `untergeschosse` is set (createBuildingModel appends it), the
+// zones keep `level: -1`; without it the plan renders level 0 as hull
+// orientation and the overlay draws the level -1 zones itself. The 3D extrusion
+// computes the elevation through hoehen.js elevationOf, i.e. below ±0. Phase 62
+// (Tiefgarage) continues in the SAME basement: this module is the one storey -1.
 //
 // AVA hand-over (D-P61-10): kellerMengen returns the quantity list (pieces, m²,
 // lfm). The deep integration into nova-ausschreibung (LV positions from basement

@@ -12,6 +12,7 @@
 // In:  register, the sentence, ctx, the context the viewer knows right now ({auswahl, ansicht?, zeigepunkt?}).
 // Out: eingabeAusfuehren -> {ok, art, ...}; eingabeBefehlRegistrieren adds the command "eingabe {text, herkunft?}".
 import { sprachbefehl } from "./sprachbefehl.js";
+import { bibliothekAktuell } from "./befehlsBibliothek.js";
 import { vomAgentenKanal } from "./kanal.js";
 
 export { vomAgentenKanal };
@@ -92,9 +93,15 @@ export function eingabeAusfuehren(reg, text, ctx = {}, kontext = {}) {
  * Registers the command "eingabe {text, herkunft?}": a sentence as a command, for agents, scripts and typed input.
  * @param {ReturnType<typeof import("../befehlsregister.js").befehlsRegister>} reg
  * @param {() => {kontext: () => any, ansicht?: () => any, zeigepunkt?: () => any}} a  Accessor of the viewer's surface (called at every command).
+ * @param {{bibliothekVorladen?: () => unknown}} [o]  bibliothekVorladen: loads the office's command library into the cache (befehlsBibliothekLaden.js
+ *   bibliothekLaden) - called once here, so a typed or agent sentence knows the library without the speech field having been opened (review 106-10).
  * @returns {() => void} Remover.
  */
-export function eingabeBefehlRegistrieren(reg, a) {
+export function eingabeBefehlRegistrieren(reg, a, o = {}) {
+  if (typeof o.bibliothekVorladen === "function") {
+    try { void Promise.resolve(o.bibliothekVorladen()).catch(() => { /* the loader reports its own error; the grammar then works without office templates */ }); }
+    catch { /* same */ }
+  }
   return reg.registrieren({
     id: "eingabe", label: "Eingabe", menue: "Befehlszeile", kurz: ["satz"], parameter: { text: "text", herkunft: "text" },
     ausfuehren: (p, ctx) => {
@@ -104,7 +111,8 @@ export function eingabeBefehlRegistrieren(reg, a) {
       // `herkunft` as a parameter: only text and speech, only for a caller that is not the agent channel (the channel is always "agent")
       const frei = ["text", "sprache"].includes(String(p?.herkunft)) ? String(p.herkunft) : null;
       const innen = { ...(ctx || {}), ...(frei && ctx?.herkunft == null && !vomAgentenKanal(ctx) ? { herkunft: frei } : {}) };
-      const r = eingabeAusfuehren(reg, text, innen, { auswahl: f.kontext(), ansicht: f.ansicht?.() ?? null, zeigepunkt: f.zeigepunkt?.() ?? null });
+      // 106-10: the office's command library as the viewer (at registration) or the speech field has loaded it (befehlsBibliothekLaden.js)
+      const r = eingabeAusfuehren(reg, text, innen, { auswahl: f.kontext(), ansicht: f.ansicht?.() ?? null, zeigepunkt: f.zeigepunkt?.() ?? null, bibliothek: bibliothekAktuell() });
       if (!r.ok) throw new Error(r.text);
       return r.art === "rueckfrage" ? { rueckfrage: r.frage, beiJa: r.beiJa } : { befehl: r.befehl, verstanden: r.verstanden, ergebnis: r.ergebnis };
     },

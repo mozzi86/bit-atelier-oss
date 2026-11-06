@@ -484,7 +484,8 @@ describe("107-03 Review-Fixes", () => {
   });
   it("Studio: der IFC-Download übergibt bauteilAttribute als Option (Regression: ein Zeilenkommentar hatte sie verschluckt)", () => {
     const quelle = readFileSync(fileURLToPath(new URL("../../packages/nova-designer/src/components/BitBimStudio.jsx", import.meta.url)), "utf8");
-    const start = quelle.indexOf("const downloadIFC = () => {");
+    // 107-09: the download became async (it may load the intersection module first) — the anchor finds both forms
+    const start = quelle.search(/const downloadIFC = (async )?\(\) => \{/);
     assert.ok(start > 0);
     const aufruf = quelle.slice(start, quelle.indexOf("projectName:", start));
     // without line comments: what the engine actually sees

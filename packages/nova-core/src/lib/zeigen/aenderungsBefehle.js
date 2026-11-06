@@ -31,6 +31,7 @@ import { agentQuellen } from "./satzMarke.js";
 import { pruefeAenderung } from "./pruefung.js";
 import { vorschlagAusfuehren, vorschlagVorbereiten, zielAusAuswahl } from "./vorschlag.js";
 import { vomAgentenKanal } from "./kanal.js";
+import { bibliothekAktuell } from "./befehlsBibliothek.js";
 
 /** Kinds of change a surface can support. */
 const ALLE_ARTEN = ["eigenschaft", "transformieren", "teilen"];
@@ -54,6 +55,10 @@ const ALLE_ARTEN = ["eigenschaft", "transformieren", "teilen"];
  * @property {(id: string) => void} [vorschauEntfernen]  Removes the ghost of a proposal again.
  * @property {() => boolean} [darfAendern]  106-07: may the person at this device change the model (role with "Modell & Prüfung:
  *   Bearbeiten", rechte.js darf("modell", "voll"))? Read at every bestaetigen / rueckgaengig; missing = yes (as before).
+ * @property {(vorschlag: any, eintrag: any) => any} [schrittBestaetigt]  106-10: stores the confirmed step in the change log
+ *   (aenderungsProtokollSpeicher.js protokollAnbinden); called after the step ran, never waited for.
+ * @property {(eintrag: any, ort?: "fenster"|"speichern") => any} [schrittZurueckgenommen]  106-10: notes in the change log that the
+ *   step was reversed in this viewer.
  */
 
 /**
@@ -151,7 +156,8 @@ export function vorschlagKurz(v) {
  */
 export function aenderungsBefehleRegistrieren(reg, a) {
   /** Options for the check/execution of the CURRENT state, translator included. */
-  const opt = () => ({ ...(a().optionen() || {}), t: a().t });
+  // review 106-10: the office library goes into every check, so a value outside it is a warning on the card - also for an agent
+  const opt = () => ({ bibliothek: bibliothekAktuell(), ...(a().optionen() || {}), t: a().t });
 
   /**
    * Resolves the target of a command: a given GUID or the one selected element.
@@ -255,8 +261,9 @@ export function aenderungsBefehleRegistrieren(reg, a) {
         if (!liste.length) throw new Error(id ? `Kein offener Vorschlag mit der Id ${id}` : "Kein offener Vorschlag zu prüfen");
         return liste.map((v) => vorschlagKurz(neuPruefen(v)));
       } }),
-    reg.registrieren({ id: "vorschlaege", label: "Vorschläge und Verlauf lesen", menue: "Abfrage", kurz: ["aenderungen"],
-      ausfuehren: () => ({
+    reg.registrieren({ id: "vorschlaege", label: "Vorschläge und Verlauf lesen", menue: "Abfrage", kurz: ["aenderungen"], parameter: { nur_offen: "ja|nein" },
+      // review 106-08: nur_offen = only the open proposals, without mapping the whole history (the VR panel asks every frame)
+      ausfuehren: (p) => (p?.nur_offen === true || p?.nur_offen === "ja" ? { offen: a().speicher.offen().map(vorschlagKurz) } : {
         offen: a().speicher.offen().map(vorschlagKurz),
         verlauf: a().speicher.verlauf().map((s) => ({
           vorschlag_id: s.vorschlag_id, art: s.art, satz: s.satz, herkunft: s.herkunft, herkunft_quellen: herkunftQuellen(s), befehl_text: s.befehl_text, zeit: s.zeit,
@@ -277,6 +284,7 @@ export function aenderungsBefehleRegistrieren(reg, a) {
         f.uebernehmen(v, r);
         f.speicher.entfernen(v.id);
         f.speicher.verlaufHinzu({ ...r.eintrag, zurueckgenommen: null });
+        f.schrittBestaetigt?.(v, r.eintrag); // 106-10: the step goes into the project's change log for the review (not awaited)
         f.vorschauEntfernen?.(v.id);
         // the model changed: the other open proposals are checked again - one on the same target is now stale and blocked
         for (const andere of f.speicher.offen()) neuPruefen(andere);
@@ -310,6 +318,7 @@ export function aenderungsBefehleRegistrieren(reg, a) {
         const r = aenderungUmkehren(f.modell() ?? {}, schritt, { projektId: f.optionen()?.projektId ?? null, spaetere, eintraege: f.optionen()?.eintraege });
         f.zuruecknehmen(schritt, r);
         f.speicher.verlaufMarkieren(schritt.vorschlag_id, { zurueckgenommen: new Date().toISOString() });
+        f.schrittZurueckgenommen?.(schritt, "fenster"); // 106-10: the change log shows it as reversed (not awaited)
         return { vorschlag_id: schritt.vorschlag_id, art: schritt.art, satz: schritt.satz, herkunft: schritt.herkunft, zurueckgenommen: true };
       } }),
   ];

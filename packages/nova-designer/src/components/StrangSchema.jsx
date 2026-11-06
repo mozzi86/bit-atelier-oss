@@ -7,6 +7,7 @@
 
 import React from "react";
 import { GEWERKE_TGA, KNOTEN_ARTEN } from "@designer/lib/tgaNetz";
+import { geschossName } from "@core/lib/bauteil/ebenen.js";
 
 const SPALTE_PX = 78;   // column pitch in px
 const ZEILE_PX = 38;    // row pitch in px
@@ -15,7 +16,8 @@ const OBEN_PX = 34;     // room for the column headers
 const UNTEN_PX = 30;    // room for the demand line
 
 const de1 = (n) => (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 1 });
-const geschoss = (lvl) => (lvl === 0 ? "EG" : `${lvl}. OG`);
+// 107-13: storey names incl. basements ("1. UG") from the one helper of @core
+const geschoss = (lvl) => geschossName(lvl);
 
 /**
  * @param {object} p
@@ -31,8 +33,9 @@ export default function StrangSchema({ daten, kennwerte = [], leerText = "Noch k
   }
   const W = LINKS_PX + spalten.length * SPALTE_PX + 12;
   const H = OBEN_PX + zeilen.length * ZEILE_PX + UNTEN_PX;
-  // row index 0 = highest storey at the top
-  const yVon = (lvl) => OBEN_PX + (zeilen.length - 1 - lvl) * ZEILE_PX + ZEILE_PX / 2;
+  // row index 0 = highest storey at the top; 107-13: counted from the highest LEVEL in `zeilen` (rows may start below 0 with basements)
+  const obersterLevel = Math.max(...zeilen);
+  const yVon = (lvl) => OBEN_PX + (obersterLevel - lvl) * ZEILE_PX + ZEILE_PX / 2;
   const xVon = (i) => LINKS_PX + i * SPALTE_PX + SPALTE_PX / 2;
   const zelle = (strangId, lvl) => (daten.zellen || []).find((z) => z.strangId === strangId && z.level === lvl);
   const wert = (strangId) => kennwerte.find((k) => k.strangId === strangId);
@@ -50,7 +53,7 @@ export default function StrangSchema({ daten, kennwerte = [], leerText = "Noch k
       {spalten.map((sp, i) => {
         const farbe = GEWERKE_TGA[sp.gewerk]?.farbe || "#334155";
         const x = xVon(i);
-        const lvlBis = Math.min(sp.levelBis, zeilen.length - 1);
+        const lvlBis = Math.min(sp.levelBis, obersterLevel);
         const kw = wert(sp.strangId);
         return (
           <g key={sp.strangId} data-testid="tn-schema-strang" data-id={sp.strangId}>

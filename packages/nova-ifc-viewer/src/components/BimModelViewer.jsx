@@ -1,13 +1,21 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { useBuildingProgram } from "@core/lib/useBuildingProgram";
+import { dachDreiecke } from "@core/lib/bauteil/dachGeometrie.js"; // 108-11: triangles of the roof faces handed in (no own roof computation)
 
 // Lightweight IFC-style 3D model viewer built directly on three.js (no addons,
 // so no import-path fragility). Renders a multi-storey building and places
 // clickable issue markers at stored 3D positions ("affected locations").
 //
 // Props:
-//   building        — { floors?, area_net? } sizes the model
+//   building        — { floors?, area_net?, dach? } sizes the model; without dach: the schematic stack of before (floors boxes of 3 m
+//                     over a stand-in rectangle from area_net). dach (108-11, optional) = the main body of the Massing-Studio WITH the
+//                     roof of the building model, drawn TO SCALE in m instead of the stack: { form, traufhoehe_m, firsthoehe_m,
+//                     geschossEbenen_m[], umriss[{x, z}], flaechen[{art, punkte3d}], wandFlaechen?[{art, punkte3d}] } — the values of
+//                     massing/hauptdach.hauptkoerperDach (createBuildingModel + globalesDach, the BIM studio's call). Outline and faces
+//                     in any plan frame (the studio hands site m); the viewer centres them on the outline's bounding box. One storey
+//                     slab per storey plane from ±0.00 up to the eaves, gable triangles and wall infill in the storey colour, the roof
+//                     faces in the roof colour. The viewer computes no slope, eaves or ridge itself.
 //   issues          — [{ id, location:{x,y,z}, priority }]
 //   selectedIssueId — highlights the matching marker
 //   addMode         — when true, clicking the building reports a 3D point
@@ -53,6 +61,17 @@ export default function BimModelViewer({
 
   const floors = Math.max(1, Math.round(building?.floors || 5));
   const footprint = Math.sqrt(Math.max(building?.area_net || 600, 200)) / 3;
+  // 108-11: the main body with the roof of the building model as one string key, so the scene effect re-runs only on a real change
+  const dachEin = building?.dach;
+  const dachKey = dachEin && ["sattel", "walm", "pult"].includes(dachEin.form) && Number(dachEin.traufhoehe_m) > 0
+    && Array.isArray(dachEin.umriss) && dachEin.umriss.length >= 3 && Array.isArray(dachEin.flaechen) && dachEin.flaechen.length
+    ? JSON.stringify({
+      form: dachEin.form, traufhoehe_m: Number(dachEin.traufhoehe_m), firsthoehe_m: Number(dachEin.firsthoehe_m) || Number(dachEin.traufhoehe_m),
+      geschossEbenen_m: Array.isArray(dachEin.geschossEbenen_m) ? dachEin.geschossEbenen_m : [],
+      umriss: dachEin.umriss, flaechen: dachEin.flaechen.map((/** @type {any} */ q) => ({ art: q.art, punkte3d: q.punkte3d })),
+      wandFlaechen: Array.isArray(dachEin.wandFlaechen) ? dachEin.wandFlaechen.map((/** @type {any} */ q) => ({ art: q.art, punkte3d: q.punkte3d })) : [],
+    })
+    : "";
 
   // --- Build scene once -----------------------------------------------------
   useEffect(() => {
@@ -92,40 +111,105 @@ export default function BimModelViewer({
     scene.add(ground);
 
     // Building group (floors)
-    const w = footprint;
-    const d = footprint * 0.8;
+    /** @type {any} */
+    const dach = dachKey ? JSON.parse(dachKey) : null;
     const floorH = 3;
     const buildingGroup = new THREE.Group();
     const pickTargets = [];
     /** @type {Record<string, any>} */
     const slabByEl = {}; // elementId -> slab mesh (for highlight sync)
-    for (let i = 0; i < floors; i++) {
-      const slab = new THREE.Mesh(
-        new THREE.BoxGeometry(w, floorH * 0.9, d),
-        new THREE.MeshStandardMaterial({
-          color: 0x93c5fd,
-          transparent: true,
-          opacity: 0.55,
-          roughness: 0.6,
-        })
-      );
-      slab.position.y = i * floorH + floorH / 2;
-      slab.castShadow = true;
-      slab.userData.elementId = `floor-${i}`;
-      buildingGroup.add(slab);
-      pickTargets.push(slab);
-      slabByEl[`floor-${i}`] = slab;
-      // edges for definition
-      const edges = new THREE.LineSegments(
-        new THREE.EdgesGeometry(slab.geometry),
-        new THREE.LineBasicMaterial({ color: 0x1e3a8a, transparent: true, opacity: 0.4 })
-      );
-      edges.position.copy(slab.position);
-      buildingGroup.add(edges);
+    /** @type {number[]} */
+    let ebenen = []; // storey elevations above ground, m (zones are placed on them)
+    let w, d, buildingHeight;
+    if (!dach) {
+      // schematic stack (no roof): exactly as before 108-11
+      w = footprint;
+      d = footprint * 0.8;
+      for (let i = 0; i < floors; i++) {
+        const slab = new THREE.Mesh(
+          new THREE.BoxGeometry(w, floorH * 0.9, d),
+          new THREE.MeshStandardMaterial({
+            color: 0x93c5fd,
+            transparent: true,
+            opacity: 0.55,
+            roughness: 0.6,
+          })
+        );
+        slab.position.y = i * floorH + floorH / 2;
+        slab.castShadow = true;
+        slab.userData.elementId = `floor-${i}`;
+        buildingGroup.add(slab);
+        pickTargets.push(slab);
+        slabByEl[`floor-${i}`] = slab;
+        // edges for definition
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(slab.geometry),
+          new THREE.LineBasicMaterial({ color: 0x1e3a8a, transparent: true, opacity: 0.4 })
+        );
+        edges.position.copy(slab.position);
+        buildingGroup.add(edges);
+      }
+      buildingHeight = floors * floorH;
+    } else {
+      // 108-11 (review): the main body to scale — outline extruded storey by storey up to the eaves, then the faces handed in
+      const xs = dach.umriss.map((/** @type {any} */ p) => Number(p.x)), zs = dach.umriss.map((/** @type {any} */ p) => Number(p.z));
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+      w = Math.max(...xs) - Math.min(...xs);
+      d = Math.max(...zs) - Math.min(...zs);
+      const shape = new THREE.Shape();
+      dach.umriss.forEach((/** @type {any} */ p, /** @type {number} */ i) => (i ? shape.lineTo(p.x - cx, -(p.z - cz)) : shape.moveTo(p.x - cx, -(p.z - cz))));
+      shape.closePath();
+      const traufe = Number(dach.traufhoehe_m);
+      ebenen = [0, ...dach.geschossEbenen_m.map(Number).filter((/** @type {number} */ z) => z > 1e-6 && z < traufe - 1e-6)].sort((p, q) => p - q);
+      ebenen.forEach((unten, i) => {
+        const oben = i + 1 < ebenen.length ? ebenen[i + 1] : traufe;
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: oben - unten, bevelEnabled: false });
+        geo.rotateX(-Math.PI / 2); // extrusion (z) → height (y), plan z stays z (same as the massing iso)
+        const slab = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.55, roughness: 0.6 }));
+        slab.position.y = unten;
+        slab.castShadow = true;
+        slab.userData.elementId = `floor-${i}`;
+        buildingGroup.add(slab);
+        pickTargets.push(slab);
+        slabByEl[`floor-${i}`] = slab;
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x1e3a8a, transparent: true, opacity: 0.4 }));
+        edges.position.copy(slab.position);
+        buildingGroup.add(edges);
+      });
+      /** @param {any[]} flaechen @returns {number[]} triangles in the viewer frame, m */
+      const dreiecke = (flaechen) => dachDreiecke(flaechen).map((v, i) => (i % 3 === 0 ? v - cx : i % 3 === 2 ? v - cz : v));
+      // gable triangles and wall infill belong to the walls (D-EFH-02) — storey colour; the roof faces in the roof colour of the BIM studio
+      const wand = dreiecke([...dach.flaechen.filter((/** @type {any} */ q) => q.art === "giebel"), ...dach.wandFlaechen]);
+      if (wand.length) {
+        const ggeo = new THREE.BufferGeometry();
+        ggeo.setAttribute("position", new THREE.Float32BufferAttribute(wand, 3));
+        ggeo.computeVertexNormals();
+        buildingGroup.add(new THREE.Mesh(ggeo, new THREE.MeshStandardMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.55, roughness: 0.6, side: THREE.DoubleSide })));
+      }
+      const dachPos = dreiecke(dach.flaechen.filter((/** @type {any} */ q) => q.art !== "giebel"));
+      if (dachPos.length) {
+        const dgeo = new THREE.BufferGeometry();
+        dgeo.setAttribute("position", new THREE.Float32BufferAttribute(dachPos, 3));
+        dgeo.computeVertexNormals();
+        const roof = new THREE.Mesh(dgeo, new THREE.MeshStandardMaterial({ color: 0xb05a3c, roughness: 0.85, side: THREE.DoubleSide }));
+        roof.castShadow = true;
+        roof.userData.dach = true;
+        buildingGroup.add(roof);
+      }
+      buildingHeight = Math.max(traufe, Number(dach.firsthoehe_m) || traufe);
     }
     scene.add(buildingGroup);
+    // 108-11: headless check (e2e) — the form, plus eaves and ridge MEASURED on the drawn object (top of the storey slabs, top of the group)
+    mount.dataset.dach = dach ? String(dach.form) : "";
+    if (dach) {
+      const slabTop = pickTargets.reduce((m, o) => Math.max(m, new THREE.Box3().setFromObject(o).max.y), 0);
+      mount.dataset.traufeM = slabTop.toFixed(2);
+      mount.dataset.firstM = new THREE.Box3().setFromObject(buildingGroup).max.y.toFixed(2);
+    } else {
+      delete mount.dataset.traufeM;
+      delete mount.dataset.firstM;
+    }
 
-    const buildingHeight = floors * floorH;
 
     // Camera orbit state (spherical)
     const orbit = {
@@ -311,7 +395,7 @@ export default function BimModelViewer({
     const ro = new ResizeObserver(onResize);
     ro.observe(mount);
 
-    state.current = { scene, renderer, markerGroup, commentGroup, zoneGroup, buildingGroup, orbit, applyCamera, el, mount, slabByEl };
+    state.current = { scene, renderer, markerGroup, commentGroup, zoneGroup, buildingGroup, orbit, applyCamera, el, mount, slabByEl, ebenen: dach ? ebenen : null };
 
     return () => {
       cancelAnimationFrame(raf);
@@ -322,12 +406,19 @@ export default function BimModelViewer({
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       el.removeEventListener("wheel", onWheel);
+      // 108-11 review: free the GPU buffers of this build (the scene is rebuilt when the model or its roof changes)
+      for (const wurzel of [buildingGroup, ground, grid]) {
+        wurzel.traverse((/** @type {any} */ o) => {
+          o.geometry?.dispose?.();
+          (Array.isArray(o.material) ? o.material : [o.material]).forEach((/** @type {any} */ m) => m?.dispose?.());
+        });
+      }
       renderer.dispose();
       if (el.parentNode === mount) mount.removeChild(el);
     };
     // Rebuild only when the model geometry inputs change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [floors, footprint]);
+  }, [floors, footprint, dachKey]);
 
   // --- Sync storey highlight for AVA takeoff --------------------------------
   useEffect(() => {
@@ -351,7 +442,7 @@ export default function BimModelViewer({
         m.emissive?.setHex(0x000000);
       }
     });
-  }, [selectedElementIds, highlightElementIds, floors, footprint]);
+  }, [selectedElementIds, highlightElementIds, floors, footprint, dachKey]);
 
   // --- Sync markers when issues / selection change --------------------------
   useEffect(() => {
@@ -422,8 +513,10 @@ export default function BimModelViewer({
       if (pts.length < 3) return;
       const level = z.level || 0;
       // Nur Geschosse zeichnen, die das Gebäude auch hat (sonst schweben sie).
-      if (level >= floors) return;
-      const baseY = level * floorH + 0.08;
+      // 108-11: with the body to scale on the storey planes of the model (s.ebenen), else on the 3 m grid of the stack
+      const ebenen = Array.isArray(s.ebenen) && s.ebenen.length ? s.ebenen : null;
+      if (ebenen ? level >= ebenen.length : level >= floors) return;
+      const baseY = (ebenen ? ebenen[level] : level * floorH) + 0.08;
 
       // Flache Extrusion des Raumpolygons (XZ-Ebene, Meter um den Ursprung).
       const shape = new THREE.Shape();
@@ -450,7 +543,7 @@ export default function BimModelViewer({
     });
     // footprint in den Deps: nach einem Scene-Rebuild ist zoneGroup neu und leer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zones, floors, footprint]);
+  }, [zones, floors, footprint, dachKey]);
 
   return (
     <div className="relative w-full h-full">

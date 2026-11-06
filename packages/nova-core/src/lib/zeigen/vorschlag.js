@@ -170,7 +170,10 @@ export function vorschlagAusfuehren(modell, vorschlag, opt = {}) {
   const zeit = opt.zeit || new Date().toISOString();
   const ifc = vorschlag.ziel?.quelle === "ifc";
   // herkunft_quellen (D-IM-07): all origins next to the main one, so a reload still tells "Spracheingabe + Agent" from "Agent"
-  const marke = { herkunft: vorschlag.herkunft.quelle, herkunft_quellen: herkunftQuellen(vorschlag.herkunft), befehl_text: vorschlag.herkunft.befehl_text ?? null, zeit, vorschlag_id: vorschlag.id };
+  // 106-09 (additive): which human channel confirmed it and the sentence that was confirmed - another device shows both
+  // when the change arrives there (it arrives as confirmed by the person HERE, never confirmed again)
+  const marke = { herkunft: vorschlag.herkunft.quelle, herkunft_quellen: herkunftQuellen(vorschlag.herkunft), befehl_text: vorschlag.herkunft.befehl_text ?? null, zeit, vorschlag_id: vorschlag.id,
+    bestaetigt_durch: von, satz: vorschlag.satz ?? null };
   // the mark the element carried before (a step reverses it only while it is still its own)
   const markeVorher = ifc ? null : (bauteilImModell(modell ?? {}, vorschlag.ziel.guid, { projektId: opt.projektId ?? null })?.element?.[MARKE_FELD] ?? null);
   const r = modellMitAenderung(modell ?? {}, vorschlag, { projektId: opt.projektId, geschosshoehe_m: opt.geschosshoehe_m, naechsteIdx: opt.naechsteIdx, zeit, bestaetigt_durch: von, marke });

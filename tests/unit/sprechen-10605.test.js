@@ -452,7 +452,8 @@ test("Quelltext: die Befehlszeile des Massing-Studios gibt ctx an jeden Befehl w
   assert.match(massing, /ausfuehren: \(p, ctx\) => \{ if \(!p\?\.text\) throw new Error\("text fehlt"\); a\(\)\.eingabeAnwenden\(String\(p\.text\), \{ ctx \}\)/);
   for (const datei of ["packages/nova-designer/src/components/BitBimStudio.jsx", "packages/nova-ifc-viewer/src/pages/IfcViewer.jsx"]) {
     const q = fs.readFileSync(datei, "utf8");
-    assert.match(q, /eingabeBefehlRegistrieren\(reg, \(\) => \/\*\* @type \{any\} \*\/ \(aenderung\.current\)\)/, datei);
+    // review 106-10: the office library is loaded when the command is registered
+    assert.match(q, /eingabeBefehlRegistrieren\(reg, \(\) => \/\*\* @type \{any\} \*\/ \(aenderung\.current\), \{ bibliothekVorladen: \(\) => bibliothekLaden\(\) \}\)/, datei);
     assert.match(q, /<SprechFeld register=\{befehle\}/, datei);
   }
 });

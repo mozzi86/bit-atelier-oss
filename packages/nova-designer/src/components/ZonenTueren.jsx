@@ -16,7 +16,8 @@
 // 89-07 (BW-09): a zone door IS the door component — every symbol carries the component's
 // stable GUID (data-guid, @core werkstattBauteile.tuerGuid: same key as the swing override).
 //
-// In:  zonen (with tueren), X/Z/SCALE (host plan), px (screen px → viewBox units).
+// 107-12: an optional `detailgrad` (@core/lib/plan/massstab.js detailgradFuer) decides leaf and arc; the massing studio passes it.
+// In:  zonen (with tueren), X/Z/SCALE (host plan), px (screen px → viewBox units), optional level of detail.
 // Out: a <g> of SVG shapes.
 
 import React from "react";
@@ -32,12 +33,17 @@ import { tuerGuid } from "@core/lib/werkstattBauteile";
  * @param {number} p.SCALE viewBox units per metre
  * @param {(n:number)=>number} [p.px] screen px → viewBox units; default = viewBox units
  * @param {boolean} [p.nurOeffnung=false] massing mode: opening only, no leaf/arc
+ * @param {{tuerBlatt: boolean, tuerBogen: boolean}|null} [p.detailgrad] 107-12: level of detail (detailgradFuer); when given it decides
+ *   leaf and arc (1:200 → opening only) instead of nurOeffnung
  * @param {(zoneName:string, idx:number, tuer:object) => void} [p.onToggle] click handler (focus)
  * @param {(tuer:object) => string} [p.titelFuer] tooltip text per door (host passes translated text)
  * @param {string} [p.prefix="fk"] data-testid prefix
  */
-export default function ZonenTueren({ zonen, X, Z, SCALE, px = null, nurOeffnung = false, onToggle, titelFuer, prefix = "fk" }) {
+export default function ZonenTueren({ zonen, X, Z, SCALE, px = null, nurOeffnung: nurOeffnungProp = false, detailgrad = null, onToggle, titelFuer, prefix = "fk" }) {
   const p = px || ((n) => n);
+  // 107-12: the level of detail decides (one function for plan, massing and focus); the old flag stays for callers without it
+  const nurOeffnung = detailgrad ? !detailgrad.tuerBlatt : nurOeffnungProp;
+  const mitBogen = detailgrad ? detailgrad.tuerBogen : true;
   const out = [];
   for (const zone of Array.isArray(zonen) ? zonen : []) {
     const tueren = Array.isArray(zone?.tueren) ? zone.tueren : [];
@@ -74,7 +80,7 @@ export default function ZonenTueren({ zonen, X, Z, SCALE, px = null, nurOeffnung
             <>
               <line x1={X(g.scharnier.x)} y1={Z(g.scharnier.z)} x2={X(g.offen.x)} y2={Z(g.offen.z)}
                 stroke="#0f172a" strokeWidth={p(1.4)} strokeLinecap="butt" data-tuer-blatt />
-              <path d={bogen} fill="none" stroke="#475569" strokeWidth={p(0.6)} data-tuer-bogen />
+              {mitBogen && <path d={bogen} fill="none" stroke="#475569" strokeWidth={p(0.6)} data-tuer-bogen />}
               {/* Hit area for the click (the thin strokes are hard to hit). */}
               {klickbar && <circle cx={X((g.scharnier.x + g.geschlossen.x) / 2)} cy={Z((g.scharnier.z + g.geschlossen.z) / 2)} r={p(9)} fill="transparent" stroke="none" />}
             </>

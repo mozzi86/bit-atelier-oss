@@ -19,7 +19,8 @@ const TG_STATUS = {
   offen: { color: "bg-slate-100 text-slate-600", dot: "bg-slate-400", label: "offen" },
 };
 
-// Colours per garage zone kind (overlay, level -1 drawn over the EG hull — D-P61-09).
+// Colours per garage zone kind (overlay, level -1; 107-13: over the basement hull when the model has one, D-BK-20 lifted
+// D-P61-09 — else over the EG hull as orientation).
 // Dark mode: explicit text colours on light tints (REVIEW-DARKMODE lesson).
 const FARBE = {
   stellplatz: { fill: "#e0f2fe", stroke: "#0369a1", text: "#0c4a6e" },
@@ -44,6 +45,8 @@ const FARBE = {
  * @param {boolean} p.kellerAktiv cellar applied — the garage then takes the head end and the cellar moves behind it
  * @param {() => void} p.onAnwenden
  * @param {() => void} p.onEntfernen
+ * @param {(() => void)|undefined} [p.onUgAnlegen] 107-13: puts one basement storey into the model (programme field `untergeschosse`);
+ *   shown only while the model has no basement — the step is explicit, never silent (D-BW-03)
  * @param {object|null} p.mengenPersistiert layer.tiefgarage.mengen (AVA hand-over)
  * @param {{points: Array<{x:number,z:number}>, volumen_m3: number, nutzhoehe_m: number, passt: boolean|null, eingaben?: any, klimaStatus?: string}|null} [p.zisterne]
  *   91-02: rainwater cistern UNDER the garage slab (useRegenwasser + zisternenRechteck) — drawn dashed
@@ -51,9 +54,12 @@ const FARBE = {
  */
 export default function TiefgaragenPlaner({
   plan, ergebnis, checks, optionen, setOptionen, aktiv, tesselierungAngewendet, kellerAktiv,
-  onAnwenden, onEntfernen, mengenPersistiert, zisterne = null,
+  onAnwenden, onEntfernen, mengenPersistiert, onUgAnlegen, zisterne = null,
 }) {
   const { t } = useI18n();
+  // 107-13 (D-BK-20, D-P61-09 lifted): with a basement in the model the plan shows the hull of level −1; the zones stay in the overlay
+  // (customZones={[]} keeps them from being drawn twice). Without one the ground-floor hull remains the orientation as before.
+  const ugImModell = (plan?.model?.untergeschosse || 0) > 0;
   const zonen = ergebnis?.zonen || [];
   const mengen = ergebnis?.mengen || {};
   const nachweis = ergebnis?.nachweis || {};
@@ -167,14 +173,20 @@ export default function TiefgaragenPlaner({
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
-                {t("Tiefgarage (UG, Geschoss −1)")} — {t("Hülle des EG als Orientierung")}
+                {t("Tiefgarage (UG, Geschoss −1)")} — {ugImModell ? t("Hülle des UG") : t("Hülle des EG als Orientierung")}
               </CardTitle>
+              {!ugImModell && onUgAnlegen && (
+                <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+                  <span>{t("Das Modell hat noch kein Untergeschoss.")}</span>
+                  <Button size="sm" variant="outline" onClick={onUgAnlegen} data-testid="tg-ug-anlegen">{t("UG im Modell anlegen")}</Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               <BimPlan2D
                 model={plan.model}
                 mode="grundriss"
-                level={0}
+                level={ugImModell ? -1 : 0}
                 storeyHeight={plan.storeyHeight}
                 readOnly
                 customZones={[]}

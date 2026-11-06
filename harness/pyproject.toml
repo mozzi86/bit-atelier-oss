@@ -27,6 +27,12 @@ dev = ["pytest==9.1.1", "pytest-asyncio==1.4.0"]
 # 67-03: IFC read/write. ifcopenshell (IfcOpenShell project, LGPL-3.0) pulls
 # numpy, shapely, lark, isodate and python-dateutil; the core stays free of them.
 ifc = ["ifcopenshell==0.8.5"]
+# 109-01: component catalogue builder. elmonkey-core is the user's own package (MIT), pinned to the
+# release wheel core-v0.3.0 by URL + sha256 (not on PyPI); stdlib only, its IFC part uses ifcopenshell.
+katalog = [
+  "elmonkey-core @ https://github.com/mozzi86/ELMonkey/releases/download/core-v0.3.0/elmonkey_core-0.3.0-py3-none-any.whl#sha256=4c77a9d1293a22f60dbd868f374bdd43a0048089419564781a83d7f51902d784",
+  "ifcopenshell==0.8.5",
+]
 # 67-05: local speech. faster-whisper (SYSTRAN, MIT; pulls ctranslate2 4.8.2, OpenNMT, MIT),
 # sounddevice (MIT, PortAudio) for the CLI microphone, piper-tts (MIT) optional TTS.
 voice = ["faster-whisper==1.2.1", "sounddevice==0.5.6", "piper-tts==1.8.0"]
@@ -40,6 +46,10 @@ harness = "harness.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["harness*"]
+
+# 109-01: the neutral catalogue base stock must ship with a non-editable install too.
+[tool.setuptools.package-data]
+harness = ["bauteilkatalog/daten/*.json", "bauteilkatalog/daten/typen/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

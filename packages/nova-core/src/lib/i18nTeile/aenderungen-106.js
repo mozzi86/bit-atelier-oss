@@ -43,6 +43,8 @@ export const EN = {
   "{eigenschaft} ist jetzt {jetzt}, der Vorschlag ging von {vorschlag} aus": "{eigenschaft} is now {jetzt}, the proposal started from {vorschlag}",
   "Lage oder Maße": "position or size",
   "Bauteil oder Öffnungen": "element or openings",
+  // review 106-10: a property value outside the office's command library (pruefung.js PRUEF_VORLAGEN.bibliothekWert)
+  "{wert} steht nicht in der Befehlsbibliothek des Büros für {eigenschaft} (erlaubt: {werte})": "{wert} is not in the office's command library for {eigenschaft} (allowed: {werte})",
   // data sheet rows and viewer messages (review fix)
   "Feuerwiderstand": "Fire resistance",
   "Statik-Vermerk": "Structural note",

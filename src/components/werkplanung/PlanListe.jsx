@@ -2,12 +2,22 @@
 // status forward (Vorabzug, Geprüft), release with name (writes an AuditLog entry),
 // new revision index with change text (AuditLog too), PDF via dokumentAblegen.
 //
+// 106-11: the model state. Filing a PDF reads the state line the BIM studio wrote into its keywords and keeps it on the plan
+// (additive field Plan.modellstand); the column "Modellstand" compares it with the current state of the project (stored model +
+// change log): "aktuell" / "veraltet" (the drawn content changed since printing) and the note of unreleased AI changes ("offen",
+// or "überholt" once they were released). Word + sign + border form, the tokens add colour (guard rail 5).
+// Review 106-11: the state of a plan counts only while its file is filed (a new index clears both); a sheet of another project
+// reads "unbekannt"; while the current state loads the column says so neutrally. Not tamper-proof: Plan.modellstand is a normal
+// field and comes from the PDF's keywords (open decision, see 106-11-SUMMARY).
+//
 // In:  projectId, projektName (default short code). Loads/writes Plan, AuditLog,
-//      Document (through dokumentAblegen). Rules: src/lib/werkplanung/plaene.js.
+//      Document (through dokumentAblegen); reads BimModel and AenderungsSchritt. Rules: src/lib/werkplanung/plaene.js,
+//      @core/lib/zeigen/planStand.js.
 // Out: UI; data-testids pl-neu, pl-form-*, pl-speichern, pl-zeile (data-nummer,
 //      data-status, data-index), pl-status-*, pl-freigeben, pl-freigabe-von,
-//      pl-freigabe-ok, pl-index, pl-index-text, pl-index-ok, pl-datei, pl-fehler.
-import React, { useCallback, useEffect, useState } from "react";
+//      pl-freigabe-ok, pl-index, pl-index-text, pl-index-ok, pl-datei, pl-fehler,
+//      pl-modellstand (data-status, data-vermerk).
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Button } from "@core/components/ui/button";
 import { Input } from "@core/components/ui/input";
@@ -19,6 +29,8 @@ import { useAuth } from "@core/lib/AuthContext";
 import { fileToDataUrl } from "@core/lib/pdf";
 import { dokumentAblegen } from "@core/lib/ablage";
 import { Plus } from "lucide-react";
+import { planStandVergleich, modellstandText } from "@core/lib/zeigen/planStand.js";
+import { aktuellenModellStandLaden, modellstandAusPdf } from "@core/lib/zeigen/planStandLaden.js";
 import {
   PLAN_FORMATE, planNummer, planStatusLabel, planPruefung, planUebergangErlaubt,
   statusPatch, freigabePatch, indexPatch, auditEintrag, neuerPlan,
@@ -26,6 +38,20 @@ import {
 
 const LEER = { projekt_kurz: "", lph: "5", gewerk: "AR", nr: "", titel: "", massstab: "1:50", format: "A1" };
 const fehlerText = (e) => (e instanceof Error ? e.message : String(e));
+
+/** 106-11: look of the comparison states - word, sign and border form carry the meaning, the token class adds colour. */
+const STAND_DARSTELLUNG = /** @type {Record<string, {wort: string, zeichen: string, klasse: string}>} */ ({
+  aktuell: { wort: "aktuell", zeichen: "✓", klasse: "border-solid border-erfolg text-erfolg" },
+  veraltet: { wort: "veraltet", zeichen: "!", klasse: "border-dashed border-warnung text-warnung" },
+  unbekannt: { wort: "unbekannt", zeichen: "?", klasse: "border-dotted border-muted-foreground text-muted-foreground" },
+  ohne: { wort: "kein Modellstand", zeichen: "–", klasse: "border-dotted border-border text-muted-foreground" },
+  laedt: { wort: "wird geprüft …", zeichen: "…", klasse: "border-dotted border-border text-muted-foreground" },
+});
+const VERMERK_DARSTELLUNG = /** @type {Record<string, {wort: string, zeichen: string, klasse: string}>} */ ({
+  offen: { wort: "enthält ungeprüfte KI-Änderungen", zeichen: "?", klasse: "border-dashed border-warnung text-warnung bg-warnung-flaeche" },
+  ueberholt: { wort: "Vermerk überholt", zeichen: "↻", klasse: "border-dotted border-hinweis text-hinweis" },
+  unbekannt: { wort: "Prüfstand unbekannt", zeichen: "?", klasse: "border-dotted border-warnung text-warnung" },
+});
 
 /**
  * @param {{projectId: string, projektName?: string}} props
@@ -38,6 +64,11 @@ export default function PlanListe({ projectId, projektName = "" }) {
   const [freigabe, setFreigabe] = useState(/** @type {null | {plan: any, von: string}} */ (null));
   const [neuIndex, setNeuIndex] = useState(/** @type {null | {plan: any, text: string}} */ (null));
   const [fehler, setFehler] = useState(/** @type {string|null} */ (null));
+  // undefined = still loading (neutral "wird geprüft …"), else the current state (modellStandUnbekannt when it failed)
+  const [aktuell, setAktuell] = useState(/** @type {import("@core/lib/zeigen/planStand.js").ModellStand|undefined} */ (undefined));
+  const projektRef = useRef(projectId);
+  projektRef.current = projectId;
+  const anfrageRef = useRef(0);
 
   const laden = useCallback(async () => {
     try {
@@ -48,6 +79,22 @@ export default function PlanListe({ projectId, projektName = "" }) {
     } catch (e) { setFehler(`${t("Pläne konnten nicht geladen werden")}: ${fehlerText(e)}`); }
   }, [projectId, t]);
   useEffect(() => { laden(); }, [laden]);
+  // 106-11: current model state; again when the window gets the focus back (a release or a model change in another tab)
+  // only the newest answer for the CURRENT project counts (focus + visibility + upload can overlap; a slow answer of the previous
+  // project must not be compared with this project's plans)
+  const standLaden = useCallback(async () => {
+    const nr = ++anfrageRef.current;
+    const st = await aktuellenModellStandLaden(projectId);
+    if (projektRef.current === projectId && nr === anfrageRef.current) setAktuell(st);
+  }, [projectId]);
+  useEffect(() => {
+    setAktuell(undefined);
+    standLaden();
+    const neu = () => { if (document.visibilityState !== "hidden") standLaden(); };
+    window.addEventListener("focus", neu);
+    document.addEventListener("visibilitychange", neu);
+    return () => { window.removeEventListener("focus", neu); document.removeEventListener("visibilitychange", neu); };
+  }, [standLaden]);
 
   const kurzVorschlag = String(projektName || "").replace(/[^\p{L}\p{N}]+/gu, "").slice(0, 3).toUpperCase();
 
@@ -104,11 +151,13 @@ export default function PlanListe({ projectId, projektName = "" }) {
     if (!datei) return;
     try {
       const daten = await fileToDataUrl(datei);
+      // 106-11: the model state the sheet was printed with (null = a PDF from elsewhere or from before 106-11)
+      const modellstand = await modellstandAusPdf(new Uint8Array(await datei.arrayBuffer()));
       // Storage rule: dokumentAblegen routes > 1 MB into the object store (inhaltAblegen).
       const r = await dokumentAblegen({ projectId, name: datei.name, typ: "Plan-PDF", daten: String(daten), notiz: `Plan ${planNummer(plan).voll}` });
       if (!r.ok) throw new Error(r.grund || "Ablage fehlgeschlagen");
-      await bitApi.entities.Plan.update(plan.id, { datei_ref: r.dokument?.id || null });
-      await laden();
+      await bitApi.entities.Plan.update(plan.id, { datei_ref: r.dokument?.id || null, modellstand });
+      await Promise.all([laden(), standLaden()]);
     } catch (err) { setFehler(`${t("Plandatei konnte nicht abgelegt werden")}: ${fehlerText(err)}`); }
   };
 
@@ -143,6 +192,7 @@ export default function PlanListe({ projectId, projektName = "" }) {
                   <th className="py-2 px-2">{t("Index")}</th>
                   <th className="py-2 px-2">{t("Status")}</th>
                   <th className="py-2 px-2">{t("Freigabe")}</th>
+                  <th className="py-2 px-2">{t("Modellstand")}</th>
                   <th className="py-2 px-2">{t("Hinweise")}</th>
                   <th className="py-2 px-2" />
                 </tr>
@@ -151,6 +201,12 @@ export default function PlanListe({ projectId, projektName = "" }) {
                 {plaene.map((p) => {
                   const nr = planNummer(p);
                   const hw = planPruefung(p, plaene);
+                  // the state belongs to the filed sheet: without a file (e.g. after a new index) the plan has none
+                  const ps = p.datei_ref ? p.modellstand || null : null;
+                  const laedt = aktuell === undefined && !!ps;
+                  const vg = planStandVergleich(ps, aktuell);
+                  const sd = laedt ? STAND_DARSTELLUNG.laedt : STAND_DARSTELLUNG[vg.status];
+                  const vd = laedt ? null : VERMERK_DARSTELLUNG[vg.vermerk];
                   return (
                     <tr key={p.id} className="border-b last:border-0 align-top" data-testid="pl-zeile"
                       data-nummer={nr.voll} data-status={p.status} data-index={p.index || ""}>
@@ -162,6 +218,16 @@ export default function PlanListe({ projectId, projektName = "" }) {
                       <td className="py-1.5 px-2">{t(planStatusLabel(p.status))}</td>
                       <td className="py-1.5 px-2 text-xs">
                         {p.freigabe ? `${p.freigabe.von}, ${new Date(p.freigabe.am).toLocaleDateString("de-DE")}` : "—"}
+                      </td>
+                      <td className="py-1.5 px-2 text-xs" data-testid="pl-modellstand" data-status={laedt ? "laedt" : vg.status} data-vermerk={laedt ? "keiner" : vg.vermerk}
+                        title={ps ? modellstandText({ ...ps, grund: null, guids: [], herkunft_quellen: [], betroffen: [] }, t) : undefined}>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 ${sd.klasse}`}><span aria-hidden="true">{sd.zeichen}</span>{t(sd.wort)}</span>
+                          {vd && <span data-testid="pl-modellstand-vermerk" className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 ${vd.klasse}`}><span aria-hidden="true">{vd.zeichen}</span>{t(vd.wort)}</span>}
+                          {!laedt && vg.hinweise.filter((h) => h.code !== "ohne_modellstand").map((h) => (
+                            <span key={h.code} data-code={h.code} className={h.stufe === "warn" ? "text-warnung" : "text-muted-foreground"}>{t(h.text)}</span>
+                          ))}
+                        </div>
                       </td>
                       <td className="py-1.5 px-2 text-xs">
                         {hw.map((h) => (

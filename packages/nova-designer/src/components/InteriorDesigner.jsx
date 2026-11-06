@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { geschossName } from "@core/lib/bauteil/ebenen.js";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Button } from "@core/components/ui/button";
 import { Input } from "@core/components/ui/input";
@@ -31,7 +32,8 @@ import KatalogPanel from "./KatalogPanel";
 
 const STYLES = ["Modern", "Skandinavisch", "Industrial", "Minimalistisch", "Klassisch", "Biophilic"];
 
-const geschossLabel = (z) => ((z.level ?? 0) === 0 ? "EG" : `${z.level}. OG`);
+// 107-13: the same storey name as the furnishing plan tabs ("1. UG" for basement rooms), from @core (bauteil/ebenen.js)
+const geschossLabel = (z) => geschossName(z.level ?? 0);
 
 // Schrittweite Pfeiltasten/Buttons: 10 cm. Seit Phase 43 ist Drag der Hauptweg
 // (MoebelDraufsicht + useSvgDrag, 5-cm-Raster über verschiebeItem); die Schritte bleiben

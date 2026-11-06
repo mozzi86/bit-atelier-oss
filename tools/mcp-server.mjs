@@ -214,6 +214,26 @@ async function bildFreigabePruefen(projektId) {
 
 // --- Argument checks ------------------------------------------------------------
 
+/**
+ * 106-10 (D-IM-04): entities only the person in the app writes - the change log (release / reversal notes) and the office's command
+ * library. Same list as packages/nova-core/src/lib/verlauf/entitaeten.js NUR_PERSON_SCHREIBT (a unit test compares both; this file
+ * imports nothing from the packages). The app server refuses such a write as well (403); here it is refused before it is sent.
+ */
+const NUR_PERSON_ENTITAETEN = Object.freeze(['AenderungsSchritt', 'Befehlsvorlage']);
+
+/** Refusal of create_record / update_record on those entities. */
+const NUR_PERSON_HINWEIS = 'Freigeben, Zurücknehmen und die Befehlsbibliothek sind Handlungen der Person in der App (Seite „Modellfreigabe“) — ein Agent kann sie lesen, aber nicht schreiben.';
+
+/**
+ * The entity of a write tool: like entitaetAus, but never one of NUR_PERSON_ENTITAETEN.
+ * @param {Record<string, any>} args @returns {string}
+ */
+function schreibEntitaetAus(args) {
+  const entity = entitaetAus(args);
+  if (NUR_PERSON_ENTITAETEN.some((e) => e.toLowerCase() === entity.toLowerCase())) throw new EingabeFehler(NUR_PERSON_HINWEIS); // any spelling (review 106-10)
+  return entity;
+}
+
 /** @param {Record<string, unknown>} args @returns {string} */
 function entitaetAus(args) {
   const entity = String(args.entity ?? '');
@@ -743,7 +763,7 @@ const WERKZEUGE = [
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     schreibt: true,
     async ausfuehren(args) {
-      return api('POST', `/entities/${entitaetAus(args)}`, datenAus(args));
+      return api('POST', `/entities/${schreibEntitaetAus(args)}`, datenAus(args));
     },
   },
   {
@@ -758,7 +778,7 @@ const WERKZEUGE = [
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     schreibt: true,
     async ausfuehren(args) {
-      return api('PUT', `/entities/${entitaetAus(args)}/${encodeURIComponent(idAus(args))}`, datenAus(args));
+      return api('PUT', `/entities/${schreibEntitaetAus(args)}/${encodeURIComponent(idAus(args))}`, datenAus(args));
     },
   },
 ];

@@ -5,8 +5,8 @@
 // than in the plan. Now all four call this file.
 //
 // Rule (spec VI.3): the store holds the BASE GEOMETRY of a wall (a, b, thickness or build-up,
-// refLine); mesh, plan, PDF and IFC are always derived from it. A mesh is never the source and may
-// at most later lie as a discardable intermediate store (D-BK-08a, plan 107-14). Nothing here writes
+// refLine); mesh, plan, PDF and IFC are derived from it; a computed mesh lies at most as a discardable
+// intermediate store with a hash of the base inputs (csg_cache_layer, 107-14, D-BK-08a), never as the source. Nothing here writes
 // back into a, b or the thickness: changing thickness or build-up moves the body, not the line.
 //
 // Geometry (model plane x/z in metres, y up; IFC X = x, IFC Y = z):
@@ -32,6 +32,9 @@
 // Workshop walls (werkstattBauteile.js D-BW-02): they carry no refLine; they are drawn as
 // "center" on the shared zone edge (the zone keeps its clear dimension, the wall is centred on the
 // edge in plan, 3D and IFC). Nothing changes there.
+//
+// 108-01: modellImSchnitt() turns the model for the section B-B (cut along z) so huellSchnittWaende/ugSchnittWaende and both section
+// drawers keep cutting at z = 0 unchanged.
 //
 // In:  wall records ({a, b, composite?, thickness?, refLine?}), thickness in m, optional core split.
 // Out: plain numbers and objects; pure, no I/O, node-testable.
@@ -231,6 +234,22 @@ export function huellSchnittWaende(model) {
 }
 
 /**
+ * 107-09 (review): true when the intersected layers of the section replace the rectangle of one cut hull wall — some ring of a hull wall
+ * of the same kind (basement level < 0 or above ground) overlaps the wall's x range. One rule for the screen section (BimPlan2D) and the PDF section (vektorPlan).
+ * @param {Array<{schluessel: string, ringe: Array<Array<{x: number, h: number}>>}>} vSchnitt cut layers (schnittFlaechen)
+ * @param {{von_m: number, bis_m: number}} wand the cut wall (huellSchnittWaende / ugSchnittWaende), x in m
+ * @param {boolean} unterirdisch the rectangle of a basement wall
+ * @returns {boolean}
+ */
+export function schnittErsetzt(vSchnitt, wand, unterirdisch) {
+  return (vSchnitt || []).some((f) => {
+    const m = /^env:(-?\d+):/.exec(String(f.schluessel));
+    if (!m || (Number(m[1]) < 0) !== unterirdisch) return false;
+    return f.ringe.some((r) => r.length >= 3 && Math.min(...r.map((p) => p.x)) < wand.bis_m - 1e-6 && Math.max(...r.map((p) => p.x)) > wand.von_m + 1e-6);
+  });
+}
+
+/**
  * @typedef {object} Eckfueller
  * @property {number} x       centre x in m
  * @property {number} z       centre z in m
@@ -305,4 +324,64 @@ export function eckfueller(waende, toleranz_m = 0.3, geschosse = undefined) {
     });
   }
   return ergebnis;
+}
+
+/**
+ * The two cut side walls of the BASEMENT in the section at z = 0 (107-13, D-BK-20): the same cut as huellSchnittWaende(), applied to the
+ * hull walls of the first basement (level −1, build-up `single24` by default, so usually thinner than the facade above). They reach from
+ * `model.fusshoehe_m` (negative, m) up to ±0.00; the walls above ground keep their own cut. The export draws no ground subtraction here
+ * (bounded extruded bodies; the cut against the terrain is plan 107-10).
+ * @param {{footprint?: Array<PktXZ>, walls?: Array<any>, fusshoehe_m?: number}} model createBuildingModel result (m)
+ * @returns {Array<SchnittWand & {unten_m: number, oben_m: number}>} [left, right] with the lower and upper edge in m; empty without basements
+ */
+export function ugSchnittWaende(model) {
+  const fuss = Number(model?.fusshoehe_m);
+  if (!(fuss < 0)) return [];
+  const ug = (model?.walls || []).filter((w) => w.level === -1);
+  if (!ug.length) return [];
+  return huellSchnittWaende({ footprint: model.footprint, walls: ug }).map((s) => ({ ...s, unten_m: fuss, oben_m: 0 }));
+}
+
+/**
+ * 108-01: the model as the section along the axis `achse` sees it. "x" (section A-A, the line z = 0 along x) returns the model itself
+ * (identity, so every section without the choice stays byte-identical). "z" (section B-B, the line x = 0 along z) turns footprint,
+ * hull walls (a, b), parapets (a, b), slabs and spaces (polygon) by −90° in plan, (x, z) → (z, −x): a rotation without mirroring, so
+ * the winding of the footprint and with it the side of the hull reference line stay as they are, and the readers keep cutting at
+ * z = 0 (huellSchnittWaende, ugSchnittWaende, BimPlan2D Schnitt, vektorPlan schnittGrafik). The turned x is the old z, i.e. the
+ * position along the B-B line (dachSchnittLinie(…, "z") uses the same s).
+ * The wall seen behind the cut in elevation is the FIRST wall of each storey (both drawers take it); for "z" the first wall of a
+ * storey is therefore the one that runs most along the turned x axis (ties: the earlier one), the other walls keep their order.
+ * @param {any} model createBuildingModel result (m)
+ * @param {"x"|"z"|null|undefined} achse section axis
+ * @returns {any} the model ("x") or a turned copy ("z"); the input is never changed
+ */
+export function modellImSchnitt(model, achse) {
+  if (achse !== "z" || !model) return model;
+  const dreh = (/** @type {any} */ p) => (p ? { ...p, x: p.z, z: -p.x } : p);
+  const ring = (/** @type {any[]|undefined} */ pts) => (Array.isArray(pts) ? pts.map(dreh) : pts);
+  const linie = (/** @type {any} */ w) => ({ ...w, a: dreh(w.a), b: dreh(w.b) });
+  const waende = (Array.isArray(model.walls) ? model.walls : []).map(linie);
+  // per storey: the wall most parallel to the section line (|dx| largest) goes to the place of the storey's first wall
+  /** @type {Map<number, any>} */
+  const rueck = new Map();
+  for (const w of waende) {
+    const alt = rueck.get(w.level);
+    if (!alt || Math.abs(w.b.x - w.a.x) > Math.abs(alt.b.x - alt.a.x) + 1e-9) rueck.set(w.level, w);
+  }
+  /** @type {any[]} */
+  const geordnet = [];
+  /** @type {Set<number>} */
+  const gesehen = new Set();
+  for (const w of waende) {
+    if (!gesehen.has(w.level)) { gesehen.add(w.level); geordnet.push(rueck.get(w.level)); }
+    if (w !== rueck.get(w.level)) geordnet.push(w);
+  }
+  return {
+    ...model,
+    footprint: ring(model.footprint),
+    walls: geordnet,
+    ...(Array.isArray(model.parapets) ? { parapets: model.parapets.map(linie) } : {}),
+    ...(Array.isArray(model.slabs) ? { slabs: model.slabs.map((/** @type {any} */ s) => ({ ...s, polygon: ring(s.polygon) })) } : {}),
+    ...(Array.isArray(model.spaces) ? { spaces: model.spaces.map((/** @type {any} */ s) => ({ ...s, polygon: ring(s.polygon) })) } : {}),
+  };
 }

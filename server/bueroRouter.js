@@ -57,6 +57,8 @@ const GERAET_ERLAUBT = Object.freeze([
   // and lets it answer only what it took. The agent side (POST /api/steuerung) stays host-only.
   [LESEND, /^\/api\/steuerung\/naechste$/],
   [new Set(['POST']), /^\/api\/steuerung\/antwort$/],
+  // 106-09: the change stream of ONE project (read only; aenderungsStrom.js) - a device learns what it could read anyway.
+  [LESEND, /^\/api\/aenderungen$/],
 ]);
 /** HR data: only with PERSONAL_LAN=1 (D-P80-05), and then only for paired devices. */
 const PERSONAL_PFAD = /^\/api\/personal(-dateien)?(\/[^/]+){1,2}$/;
@@ -234,11 +236,13 @@ export function lanServer({ app, port, adressenFn = () => lanAdressen() }) {
  * Routes of the office mode, mounted under /api BEFORE authRouter (it answers /auth/me for devices).
  * @param {import('./bueroModus.js').Buero} buero
  * @param {{port: number|string, appModus: boolean, origins?: string[],
- *   lan: Pick<LanServer, 'starten'|'stoppen'|'adressen'|'fehler'>}} o
- *   origins = further app origins that may trigger host actions (Vite dev server); lan = listener manager
+ *   lan: Pick<LanServer, 'starten'|'stoppen'|'adressen'|'fehler'>, beiEntzug?: (w: {geraet?: string, alle?: boolean}) => void}} o
+ *   origins = further app origins that may trigger host actions (Vite dev server); lan = listener manager;
+ *   beiEntzug = 106-09 review: called when a device loses access (revoked, logged off: {geraet: id}) or office mode goes
+ *   off ({alle: true}) — the change stream closes that device's open connections at once
  * @returns {import('express').Router}
  */
-export function bueroRouter(buero, { port, appModus, origins = [], lan }) {
+export function bueroRouter(buero, { port, appModus, origins = [], lan, beiEntzug = () => {} }) {
   const r = Router();
   const appOrigins = new Set([`http://localhost:${port}`, `http://127.0.0.1:${port}`, ...origins]);
   /** @param {any} req @returns {BitZugang} */
@@ -293,6 +297,7 @@ export function bueroRouter(buero, { port, appModus, origins = [], lan }) {
     const g = zugang(req).geraet;
     if (!g) return res.status(401).json({ error: 'Nicht gekoppelt.' });
     buero.widerrufen(g.id);
+    beiEntzug({ geraet: g.id });
     res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
     res.json({ ok: true });
   });
@@ -303,6 +308,7 @@ export function bueroRouter(buero, { port, appModus, origins = [], lan }) {
     const an = req.body?.aktiv === true;
     try {
       buero.setzeAktiv(an);
+      if (!an) beiEntzug({ alle: true });
       if (an) {
         await lan.starten();
         console.warn(`[buero] Office mode ON — paired devices in this network may use the app: ${lan.adressen().map((a) => `http://${a}:${port}`).join(', ') || '(no address bound)'}`);
@@ -328,6 +334,7 @@ export function bueroRouter(buero, { port, appModus, origins = [], lan }) {
 
   r.delete('/buero/geraete/:id', hostAktion, (req, res) => {
     if (!buero.widerrufen(req.params.id)) return res.status(404).json({ error: 'Gerät nicht gefunden.' });
+    beiEntzug({ geraet: req.params.id });
     res.json({ ok: true });
   });
 

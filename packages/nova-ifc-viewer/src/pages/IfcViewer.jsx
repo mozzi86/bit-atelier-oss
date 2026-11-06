@@ -10,7 +10,7 @@
 // (public/beispiel/musterprojekt.ifc) replaces "Modell vom Server", ?beispiel=1 loads it
 // on arrival, and a linked element (?sel) says honestly that it waits for a model.
 // A single selected element leads to a prefilled ticket (ticketLink.js, N-10).
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { parseZustand, viewerLink } from "@ifc/lib/viewerLink";
 import { neuesTicketUrl } from "@ifc/lib/ticketLink";
@@ -39,15 +39,19 @@ import { byTrade } from "@core/lib/tradeSort";
 import { pruefeAttributeVorUebernahme } from "@ifc/lib/mengenAttributPruefung";
 import { statusFarbe } from "@core/lib/plan/statusDarstellung.js";
 // 106-01: one ray pick and one highlighter for every viewer (hover, click, later VR controllers).
-import { identitaetAus, pickDrossel, zeigerPick, zeigerArt, TIPP_TOLERANZ_PX } from "@core/lib/zeigen/strahlPick.js";
+import { identitaetAus, pickDrossel, zeigerPick, zeigerArt, TIPP_TOLERANZ_PX, strahlPick, weltNormale } from "@core/lib/zeigen/strahlPick.js";
+// 106-08: "In VR ansehen" (only with a WebXR device; the session code loads on demand)
+import XrKnopf from "@core/components/zeigen/XrKnopf.jsx";
 import { zweiFingerGeste } from "@core/lib/zeigen/zweiFinger.js";
 import { useZeigerArt, TABLETT_PLATZ } from "@core/lib/zeigen/useZeigerArt.js";
 import { useZugriff } from "@core/lib/ZugriffContext.jsx";
+import { useAuth } from "@core/lib/AuthContext";
+import { protokollAnbinden } from "@core/lib/zeigen/aenderungsProtokollSpeicher.js";
 import { hervorhebung, umrissLinie } from "@core/lib/zeigen/hervorheben.js";
 import { ZEIGE_ZUSTAENDE, ZEIGE_CSS_RAND } from "@core/lib/zeigen/zustaende.js";
 import { ansichtAufBox } from "@core/lib/zeigen/ansichtAufBox.js";
 import { auswahlBefehleRegistrieren } from "@core/lib/zeigen/auswahlBefehle.js";
-import { ansichtAlsPng } from "@core/lib/zeigen/ansichtBild.js";
+import { ansichtAlsPng, xrZeigtGerade } from "@core/lib/zeigen/ansichtBild.js";
 import { befehlsRegister } from "@core/lib/befehlsregister.js";
 import { starteSteuerungsBruecke } from "@core/lib/steuerungsBruecke.js";
 import { elementBox, ifcAuswahlKontext, ifcModellUebersicht } from "@ifc/lib/auswahlIfc";
@@ -58,8 +62,19 @@ import { AenderungsFeld } from "@core/components/zeigen/AenderungsVorschau.jsx";
 // 106-05: speech and typed sentences at the model.
 import SprechFeld from "@core/components/zeigen/SprechFeld.jsx";
 import { eingabeBefehlRegistrieren } from "@core/lib/zeigen/eingabe.js";
+import { bibliothekLaden } from "@core/lib/zeigen/befehlsBibliothekLaden.js";
+import { personName } from "@core/lib/zeigen/aenderungsProtokoll.js";
 import { ansichtAusKamera } from "@core/lib/zeigen/ansichtRichtung.js";
 import { letzterEintrag } from "@ifc/lib/attributJournal";
+// 106-09: journal entries of other devices arrive through the change stream; two changes of one property are a conflict.
+import { stromAbonnieren } from "@core/lib/abgleich/stromClient";
+import { abgleichStand, abgleichTesthaken, abgleichZeigen } from "@core/lib/abgleich/abgleichStand";
+import { vorschlaegeNeuPruefen } from "@core/lib/abgleich/modellAbgleich";
+import { journalFremdAnwenden, entscheidungsEintrag, journalLuecke } from "@ifc/lib/journalAbgleich";
+/** 106-09: notes and conflicts of the sync between devices - loaded only when there is something to show. */
+const AbgleichHinweise = React.lazy(() => import("@core/components/abgleich/AbgleichHinweise.jsx"));
+/** 106-09 review: sources of the conflict cards the IFC viewer shows in its view (journal conflicts and the save path). */
+const IFC_QUELLEN = Object.freeze(["ifc", "modell"]);
 /** Pointer travel (px) below which hover does not pick again [ASSUMED]: sub-pixel jitter picks the same element. */
 const HOVER_MIN_PX = 2;
 /** Pause (ms) after the last wheel tick before hover looks again [ASSUMED]: the damped camera has mostly settled. */
@@ -118,7 +133,13 @@ export default function IfcViewer({ embedded = false }) {
   const gestenSummeRef = useRef({ schritte: 0, drehungRad: 0, faktor: 1 });
   // 106-07: tablet layout (finger or pen in use) and the right to change the model (rechte.js, module "modell")
   const { grob } = useZeigerArt();
-  const darfAendern = useZugriff().darf("modell", "voll");
+  const zugriff = useZugriff();
+  const darfAendern = zugriff.darf("modell", "voll");
+  // 106-10: the name of the person who confirms a step goes into the change log (review workplace "Modellfreigabe")
+  const { user } = useAuth();
+  const autorRef = useRef(/** @type {string|null} */ (null));
+  // review 106-10: the active office person (Nutzer & Rechte), not the local sign-in stand-in
+  autorRef.current = personName(zugriff, user) || null;
   const hoverBoxRef = useRef(null); // overlay box near the pointer
   const hoverTextRef = useRef(null); // its text line
   const hoverZustandRef = useRef(null); // its state line (words)
@@ -206,6 +227,8 @@ export default function IfcViewer({ embedded = false }) {
     let raf = 0;
     const animate = () => {
       raf = requestAnimationFrame(animate);
+      // 106-08: while a VR session presents, the session renders (renderer.setAnimationLoop) and owns the camera
+      if (renderer.xr.isPresenting) return;
       controls.update();
       renderer.render(scene, camera);
       frames += 1;
@@ -1176,6 +1199,71 @@ export default function IfcViewer({ embedded = false }) {
       setPicked(pickedAus(eid, sem, ms));
     };
 
+    // Shows an identity (with GUID) as hovered: 'fokus' on all its ranges, or the words "Ausgewählt" when it is the selection.
+    // The mouse hover below and the VR controller ray (106-08) take this same road.
+    const hoverAnzeigen = (/** @type {any} */ id) => {
+      const model = modelRef.current;
+      const mesh = meshRef.current;
+      if (!model || !mesh) return;
+      const eid = /** @type {number} */ (id.expressId);
+      const gewaehlt = !!(pickedRef.current && !pickedRef.current.multi && pickedRef.current.eid === eid);
+      const name = gewaehlt ? "auswahl" : "fokus";
+      if (hoverRef.current?.expressId !== eid || hoverRef.current?.zustand !== name) {
+        hoverLoeschen();
+        if (!gewaehlt) { // the selected element keeps its blue and its outline, hover never paints over it
+          try {
+            for (const r of model.merged.ranges) {
+              if (r.eid !== eid) continue;
+              const ziel = { mesh, bereich: { start: r.start, count: r.count } };
+              zeigen.setzen(ziel, "fokus");
+              hoverZieleRef.current.push(ziel);
+            }
+          } catch (err) { console.warn(`[IFC] hover highlight failed: ${err?.message || err}`); }
+        }
+        const sem = elementZu(model, eid);
+        hoverRef.current = { quelle: "ifc", guid: id.guid, expressId: eid, typ: sem?.ifcType || "IFC", name: sem?.name || "", zustand: name };
+        if (hoverTextRef.current) hoverTextRef.current.textContent = `${hoverRef.current.typ}${sem?.name ? ` · ${sem.name}` : ""}`;
+        // the overlay says the state the picture shows: words, colour and outline form
+        const look = ZEIGE_ZUSTAENDE[name];
+        if (hoverZustandRef.current) hoverZustandRef.current.textContent = tText(look.label);
+        if (hoverSymbolRef.current) {
+          hoverSymbolRef.current.style.borderColor = look.hex;
+          hoverSymbolRef.current.style.borderStyle = ZEIGE_CSS_RAND[look.umriss];
+        }
+      }
+    };
+
+    // 106-08: the VR controller ray. The exact ray (no capture radius, like the mouse) into the SAME pick core and resolver as click
+    // and hover; the first hit counts (an unknown hit in front is not seen through). Select = the click's road.
+    t.xrZeigen = {
+      treffen: (/** @type {any} */ strahl) => {
+        const model = modelRef.current;
+        const mesh = meshRef.current;
+        if (!model || !mesh) return null;
+        const tr = strahlPick(mesh, strahl, { schnittebenen: mesh.material?.clippingPlanes });
+        const id = identitaetAus(tr, aufloeser);
+        if (!id || !tr) return null;
+        const sem = elementZu(model, /** @type {number} */ (id.expressId));
+        return { guid: id.guid || null, text: `${sem?.ifcType || "IFC"}${sem?.name ? ` · ${sem.name}` : ""}`, punkt: id.punkt, abstand: id.abstand, normal: weltNormale(tr), id };
+      },
+      // review 106-08: the raw first hit (also parts the resolver cannot name) - a teleport must not go through them
+      rohTreffen: (/** @type {any} */ strahl) => {
+        const mesh = meshRef.current;
+        if (!mesh) return null;
+        const tr = strahlPick(mesh, strahl, { schnittebenen: mesh.material?.clippingPlanes });
+        return tr ? { punkt: tr.punkt, abstand: tr.abstand, normal: weltNormale(tr) } : null;
+      },
+      hover: (/** @type {any} */ x) => { if (x?.id && x.guid) hoverAnzeigen(x.id); else hoverLoeschen(); },
+      waehlen: (/** @type {any} */ x) => {
+        const model = modelRef.current;
+        if (!x?.id || !model) { setPicked(null); return; } // a miss clears the selection, as a click into the void does
+        hoverLoeschen();
+        const eid = /** @type {number} */ (x.id.expressId);
+        setSelectionMesh(eid);
+        setPicked(pickedAus(eid, elementZu(model, eid), 0));
+      },
+    };
+
     // Hover: remember the last pointer, ONE pick per animation frame, and never faster than the
     // pick budget allows (a slow pick on a big model delays the next one; a pointer that moved
     // less than HOVER_MIN_PX since the last pick does not pick again).
@@ -1199,32 +1287,7 @@ export default function IfcViewer({ embedded = false }) {
         // guidPflicht: only what a later "dieses" command could address is shown
         const id = identitaetAus(treffer, aufloeser, { guidPflicht: true });
         if (!id) { hoverLoeschen(); return; } // no hit or unknown hit: nothing is shown, nothing is guessed
-        const eid = /** @type {number} */ (id.expressId);
-        const gewaehlt = !!(pickedRef.current && !pickedRef.current.multi && pickedRef.current.eid === eid);
-        const name = gewaehlt ? "auswahl" : "fokus";
-        if (hoverRef.current?.expressId !== eid || hoverRef.current?.zustand !== name) {
-          hoverLoeschen();
-          if (!gewaehlt) { // the selected element keeps its blue and its outline, hover never paints over it
-            try {
-              for (const r of model.merged.ranges) {
-                if (r.eid !== eid) continue;
-                const ziel = { mesh, bereich: { start: r.start, count: r.count } };
-                zeigen.setzen(ziel, "fokus");
-                hoverZieleRef.current.push(ziel);
-              }
-            } catch (err) { console.warn(`[IFC] hover highlight failed: ${err?.message || err}`); }
-          }
-          const sem = elementZu(model, eid);
-          hoverRef.current = { quelle: "ifc", guid: id.guid, expressId: eid, typ: sem?.ifcType || "IFC", name: sem?.name || "", zustand: name };
-          if (hoverTextRef.current) hoverTextRef.current.textContent = `${hoverRef.current.typ}${sem?.name ? ` · ${sem.name}` : ""}`;
-          // the overlay says the state the picture shows: words, colour and outline form
-          const look = ZEIGE_ZUSTAENDE[name];
-          if (hoverZustandRef.current) hoverZustandRef.current.textContent = tText(look.label);
-          if (hoverSymbolRef.current) {
-            hoverSymbolRef.current.style.borderColor = look.hex;
-            hoverSymbolRef.current.style.borderStyle = ZEIGE_CSS_RAND[look.umriss];
-          }
-        }
+        hoverAnzeigen(id);
       }
       const box = hoverBoxRef.current;
       const mount = mountRef.current;
@@ -1272,6 +1335,7 @@ export default function IfcViewer({ embedded = false }) {
       if (rafId) cancelAnimationFrame(rafId);
       clearTimeout(radTimer);
       zeigen.verwerfen(); // hover, marks and the cached outline geometries
+      if (t.xrZeigen) delete t.xrZeigen;
       hoverZieleRef.current = [];
       hoverRef.current = null;
       if (hoverBoxRef.current) hoverBoxRef.current.style.display = "none";
@@ -1330,7 +1394,8 @@ export default function IfcViewer({ embedded = false }) {
         const th = threeRef.current;
         if (!th) return null;
         const d = th.camera.position.clone().sub(th.controls.target);
-        return { abstand: d.length(), azimutRad: Math.atan2(d.x, d.z) };
+        // fovGrad / zoom (review 106-08): a VR session must hand back the desktop projection, not the headset's field of view
+        return { abstand: d.length(), azimutRad: Math.atan2(d.x, d.z), fovGrad: th.camera.fov, zoom: th.camera.zoom };
       },
       /** 106-07: kind of the last pointer on the canvas and the sum of two-finger steps seen (count, twist rad, pinch factor). */
       zeiger: () => ({ art: zeigerArtRef.current, geste: { ...gestenSummeRef.current } }),
@@ -1432,6 +1497,13 @@ export default function IfcViewer({ embedded = false }) {
     if (zustandSetzen(v.ziel.guid, zustand)) vorschauRef.current.set(v.id, { guid: v.ziel.guid, zustand });
   };
   const aenderung = useRef(/** @type {Record<string, any>} */ ({}));
+  // 106-10: confirmed and reversed steps go into the project's change log (entity AenderungsSchritt)
+  const protokollPid = useRef(/** @type {string|null} */ (null));
+  protokollPid.current = projectId || null;
+  const protokollModell = useRef("");
+  protokollModell.current = modellName();
+  const protokoll = useMemo(() => protokollAnbinden({ quelle: "ifc", projektId: () => protokollPid.current, autor: () => autorRef.current,
+    modell: () => protokollModell.current || null, onFehler: (was, detail) => toast.error(`${t(was)}: ${detail}`) }), []); // eslint-disable-line react-hooks/exhaustive-deps -- reads refs
   aenderung.current = {
     kontext: () => kontextAus(auswahlEids()),
     modell: () => ({}), // no drawn elements here: the checks of the rules have nothing to compare
@@ -1452,15 +1524,16 @@ export default function IfcViewer({ embedded = false }) {
     uebernehmen: (/** @type {any} */ v, /** @type {any} */ r) => {
       const eintrag = r.journal;
       if (!eintrag) throw new Error("Kein Journal-Eintrag — nichts zu speichern");
-      const stand = { ...eintrag, id: undefined, speichern: undefined };
+      const stand = { ...eintrag, id: undefined, speichern: undefined, eigen: true }; // eigen (106-09): written by this page, never sent
       journalRef.current = [...journalRef.current, stand];
       // the register answers at once; the entity write follows, a failure is said in words and the entry leaves the cache again
       stand.speichern = bitApi.entities.IfcAenderung.create(eintrag)
-        .then((neu) => { stand.id = neu?.id; setJournalStand((n) => n + 1); })
+        .then((neu) => { stand.id = neu?.id; if (neu?.id) eigeneJournalIds.current.add(neu.id); setJournalStand((n) => n + 1); })
         .catch((e) => {
           journalRef.current = journalRef.current.filter((x) => x !== stand);
-          // the step did not happen after all: the history must not list it as active
+          // the step did not happen after all: the history must not list it as active (nor the change log, 106-10)
           vorschlaege.verlaufMarkieren(v.id, { zurueckgenommen: new Date().toISOString() });
+          protokoll.schrittZurueckgenommen({ vorschlag_id: v.id }, "speichern");
           toast.error(`${t("Journal nicht gespeichert")}: ${e?.message || e}`);
         });
     },
@@ -1481,12 +1554,14 @@ export default function IfcViewer({ embedded = false }) {
     t,
     vorschauZeigen, vorschauEntfernen,
     darfAendern: () => darfAendern, // 106-07: bestaetigen / rueckgaengig only for a role that may change the model
+    schrittBestaetigt: protokoll.schrittBestaetigt, schrittZurueckgenommen: protokoll.schrittZurueckgenommen, // 106-10 change log
   };
   const befehle = useMemo(() => {
     const reg = befehlsRegister();
     auswahlBefehleRegistrieren(reg, () => /** @type {any} */ (aktuell.current));
     aenderungsBefehleRegistrieren(reg, () => /** @type {any} */ (aenderung.current));
-    eingabeBefehlRegistrieren(reg, () => /** @type {any} */ (aenderung.current)); // 106-05: a sentence as a command, the caller's ctx goes on
+    // 106-05: a sentence as a command, the caller's ctx goes on; review 106-10: the office library is loaded here, not only by the speech field
+    eingabeBefehlRegistrieren(reg, () => /** @type {any} */ (aenderung.current), { bibliothekVorladen: () => bibliothekLaden() });
     return reg;
   }, []);
   // the buttons of the preview take the same road as the commands; a refusal is shown in words
@@ -1494,6 +1569,79 @@ export default function IfcViewer({ embedded = false }) {
     const r = befehle.ausfuehren(id, p);
     if (!r.ok) toast.error(/** @type {{ok: false, error: string}} */ (r).error);
   };
+  // ---- 106-09: journal entries of other devices (change stream) ----
+  // A new entry of another device joins the journal at once (attribute editor and checks see it); an open proposal on
+  // the same property is checked again and becomes "Veraltet". Two entries that started from the same value and ended at
+  // different ones are a conflict with both values; the person's pick is written as a new entry (herkunft "hand").
+  // Nothing is confirmed by the sync itself (D-IM-04).
+  const eigeneJournalIds = useRef(/** @type {Set<string>} */ (new Set()));
+  const modellNameRef = useRef("");
+  modellNameRef.current = modellName();
+  const abgleichT = useRef(t);
+  abgleichT.current = t;
+  // 106-09 review: the IFC viewer shows its own conflict cards and those of the save path; the page-wide card the rest
+  useEffect(() => {
+    const ab = IFC_QUELLEN.map((q) => abgleichStand.anzeigeMelden(q));
+    return () => { ab.forEach((f) => f()); };
+  }, []);
+  useEffect(() => {
+    if (!projectId) return undefined;
+    abgleichTesthaken();
+    /** @param {any} x @returns {boolean} */
+    const eigen = (x) => x?.eigen === true || (x?.id != null && eigeneJournalIds.current.has(x.id));
+    /** Writes a decision entry (conflict card) like a confirmed step: into the journal, then to the entity. @param {any} e */
+    const entscheidungSchreiben = async (e) => {
+      const stand = { ...e, eigen: true };
+      journalRef.current = [...journalRef.current, stand];
+      const neu = await bitApi.entities.IfcAenderung.create(e);
+      if (neu?.id) { stand.id = neu.id; eigeneJournalIds.current.add(neu.id); }
+      setJournalStand((n) => n + 1);
+    };
+    /** One journal change of another device (stream event, or found after a gap). @param {any} ereignis @param {any} rec @param {any} geraet */
+    const anwenden = (ereignis, rec, geraet) => {
+      const r = journalFremdAnwenden(journalRef.current, ereignis, rec, { modell: modellNameRef.current, eigen, t: abgleichT.current });
+      if (!r.geaendert) return;
+      journalRef.current = r.journal;
+      setJournalStand((n) => n + 1);
+      const kid = `ifc:${r.schluessel}`;
+      if (r.konflikt) {
+        const k = r.konflikt;
+        const loesen = async (/** @type {"mein"|"fremd"} */ wahl) => {
+          const e = entscheidungsEintrag(journalRef.current, k, wahl);
+          if (e) await entscheidungSchreiben(e);
+          vorschlaegeNeuPruefen(befehle);
+        };
+        abgleichStand.konfliktMelden({
+          quelle: "ifc", projektId: projectId, feld: String(r.schluessel), geraet,
+          titel: `${k.fremd.eigenschaft} (${k.fremd.pset})`,
+          zeilen: [{ schluessel: k.fremd.guid, name: k.fremd.guid, mein: `${k.mein.alt ?? "—"} → ${k.mein.wert ?? "—"}`, fremd: `${k.fremd.alt ?? "—"} → ${k.fremd.wert ?? "—"}` }],
+          loesen: { mein: () => loesen("mein"), fremd: () => loesen("fremd") },
+        });
+      } else {
+        abgleichStand.konfliktWeg(kid); // a later entry of the property settled it on the other device
+      }
+      const veraltet = vorschlaegeNeuPruefen(befehle);
+      if (r.zeile) abgleichStand.hinweisHinzu({ geraet, zeilen: [r.zeile], veraltet });
+    };
+    const abmelden = stromAbonnieren(projectId, (ereignis) => {
+      if (ereignis.entitaet !== "IfcAenderung") return;
+      const lesen = ereignis.art === "geloescht" ? Promise.resolve(null)
+        : ereignis.datensatz ? Promise.resolve(ereignis.datensatz) : bitApi.entities.IfcAenderung.get(ereignis.id);
+      lesen.then((rec) => anwenden(ereignis, rec, ereignis.geraet))
+        .catch((err) => console.error(`[abgleich] journal entry of another device not read: ${err?.message || err}`));
+    }, {
+      // review 106-09: after a gap in the stream the stored journal of the model is read again; what is new or gone counts like an event
+      neuAbgleichen: () => {
+        bitApi.entities.IfcAenderung.filter({ project_id: projectId, modell: modellNameRef.current })
+          .then((rows) => { for (const x of journalLuecke(journalRef.current, rows || [], eigen)) anwenden(x.ereignis, x.rec, { name: "", unbekannt: true }); })
+          .catch((err) => console.error(`[abgleich] journal not read again after a gap: ${err?.message || err}`));
+      },
+    });
+    // only the IFC viewer's own cards go with it (never the studio's or the save path's of the same project)
+    return () => { abmelden(); abgleichStand.leeren(projectId, { quellen: ["ifc"] }); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- befehle is created once; the journal and model name are read through refs
+  }, [projectId]);
+  const abgleich = useSyncExternalStore(abgleichStand.abonnieren, abgleichStand.stand);
   // reachable for local agents / tests while the viewer is open (window.__bitBefehle.zeileBearbeiten(...))
   // and through the local control channel (server/steuerungRouter.js); the global is deleted only if it is still ours.
   useEffect(() => {
@@ -1504,6 +1652,37 @@ export default function IfcViewer({ embedded = false }) {
       if (/** @type {any} */ (window).__bitBefehle === befehle) delete /** @type {any} */ (window).__bitBefehle;
     };
   }, [befehle]);
+
+  // ---- 106-08: what a VR session needs from this viewer (XrKnopf loads the session code only on demand) ----
+  const sprechFernRef = useRef(/** @type {any} */ (null)); // the speech field's handle: grip = speech button, panel = its answers
+  const xrQuelle = () => {
+    const th = threeRef.current;
+    if (!th?.xrZeigen || !modelRef.current) return null;
+    // review 106-08: delegates that read the CURRENT pick handles at every call - the pick effect may run again during a session
+    // (another model loaded at the desk); a copy of the old ones would drive a highlight that was already discarded
+    const xz = () => threeRef.current?.xrZeigen ?? null;
+    return {
+      renderer: th.renderer, szene: th.scene, kamera: th.camera,
+      quelle: {
+        treffen: (/** @type {any} */ s) => xz()?.treffen(s) ?? null,
+        rohTreffen: (/** @type {any} */ s) => xz()?.rohTreffen(s) ?? null,
+        hover: (/** @type {any} */ x) => { xz()?.hover(x); },
+        waehlen: (/** @type {any} */ x) => { xz()?.waehlen(x); },
+        auswahlText: () => {
+          const p = pickedRef.current;
+          if (!p) return null;
+          return p.multi ? `${(p.eids || []).length} ${t("Bauteile")}` : `${p.typ}${p.name ? ` · ${p.name}` : ""}`;
+        },
+        box: () => {
+          const b = modelRef.current?.merged?.bbox;
+          return b ? { min: [b.min[0], b.min[1], b.min[2]], max: [b.max[0], b.max[1], b.max[2]] } : null;
+        },
+      },
+      sprechen: () => sprechFernRef.current,
+      befehle,
+      darfAendern: () => aenderung.current.darfAendern(), // 106-07 rights: the same gate as the button on the screen
+    };
+  };
 
   const neuesteIfc = ifcFiles[0] || null;
   const neuereIfcVorhanden = !!(neuesteIfc && loadedIfcName && loadedIfcName !== neuesteIfc.name);
@@ -1741,8 +1920,17 @@ export default function IfcViewer({ embedded = false }) {
         {/* 106-05: speech and typed sentences; what is understood becomes a proposal card, a change runs only after "ja" by the person. */}
         {/* review 106-07: tablet layout = fixed at the bottom of the screen (speech right, cards left), reachable without scrolling. */}
         <SprechFeld register={befehle} kontext={() => kontextAus(auswahlEids())} ansicht={() => aenderung.current.ansicht()} nda={project?.nda === true} t={t}
-          projektId={project?.id ?? null} bild={(o) => /** @type {any} */ (aktuell.current).ansichtBild(o)} grob={grob}
+          projektId={project?.id ?? null} bild={(o) => /** @type {any} */ (aktuell.current).ansichtBild(o)} grob={grob} fernRef={sprechFernRef}
+          bildSperre={() => xrZeigtGerade(threeRef.current)}
           className={grob ? TABLETT_PLATZ.sprechen : "absolute bottom-2 right-2 z-30 w-[22rem] max-w-[40%]"} />
+        {/* 106-08: VR - only with a WebXR device; ray, hover, selection, speech and confirmation as here, on a floating panel */}
+        <XrKnopf quelle={xrQuelle} t={t} hook="ifcXr" bereit={!!modelInfo} className="absolute left-1/2 top-14 z-30 -translate-x-1/2" />
+        {/* 106-09: what arrived from another device (note with origin) and conflicts (both values), top centre of the view. */}
+        {abgleichZeigen(abgleich, IFC_QUELLEN) ? (
+          <React.Suspense fallback={null}>
+            <AbgleichHinweise t={t} darfAendern={darfAendern} grob={grob} quellen={IFC_QUELLEN} className="absolute left-1/2 top-2 z-30 w-[24rem] max-w-[60%] -translate-x-1/2 max-h-[60%] overflow-y-auto" />
+          </React.Suspense>
+        ) : null}
         <AenderungsFeld speicher={vorschlaege} t={t} darfUebernehmen={darfAendern} grob={grob} className={grob ? TABLETT_PLATZ.karten : "absolute bottom-2 left-2 z-30 w-[22rem] max-w-[60%] max-h-[480px] overflow-y-auto"}
           onUebernehmen={(v) => aenderungBefehl("bestaetigen", { vorschlag_id: v.id, durch: "hand" })}
           onVerwerfen={(v) => aenderungBefehl("verwerfen", { vorschlag_id: v.id })}

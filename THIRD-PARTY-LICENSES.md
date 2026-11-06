@@ -4,7 +4,7 @@ BIT-Atelier selbst steht unter der MIT-Lizenz (`LICENSE`). Diese Datei dokumenti
 Open-Source-Komponenten mit Hinweispflichten oder nicht-permissiven Lizenzen, die mit
 der Plattform an den Browser ausgeliefert werden. Permissiv lizenzierte Abhängigkeiten
 (MIT/ISC/BSD/Apache-2.0) sind über `package.json` und npm nachvollziehbar und hier nicht
-einzeln gelistet. Lizenzangaben laut `node_modules/<paket>/package.json` (Stand 22.10.2026). Die Versionen hier
+einzeln gelistet. Lizenzangaben laut `node_modules/<paket>/package.json` (Stand 22.10.2026, CSG-Bibliotheken 26.10.2026). Die Versionen hier
 prüft `tests/unit/drittlizenzen-10521.test.js` gegen `package-lock.json` und `vendor/`.
 
 ## @salusoft89/planegcs — LGPL-2.0-or-later
@@ -68,3 +68,25 @@ prüft `tests/unit/drittlizenzen-10521.test.js` gegen `package-lock.json` und `v
   ist:** der Plan 57-01 (Task 4) verlangt den ausdrücklichen Nachweis für die
   mit dem Browser ausgelieferte Datenschicht. Im `lokal`-Build ist das Paket
   per Tree-Shaking NICHT enthalten (57-02).
+
+## manifold-3d — Apache-2.0
+
+- **Version:** 3.5.4 (npm, exakt gepinnt)
+- **Was:** Boolesche Operationen auf geschlossenen Dreiecksnetzen (Vereinigung,
+  Differenz, Schnitt) als WebAssembly-Bibliothek — der CSG-Kern der Bauteile
+  (Plan 107-18, Entscheidung D-BK-08c vom 26.10.2026: neue Abhängigkeit mit
+  ausdrücklicher Zustimmung; ersetzt three-bvh-csg und three-mesh-bvh aus 107-14).
+- **Lizenz:** Apache License 2.0, laut `node_modules/manifold-3d/package.json`;
+  Volltext `node_modules/manifold-3d/LICENSE`, im Build als
+  `LICENSES/manifold-3d-Apache-2.0.txt` ausgeliefert (Apache-2.0 § 4 a).
+  Eine NOTICE-Datei liegt dem Paket nicht bei, § 4 d verlangt daher keinen
+  weiteren Hinweis (ein Test prüft das bei jedem Versionswechsel).
+  Quelle: Feld `repository` in `node_modules/manifold-3d/package.json`
+  (https://github.com/elalish/manifold).
+- **Enthaltene Komponente:** die WebAssembly-Datei enthält die Polygon-Bibliothek
+  Clipper2 (Boost Software License 1.0, erkennbar an den Symbolnamen der Datei).
+  Die BSL verlangt bei reiner Weitergabe als ausführbarer Code keinen Lizenztext;
+  sie wird hier der Vollständigkeit halber genannt.
+- **Warum hier gelistet:** im Browser ausgelieferte Geometrie-Bibliothek;
+  unmodifiziert, JavaScript-Teil im eigenen Chunk `csg`, WebAssembly-Datei als
+  eigenes Asset, beides nur lazy geladen (`@core/lib/csg/laden.js`).

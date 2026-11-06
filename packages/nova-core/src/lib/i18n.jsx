@@ -851,6 +851,18 @@ const DICT = {
   },
 };
 
+/**
+ * 107-11: adds the English entries of a dictionary part that is NOT on the start path (the entry chunk is near its size budget): a
+ * lazily loaded module imports its part file from i18nTeile/ and calls this once at module level, before it renders. Keys that already
+ * exist win (no part may override another). The guard test reads every part file as text, lazy or not.
+ * @param {Record<string, string>} teil German key → English text
+ * @returns {void} changes DICT.en in place
+ */
+export function englischErgaenzen(teil) {
+  const en = /** @type {Record<string, string>} */ (DICT.en);
+  for (const [k, v] of Object.entries(teil || {})) if (!(k in en)) en[k] = v;
+}
+
 function readStoredLang() {
   try {
     const stored = window.localStorage.getItem("lang");

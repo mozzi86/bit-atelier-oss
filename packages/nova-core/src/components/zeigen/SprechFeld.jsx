@@ -15,6 +15,11 @@
 //      sprech-antwort (data-art, data-ok, data-stufe), sprech-bestaetigung (+ -abbrechen), sprech-rueckfrage, sprech-cloud-ok, sprech-hilfe-knopf,
 //      sprech-hilfe; 106-06: sprech-bild (aria-pressed, data-ziel lokal|extern|nie), sprech-bild-ziel, sprech-bild-zustimmung (+ -ja, -nein),
 //      sprech-bild-zuruecknehmen.
+// 106-08: optional handle `fernRef` for a VR session: in the headset there is no screen, so the session holds the speech button through
+// this handle (grip = press and hold), reads what the field shows (heard text, answer, waiting "ja", questions) for its floating panel and
+// answers the field's questions by panel buttons. While a VR session holds the handle (`bildSperren(true)`), no image of the view goes
+// with a sentence: the desktop view is not what the person sees in the headset, and the image consent of 106-06 is a screen dialog.
+// Review 106-08: the real lock is `bildSperre()` (the viewer reads renderer.xr.isPresenting at every send); the flag is a second one.
 // 106-06: the button "mit Bild" sends ONE image of the current view (selection highlighted) along with a free sentence - as context only. The
 // line under it says where the image would go (provider and host; "verlässt diesen Rechner" in words and with the ↗ sign, not by colour); an
 // NDA project shows "nie" and the button is off; the first image of a project to a model outside this computer asks once for the project,
@@ -30,6 +35,8 @@ import { sprechTastenAnbinden } from "@core/lib/zeigen/sprechTasten.js";
 import { sprechSteuerung } from "@core/lib/zeigen/sprechStart.js";
 import { SATZ_HILFE, sprachbefehl } from "@core/lib/zeigen/sprachbefehl.js";
 import { BILD_GRUENDE, bildZielText } from "@core/lib/zeigen/bildKontext.js";
+import { bibliothekAktuell } from "@core/lib/zeigen/befehlsBibliothek.js";
+import { bibliothekLaden } from "@core/lib/zeigen/befehlsBibliothekLaden.js";
 
 /** How long a spoken "ja" stands on the screen before it applies, in ms [ASSUMED: long enough to read one line and hit "Abbrechen", short enough not to feel stuck]. */
 export const BESTAETIGUNG_FRIST_MS = 1500;
@@ -51,17 +58,21 @@ const ANTWORT_FORM = {
 /**
  * @param {{register: ReturnType<typeof import("@core/lib/befehlsregister.js").befehlsRegister>, kontext: () => any,
  *   ansicht?: () => any, zeigepunkt?: () => any, nda?: boolean, projektId?: string|null, bild?: ((o: {kante: number, breite: number}) => {png_base64: string})|null,
- *   t?: (s: string) => string, className?: string, grob?: boolean}} props
+ *   t?: (s: string) => string, className?: string, grob?: boolean, fernRef?: {current: any}|null, bildSperre?: (() => boolean)|null}} props
  *   register: the viewer's command register; kontext: selection record (auswahlKontext); ansicht: {rechts, vorn} unit vectors of the view in the plan;
  *   zeigepunkt: {x, z} in m, the spot last pointed at; nda: the open project carries the NDA marker (Project.nda); projektId: the open project
  *   (106-06, consent and NDA are stored on it); bild: renders the current view as PNG (106-06; without it there is no "mit Bild" button);
- *   grob: tablet layout (106-07).
+ *   grob: tablet layout (106-07); fernRef: 106-08 handle for a VR session ({starten, stoppen, verwerfen, stand, aktion, bildSperren}),
+ *   filled while the field is mounted; bildSperre: asked at every send, true = no image goes along (review 106-08: the viewer passes
+ *   "a VR headset presents right now", read from its renderer, so the lock cannot get lost with a re-mounted handle).
  */
-export default function SprechFeld({ register, kontext, ansicht, zeigepunkt, nda = false, projektId = null, bild = null, t = (s) => s, className = "", grob = false }) {
+export default function SprechFeld({ register, kontext, ansicht, zeigepunkt, nda = false, projektId = null, bild = null, t = (s) => s, className = "", grob = false, fernRef = null, bildSperre = null }) {
   const [mitBild, setMitBild] = useState(false);
+  /** 106-08: a VR session holds the field: no image of the view goes with a sentence (text and GUIDs only). */
+  const bildGesperrt = useRef(false);
   /** @type {React.MutableRefObject<any>} */
   const neu = useRef({});
-  neu.current = { kontext, ansicht, zeigepunkt, nda, projektId, bild: bild && mitBild && !nda ? bild : null };
+  neu.current = { kontext, ansicht, zeigepunkt, nda, projektId, bild: bild && mitBild && !nda ? bild : null, bildSperre };
   const [zustand, setZustand] = useState(/** @type {"bereit"|"aufnahme"|"erkennt"|"aus"} */ ("bereit"));
   const zustandRef = useRef(zustand);
   zustandRef.current = zustand;
@@ -85,11 +96,15 @@ export default function SprechFeld({ register, kontext, ansicht, zeigepunkt, nda
 
   const ablauf = useMemo(() => sprechAblauf({
     register,
-    kontext: () => ({ auswahl: neu.current.kontext(), ansicht: neu.current.ansicht?.() ?? null, zeigepunkt: neu.current.zeigepunkt?.() ?? null }),
+    // 106-10: the office's command library (loaded below) feeds the grammar and the model's task text
+    kontext: () => ({ auswahl: neu.current.kontext(), ansicht: neu.current.ansicht?.() ?? null, zeigepunkt: neu.current.zeigepunkt?.() ?? null, bibliothek: bibliothekAktuell() }),
     modellFrage: (text, k, o) => modellFragen(text, k.auswahl, {
-      cloudOk: o.cloudOk, nda: !!neu.current.nda, bild: neu.current.bild, projektId: neu.current.projektId, gesprochen: o.herkunft === "sprache",
+      cloudOk: o.cloudOk, nda: !!neu.current.nda, bild: bildGesperrt.current || neu.current.bildSperre?.() ? null : neu.current.bild, projektId: neu.current.projektId, gesprochen: o.herkunft === "sprache",
+      bibliothek: k.bibliothek,
     }),
   }), [register]);
+  // 106-10: load the command library when the field opens (fresh each time: the library page may have changed it); a failed load keeps the grammar as it was
+  useEffect(() => { void bibliothekLaden({ neu: true }); }, []);
 
   const bereitLesen = async () => {
     const d = sprechDienst();
@@ -245,8 +260,36 @@ export default function SprechFeld({ register, kontext, ansicht, zeigepunkt, nda
       : { text: t(/** @type {{error: string}} */ (r).error), art: "taste", ok: false, stufe: "fehler" });
   };
 
+  /** 106-08: the answers to the field's own questions, by name (panel buttons of a VR session). @param {string} id */
+  const fernAktion = (id) => {
+    if (id === "abbrechen" && halt) { haltAbbrechen(); setAntwort({ text: t("Nicht übernommen — der Vorschlag wartet weiter"), art: "abgebrochen", ok: true, stufe: "hinweis" }); }
+    else if (id === "rueckfrage-ja" && rueckfrage) void senden("ja", "text");
+    else if (id === "rueckfrage-nein" && rueckfrage) void senden("nein", "text");
+    else if (id === "cloud-ja" && cloud) { const c = cloud; void senden(c.text, c.herkunft, true); }
+    else if (id === "cloud-nein" && cloud) { setCloud(null); setAntwort(null); }
+  };
   const neuHandler = useRef(/** @type {any} */ ({}));
-  neuHandler.current = { starten: () => steuerung.starten(), stoppen, tasteBefehl };
+  neuHandler.current = { starten: () => steuerung.starten(), stoppen, tasteBefehl, fernAktion };
+  /** 106-08: what the field shows, as plain data for the VR panel (read every frame through the handle, no React render). */
+  const fernStand = useRef(/** @type {any} */ ({}));
+  fernStand.current = {
+    zustand: zustand === "bereit" && bereit && (!bereit.harness || !bereit.stt) ? "aus" : zustand,
+    gehoert, antwort: antwort ? { text: antwort.text, stufe: antwort.stufe } : null, halt: halt ? { was: halt.was } : null,
+    rueckfrage, cloud: cloud ? { anbieter: cloud.anbieter } : null,
+  };
+  useEffect(() => {
+    if (!fernRef) return undefined;
+    const h = {
+      starten: () => { void neuHandler.current.starten(); },
+      stoppen: () => { void neuHandler.current.stoppen(); },
+      verwerfen: () => { steuerung.verwerfen(); setZustand("bereit"); },
+      stand: () => fernStand.current,
+      aktion: (/** @type {string} */ id) => neuHandler.current.fernAktion(id),
+      bildSperren: (/** @type {boolean} */ an) => { bildGesperrt.current = !!an; },
+    };
+    fernRef.current = h;
+    return () => { if (fernRef.current === h) fernRef.current = null; bildGesperrt.current = false; };
+  }, [fernRef, steuerung]);
   useEffect(() => sprechTastenAnbinden(window, {
     start: () => neuHandler.current.starten(), stopp: () => neuHandler.current.stoppen(),
     uebernehmen: () => neuHandler.current.tasteBefehl("bestaetigen"), verwerfen: () => neuHandler.current.tasteBefehl("verwerfen"),

@@ -18,7 +18,15 @@ import { elevationOf, geschosseAus, okfObersterGeschoss, patchAlleGeschosshoehen
 // geschosse (107-02, D-BK-05): optional storey table [{level, name?, hoehe_m}] (m) or null. null = every storey has
 //   `storeyHeight` (all old projects); with a table the heights are read through @core/lib/bauteil/hoehen.js. `storeyHeight`
 //   stays the uniform value for the readers that only need one number.
-let state = { footprintM: null, footprintQuelle: null, achseM: null, storeys: 4, storeyHeight: 3, geschosse: null, unit: "m", zones: [], costEstimate: null };
+// untergeschosse (107-13, D-BK-20): number of basement storeys 0 … 3 [ASSUMED] (bauteil/ebenen.js MAX_UNTERGESCHOSSE) on the levels
+//   −1 … −U. `storeys` stays the number of storeys above ground. 0 = no basement in the model (all old projects); the record of a
+//   project that never had a basement never gets the field written (useBimModelSync). Kept out of programMetrics (BGF, GFZ base,
+//   height stay above ground; the basement area belongs to the DIN 277 chain of 107-11).
+// footprintLageM (108-08, D-EFH-09): position of the massing body on the site, {x, z} in m or null (not placed yet, all old projects).
+//   Offset of the ORIGIN of footprintM from the vertex mean of the site parcel (site metres, x east, z south); without a parcel from
+//   the centre of the 70 x 50-m stand-in field. Written by the massing studio only when the body is moved (or the field already
+//   exists); read by @core/lib/massing/lage.js startLageSite. The axis achseM stays relative to the footprint origin.
+let state = { footprintM: null, footprintQuelle: null, achseM: null, storeys: 4, storeyHeight: 3, geschosse: null, untergeschosse: 0, footprintLageM: null, unit: "m", zones: [], costEstimate: null };
 const listeners = new Set();
 const emit = () => listeners.forEach((l) => l());
 
@@ -80,7 +88,11 @@ export function programMetrics(s) {
   const storeys = Math.max(0, Math.round(s?.storeys || 0));
   const storeyHeight = s?.storeyHeight || 3;
   const bgf = footArea * storeys;          // Bruttogrundfläche (alle Geschosse)
-  const ngf = bgf * 0.8;                    // Nettogrundfläche ~80 % BGF
+  // Nettogrundfläche ~80 % BGF [ASSUMED] — ALWAYS the flat value, above ground, also when zones exist (107-11 review): every planner
+  // that reads pm.ngf (apartment, building services, landscape, drainage, accessibility) keeps the flat rate. The zone-aware DIN 277
+  // areas (bauteil/raeume.js din277Flaechen) are used only by the massing studio's NUF (kennzahlen.js nufFuerKennzahlen) and the DIN 277
+  // table of the BIM studio; switching programMetrics/bebauungsvorschlaege to them is an open decision (golden 86-05a).
+  const ngf = bgf * 0.8;
   // Gebäudehöhe (m); 107-02: with a storey table the sum of its heights, else storeys × one height as before
   const height = Array.isArray(s?.geschosse) && s.geschosse.length ? elevationOf(storeys, geschosseAus(s)) : storeys * storeyHeight;
   // OKF of the top storey (m): 107-02 review fix, was `(storeys − 1) × storeyHeight` inline in the planners and ignored the table

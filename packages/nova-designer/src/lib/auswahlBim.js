@@ -8,6 +8,7 @@
 // Out: pure functions, no React, no three.js. Scene coordinates: x/z plan metres, y up (storey elevation through @core/lib/bauteil/hoehen.js).
 import { steckbrief, typFuerWand } from "@core/lib/bauteil/steckbrief.js";
 import { mitAttributen } from "@core/lib/bauteil/attribute.js";
+import { istBodenplatte, huellPlattenId, untersterLevel } from "@core/lib/bauteil/ebenen.js";
 import { elevationOf, unterkante, wandHoehe, stuetzenHoehe, geschosshoehe, dachFirsthoehe_m, dachNeigung_grad, geschosseAus, FLACHDACH_BIS_GRAD } from "@core/lib/bauteil/hoehen.js";
 import { auswahlKontext, AUSWAHL_KONTEXT_MAX } from "@core/lib/zeigen/auswahlKontext.js";
 import { huellwandGuid } from "./bauteilInfo.js";
@@ -48,7 +49,7 @@ const mitte = (punkte) => {
 
 /**
  * One studio element as input for auswahlKontext().
- * @param {{type: string, index?: number, scope?: string, level?: number, edge?: number}} sel  Selection entry of the studio
+ * @param {{type: string, index?: number, scope?: string, level?: number, edge?: number, id?: string}} sel  Selection entry of the studio
  *   (wall, column, opening, zone, slab, roof, hullwall, hullslab).
  * @param {BimDaten} daten  Element arrays and model of the studio.
  * @param {{projektId?: string|number|null}} [opt]  Project of the model (part of the derived GUID).
@@ -114,13 +115,15 @@ export function bimBauteil(sel, daten, opt = {}) {
     return fertig({ ...s, guid: huellwandGuid(opt.projektId ?? null, w.level, w.edge) }, w.level, [(w.a.x + w.b.x) / 2, (w.elevation ?? y0(w.level)) + (w.height || geschosshoehe(w.level, gq)) / 2, (w.a.z + w.b.z) / 2]);
   }
   if (sel.type === "hullslab") {
-    const p = daten.model?.slabs?.find((x) => x.level === sel.level); if (!p) return null;
-    // the export: lowest hull slab = base slab (level <= 0 and elevation 0), else a floor slab; source "huelle-decke", id "<level>"
-    const boden = p.level <= 0 && !(p.elevation > 0);
-    const el = mitAttributen({ ...p, id: `${p.level}`, points: p.polygon }, (boden ? daten.huelleBodenAttribute : daten.huelleDeckenAttribute) || null);
+    // 107-13: a slab is found by its own id first (base slab "-1", basement ceilings "ug-1" …), else by its level as before
+    const p = daten.model?.slabs?.find((x) => (sel.id != null ? huellPlattenId(x) === sel.id : x.level === sel.level)); if (!p) return null;
+    // the export: lowest hull slab = base slab (bauteil/ebenen.js istBodenplatte), else a floor slab; source "huelle-decke",
+    // key = the slab's own id, else "<level>" (ifcExport.js builds the GUID from the same key)
+    const boden = istBodenplatte(daten.model, p);
+    const el = mitAttributen({ ...p, id: huellPlattenId(p), points: p.polygon }, (boden ? daten.huelleBodenAttribute : daten.huelleDeckenAttribute) || null);
     const s = sb(el, boden ? "bodenplatte" : "decke", "huelle-decke");
     const m = mitte(p.polygon);
-    return fertig(s, Math.max(0, p.level), m ? [m.x, p.elevation || 0, m.z] : null); // contained in storey max(0, level) like the export
+    return fertig(s, Math.max(untersterLevel(daten.model), p.level), m ? [m.x, p.elevation || 0, m.z] : null); // contained like the export
   }
   return null;
 }
@@ -138,7 +141,7 @@ export function bimAlle(daten, opt = {}) {
   /** @type {any[]} */
   const eintraege = [];
   for (const w of daten.model?.walls || []) eintraege.push({ type: "hullwall", level: w.level, edge: w.edge });
-  for (const p of daten.model?.slabs || []) eintraege.push({ type: "hullslab", level: p.level });
+  for (const p of daten.model?.slabs || []) eintraege.push({ type: "hullslab", level: p.level, ...(p.id != null ? { id: p.id } : {}) });
   const arten = [["wall", daten.customWalls], ["column", daten.customColumns], ["zone", daten.customZones], ["slab", daten.customSlabs], ["roof", daten.customRoofs]];
   for (const [type, arr] of arten) for (const x of arr || []) eintraege.push({ type, index: x._idx });
   for (const o of daten.customWindows || []) eintraege.push({ type: "opening", index: o._idx, scope: "custom" });
@@ -150,7 +153,7 @@ export function bimAlle(daten, opt = {}) {
  * The selection record of a set of studio entries (what is selected right now). Entries that do not resolve to
  * an element with a GUID (generated auto openings, vanished elements) are not listed but counted as `ohneGuid`;
  * only the first AUSWAHL_KONTEXT_MAX elements are resolved to full records, the total and `gekuerzt` say so.
- * @param {Array<{type: string, index?: number, scope?: string, level?: number, edge?: number}>} eintraege  Selection entries.
+ * @param {Array<{type: string, index?: number, scope?: string, level?: number, edge?: number, id?: string}>} eintraege  Selection entries.
  * @param {BimDaten} daten
  * @param {{projektId?: string|number|null, kamera?: any, breite?: number, hoehe?: number}} [opt]
  *   kamera/breite/hoehe: camera and canvas size in px for the screen position (omit in a view where pixels mean nothing).

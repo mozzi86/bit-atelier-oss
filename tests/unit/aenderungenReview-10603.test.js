@@ -134,7 +134,9 @@ test("Herkunft am gezeichneten Bauteil: Marke nach dem Ausführen, nach dem Zur�
   const v = vor(m, 2, "eigenschaft", { name: "kg", wert: "342" }, { quelle: "agent", befehl_text: "setz die kg" });
   const r = vorschlagAusfuehren(m, v, { projektId: P, bestaetigt_durch: "hand", zeit: "2026-10-25T10:00:00.000Z" });
   const marke = wandVon(r.modell, 2)[MARKE_FELD];
-  assert.deepEqual(marke, { herkunft: "agent", herkunft_quellen: ["agent"], befehl_text: "setz die kg", zeit: "2026-10-25T10:00:00.000Z", vorschlag_id: v.id });
+  // 106-09: the mark also names the confirming channel and the confirmed sentence (another device shows both)
+  assert.deepEqual(marke, { herkunft: "agent", herkunft_quellen: ["agent"], befehl_text: "setz die kg", zeit: "2026-10-25T10:00:00.000Z", vorschlag_id: v.id,
+    bestaetigt_durch: "hand", satz: v.satz });
   assert.equal(r.eintrag.bestaetigt_durch, "hand");
   assert.equal(wandVon(m, 2)[MARKE_FELD], undefined, "Eingabemodell bleibt unverändert");
   // a second step puts its own mark; undoing the second restores the first one

@@ -67,6 +67,10 @@ import { useAuth } from "@core/lib/AuthContext";
 // 92-01: self-update of the downloaded app.
 import UpdateHinweis from "@/components/update/UpdateHinweis";
 import BueroKennung from "@/components/buero/BueroKennung.jsx";
+// 106-09 review: conflicts of the device sync that no mounted viewer shows (an editor layer, a studio conflict while the
+// designer shows another tab) appear page-wide - the store is tiny, the card itself is loaded only when needed.
+import { abgleichStand } from "@core/lib/abgleich/abgleichStand";
+const AbgleichHinweise = React.lazy(() => import("@core/components/abgleich/AbgleichHinweise.jsx"));
 // 72-07 / 72-20: own lines (see the note above) — recent projects and work focus.
 import { SelectGroup, SelectLabel, SelectSeparator } from "@core/components/ui/select";
 import { FOKUS, FOKUS_SCHLUESSEL, fokusAusUrl, fokusEintraege, fokusGueltig } from "@/lib/arbeitsfokus.js";
@@ -114,6 +118,22 @@ function NutzerKopf() {
  * The page waits for the list, so it never renders on a project that is
  * about to be corrected.
  */
+/**
+ * 106-09 review: page-wide card for open sync conflicts whose source no mounted viewer shows (never an unseen lock).
+ * @param {{t: (s: string) => string, darfAendern: boolean}} props
+ */
+function AbgleichSeitenkarte({ t, darfAendern }) {
+  const s = React.useSyncExternalStore(abgleichStand.abonnieren, abgleichStand.stand);
+  const quellen = [...new Set(s.konflikte.map((k) => k.quelle))].filter((q) => !abgleichStand.angezeigt(q));
+  if (!quellen.length) return null;
+  return (
+    <React.Suspense fallback={null}>
+      <AbgleichHinweise t={t} darfAendern={darfAendern} quellen={quellen} nurKonflikte
+        className="fixed bottom-4 right-4 z-50 w-[24rem] max-w-[calc(100vw-2rem)] max-h-[60vh] overflow-y-auto" />
+    </React.Suspense>
+  );
+}
+
 function HuelleLaedt() {
   const { t } = useI18n();
   return (
@@ -702,6 +722,7 @@ function LayoutInner({ children }) {
             <Seitenwechsel />
             {/* 92-01: update banner of the local app (renders nothing in cloud/serverless builds). */}
             <UpdateHinweis />
+            <AbgleichSeitenkarte t={t} darfAendern={zugriff.darf("modell", "voll")} />
             {zustand === "inhalt" && children}
             {zustand === "laden" && <HuelleLaedt />}
             {zustand === "fehler" && <VerbindungsFehler fehler={fehler} onErneut={erneutLaden} />}

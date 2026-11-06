@@ -1,7 +1,8 @@
 // Brandschutz auf dem Grundriss — Logik des Plan-Editors (Phase 38, BSP-01…05).
 //
 // In:  brandschutz_layer = { fluchtwege: [{id, level, points}], brandabschnitte: [{id, level, name, points}],
-//        symbole: [{id, level, typ, x, z}], melder: { aktiv, flaecheJeMelder } }  (metres, level 0 = EG),
+//        symbole: [{id, level, typ, x, z}], melder: { aktiv, flaecheJeMelder } }  (metres, level 0 = EG, negative = UG —
+//        107-13: basements are model storeys now, the editor offers them; v1 data, no version step),
 //      footprint of the storey [{x,z}], concept values of the Brandschutz panel (maxFluchtweg m,
 //      flaecheJeMelder m²).
 // Out: symbol catalogue, hardened layer, editor helpers, fire-compartment areas, detector grid points,

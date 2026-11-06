@@ -27,13 +27,16 @@
 //        {art: "zurueck"}                             "rückgängig" - the voice path asks "ja/nein" first (sprechAblauf.js),
 //        {art: "abgelehnt", grund}                    understood, but refused with a German reason.
 // Pure: no DOM, no React, no register - node-testable.
-import { zahlText } from "./aenderungen.js";
+import { eigenschaftFeld, gleich, zahlText } from "./aenderungen.js";
 import { KEINE_AUSWAHL_TEXT } from "./auswahlKontext.js";
+import { erlaubteWerte } from "./befehlsBibliothek.js";
 
 /** @typedef {{auswahl?: {anzahl?: number, bauteile?: Array<{guid?: string|null, klasse?: string|null}>}|null,
  *   ansicht?: {rechts: {x: number, z: number}, vorn: {x: number, z: number}}|null, zeigepunkt?: {x: number, z: number}|null,
- *   gesprochen?: boolean}} SprachKontext
- *   gesprochen: the sentence is a transcript of the speech recognition - a confirmation then needs an unambiguous word (JA_GESPROCHEN). */
+ *   gesprochen?: boolean, bibliothek?: ReadonlyArray<{satz: string, eigenschaft: string, label: string, werte: any[]}>}} SprachKontext
+ *   gesprochen: the sentence is a transcript of the speech recognition - a confirmation then needs an unambiguous word (JA_GESPROCHEN).
+ *   bibliothek (106-10): the office's templates (befehlsBibliothek.js bibliothekNormen) - a fitting sentence becomes the property command,
+ *   and a property they restrict takes only their values (also in the free "setze ... auf ..." form). */
 
 /** @param {object} o @param {string} k @returns {boolean} own key (a word like "constructor" is not in the table) */
 const hatKey = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -378,6 +381,70 @@ function eigenschaftLesen(norm, roh) {
   return { name, wert, text: `${roh[nameIdx]}: ${wert}` };
 }
 
+/** Words a template match skips in the sentence and in the template: references to the selection, articles, nouns of element kinds. */
+const VORLAGE_SKIP = new Set(["dies", "diese", "dieses", "dieser", "diesen", "diesem", "das", "die", "der", "den", "dem", "des", "hier", "dort", "bei", "fuer", "von", "vom",
+  ...Object.keys(NOMEN)]);
+
+/** @param {string} w @returns {string} the word without a German verb ending (setze / setzen / setzt -> setz), for comparing a template word */
+const stamm = (w) => (w.length > 4 ? w.replace(/(en|st|e|t)$/, "") : w);
+
+/** Field name of the change tools -> the grammar's name for wertAus (feuerwiderstand, kg, lb, tragend, ...). @param {string} feld @returns {string} */
+const grammatikName = (feld) => (feld === "gewerk_lb" ? "lb" : feld === "bauteil_typ" ? "bauteiltyp" : feld);
+
+/**
+ * 106-10: the sentence against the office's templates ("Setze {eigenschaft} auf {wert}", "Markiere als {wert}"). Fixed words must come in the
+ * template's order (verb endings and words like "dieses", "die Wand" do not count); {eigenschaft} must name the template's property; {wert} is
+ * the rest of the sentence and must be one of the template's values.
+ * @param {string[]} norm @param {string[]} roh @param {SprachKontext["bibliothek"]} bibliothek
+ * @returns {{name: string, wert: any, text: string}|{art: "abgelehnt", grund: string}|null}  null = no template fits.
+ */
+function vorlageLesen(norm, roh, bibliothek) {
+  if (!bibliothek?.length) return null;
+  const idx = norm.map((_, i) => i).filter((i) => !VORLAGE_SKIP.has(norm[i]));
+  const sn = idx.map((i) => norm[i]), sr = idx.map((i) => roh[i]);
+  for (const v of bibliothek) {
+    const tz = zerlege(v.satz.replace("{eigenschaft}", " __eig__ ").replace("{wert}", " __wert__ ")).norm.filter((w) => !VORLAGE_SKIP.has(w) && !FUELLWORTE.has(w));
+    let i = 0, passt = true;
+    for (const w of tz.slice(0, -1)) {
+      if (i >= sn.length) { passt = false; break; }
+      if (w === "__eig__") {
+        const name = hatKey(EIGENSCHAFT_NAME, sn[i]) ? EIGENSCHAFT_NAME[/** @type {keyof typeof EIGENSCHAFT_NAME} */ (sn[i])] : sn[i];
+        if (eigenschaftFeld(name)?.feld !== v.eigenschaft) { passt = false; break; }
+      } else if (w !== sn[i] && stamm(w) !== stamm(sn[i])) { passt = false; break; }
+      i += 1;
+    }
+    if (!passt) continue;
+    let wr = sr.slice(i), wn = sn.slice(i);
+    while (wn.length && ["setzen", "aendern", "stellen", "ein", "zu"].includes(wn[wn.length - 1])) { wr = wr.slice(0, -1); wn = wn.slice(0, -1); }
+    const liste = v.werte.join(", ");
+    if (!wn.length) return ablehnen(`Der Wert fehlt — ${v.label}: ${liste}`);
+    const def = eigenschaftFeld(v.eigenschaft);
+    const roherWert = wertAus(grammatikName(v.eigenschaft), wr, wn) ?? "";
+    /** @type {any} */
+    let wert;
+    try { wert = def ? def.parse(roherWert) : roherWert; } catch { return ablehnen(`„${roherWert}“ ist für ${v.label} nicht in der Befehlsbibliothek des Büros — erlaubt: ${liste}`); }
+    if (!v.werte.some((x) => gleich(x, wert))) return ablehnen(`„${wert}“ ist für ${v.label} nicht in der Befehlsbibliothek des Büros — erlaubt: ${liste}`);
+    return { name: v.eigenschaft, wert, text: `${v.label}: ${wert}` };
+  }
+  return null;
+}
+
+/**
+ * 106-10: a value of the free "setze ... auf ..." form against the office's allowed values of that property.
+ * @param {{name: string, wert: string}} e @param {SprachKontext["bibliothek"]} bibliothek
+ * @returns {{art: "abgelehnt", grund: string}|null}  null = allowed, or the library does not restrict the property.
+ */
+function bibliothekVerbietet(e, bibliothek) {
+  const erlaubt = erlaubteWerte(bibliothek || [], e.name);
+  if (!erlaubt) return null;
+  const def = eigenschaftFeld(e.name);
+  /** @type {any} */
+  let wert;
+  try { wert = def ? def.parse(e.wert) : e.wert; } catch { wert = e.wert; }
+  if (erlaubt.some((x) => gleich(x, wert))) return null;
+  return ablehnen(`„${wert}“ ist für ${def?.label ?? e.name} nicht in der Befehlsbibliothek des Büros — erlaubt: ${erlaubt.join(", ")}`);
+}
+
 /**
  * Factor of a "skaliere" sentence.
  * @param {string[]} norm @returns {{faktor: number, text: string}|{art: "abgelehnt", grund: string}}
@@ -476,6 +543,15 @@ export function sprachbefehl(text, kontext = {}) {
     return falsch ? ablehnen(falsch) : null;
   };
 
+  // 106-10: the office's templates first - a fitting sentence becomes the property command, a value outside the list is refused with it
+  const vorlage = vorlageLesen(norm, roh, kontext.bibliothek);
+  if (vorlage) {
+    const verweigert = aendert();
+    if (verweigert) return verweigert;
+    if ("art" in vorlage) return vorlage;
+    return { art: "befehl", befehl: "eigenschaft-setzen", params: { name: vorlage.name, wert: vorlage.wert }, verstanden: `Eigenschaft setzen — ${vorlage.text} (Büro-Vorlage)` };
+  }
+
   if (/^(verschieb|schieb|versetz|beweg|verrueck|zieh)/.test(verb) || /^rueck(e|en|t)?$/.test(verb)) {
     const verweigert = aendert();
     if (verweigert) return verweigert;
@@ -536,6 +612,8 @@ export function sprachbefehl(text, kontext = {}) {
       if ("art" in e) return e;
       const verweigert = aendert();
       if (verweigert) return verweigert;
+      const verboten = bibliothekVerbietet(e, kontext.bibliothek); // 106-10: the office's allowed values hold in the free form too
+      if (verboten) return verboten;
       return { art: "befehl", befehl: "eigenschaft-setzen", params: { name: e.name, wert: e.wert }, verstanden: `Eigenschaft setzen — ${e.text}` };
     }
   }

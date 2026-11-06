@@ -10,7 +10,14 @@
 //    boundary exactly where it was — round trip export → import gives the same boundary.
 //  - floor plan: planGrafik() of vektorPlan.js (x/z in metres, z down on screen) → (x, −z).
 //
-// In:  complexData (site plan) or planGrafik() output (floor plan), scale, project name.
+// 106-11: the floor plan carries the model state (comment lines: readable text + the machine line of planStand.js) and, while
+// AI changes are unreleased or the state is unknown, the visible note "Enthält ungeprüfte KI-Änderungen" as TEXT on layer
+// A_KI_VERMERK above the drawing; the marks of planGrafik (ebene "ki_vermerk") land on the same layer, dashed.
+//
+// 107-12: opening symbols of a saved view (planGrafik `ebene: "oeffnung"`) land on the additive layer A_OEFFNUNG — outlines only, the
+// white cut of the PDF never becomes a poché SOLID; a fallback of the walls to the bands is written as visible text on A_PLANKOPF
+// ("Wände aus Bändern abgeleitet, Solid nicht verfügbar") plus a comment line. Without them the output is unchanged.
+// In:  complexData (site plan) or planGrafik() output (floor plan), scale, project name, model state.
 // Out: {ebenen, elemente, linientypen, kommentar} for dxfR12(); dxfDatei() → text + bytes.
 // Pure module: no DOM, no React, node-testable.
 import { dxfR12, dxfBytes, linientypenFuer, stiftFarbe } from "@core/lib/plan/dxfR12.js";
@@ -18,6 +25,7 @@ import { alsBlock, ecken } from "@core/lib/massing/bloecke";
 import { riegelLayout } from "@core/lib/massing/riegel";
 import { metersPerPixel, polygonAreaM2, centroid } from "@core/lib/geo";
 import { CANVAS_CENTER_X, CANVAS_CENTER_Y } from "@designer/lib/maplibreStyles";
+import { modellstandMetadaten, modellstandText, vermerkZeilen } from "@core/lib/zeigen/planStand.js";
 
 /**
  * Marker of the georeference comment line: "BIT-ATELIER-BEZUG <lat> <lng>" (degrees, WGS84 /
@@ -58,9 +66,21 @@ export const LAGEPLAN_EBENEN = Object.freeze({
 /** Layer of each planGrafik `ebene` value of the floor plan. Unknown / missing → A_PLAN. */
 const GRUNDRISS_EBENE = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({
   wand: "A_WAND", stuetze: "A_STUETZE", decke: "A_DECKE", dach: "A_DACH", schraffur: "A_SCHRAFFUR", raum_text: "A_RAUM_TEXT",
+  ki_vermerk: "A_KI_VERMERK", oeffnung: "A_OEFFNUNG",
 }));
-/** Line types of the floor plan layers (the screen shows slabs dashed, roofs dash-dot). */
-const GRUNDRISS_LINIENTYP = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({ A_DECKE: "STRICH", A_DACH: "STRICHPUNKT" }));
+/** Line types of the floor plan layers (the screen shows slabs dashed, roofs dash-dot; 106-11: AI marks dashed). */
+const GRUNDRISS_LINIENTYP = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({ A_DECKE: "STRICH", A_DACH: "STRICHPUNKT", A_KI_VERMERK: "STRICH" }));
+/** 106-11: layer of the visible model state line under the drawing. */
+const PLANKOPF_EBENE = "A_PLANKOPF";
+
+/**
+ * ASCII form of a German text for DXF comment lines (the existing comments are ASCII; some readers show 999 groups raw).
+ * @param {string} s @returns {string}
+ */
+function ascii(s) {
+  const tab = /** @type {Record<string, string>} */ ({ "ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss", "„": "\"", "“": "\"", "—": "-", "–": "-", "·": "-", "…": "..." });
+  return String(s ?? "").replace(/[äöüÄÖÜß„“—–·…]/g, (c) => tab[c]).replace(/[^\x20-\x7e]/g, "?");
+}
 /** Layer of the poché (filled cut walls and columns, SOLID entities). Pen colour 8 = grey [ASSUMED]. */
 const POCHE_EBENE = "A_WAND_POCHE";
 
@@ -144,11 +164,17 @@ export function lageplanDxfDaten(complexData, { massstab = 500, projekt = "", t 
  * labels as centred text. Line widths become pen colours per layer (widest element wins).
  * Fills with more than four corners are not filled (R12 SOLID has at most four) — walls and
  * columns always have four.
- * @param {{elemente: any[], bbox: any}} grafik output of planGrafik(), metres (x, z down)
- * @param {{massstab?: number, geschoss?: string, projekt?: string}} [opt] scale denominator (default 1:100), storey name, project name
- * @returns {DxfDaten & {leer: boolean}}
+ * 106-11: `modellstand` (planStand.js ModellStand; null = could not be determined) adds the state to the comment lines, a visible
+ * state line under the drawing (layer A_PLANKOPF) and - when AI changes are unreleased or the state is unknown - the note above
+ * the drawing (layer A_KI_VERMERK). Left out entirely (undefined) the function stays the pure translation of 104-06 (the comment
+ * then says "nicht ermittelt"); the BIM studio always passes it.
+ * @param {{elemente: any[], bbox: any, markiert?: string[]}} grafik output of planGrafik(), metres (x, z down)
+ * @param {{massstab?: number, geschoss?: string, projekt?: string, modellstand?: import("@core/lib/zeigen/planStand.js").ModellStand|null, ableitungsVermerk?: string|null}} [opt]
+ *   scale denominator (default 1:100), storey name, project name, model state; ableitungsVermerk (107-12): note of a fallback to the
+ *   bands, written under the drawing (A_PLANKOPF) and as a comment line, null = none
+ * @returns {DxfDaten & {leer: boolean, vermerk: boolean}}  vermerk: the drawing carries the visible note.
  */
-export function grundrissDxfDaten(grafik, { massstab = 100, geschoss = "", projekt = "" } = {}) {
+export function grundrissDxfDaten(grafik, { massstab = 100, geschoss = "", projekt = "", modellstand, ableitungsVermerk = null } = {}) {
   const p = (/** @type {{x: number, z: number}} */ q) => ({ x: Number(q.x), y: -Number(q.z) });
   /** @type {DxfElement[]} */
   const el = [];
@@ -165,11 +191,37 @@ export function grundrissDxfDaten(grafik, { massstab = 100, geschoss = "", proje
       const linientyp = e.dash && !GRUNDRISS_LINIENTYP[eb] ? "STRICH" : undefined;
       if (e.offen && pts.length === 2) el.push({ art: "linie", ebene: eb, a: pts[0], b: pts[1], linientyp });
       else el.push({ art: "polylinie", ebene: eb, punkte: pts, geschlossen: !e.offen, linientyp });
-      if (e.fill && !e.offen && pts.length >= 3 && pts.length <= 4) { el.push({ art: "flaeche", ebene: POCHE_EBENE, punkte: pts }); poche = true; }
+      // 107-12: an opening's white fill only cuts the poché in the PDF — in the DXF the opening is its outline on A_OEFFNUNG
+      if (e.fill && e.ebene !== "oeffnung" && !e.offen && pts.length >= 3 && pts.length <= 4) { el.push({ art: "flaeche", ebene: POCHE_EBENE, punkte: pts }); poche = true; }
     } else if (e?.art === "text" && e.text) {
       merke(eb, 0.25);
-      el.push({ art: "text", ebene: eb, x: Number(e.x), y: -Number(e.z), hoehe: ((Number(e.groesse_mm) || TEXT_MM) * massstab) / 1000, text: String(e.text) });
+      el.push({ art: "text", ebene: eb, x: Number(e.x), y: -Number(e.z), hoehe: ((Number(e.groesse_mm) || TEXT_MM) * massstab) / 1000, text: String(e.text),
+        ...(e.ausrichtung === "links" ? { ausrichtung: /** @type {"links"} */ ("links") } : {}) });
     }
+  }
+  // 106-11: visible model state and note (only when the caller handed a state, see above)
+  let vermerk = false;
+  const b = grafik?.bbox;
+  if (modellstand !== undefined && b && el.length) {
+    const k = massstab / 1000; // metres per mm on paper
+    const h = TEXT_MM * k;
+    el.push({ art: "text", ebene: PLANKOPF_EBENE, x: Number(b.x0), y: -Number(b.z1) - 8 * k, hoehe: h, ausrichtung: "links", text: `Modellstand: ${modellstandText(modellstand)}` });
+    merke(PLANKOPF_EBENE, 0.25);
+    const v = vermerkZeilen(modellstand, undefined, { markiert: grafik.markiert ? grafik.markiert.length : undefined });
+    if (v) {
+      vermerk = true;
+      // above the drawing, title first (3.5 mm), then the lines (2.5 mm), 1.6 × text height apart
+      const zeilen = [`${v.zeichen}  ${v.titel}`, ...v.zeilen];
+      zeilen.forEach((t, i) => el.push({ art: "text", ebene: GRUNDRISS_EBENE.ki_vermerk, x: Number(b.x0), y: -Number(b.z0) + (6 + (zeilen.length - 1 - i) * 1.6 * TEXT_MM) * k,
+        hoehe: i === 0 ? 3.5 * k : h, ausrichtung: "links", text: t }));
+      merke(GRUNDRISS_EBENE.ki_vermerk, 0.5);
+    }
+  }
+  // 107-12: fallback note (never silent) under the drawing, below the model state line
+  if (ableitungsVermerk && b && el.length) {
+    const k = massstab / 1000;
+    el.push({ art: "text", ebene: PLANKOPF_EBENE, x: Number(b.x0), y: -Number(b.z1) - 12 * k, hoehe: TEXT_MM * k, ausrichtung: "links", text: `! ${ableitungsVermerk}` });
+    merke(PLANKOPF_EBENE, 0.25);
   }
   /** @type {DxfEbene[]} */
   const ebenen = [...breite.entries()].map(([name, b]) => ({ name, farbe: stiftFarbe(b), linientyp: GRUNDRISS_LINIENTYP[name] }));
@@ -178,8 +230,12 @@ export function grundrissDxfDaten(grafik, { massstab = 100, geschoss = "", proje
     `BIT-Atelier Grundriss${geschoss ? ` ${geschoss}` : ""}${projekt ? ` - ${projekt}` : ""}`,
     `Einheit Meter ($INSUNITS 6), Ursprung = Modellursprung, y = -z des Modells; Vorgabe-Massstab 1:${massstab}`,
     "Linienstaerken als Stiftfarben (ACI) je Ebene, Poche als SOLID auf A_WAND_POCHE",
+    ascii(`Modellstand: ${modellstandText(modellstand ?? null)}`),
+    modellstandMetadaten(modellstand ?? null),
   ];
-  return { ebenen, elemente: el, linientypen: linientypenFuer(massstab), kommentar, leer: el.length === 0 };
+  if (vermerk) kommentar.push(ascii(`ACHTUNG: ${vermerkZeilen(modellstand)?.titel ?? ""} - Vermerk und Markierung auf Ebene A_KI_VERMERK`));
+  if (ableitungsVermerk) kommentar.push(ascii(`ACHTUNG: ${ableitungsVermerk}`));
+  return { ebenen, elemente: el, linientypen: linientypenFuer(massstab), kommentar, leer: el.length === 0, vermerk };
 }
 
 /**

@@ -24,15 +24,16 @@ rechner nicht installiert, IfcOpenShell 0.8 liegt im 3.11-Interpreter.
 ```powershell
 cd <Repo-Ordner>\harness
 py -3.11 -m venv .venv
-.venv\Scripts\python -m pip install -e ".[dev,ifc]"   # H-1/M-13 (Review 67-03): ohne
+.venv\Scripts\python -m pip install -e ".[dev,ifc,katalog]"   # H-1/M-13 (Review 67-03): ohne
                                                        # Extra [ifc] überspringen sich alle
-                                                       # IFC-Tests still — immer mitinstallieren
+                                                       # IFC-Tests still — immer mitinstallieren;
+                                                       # [katalog] = Bauteilkatalog (109-01)
 Copy-Item config.example.yaml config.yaml
 Copy-Item providers.example.yaml providers.yaml
 Copy-Item .env.example .env        # Schlüssel eintragen — nur hier
 ```
 
-macOS/Linux: `python3.11 -m venv .venv && .venv/bin/python -m pip install -e ".[dev,ifc]"`.
+macOS/Linux: `python3.11 -m venv .venv && .venv/bin/python -m pip install -e ".[dev,ifc,katalog]"`.
 
 ## Startbefehle
 
@@ -325,6 +326,37 @@ blockiert — FreeCAD-Dokumente dürfen nur im GUI-Thread angefasst werden).
 
 Nicht Teil von 67-04: iteratives Verfeinern per Sprache mit Rückfragen
 („mach das Bad größer") — das ist Forschung für **Phase 68**.
+
+## Bauteilkatalog (Plan 109-01)
+
+Bibliothek der Baustoffe und Bauteiltypen mit IFC-Ausgabe. Der Bauer ist **elmonkey-core 0.3.0**
+(`elmonkey.katalog`, eigenes Paket, als Release-Wheel mit sha256 im Extra `[katalog]` gepinnt);
+der Harness liefert nur die neutralen Daten und einen Adapter (`harness/bauteilkatalog/`).
+
+- **Daten:** `harness/bauteilkatalog/daten/` — 113 Baustoffe (λ, ρ, c, graue Energie, CO₂, Farbe,
+  Textur, DIN-Schraffur), 35 Wand-/Decken-/Belagstypen (`typen/grundbestand.json`) und 7 Muster/Rohlinge.
+  Profile (DIN 18182-1) und Verstärkungsarten kommen aus den Paketdaten von elmonkey.
+- **Laufzeit-Typen:** Bearbeiten (`bearbeiten(projekt, typ, operationen)`) erzeugt nie eine Änderung am
+  Grundbestand, sondern einen neuen Typ bzw. eine neue Version unter
+  `projects/<slug>/bauteilkatalog/typen/<schluessel>.json`; `katalog(projekt)` lädt sie mit.
+- **IFC:** Materialbibliothek, Typbibliothek (`IfcProjectLibrary`), Muster-Projekt (Schichtwand mit Fenster,
+  Innenwand mit Tür, Ständerwand zerlegt in Teile mit Verstärkung, Rohdecke, Fußbodenaufbau; Option
+  Ständerwand als Schichten) in IFC4 und IFC4X3. Psets `Pset_BIT_*`, Klassifizierung nur DIN 276 und bSDD.
+  Ein Nachlauf entfernt bis zu einer neuen elmonkey-Version Herkunftsfelder, die elmonkey 0.3.0 immer schreibt,
+  schreibt Textur-Verweise auf `urn:bit-atelier:textur/…` um und überträgt alle GlobalIds in einen eigenen
+  uuid5-Namensraum (`typ_guid(t)` liefert die Typ-GUID; Laufzeit-Typen mit Inhalts-Hash).
+
+```powershell
+.venv\Scripts\python -m harness.bauteilkatalog bibliothek <ordner> [--schema IFC4|IFC4X3] [--projekt projects\<slug>]
+.venv\Scripts\python -m harness.bauteilkatalog muster <ordner> [--schema IFC4X3]
+.venv\Scripts\python -m harness.bauteilkatalog pruefen <datei.ifc>   # WHERE-Regeln, Proxys, Typen, Neutralität
+```
+
+Exit-Code: 0 gültig und neutral, 1 Prüfung fehlgeschlagen oder Eingabe unbrauchbar, 2 falsche Argumente,
+3 Bauer nicht installiert.
+
+Beispiele (IFC4, über die CLI erzeugt): `examples/bauteilkatalog/`. Daten neu umsetzen (einmalig, aus einem
+gelieferten Datenordner): `tools/bauteilkatalog_neutral.py <ordner>`.
 
 ## HTTP / WebSocket
 

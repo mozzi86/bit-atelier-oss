@@ -28,6 +28,8 @@ import { SERVERLOS, DATENQUELLE } from '../lib/umgebung.js';
 // 80-02 (D-P80-A #2): the personal storage class gets its OWN namespace,
 // never the generic `entities` proxy — istPersonalEntitaet gates both sides.
 import { istPersonalEntitaet, PERSONAL_NUR_LOKAL } from './personalEntitaeten.js';
+// 106-09: every request names its tab, so the change stream can tell a tab its own writes (server/aenderungsStrom.js).
+import { CLIENT_KOPF, clientKennung } from '../lib/abgleich/clientKennung.js';
 
 // Serverless data path of the client build (lokal). One question, one source
 // (umgebung.js) - see 70-01. The name DEMO is historical (online demo removed in 83-02).
@@ -45,7 +47,7 @@ export const ZWISCHENZEITLICH_GEAENDERT = 'bit:zwischenzeitlich-geaendert';
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', [CLIENT_KOPF]: clientKennung() },
     ...options,
   });
   if (res.headers?.get?.('X-Bit-Hinweis') === 'zwischenzeitlich-geaendert' && typeof window !== 'undefined') {
@@ -128,8 +130,9 @@ function entityClient(name) {
     get: (id) => request(`/entities/${name}/${id}`),
     create: (data) =>
       request(`/entities/${name}`, { method: 'POST', body: JSON.stringify(data) }),
-    update: (id, data) =>
-      request(`/entities/${name}/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    // 106-09 (105-20): opts.stand = updated_date the write builds on; the server refuses an outdated base with 409
+    update: (id, data, opts) =>
+      request(`/entities/${name}/${id}${opts?.stand ? `?stand=${encodeURIComponent(opts.stand)}` : ''}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id) => request(`/entities/${name}/${id}`, { method: 'DELETE' }),
   };
 }
@@ -141,7 +144,8 @@ function entityClient(name) {
  * @property {(query?: Record<string, any>, sort?: string) => Promise<any[]>} filter
  * @property {(id: string) => Promise<any>} get
  * @property {(data: Record<string, any>) => Promise<any>} create
- * @property {(id: string, data: Record<string, any>) => Promise<any>} update
+ * @property {(id: string, data: Record<string, any>, opts?: {stand?: string|null}) => Promise<any>} update
+ *   opts.stand (106-09, express path only): updated_date of the base; an outdated base answers 409 (err.status, err.data.gespeichert)
  * @property {(id: string) => Promise<any>} delete
  */
 

@@ -13,6 +13,7 @@
 // Massing-Studio uses). Pure module, no DOM.
 
 import { abstandsStreifen, dichte, konvexUeberlappen, polyFlaeche, punktInPoly } from "./baurecht.js";
+import { reihenFaktoren, ohneGuid } from "./massingModell.js"; // 107-07: the shared array core of typed "*n" / "/n"; 107-08: copies without stored guid
 
 /**
  * @typedef {{x: number, y: number}} P
@@ -144,23 +145,115 @@ export function verschieben(bloecke, ids, dx, dy) {
 }
 
 /**
- * Copy the selected blocks, offset by (dx, dy) — `anzahl` copies in a row (SketchUp "*n").
+ * Copy the selected blocks, offset by (dx, dy) — `anzahl` copies in a row (typed "*n"); 107-07: `modus` "teilen" divides the
+ * offset instead (typed "/n": copies at dx/n, 2·dx/n … dx), through the shared array core reihenFaktoren().
  * @param {Block[]} bloecke
  * @param {string[]} ids
  * @param {number} dx metres
  * @param {number} dy metres
  * @param {() => string} neueId id factory
  * @param {number} [anzahl] number of copies
+ * @param {'mal'|'teilen'} [modus] mal = each copy one offset further (default), teilen = the offset divided into anzahl steps
  * @returns {{bloecke: Block[], neu: string[]}} all blocks and the ids of the LAST copy row
  */
-export function kopieren(bloecke, ids, dx, dy, neueId, anzahl = 1) {
+export function kopieren(bloecke, ids, dx, dy, neueId, anzahl = 1, modus = "mal") {
   const quelle = bloecke.filter((k) => ids.includes(k.id));
   const out = [...bloecke];
+  /** @type {string[]} */
   let neu = [];
-  for (let n = 1; n <= Math.max(1, Math.floor(anzahl)); n++) {
-    neu = quelle.map((k) => { const c = { ...k, id: neueId(), cx: k.cx + dx * n, cy: k.cy + dy * n }; out.push(c); return c.id; });
+  // the old rule floored the count (2.7 → 2); kept so a fractional count behaves as before
+  for (const f of reihenFaktoren(Math.max(1, Math.floor(anzahl)), modus)) {
+    // 107-08: a copy never takes a stored guid along (ohneGuid) — no two blocks share a GlobalId
+    neu = quelle.map((k) => { const c = { ...ohneGuid(k), id: neueId(), cx: k.cx + dx * f, cy: k.cy + dy * f }; out.push(c); return c.id; });
   }
   return { bloecke: out, neu };
+}
+
+/**
+ * 107-07: rotated copies of the selected blocks about `um` (rotate handle + Ctrl, then typed "*n" / "/n"): copy i is the selection
+ * turned by f_i · grad (reihenFaktoren); the originals stay.
+ * @param {Block[]} bloecke
+ * @param {string[]} ids
+ * @param {number} grad degrees, clockwise on screen (as drehen)
+ * @param {P} um pivot, metres
+ * @param {() => string} neueId id factory
+ * @param {number} [anzahl] number of copies
+ * @param {'mal'|'teilen'} [modus]
+ * @returns {{bloecke: Block[], neu: string[]}} all blocks and the ids of ALL copies
+ */
+export function drehKopieren(bloecke, ids, grad, um, neueId, anzahl = 1, modus = "mal") {
+  const quelle = bloecke.filter((k) => ids.includes(k.id));
+  const out = [...bloecke];
+  /** @type {string[]} */
+  const neu = [];
+  // review 107-07: the count is floored like kopieren (2.7 → 2), so both copy functions of this module read a count alike
+  for (const f of reihenFaktoren(Math.max(1, Math.floor(anzahl)), modus)) {
+    const gedreht = drehen(quelle, ids, grad * f, um);
+    for (const k of gedreht) { const c = { ...ohneGuid(k), id: neueId() }; out.push(c); neu.push(c.id); }
+  }
+  return { bloecke: out, neu };
+}
+
+/**
+ * 107-07 review: what a copy / row leaves for the next typed "*n" / "/n".
+ * @typedef {{ids: string[], kopien: string[], erste: string[]|null, faktor0: number, grad?: number, um?: P}} Kopie
+ *   ids = the originals, kopien = ids of ALL copies of the last copy or row (the next row replaces them),
+ *   erste = [original id, id of its copy at factor faktor0] (the step of a shifted row is read from this pair),
+ *   faktor0 = factor of that first copy (1 for "*n" and a single copy, 1/n for "/n"), grad / um = rotated copy (degrees, pivot in m)
+ */
+
+/** German i18n key of the refusal when the last copy or its originals are gone. */
+export const KOPIE_FEHLT = "Kopie oder Original gibt es nicht mehr — erst neu kopieren (Strg + Ziehen)";
+
+/**
+ * 107-07 review: remember a copy or row made from `vorher` (blocks before it) — kopieren / drehKopieren append the new blocks
+ * in the order of the selected originals.
+ * @param {Array<{id: string}>} vorher blocks before the copy
+ * @param {Array<{id: string}>} nachher blocks after the copy
+ * @param {string[]} ids originals
+ * @param {number} faktor0 factor of the first copy (dimensionless)
+ * @param {{grad?: number, um?: P}} [dreh] rotated copy: angle in degrees and pivot in m
+ * @returns {Kopie}
+ */
+export function kopieMerken(vorher, nachher, ids, faktor0, dreh = {}) {
+  const kopien = nachher.slice(vorher.length).map((k) => k.id);
+  const quelle = vorher.filter((k) => ids.includes(k.id));
+  /** @type {Kopie} */
+  const lk = { ids: [...ids], kopien, erste: quelle.length && kopien.length ? [quelle[0].id, kopien[0]] : null, faktor0 };
+  if (dreh.grad != null && dreh.um) { lk.grad = dreh.grad; lk.um = dreh.um; }
+  return lk;
+}
+
+/**
+ * 107-07 review: the row of the last copy on the CURRENT blocks — the copies of the last copy / row go, the new row is made from
+ * the originals as they stand now. A shifted copy repeats where its first copy stands now relative to its original (an arrow
+ * nudge of the copy counts); a rotated copy repeats its angle about its pivot. Refused when an original or a copy no longer
+ * exists (deleted, undone, another record) — never rebuilt from an old snapshot.
+ * @param {Array<{id: string, cx: number, cy: number}>} bloecke current blocks, centres in m
+ * @param {Kopie} lk
+ * @param {number} n number of copies (floored, at least 1)
+ * @param {'mal'|'teilen'} art
+ * @param {() => string} idFn id factory
+ * @returns {{bloecke: any[], neu: string[], kopie: Kopie}|{fehler: string}} fehler = German i18n key
+ */
+export function reiheAusKopie(bloecke, lk, n, art, idFn) {
+  const da = new Set(bloecke.map((k) => k.id));
+  const vorhanden = (/** @type {string[]} */ l) => l.length > 0 && l.every((id) => da.has(id));
+  if (!lk || !vorhanden(lk.ids) || !vorhanden(lk.kopien)) return { fehler: KOPIE_FEHLT };
+  const weg = new Set(lk.kopien);
+  const ohne = bloecke.filter((k) => !weg.has(k.id));
+  const anzahl = Math.max(1, Math.floor(n));
+  const f0 = reihenFaktoren(anzahl, art)[0];
+  if (lk.grad != null && lk.um) {
+    const r = drehKopieren(/** @type {any} */ (ohne), lk.ids, lk.grad, lk.um, idFn, anzahl, art);
+    return { bloecke: r.bloecke, neu: r.neu, kopie: kopieMerken(ohne, r.bloecke, lk.ids, f0, { grad: lk.grad, um: lk.um }) };
+  }
+  const o = lk.erste ? bloecke.find((k) => k.id === lk.erste?.[0]) : null;
+  const c = lk.erste ? bloecke.find((k) => k.id === lk.erste?.[1]) : null;
+  if (!o || !c || !(lk.faktor0 > 0)) return { fehler: KOPIE_FEHLT };
+  const dx = (c.cx - o.cx) / lk.faktor0, dy = (c.cy - o.cy) / lk.faktor0; // m per step
+  const r = kopieren(/** @type {any} */ (ohne), lk.ids, dx, dy, idFn, anzahl, art);
+  return { bloecke: r.bloecke, neu: r.bloecke.slice(ohne.length).map((k) => k.id), kopie: kopieMerken(ohne, r.bloecke, lk.ids, f0) };
 }
 
 /**

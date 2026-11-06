@@ -297,6 +297,18 @@ export function createBuero({
       return oeffentlich(g);
     },
 
+    /**
+     * 106-09 review: whether a device is still paired and not expired (no "last seen" refresh, no disk write) — checked by
+     * the change stream before every event it sends to a device over a connection opened earlier.
+     * @param {string|null|undefined} id
+     * @returns {boolean}
+     */
+    geraetGueltig(id) {
+      if (!id) return false;
+      const g = zustand.geraete.find((x) => x.id === id);
+      return Boolean(g) && Date.parse(/** @type {Geraet} */ (g).laeuftAb) > jetzt();
+    },
+
     /** @returns {GeraetOeffentlich[]} paired, not yet expired devices, newest first */
     geraete() {
       if (aufraeumen()) speichern();

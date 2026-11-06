@@ -60,6 +60,8 @@ const Werkplanung = React.lazy(() => import('./pages/Werkplanung'));
 // NAV-PLAN 2026-10-13: site diary page split off Werkplanung (station 8).
 const Baustelle = React.lazy(() => import('./pages/Baustelle'));
 const ModelVersions = React.lazy(() => import('@ifc/pages/ModelVersions'));
+// 106-10: review workplace (change log, release, command library) - a lazy chunk like every page.
+const Modellfreigabe = React.lazy(() => import('./pages/Modellfreigabe'));
 const ModelCheck = React.lazy(() => import('@ifc/pages/ModelCheck'));
 const IfcViewer = React.lazy(() => import('@ifc/pages/IfcViewer'));
 const PlanSketchStudio = React.lazy(() => import('@designer/pages/PlanSketchStudio'));
@@ -171,6 +173,7 @@ const HauptApp = () => {
     <Route path="/Werkplanung" element={<Werkplanung />} />
     <Route path="/Baustelle" element={<Baustelle />} />
     <Route path="/ModelVersions" element={<ModelVersions />} />
+    <Route path="/Modellfreigabe" element={<Modellfreigabe />} />
     <Route path="/ModelCheck" element={<ModelCheck />} />
     <Route path="/IfcViewer" element={<IfcViewer />} />
     <Route path="/SketchStudio" element={<PlanSketchStudio />} />

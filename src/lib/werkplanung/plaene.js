@@ -164,11 +164,12 @@ export function freigabePatch(p, von, jetzt = new Date()) {
 /**
  * Patch for a new revision index: next letter, history entry, status back to
  * 'in_arbeit', release cleared, file reference cleared (the old file belongs to
- * the old index).
+ * the old index), and with it the model state of that file (106-11 review:
+ * Plan.modellstand describes the filed sheet, the new index has none yet).
  * @param {PlanRecord} p
  * @param {string} aenderung description of the change (required)
  * @param {Date} [jetzt]
- * @returns {{index: string, indizes: Array<{index: string, datum: string, aenderung: string}>, status: string, freigabe: null, datei_ref: null}|null}
+ * @returns {{index: string, indizes: Array<{index: string, datum: string, aenderung: string}>, status: string, freigabe: null, datei_ref: null, modellstand: null}|null}
  */
 export function indexPatch(p, aenderung, jetzt = new Date()) {
   const text = String(aenderung || "").trim();
@@ -180,6 +181,7 @@ export function indexPatch(p, aenderung, jetzt = new Date()) {
     status: "in_arbeit",
     freigabe: null,
     datei_ref: null,
+    modellstand: null,
   };
 }
 

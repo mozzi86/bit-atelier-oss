@@ -18,6 +18,7 @@ import { createBuildingModel } from "@core/lib/buildingModel";
 import { setzeProjektAufbauten } from "@core/lib/bauteil/aufbauten.js";
 import { useBuildingProgram } from "@core/lib/useBuildingProgram";
 import { loadBimModel, aufBimModelAenderung } from "@core/lib/useBimModelSync";
+import { eingangDesDatensatzes } from "@designer/lib/autoOpenings"; // 108-01
 // 89-02: the workshop's walls/doors/rooms as classified components (read model for planners).
 import { werkstattBauteile } from "@core/lib/werkstattBauteile";
 
@@ -28,6 +29,41 @@ import { werkstattBauteile } from "@core/lib/werkstattBauteile";
  * @type {string|number|null}
  */
 let aufbautenProjekt = null;
+
+/**
+ * Builds the plan model of the planner tabs from the shared programme store and the loaded record (pure; the hook below memoises it).
+ * @param {any} bp programme store values (footprintM, storeys, storeyHeight in m, geschosse, untergeschosse)
+ * @param {any} geladen loaded BimModel record or null (hull parameters)
+ * @returns {ReturnType<typeof createBuildingModel>}
+ */
+export function planModellBauen(bp, geladen) {
+  return createBuildingModel({
+    footprintM: bp.footprintM,
+    storeys: bp.storeys,
+    storeyHeight: bp.storeyHeight,
+    parapet: geladen?.parapet,
+    wallThickness: geladen?.envThickness,
+    wallComposite: geladen?.envComposite,
+    huelleBezug: geladen?.huelle_bezug, // 107-01: reference line of the hull walls (optional field)
+    geschosse: bp.geschosse, // 107-02: optional storey table (null = one height for all storeys)
+    deckenDicke: geladen?.huelle_decke_dicke_m, deckenBezug: geladen?.huelle_decke_bezug, // 107-02: thickness/side of the hull slabs (optional fields; absent = 0.25 m, lower edge on the plane)
+    untergeschosse: bp.untergeschosse || 0, // 107-13 (D-BK-20): basements on the levels −1 … −U (0 = none, all old projects)
+    // 108-02 (D-EFH-01): the global roof form of the record — read only together with a knee wall on the top storey row (eaves, walls,
+    // collar-beam floor), so the planner tabs and the workshop see the same model as the studio
+    dachform: geladen?.dachform || null, dachneigung: geladen?.dachneigung ?? null,
+  });
+}
+
+/**
+ * The inputs the plan model depends on, in the order of the useMemo dependency list (107-13: `untergeschosse` belongs to it, else the
+ * plan in BimPlan2D and the editors stays stale when a basement is added).
+ * @param {any} bp programme store values
+ * @param {any} geladen loaded record
+ * @returns {any[]}
+ */
+export function planModellAbhaengigkeiten(bp, geladen) {
+  return [bp.footprintM, bp.storeys, bp.storeyHeight, bp.geschosse, bp.untergeschosse, geladen];
+}
 
 export function usePlanModel(projectId) {
   const bp = useBuildingProgram();
@@ -65,19 +101,9 @@ export function usePlanModel(projectId) {
   // Hülle live aus dem Store; Hüll-Parameter (Attika/Wandaufbau) aus dem
   // geladenen Datensatz, damit der Plan dem BIM-Studio entspricht.
   const model = useMemo(
-    () =>
-      createBuildingModel({
-        footprintM: bp.footprintM,
-        storeys: bp.storeys,
-        storeyHeight: bp.storeyHeight,
-        parapet: geladen?.parapet,
-        wallThickness: geladen?.envThickness,
-        wallComposite: geladen?.envComposite,
-        huelleBezug: geladen?.huelle_bezug, // 107-01: reference line of the hull walls (optional field)
-        geschosse: bp.geschosse, // 107-02: optional storey table (null = one height for all storeys)
-        deckenDicke: geladen?.huelle_decke_dicke_m, deckenBezug: geladen?.huelle_decke_bezug, // 107-02: thickness/side of the hull slabs (optional fields; absent = 0.25 m, lower edge on the plane)
-      }),
-    [bp.footprintM, bp.storeys, bp.storeyHeight, bp.geschosse, geladen]
+    () => planModellBauen(bp, geladen),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    planModellAbhaengigkeiten(bp, geladen)
   );
 
   // Räume LIVE aus dem Store (Format wie customZones; _idx fehlt — für die
@@ -111,10 +137,14 @@ export function usePlanModel(projectId) {
     // Eingangstür-Konfiguration (für autoEnvOpenings), read-only wie oben.
     dachform: geladen?.dachform || "flach",
     dachneigung: geladen?.dachneigung ?? 30,
-    entranceCfg: geladen?.entranceCfg || null,
+    // 108-01 (D-EFH-04): a stored record without `enabled` (new projects) gets the entrance IN EFFECT — off with an own hull door on the
+    // ground floor — so room climate, sound insulation and the workshop count the same openings as the studio; a stored choice stays.
+    // Review: also a record WITHOUT entranceCfg (studio never opened) gets the studio start values (autoOpenings.eingangDesDatensatzes).
+    entranceCfg: eingangDesDatensatzes(geladen),
     storeys: bp.storeys,
     storeyHeight: bp.storeyHeight,
     geschosse: bp.geschosse || null,
+    untergeschosse: model.untergeschosse || 0, // 107-13: number of basements as the model has it (0 … 3)
     unit: bp.unit || "m",
   };
 }
