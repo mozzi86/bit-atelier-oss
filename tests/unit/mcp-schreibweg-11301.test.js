@@ -12,7 +12,6 @@
 import { describe, it, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -76,7 +75,7 @@ describe('113-01 — MCP server against the real server/index.js', () => {
     const API = `http://127.0.0.1:${port}/api`;
     api = spawn(process.execPath, [path.join(WURZEL, 'server', 'index.js')], {
       cwd: WURZEL, stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, BIT_DATA_DIR: DATEN, BIT_PERSONAL_SCHLUESSEL: crypto.randomBytes(32).toString('hex'), API_PORT: String(port), BIT_STEUERUNG_TOKEN: '' },
+      env: { ...process.env, BIT_DATA_DIR: DATEN, BIT_PERSONAL_SCHLUESSEL: path.join(DATEN, 'personal.key'), API_PORT: String(port), BIT_STEUERUNG_TOKEN: '' },
     });
     api.stdout.on('data', (s) => { apiLog += s; });
     api.stderr.on('data', (s) => { apiLog += s; });

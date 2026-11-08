@@ -99,6 +99,7 @@ import { vollgeschossAusDach } from "@core/lib/bauteil/vollgeschoss.js"; // 108-
 import { dachBerechnen, dachDreiecke, dachVonDachelement, globalesDach, schnittAchseQuerZumFirst, dachEbenen } from "@core/lib/bauteil/dachGeometrie.js"; // 107-10: one roof library for 3D, IFC and solid relations
 import { treppeBerechnen, mitTreppenLoechern, treppeKoerper, treppenText, neueTreppe, deckeUeber, treppenLoch } from "@core/lib/bauteil/treppe.js"; // 108-06: stairs as elements, derived slab openings
 import { gaubeBerechnen, gaubenDreiecke, neueGaube, GAUBE_STANDARD } from "@core/lib/bauteil/gauben.js"; // 108-13: dormers on the global roof
+import { mitGiebelProfilen } from "@core/lib/bauteil/giebel.js"; // 108-03: hull walls of the top storey up to the roof contour
 import { SOLIDRELATIONEN_LEER, relationenVon, relationAnlegen, relationAktivSetzen, aktiveRelationenFuer, relationWirkt, istSeoCacheSchluessel } from "@core/lib/bauteil/seoRelationen.js"; // 107-10: stored solid relations (pure; seo.js loads lazily)
 import { csgWarnungText } from "@core/lib/bauteil/csgWarnung.js";
 import { brilleVon, sichtbarUnter, zeigtStatus, STANDARD_BRILLE } from "@core/lib/plan/brillen.js";
@@ -342,10 +343,12 @@ function applyPickHighlight(t, selected, multi) {
  * @param {THREE.Material} material
  * @returns {THREE.Mesh}
  */
-function dachMesh(dach, material, giebelMaterial = null) {
+function dachMesh(dach, material, giebelMaterial = null, ohneGiebel = false) {
   // 108-03 (user 08.11.2026: "die Giebelseiten sind nicht rot, sie sind Hauswand"): the vertical gable triangles are wall, not roof —
-  // with `giebelMaterial` they become their own mesh in the facade material; without it the old single mesh (drawn roofs, massing)
-  const teile = giebelMaterial ? dach.flaechen.filter((f) => f.art !== "giebel") : dach.flaechen;
+  // with `giebelMaterial` they become their own mesh in the facade material; `ohneGiebel` leaves them out entirely (the hull walls carry
+  // the gable as a profile wall, mitGiebelProfilen); without either the old single mesh (drawn roofs, massing)
+  const teile = giebelMaterial || ohneGiebel ? dach.flaechen.filter((f) => f.art !== "giebel") : dach.flaechen;
+  if (ohneGiebel) giebelMaterial = null;
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(dachDreiecke(teile), 3));
   geo.computeVertexNormals();
@@ -416,11 +419,15 @@ function buildWallMeshWithHoles(w, material, openings, thicknessOverride, normal
   const nx = g.normale.x, nz = g.normale.z;
   const off = normalOffset != null ? normalOffset : g.versatz_m;
   const shape = new THREE.Shape();
-  shape.moveTo(0, 0); shape.lineTo(len, 0); shape.lineTo(len, H); shape.lineTo(0, H); shape.closePath();
+  // 108-03: a hull wall under the roof (w.profil, bauteil/giebel.js) is its profile polygon in the wall plane; else the rectangle
+  const prof = w.profil && Array.isArray(w.profil.punkte) && w.profil.punkte.length >= 3 ? w.profil : null;
+  const Hp = prof ? prof.hoehe_max_m : H;
+  if (prof) { prof.punkte.forEach((p, i) => (i ? shape.lineTo(p.x, p.y) : shape.moveTo(p.x, p.y))); shape.closePath(); }
+  else { shape.moveTo(0, 0); shape.lineTo(len, 0); shape.lineTo(len, H); shape.lineTo(0, H); shape.closePath(); }
   // 107-04: the hole of an opening has ONE rule (lochImWand: position kept in the wall like the IFC export, edge clearance at the sides and
   // 2 cm at bottom and top). An opening that does not fit is reported by the studio (oeffnungsProblemText), no longer clamped in silence.
   (openings || []).forEach(({ u, sill, width, height, rund }) => {
-    const loch = lochImWand({ w: width, h: height, sill }, u, len, H);
+    const loch = lochImWand({ w: width, h: height, sill }, u, len, Hp, prof ? { profil: prof } : undefined);
     if (!loch) return;
     const p = new THREE.Path();
     // a round penetration (core drilling) is a circle in the wall plane, everything else a rectangle
@@ -1223,6 +1230,8 @@ export default function BitBimStudio({ complexData }) {
   const eingangOeffnung = useMemo(() => entranceOpening(model.walls, entranceWirksam), [model, entranceWirksam]);
   // 108-01: the global roof form once (globalesDach) — section, 3D and solid relations read the same roof; the section axis across the ridge
   const globalDach = useMemo(() => globalesDach(model, dachform, dachneigung, gs), [model, dachform, dachneigung, gs]);
+  // 108-03: the hull walls of the top storey with their profile under that roof (gable walls up to the ridge); same model object without a pitched roof
+  const giebel = useMemo(() => mitGiebelProfilen(model, globalDach), [model, globalDach]);
   // 108-02 (D-EFH-01): full-storey rule of the attic storey (the top storey with a knee wall) from the same roof: floor = top of the
   // structural slab under it (eaves − knee wall) [ASSUMED: no floor build-up], area = the footprint. A hint, never a block (vollgeschoss.js).
   const vollgeschossDg = useMemo(() => {
@@ -1234,7 +1243,7 @@ export default function BitBimStudio({ complexData }) {
 
   // ---- 107-04: opening chain (host, sizes, height anchor, new opening) ----
   // The walls an opening can sit in (drawn + hull walls), for wirtVon() — the ONE host resolver (also used by the IFC export).
-  const wirtModell = useMemo(() => ({ customWalls, huelle: model.walls, werkstatt: null, projektId: projectId || null, geschosse: gs }), [customWalls, model, projectId, gs]);
+  const wirtModell = useMemo(() => ({ customWalls, huelle: giebel.model.walls, werkstatt: null, projektId: projectId || null, geschosse: gs }), [customWalls, giebel, projectId, gs]); // 108-03: hull walls with their roof profile
   /** Stores a record made by neueOeffnung() in its array (the plan click and the 3D click both end here). */
   const oeffnungSetzen = ({ scope, satz }) => (scope === "env" ? setEnvOpenings : setCustomWindows)((os) => [...os, satz]);
   /**
@@ -1660,10 +1669,14 @@ export default function BitBimStudio({ complexData }) {
     const f2 = (/** @type {number} */ v) => v.toFixed(2);
     const pruefe = (/** @type {any} */ o, /** @type {any} */ wirt, /** @type {string} */ ort) => {
       if (!wirt) return;
-      const r = oeffnungPasst(masseAmWand(o, wirt.wand, wirt.wand.unterkante_m), wirt.wand.laenge_m, wirt.wand.hoehe_m);
+      // 108-03: against the roof profile of a hull wall (lowest height over the opening's span)
+      const r = oeffnungPasst(masseAmWand(o, wirt.wand, wirt.wand.unterkante_m), wirt.wand.laenge_m, wirt.wand.hoehe_m, { profil: wirt.wand.profil || null, u: o.u ?? null });
       if (r.ok) return;
       const wo = tz(o.kind === "door" ? "Tür auf {{ort}}" : o.kind === "oeffnung" ? "Öffnung auf {{ort}}" : "Fenster auf {{ort}}").replace("{{ort}}", ort);
-      out.push(tz("{{wo}}: {{b}}×{{h}} m (Brüstung {{sill}} m) passt nicht in die Wand ({{l}}×{{hw}} m)").replace("{{wo}}", wo)
+      const satz = r.daten.hoehe_an_stelle != null && r.daten.sill + r.daten.h > r.daten.hoehe_an_stelle + 1e-6
+        ? tz("{{wo}}: {{b}}×{{h}} m (Brüstung {{sill}} m) ragt über die Dachkontur: an dieser Stelle nur {{hw}} m Wandhöhe")
+        : tz("{{wo}}: {{b}}×{{h}} m (Brüstung {{sill}} m) passt nicht in die Wand ({{l}}×{{hw}} m)");
+      out.push(satz.replace("{{wo}}", wo)
         .replace("{{b}}", f2(r.daten.w)).replace("{{h}}", f2(r.daten.h)).replace("{{sill}}", f2(r.daten.sill)).replace("{{l}}", f2(r.daten.laenge)).replace("{{hw}}", f2(r.daten.hoehe)));
     };
     customWindows.forEach((o) => pruefe(o, wirtVon(o, wirtModell), tz("Wand {{wand}}").replace("{{wand}}", String(o.wallIdx))));
@@ -3818,7 +3831,7 @@ export default function BitBimStudio({ complexData }) {
 
     // Regel-Öffnungen (Auto-Fenster + Eingangstür) kommen aus autoOpenings —
     // derselben Liste, die auch der IFC-Export bekommt (KD-16).
-    model.walls.forEach((w) => {
+    giebel.model.walls.forEach((w) => { // 108-03: top-storey hull walls carry `profil` (gable up to the roof)
       const autos = autoOpenings.filter((o) => o.level === w.level && o.edge === w.edge);
       const ops = /** @type {Array<{u: number, sill: number, width: number, height: number, rund?: boolean}>} */ (autos.map((o) => ({ u: o.u, sill: o.sill, width: o.width, height: o.height })));
       // benutzerplatzierte Öffnungen auf dieser Hüllwand
@@ -3831,7 +3844,8 @@ export default function BitBimStudio({ complexData }) {
       const hComp = !renderMode && w.composite ? compositeById(w.composite) : null;
       // 107-09: the intersected solid (layers as material groups) once its volume comparison passed; until then and as the fallback the layers below.
       // Review 107-09: in render mode too (one facade material over all layer groups), so 3D and plan show the same joint
-      const vs = seoSolid(`env:${w.level}:${w.edge}`) || (w.composite ? vSolidsAktuell?.waende.get(`env:${w.level}:${w.edge}`) : null); // 107-10: a wall cut under a roof first
+      // 108-03: a profile wall (gable) is drawn from its profile polygon — the intersected solids know the stored knee-wall height only
+      const vs = w.profil ? null : seoSolid(`env:${w.level}:${w.edge}`) || (w.composite ? vSolidsAktuell?.waende.get(`env:${w.level}:${w.edge}`) : null); // 107-10: a wall cut under a roof first
       // 107-13 review: in render mode a basement wall gets concrete (slabMat), not the facade preset - clinker below ground is wrong (A2)
       const weg = huellMeshWeg({ hatSolid: !!vs?.geometrie, hatAufbau: !!hComp, kellerImRender: renderMode && w.level < 0 });
       const ganz = weg.beton ? slabMat : wallMat;
@@ -3907,7 +3921,7 @@ export default function BitBimStudio({ complexData }) {
         : new THREE.MeshStandardMaterial({ color: 0xb05a3c, roughness: 0.85, side: THREE.DoubleSide });
       // 107-10: roof library (shed: slope as set, see there); 108-01: eaves from globaleTraufhoehe_m (one function for 3D, IFC, section)
       const dd = globalesDach(model, dachform, dachneigung, gs);
-      const roof = dd && dd.ok ? dachMesh(dd, roofMat, wallMat) : null; // 108-03: gable triangles in the facade material
+      const roof = dd && dd.ok ? dachMesh(dd, roofMat, wallMat, giebel.profile.size > 0) : null; // 108-03: gable = the hull wall itself (profile); without profiles the triangle in the facade material
       if (roof) {
         roof.traverse((c) => { c.userData.layer = "attika"; c.userData.kind = "globalroof"; });
         t.buildingGroup.add(roof);
@@ -3947,7 +3961,7 @@ export default function BitBimStudio({ complexData }) {
     applyLayerVisibility(t, layersRef.current);
     // Hülle wurde neu gebaut — Aura auf Hüllwand/Auto-Fenster wiederherstellen
     applyPickHighlight(t, selectedRef.current, multiSelRef.current);
-  }, [model, envOpenings, autoOpenings, renderMode, facadePreset, huelleErscheinung, dachform, dachneigung, customSlabs, customStairs, gauben, gs, durchbruchLoecher, vSolidsAktuell, seoJeSchluessel]);
+  }, [model, giebel, envOpenings, autoOpenings, renderMode, facadePreset, huelleErscheinung, dachform, dachneigung, customSlabs, customStairs, gauben, gs, durchbruchLoecher, vSolidsAktuell, seoJeSchluessel]);
 
   // Kamera nur bei Modelländerung neu ausrichten (nicht bei jeder Öffnung)
   useEffect(() => {
@@ -5147,6 +5161,15 @@ export default function BitBimStudio({ complexData }) {
                     <option value="">{tz("wie bisher")}</option>
                     {glasBaustoffe().map((s) => <option key={s.schluessel} value={s.schluessel}>{s.name}</option>)}
                   </select>),
+                  // 108-05: hinge and swing of a door (additive fields; defaults links/innen = the picture before 108-05), "Spiegeln" flips the hinge
+                  ...(o.kind === "door" && o.typeId !== "sliding" ? [
+                    field(tz("Anschlag"), <span className="flex items-center gap-1">
+                      <select className={selCls} value={o.anschlag === "rechts" ? "rechts" : "links"} data-testid="tuer-anschlag" aria-label={tz("Anschlag")} onChange={(e) => patchOpening(o._idx, scope, { anschlag: e.target.value === "rechts" ? "rechts" : undefined })}>
+                        <option value="links">{tz("links")}</option><option value="rechts">{tz("rechts")}</option></select>
+                      <button type="button" className="underline" data-testid="tuer-spiegeln" onClick={() => patchOpening(o._idx, scope, { anschlag: o.anschlag === "rechts" ? undefined : "rechts" })}>{tz("Spiegeln")}</button></span>),
+                    field(tz("Aufschlag"), <select className={selCls} value={o.aufschlag === "aussen" ? "aussen" : "innen"} data-testid="tuer-aufschlag" aria-label={tz("Aufschlag")} onChange={(e) => patchOpening(o._idx, scope, { aufschlag: e.target.value === "aussen" ? "aussen" : undefined })}>
+                      <option value="innen">{tz("innen")}</option><option value="aussen">{tz("außen")}</option></select>),
+                  ] : []),
                   field("Lage", <span className="text-slate-400">{scope === "env" ? "Hüllwand" : "Innenwand"}</span>),
                   ...zustandFelder(o, (p) => patchOpening(o._idx, scope, p), zfOpts),
                   ...sbFelder(o, o.kind === "door" ? (scope === "env" ? "tuer-aussen" : "tuer-innen") : ohneFuellung ? "oeffnung" : "fenster", `oeffnung|${scope === "env" ? `env:${o.level}:${o.edge}` : `cw:${o.wallIdx}`}|${o.kind}|${o._idx}`, (p) => patchOpening(o._idx, scope, p)),

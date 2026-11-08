@@ -29,6 +29,7 @@ import { aufbauVon, kernLage } from "./aufbauten.js";
 import { bauteilGuid } from "./steckbrief.js";
 import { elevationOf, unterkante, wandHoehe, geschosshoehe, deckenLage } from "./hoehen.js";
 import { wandDicke_m, wandGeometrie, kernVon } from "./referenz.js";
+import { profilHoeheBereich } from "./giebel.js"; // 108-03: opening height under a hull profile
 
 /** Height anchors an opening's `sill` can be measured from (stored as `bruestung_bezug`). */
 export const BRUESTUNG_BEZUEGE = Object.freeze(["wand_uk", "okrd", "okff"]);
@@ -193,15 +194,34 @@ export function oeffnungMitte_m(u, breite_m, wandLaenge_m) {
  * @param {{w: number, h: number, sill: number}} masse sizes in m (oeffnungsMasse)
  * @param {number} wandLaenge_m wall length in m
  * @param {number} wandHoehe_m wall height in m
- * @returns {{ok: boolean, text: string|null, daten: {w: number, h: number, sill: number, laenge: number, hoehe: number}}} text: German
+ * @returns {{ok: boolean, text: string|null, daten: {w: number, h: number, sill: number, laenge: number, hoehe: number, hoehe_an_stelle?: number}}} text: German
  *   "<w>×<h> m (Brüstung <sill> m) passt nicht in die Wand (<len>×<height> m)" (export warning); daten: the same numbers in m, formatted to
  *   2 decimals, for the UI which builds its own translated sentence (tz) instead of showing this German text
  */
-export function oeffnungPasst(masse, wandLaenge_m, wandHoehe_m) {
+export function oeffnungPasst(masse, wandLaenge_m, wandHoehe_m, opt = undefined) {
   const { w, h, sill } = masse;
-  const daten = { w, h, sill, laenge: wandLaenge_m, hoehe: wandHoehe_m };
-  if (w > 0 && h > 0 && w + 2 * OEFFNUNG_RAND_M <= wandLaenge_m && sill + h <= wandHoehe_m + 1e-6 && sill >= -1e-6) return { ok: true, text: null, daten };
-  return { ok: false, daten, text: `${w.toFixed(2)}×${h.toFixed(2)} m (Brüstung ${sill.toFixed(2)} m) passt nicht in die Wand (${wandLaenge_m.toFixed(2)}×${wandHoehe_m.toFixed(2)} m)` };
+  // 108-03: a hull wall under the roof (profil) — the height the opening has to fit under is the lowest profile height over its span
+  const hoeheHier = profilHoeheFuer(opt, w, wandLaenge_m, wandHoehe_m);
+  const daten = { w, h, sill, laenge: wandLaenge_m, hoehe: hoeheHier.hoehe, ...(hoeheHier.profil ? { hoehe_an_stelle: hoeheHier.hoehe } : {}) };
+  if (w > 0 && h > 0 && w + 2 * OEFFNUNG_RAND_M <= wandLaenge_m && sill + h <= hoeheHier.hoehe + 1e-6 && sill >= -1e-6) return { ok: true, text: null, daten };
+  if (hoeheHier.profil && sill + h > hoeheHier.hoehe + 1e-6) return { ok: false, daten, text: `${w.toFixed(2)}×${h.toFixed(2)} m (Brüstung ${sill.toFixed(2)} m) ragt über die Dachkontur: an dieser Stelle nur ${hoeheHier.hoehe.toFixed(2)} m Wandhöhe` };
+  return { ok: false, daten, text: `${w.toFixed(2)}×${h.toFixed(2)} m (Brüstung ${sill.toFixed(2)} m) passt nicht in die Wand (${wandLaenge_m.toFixed(2)}×${hoeheHier.hoehe.toFixed(2)} m)` };
+}
+
+/**
+ * 108-03: the wall height an opening has to fit under — with a hull profile (gable wall under the roof, bauteil/giebel.js) the lowest
+ * profile height over the opening's span, else the plain wall height. `opt.u` is the stored middle of the opening (null = wall middle).
+ * @param {{profil?: import("./giebel.js").HuellProfil|null, u?: number|null}|undefined} opt
+ * @param {number} w_m opening width, m
+ * @param {number} wandLaenge_m
+ * @param {number} wandHoehe_m
+ * @returns {{hoehe: number, profil: boolean}}
+ */
+function profilHoeheFuer(opt, w_m, wandLaenge_m, wandHoehe_m) {
+  const p = opt?.profil;
+  if (!p || !Array.isArray(p.oben) || !p.oben.length) return { hoehe: wandHoehe_m, profil: false };
+  const mitte = oeffnungMitte_m(opt?.u ?? null, w_m, wandLaenge_m);
+  return { hoehe: profilHoeheBereich(p, mitte - w_m / 2, mitte + w_m / 2), profil: true };
 }
 
 /**
@@ -214,10 +234,12 @@ export function oeffnungPasst(masse, wandLaenge_m, wandHoehe_m) {
  * @param {number} wandHoehe_m wall height in m
  * @returns {{x0: number, x1: number, y0: number, y1: number}|null} corners in m, null when nothing of the hole remains
  */
-export function lochImWand(masse, u, wandLaenge_m, wandHoehe_m) {
+export function lochImWand(masse, u, wandLaenge_m, wandHoehe_m, opt = undefined) {
   const mitte = oeffnungMitte_m(u, masse.w, wandLaenge_m);
   const x0 = Math.max(OEFFNUNG_RAND_M, mitte - masse.w / 2), x1 = Math.min(wandLaenge_m - OEFFNUNG_RAND_M, mitte + masse.w / 2);
-  const y0 = Math.max(0.02, masse.sill), y1 = Math.min(wandHoehe_m - 0.02, masse.sill + masse.h);
+  // 108-03: under a hull profile the hole is clamped to the lowest profile height over its span (same 2 cm rule); a rejected opening is still reported, not shrunk in silence
+  const hoehe = profilHoeheFuer(opt ? { ...opt, u } : undefined, masse.w, wandLaenge_m, wandHoehe_m).hoehe;
+  const y0 = Math.max(0.02, masse.sill), y1 = Math.min(hoehe - 0.02, masse.sill + masse.h);
   return x1 <= x0 || y1 <= y0 ? null : { x0, x1, y0, y1 };
 }
 
@@ -306,6 +328,7 @@ export function lochUeberlappt(loch, vorhandene) {
  * @property {number} unterkante_m
  * @property {number} versatz_m  offset of the wall BODY middle from the axis a→b in m (reference line, 0 = centred), positive towards the left normal
  * @property {string|undefined} refLine reference line of the wall ("center" …), for the hull `refLine` of the model wall
+ * @property {import("./giebel.js").HuellProfil|null} [profil] 108-03: profile of a hull wall under the roof (null/absent = rectangle)
  */
 
 /**
@@ -355,7 +378,8 @@ function kandidaten(modell) {
   for (const w of modell.huelle || []) {
     if (!w?.a || !w?.b) continue;
     out.push({ familie: "huelle", schluessel: `env:${w.level}:${w.edge}`, guid: bauteilGuid(pid, "huelle", { id: `${w.level}:${w.edge}` }), roh: w, ref: { level: w.level, edge: w.edge }, u: null,
-      wand: { a: w.a, b: w.b, level: w.level, laenge_m: laenge(w), dicke_m: w.thickness, hoehe_m: w.height, unterkante_m: w.elevation, versatz_m: versatz(w, w.thickness), refLine: w.refLine } });
+      // 108-03: a hull wall under the roof carries its profile (bauteil/giebel.js mitGiebelProfilen); its usable height is the profile top
+      wand: { a: w.a, b: w.b, level: w.level, laenge_m: laenge(w), dicke_m: w.thickness, hoehe_m: w.profil ? w.profil.hoehe_max_m : w.height, unterkante_m: w.elevation, versatz_m: versatz(w, w.thickness), refLine: w.refLine, profil: w.profil || null } });
   }
   for (const w of (modell.werkstatt?.waende || []).filter((/** @type {any} */ x) => !x.huelle)) {
     if (!w?.a || !w?.b) continue;

@@ -1,0 +1,3231 @@
+{
+ "baustoffe": [
+  {
+   "farbe": "#6b6d72",
+   "kennwerte": {
+    "co2_kg_kg": 9.16,
+    "dichte_kg_m3": 2800,
+    "graue_energie_MJ_kg": 155,
+    "lambda_W_mK": 160,
+    "waermekapazitaet_J_kgK": 880
+   },
+   "kurz": null,
+   "name": "Aluminium_760",
+   "schluessel": "aluminium-760",
+   "verschneidungsprioritaet": 760,
+   "werkstoffklasse": "metall"
+  },
+  {
+   "farbe": "#55585e",
+   "kennwerte": {
+    "co2_kg_kg": 0.076,
+    "dichte_kg_m3": 2100,
+    "graue_energie_MJ_kg": 3.93,
+    "lambda_W_mK": 0.7,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Asphalt dunkel_340",
+   "schluessel": "asphalt-dunkel-340",
+   "verschneidungsprioritaet": 340,
+   "werkstoffklasse": "bitumen"
+  },
+  {
+   "farbe": "#7d848a",
+   "kennwerte": {
+    "co2_kg_kg": 0.076,
+    "dichte_kg_m3": 2100,
+    "graue_energie_MJ_kg": 3.93,
+    "lambda_W_mK": 0.7,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Asphalt grau_340",
+   "schluessel": "asphalt-grau-340",
+   "verschneidungsprioritaet": 340,
+   "werkstoffklasse": "bitumen"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0.39,
+    "dichte_kg_m3": 900,
+    "graue_energie_MJ_kg": 6.75,
+    "lambda_W_mK": 0.25,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": "GKB",
+   "name": "Ausbauplatte GKB_355",
+   "schluessel": "ausbauplatte-gkb-355",
+   "verschneidungsprioritaet": 355,
+   "werkstoffklasse": "gipsplatte"
+  },
+  {
+   "farbe": "#7eb4a5",
+   "kennwerte": {
+    "co2_kg_kg": 0.39,
+    "dichte_kg_m3": 900,
+    "graue_energie_MJ_kg": 6.75,
+    "lambda_W_mK": 0.25,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": "GKBI",
+   "name": "Ausbauplatte GKBI_355",
+   "schluessel": "ausbauplatte-gkbi-355",
+   "verschneidungsprioritaet": 355,
+   "werkstoffklasse": "gipsplatte"
+  },
+  {
+   "farbe": "#dacaad",
+   "kennwerte": {
+    "co2_kg_kg": 0.29,
+    "dichte_kg_m3": 500,
+    "graue_energie_MJ_kg": 6.95,
+    "lambda_W_mK": 0.13,
+    "waermekapazitaet_J_kgK": 1600
+   },
+   "kurz": null,
+   "name": "Bauholz_520",
+   "schluessel": "bauholz-520",
+   "verschneidungsprioritaet": 520,
+   "werkstoffklasse": "holz"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0.64,
+    "dichte_kg_m3": 500,
+    "graue_energie_MJ_kg": 13.1,
+    "lambda_W_mK": 0.13,
+    "waermekapazitaet_J_kgK": 1600
+   },
+   "kurz": null,
+   "name": "Bauteil_500",
+   "schluessel": "bauteil-500",
+   "verschneidungsprioritaet": 500,
+   "werkstoffklasse": "sonstiges"
+  },
+  {
+   "farbe": "#a8a8a8",
+   "kennwerte": {
+    "co2_kg_kg": 0.39,
+    "dichte_kg_m3": 900,
+    "graue_energie_MJ_kg": 6.75,
+    "lambda_W_mK": 0.25,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Bekleidung_300",
+   "schluessel": "bekleidung-300",
+   "verschneidungsprioritaet": 300,
+   "werkstoffklasse": "sonstiges"
+  },
+  {
+   "farbe": "#778478",
+   "kennwerte": {
+    "co2_kg_kg": 0.15,
+    "dichte_kg_m3": 2300,
+    "graue_energie_MJ_kg": 0.92,
+    "lambda_W_mK": 0.8,
+    "waermekapazitaet_J_kgK": 800
+   },
+   "kurz": null,
+   "name": "Beton unbewehrt_330",
+   "schluessel": "beton-unbewehrt-330",
+   "verschneidungsprioritaet": 330,
+   "werkstoffklasse": "beton"
+  },
+  {
+   "farbe": "#778478",
+   "kennwerte": {
+    "co2_kg_kg": 0.15,
+    "dichte_kg_m3": 2300,
+    "graue_energie_MJ_kg": 0.92,
+    "lambda_W_mK": 0.8,
+    "waermekapazitaet_J_kgK": 800
+   },
+   "kurz": null,
+   "name": "Beton, unbewehrt_330",
+   "schluessel": "beton-unbewehrt-330-2",
+   "verschneidungsprioritaet": 330,
+   "werkstoffklasse": "beton"
+  },
+  {
+   "farbe": "#b6b4ad",
+   "kennwerte": {
+    "co2_kg_kg": 0.088,
+    "dichte_kg_m3": 1400,
+    "graue_energie_MJ_kg": 0.72,
+    "lambda_W_mK": 0.6,
+    "waermekapazitaet_J_kgK": 880
+   },
+   "kurz": null,
+   "name": "Betonblock_640",
+   "schluessel": "betonblock-640",
+   "verschneidungsprioritaet": 640,
+   "werkstoffklasse": "mauerwerk"
+  },
+  {
+   "farbe": "#8a4837",
+   "kennwerte": {
+    "co2_kg_kg": 0.107,
+    "dichte_kg_m3": 2100,
+    "graue_energie_MJ_kg": 0.75,
+    "lambda_W_mK": 1.5,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Betondachstein_780",
+   "schluessel": "betondachstein-780",
+   "verschneidungsprioritaet": 780,
+   "werkstoffklasse": "dachdeckung"
+  },
+  {
+   "farbe": "#ceb18a",
+   "kennwerte": {
+    "co2_kg_kg": 0.52,
+    "dichte_kg_m3": 300,
+    "graue_energie_MJ_kg": 11.9,
+    "lambda_W_mK": 0.09,
+    "waermekapazitaet_J_kgK": 1600
+   },
+   "kurz": null,
+   "name": "Brettschichtholz_620",
+   "schluessel": "brettschichtholz-620",
+   "verschneidungsprioritaet": 620,
+   "werkstoffklasse": "holzwerkstoff"
+  },
+  {
+   "farbe": "#484848",
+   "kennwerte": {
+    "co2_kg_kg": 0.7,
+    "dichte_kg_m3": 2300,
+    "graue_energie_MJ_kg": 10,
+    "lambda_W_mK": 1.3,
+    "waermekapazitaet_J_kgK": 840
+   },
+   "kurz": null,
+   "name": "Dachziegel dunkel_780",
+   "schluessel": "dachziegel-dunkel-780",
+   "verschneidungsprioritaet": 780,
+   "werkstoffklasse": "dachdeckung"
+  },
+  {
+   "farbe": "#aeaeae",
+   "kennwerte": {
+    "co2_kg_kg": 0.7,
+    "dichte_kg_m3": 2300,
+    "graue_energie_MJ_kg": 10,
+    "lambda_W_mK": 1.3,
+    "waermekapazitaet_J_kgK": 840
+   },
+   "kurz": null,
+   "name": "Dachziegel grau_780",
+   "schluessel": "dachziegel-grau-780",
+   "verschneidungsprioritaet": 780,
+   "werkstoffklasse": "dachdeckung"
+  },
+  {
+   "farbe": "#cb7672",
+   "kennwerte": {
+    "co2_kg_kg": 0.7,
+    "dichte_kg_m3": 2300,
+    "graue_energie_MJ_kg": 10,
+    "lambda_W_mK": 1.3,
+    "waermekapazitaet_J_kgK": 840
+   },
+   "kurz": null,
+   "name": "Dachziegel rot_780",
+   "schluessel": "dachziegel-rot-780",
+   "verschneidungsprioritaet": 780,
+   "werkstoffklasse": "dachdeckung"
+  },
+  {
+   "farbe": "#b5b6c1",
+   "kennwerte": {
+    "co2_kg_kg": 6.15,
+    "dichte_kg_m3": 7900,
+    "graue_energie_MJ_kg": 56.7,
+    "lambda_W_mK": 17,
+    "waermekapazitaet_J_kgK": 460
+   },
+   "kurz": null,
+   "name": "Edelstahl",
+   "schluessel": "edelstahl",
+   "verschneidungsprioritaet": 760,
+   "werkstoffklasse": "metall"
+  },
+  {
+   "farbe": "#7eb4a5",
+   "kennwerte": {
+    "co2_kg_kg": 3.42,
+    "dichte_kg_m3": 28,
+    "graue_energie_MJ_kg": 87.4,
+    "lambda_W_mK": 0.032,
+    "waermekapazitaet_J_kgK": 1450
+   },
+   "kurz": null,
+   "name": "Entkopplungsmatte",
+   "schluessel": "entkopplungsmatte",
+   "verschneidungsprioritaet": 902,
+   "werkstoffklasse": "daemmung_hart"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 3.18,
+    "dichte_kg_m3": 15,
+    "graue_energie_MJ_kg": 76,
+    "lambda_W_mK": 0.042,
+    "waermekapazitaet_J_kgK": 1450
+   },
+   "kurz": "EPS",
+   "name": "EPS_750",
+   "schluessel": "eps-750",
+   "verschneidungsprioritaet": 750,
+   "werkstoffklasse": "daemmung_hart"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 3.42,
+    "dichte_kg_m3": 28,
+    "graue_energie_MJ_kg": 87.4,
+    "lambda_W_mK": 0.032,
+    "waermekapazitaet_J_kgK": 1450
+   },
+   "kurz": "EPS",
+   "name": "EPS_795",
+   "schluessel": "eps-795",
+   "verschneidungsprioritaet": 795,
+   "werkstoffklasse": "daemmung_hart"
+  },
+  {
+   "farbe": "#564327",
+   "kennwerte": {
+    "co2_kg_kg": 0.005,
+    "dichte_kg_m3": 1100,
+    "graue_energie_MJ_kg": 0.008,
+    "lambda_W_mK": 2.3,
+    "waermekapazitaet_J_kgK": 1200
+   },
+   "kurz": null,
+   "name": "Erdreich",
+   "schluessel": "erdreich",
+   "verschneidungsprioritaet": 160,
+   "werkstoffklasse": "erdreich"
+  },
+  {
+   "farbe": "#564327",
+   "kennwerte": {
+    "co2_kg_kg": 0.005,
+    "dichte_kg_m3": 1100,
+    "graue_energie_MJ_kg": 0.008,
+    "lambda_W_mK": 2.3,
+    "waermekapazitaet_J_kgK": 1200
+   },
+   "kurz": null,
+   "name": "Erdreich_160",
+   "schluessel": "erdreich-160",
+   "verschneidungsprioritaet": 160,
+   "werkstoffklasse": "erdreich"
+  },
+  {
+   "farbe": "#a5a9ad",
+   "kennwerte": {
+    "co2_kg_kg": 0.15,
+    "dichte_kg_m3": 2300,
+    "graue_energie_MJ_kg": 0.92,
+    "lambda_W_mK": 0.8,
+    "waermekapazitaet_J_kgK": 800
+   },
+   "kurz": "Estrich",
+   "name": "Estrich_330",
+   "schluessel": "estrich-330",
+   "verschneidungsprioritaet": 330,
+   "werkstoffklasse": "estrich"
+  },
+  {
+   "farbe": "#b6b4ad",
+   "kennwerte": {
+    "co2_kg_kg": 0.107,
+    "dichte_kg_m3": 2100,
+    "graue_energie_MJ_kg": 0.75,
+    "lambda_W_mK": 1.5,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Faserzementplatte_780",
+   "schluessel": "faserzementplatte-780",
+   "verschneidungsprioritaet": 780,
+   "werkstoffklasse": "dachdeckung"
+  },
+  {
+   "farbe": "#938d88",
+   "kennwerte": {
+    "co2_kg_kg": 0.107,
+    "dichte_kg_m3": 1800,
+    "graue_energie_MJ_kg": 0.74,
+    "lambda_W_mK": 1.15,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Fertigteil_390",
+   "schluessel": "fertigteil-390",
+   "verschneidungsprioritaet": 390,
+   "werkstoffklasse": "stahlbeton"
+  },
+  {
+   "farbe": "#585858",
+   "kennwerte": {
+    "co2_kg_kg": 0.18,
+    "dichte_kg_m3": 1750,
+    "graue_energie_MJ_kg": 1.5,
+    "lambda_W_mK": 1.3,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Fliese anthrazit_310",
+   "schluessel": "fliese-anthrazit-310",
+   "verschneidungsprioritaet": 310,
+   "werkstoffklasse": "keramik"
+  },
+  {
+   "farbe": "#585858",
+   "kennwerte": {
+    "co2_kg_kg": 0.18,
+    "dichte_kg_m3": 1750,
+    "graue_energie_MJ_kg": 1.5,
+    "lambda_W_mK": 1.3,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Fliesen anthrazit_350",
+   "schluessel": "fliesen-anthrazit-350",
+   "verschneidungsprioritaet": 350,
+   "werkstoffklasse": "keramik"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0.18,
+    "dichte_kg_m3": 1750,
+    "graue_energie_MJ_kg": 1.5,
+    "lambda_W_mK": 1.3,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Fliesen weiß_350",
+   "schluessel": "fliesen-weiss-350",
+   "verschneidungsprioritaet": 350,
+   "werkstoffklasse": "keramik"
+  },
+  {
+   "farbe": "#000000",
+   "kennwerte": {
+    "co2_kg_kg": 3.1,
+    "dichte_kg_m3": 1200,
+    "graue_energie_MJ_kg": 77.2,
+    "lambda_W_mK": 0.14,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Folie_770",
+   "schluessel": "folie-770",
+   "verschneidungsprioritaet": 770,
+   "werkstoffklasse": "abdichtung"
+  },
+  {
+   "farbe": "#ccbeac",
+   "kennwerte": {
+    "co2_kg_kg": 0.52,
+    "dichte_kg_m3": 300,
+    "graue_energie_MJ_kg": 11.9,
+    "lambda_W_mK": 0.09,
+    "waermekapazitaet_J_kgK": 1600
+   },
+   "kurz": null,
+   "name": "Geländer_350",
+   "schluessel": "gelander-350",
+   "verschneidungsprioritaet": 350,
+   "werkstoffklasse": "holz"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0.11,
+    "dichte_kg_m3": 1000,
+    "graue_energie_MJ_kg": 1.6,
+    "lambda_W_mK": 0.4,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": "Gipsputz",
+   "name": "Gipsputz_350",
+   "schluessel": "gipsputz-350",
+   "verschneidungsprioritaet": 350,
+   "werkstoffklasse": "putz"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0.11,
+    "dichte_kg_m3": 1000,
+    "graue_energie_MJ_kg": 1.6,
+    "lambda_W_mK": 0.4,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": "Gipsputz",
+   "name": "Gipsputz_360",
+   "schluessel": "gipsputz-360",
+   "verschneidungsprioritaet": 360,
+   "werkstoffklasse": "putz"
+  },
+  {
+   "farbe": "#f7e29b",
+   "kennwerte": {
+    "co2_kg_kg": 1.3,
+    "dichte_kg_m3": 14,
+    "graue_energie_MJ_kg": 26,
+    "lambda_W_mK": 0.04,
+    "waermekapazitaet_J_kgK": 1030
+   },
+   "kurz": "GW",
+   "name": "Glaswolle_220",
+   "schluessel": "glaswolle-220",
+   "verschneidungsprioritaet": 220,
+   "werkstoffklasse": "daemmung_weich"
+  },
+  {
+   "farbe": "#fcfb00",
+   "kennwerte": {
+    "co2_kg_kg": 1.3,
+    "dichte_kg_m3": 14,
+    "graue_energie_MJ_kg": 26,
+    "lambda_W_mK": 0.04,
+    "waermekapazitaet_J_kgK": 1030
+   },
+   "kurz": "GW",
+   "name": "Glaswolle weich_220",
+   "schluessel": "glaswolle-weich-220",
+   "verschneidungsprioritaet": 220,
+   "werkstoffklasse": "daemmung_weich"
+  },
+  {
+   "farbe": "#36393f",
+   "kennwerte": {
+    "co2_kg_kg": 3.8,
+    "dichte_kg_m3": 1200,
+    "graue_energie_MJ_kg": 110,
+    "lambda_W_mK": 0.17,
+    "waermekapazitaet_J_kgK": 1400
+   },
+   "kurz": null,
+   "name": "Gummi_770",
+   "schluessel": "gummi-770",
+   "verschneidungsprioritaet": 770,
+   "werkstoffklasse": "kunststoff"
+  },
+  {
+   "farbe": "#ff4646",
+   "kennwerte": {
+    "co2_kg_kg": 0,
+    "dichte_kg_m3": 0,
+    "graue_energie_MJ_kg": 0,
+    "lambda_W_mK": 0,
+    "waermekapazitaet_J_kgK": 0
+   },
+   "kurz": null,
+   "name": "Haustechnikbereich_0",
+   "schluessel": "haustechnikbereich-0",
+   "verschneidungsprioritaet": 0,
+   "werkstoffklasse": "sonstiges"
+  },
+  {
+   "farbe": "#c49f8a",
+   "kennwerte": {
+    "co2_kg_kg": 0.48,
+    "dichte_kg_m3": 742,
+    "graue_energie_MJ_kg": 6,
+    "lambda_W_mK": 0.125,
+    "waermekapazitaet_J_kgK": 920
+   },
+   "kurz": "HLZ",
+   "name": "Hochlochziegel_640",
+   "schluessel": "hochlochziegel-640",
+   "verschneidungsprioritaet": 640,
+   "werkstoffklasse": "mauerwerk"
+  },
+  {
+   "farbe": "#aaac99",
+   "kennwerte": {
+    "co2_kg_kg": 0.12,
+    "dichte_kg_m3": 200,
+    "graue_energie_MJ_kg": 10.8,
+    "lambda_W_mK": 0.075,
+    "waermekapazitaet_J_kgK": 1510
+   },
+   "kurz": null,
+   "name": "Holzwolledämmplatte_640",
+   "schluessel": "holzwolledammplatte-640",
+   "verschneidungsprioritaet": 640,
+   "werkstoffklasse": "daemmung_weich"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0.22,
+    "dichte_kg_m3": 1600,
+    "graue_energie_MJ_kg": 1.45,
+    "lambda_W_mK": 0.8,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Kalkputz_370",
+   "schluessel": "kalkputz-370",
+   "verschneidungsprioritaet": 370,
+   "werkstoffklasse": "putz"
+  },
+  {
+   "farbe": "#f0f0f0",
+   "kennwerte": {
+    "co2_kg_kg": 0.07,
+    "dichte_kg_m3": 1800,
+    "graue_energie_MJ_kg": 1.2,
+    "lambda_W_mK": 0.93,
+    "waermekapazitaet_J_kgK": 840
+   },
+   "kurz": "KS",
+   "name": "Kalksandstein_635",
+   "schluessel": "kalksandstein-635",
+   "verschneidungsprioritaet": 635,
+   "werkstoffklasse": "mauerwerk"
+  },
+  {
+   "farbe": "#f0f0f0",
+   "kennwerte": {
+    "co2_kg_kg": 0.07,
+    "dichte_kg_m3": 1800,
+    "graue_energie_MJ_kg": 1.2,
+    "lambda_W_mK": 0.93,
+    "waermekapazitaet_J_kgK": 840
+   },
+   "kurz": "KS",
+   "name": "Kalksandstein_750",
+   "schluessel": "kalksandstein-750",
+   "verschneidungsprioritaet": 750,
+   "werkstoffklasse": "mauerwerk"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0.22,
+    "dichte_kg_m3": 1600,
+    "graue_energie_MJ_kg": 1.45,
+    "lambda_W_mK": 0.8,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": "KZ-Putz",
+   "name": "Kalkzementputz_370",
+   "schluessel": "kalkzementputz-370",
+   "verschneidungsprioritaet": 370,
+   "werkstoffklasse": "putz"
+  },
+  {
+   "farbe": "#595959",
+   "kennwerte": {
+    "co2_kg_kg": 0.24,
+    "dichte_kg_m3": 2000,
+    "graue_energie_MJ_kg": 3,
+    "lambda_W_mK": 1,
+    "waermekapazitaet_J_kgK": 800
+   },
+   "kurz": null,
+   "name": "Keramik grau_755",
+   "schluessel": "keramik-grau-755",
+   "verschneidungsprioritaet": 755,
+   "werkstoffklasse": "keramik"
+  },
+  {
+   "farbe": "#83522d",
+   "kennwerte": {
+    "co2_kg_kg": 0.24,
+    "dichte_kg_m3": 2000,
+    "graue_energie_MJ_kg": 3,
+    "lambda_W_mK": 1,
+    "waermekapazitaet_J_kgK": 800
+   },
+   "kurz": null,
+   "name": "Keramik rotbraun_755",
+   "schluessel": "keramik-rotbraun-755",
+   "verschneidungsprioritaet": 755,
+   "werkstoffklasse": "keramik"
+  },
+  {
+   "farbe": "#cfbda5",
+   "kennwerte": {
+    "co2_kg_kg": 0.004,
+    "dichte_kg_m3": 1800,
+    "graue_energie_MJ_kg": 0.063,
+    "lambda_W_mK": 1.4,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Kies_140",
+   "schluessel": "kies-140",
+   "verschneidungsprioritaet": 140,
+   "werkstoffklasse": "erdreich"
+  },
+  {
+   "farbe": "#cfbda5",
+   "kennwerte": {
+    "co2_kg_kg": 0.06,
+    "dichte_kg_m3": 1600,
+    "graue_energie_MJ_kg": 1,
+    "lambda_W_mK": 0.55,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Kies fein_100",
+   "schluessel": "kies-fein-100",
+   "verschneidungsprioritaet": 100,
+   "werkstoffklasse": "erdreich"
+  },
+  {
+   "farbe": "#c7b39e",
+   "kennwerte": {
+    "co2_kg_kg": 0.06,
+    "dichte_kg_m3": 1600,
+    "graue_energie_MJ_kg": 1,
+    "lambda_W_mK": 0.55,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Kies grob_100",
+   "schluessel": "kies-grob-100",
+   "verschneidungsprioritaet": 100,
+   "werkstoffklasse": "erdreich"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0,
+    "dichte_kg_m3": 600,
+    "graue_energie_MJ_kg": 0,
+    "lambda_W_mK": 0.18,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": "KH-Putz",
+   "name": "Kunstharzputz_370",
+   "schluessel": "kunstharzputz-370",
+   "verschneidungsprioritaet": 370,
+   "werkstoffklasse": "putz"
+  },
+  {
+   "farbe": "#aac2af",
+   "kennwerte": {
+    "co2_kg_kg": 2.71,
+    "dichte_kg_m3": 8900,
+    "graue_energie_MJ_kg": 42,
+    "lambda_W_mK": 380,
+    "waermekapazitaet_J_kgK": 380
+   },
+   "kurz": null,
+   "name": "Kupfer_760",
+   "schluessel": "kupfer-760",
+   "verschneidungsprioritaet": 760,
+   "werkstoffklasse": "metall"
+  },
+  {
+   "farbe": "#ffd17d",
+   "kennwerte": {
+    "co2_kg_kg": 0.65,
+    "dichte_kg_m3": 2550,
+    "graue_energie_MJ_kg": 10.5,
+    "lambda_W_mK": 3.5,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Lehm_120",
+   "schluessel": "lehm-120",
+   "verschneidungsprioritaet": 120,
+   "werkstoffklasse": "erdreich"
+  },
+  {
+   "farbe": "#bfa58c",
+   "kennwerte": {
+    "co2_kg_kg": 0.4,
+    "dichte_kg_m3": 1800,
+    "graue_energie_MJ_kg": 2.2,
+    "lambda_W_mK": 1,
+    "waermekapazitaet_J_kgK": 800
+   },
+   "kurz": null,
+   "name": "Lehmputz_370",
+   "schluessel": "lehmputz-370",
+   "verschneidungsprioritaet": 370,
+   "werkstoffklasse": "putz"
+  },
+  {
+   "farbe": "#a5a9ad",
+   "kennwerte": {
+    "co2_kg_kg": 0.46,
+    "dichte_kg_m3": 450,
+    "graue_energie_MJ_kg": 6.2,
+    "lambda_W_mK": 0.12,
+    "waermekapazitaet_J_kgK": 800
+   },
+   "kurz": null,
+   "name": "Leichtbeton_655",
+   "schluessel": "leichtbeton-655",
+   "verschneidungsprioritaet": 655,
+   "werkstoffklasse": "leichtbeton"
+  },
+  {
+   "farbe": "#8f8c87",
+   "kennwerte": {
+    "co2_kg_kg": 3.1,
+    "dichte_kg_m3": 1390,
+    "graue_energie_MJ_kg": 77.2,
+    "lambda_W_mK": 0.17,
+    "waermekapazitaet_J_kgK": 900
+   },
+   "kurz": null,
+   "name": "Linoleum_300",
+   "schluessel": "linoleum-300",
+   "verschneidungsprioritaet": 300,
+   "werkstoffklasse": "kunststoff"
+  },
+  {
+   "farbe": "#8f8c87",
+   "kennwerte": {
+    "co2_kg_kg": 3.1,
+    "dichte_kg_m3": 1390,
+    "graue_energie_MJ_kg": 77.2,
+    "lambda_W_mK": 0.17,
+    "waermekapazitaet_J_kgK": 900
+   },
+   "kurz": null,
+   "name": "Linoleum_350",
+   "schluessel": "linoleum-350",
+   "verschneidungsprioritaet": 350,
+   "werkstoffklasse": "kunststoff"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0,
+    "dichte_kg_m3": 1.2,
+    "graue_energie_MJ_kg": 0,
+    "lambda_W_mK": 0.18,
+    "waermekapazitaet_J_kgK": 1008
+   },
+   "kurz": "Luft",
+   "name": "Luftschicht horizontal_205",
+   "schluessel": "luftschicht-horizontal-205",
+   "verschneidungsprioritaet": 205,
+   "werkstoffklasse": "luft"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0,
+    "dichte_kg_m3": 1.2,
+    "graue_energie_MJ_kg": 0,
+    "lambda_W_mK": 0.16,
+    "waermekapazitaet_J_kgK": 1008
+   },
+   "kurz": "Luft",
+   "name": "Luftschicht vertikal_205",
+   "schluessel": "luftschicht-vertikal-205",
+   "verschneidungsprioritaet": 205,
+   "werkstoffklasse": "luft"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0,
+    "dichte_kg_m3": 1.2,
+    "graue_energie_MJ_kg": 0,
+    "lambda_W_mK": 0.16,
+    "waermekapazitaet_J_kgK": 1008
+   },
+   "kurz": "Luft",
+   "name": "Luftschicht vertikal durchgehend_765",
+   "schluessel": "luftschicht-vertikal-durchgehend-765",
+   "verschneidungsprioritaet": 765,
+   "werkstoffklasse": "luft"
+  },
+  {
+   "farbe": "#f7f7f7",
+   "kennwerte": {
+    "co2_kg_kg": 0.13,
+    "dichte_kg_m3": 2800,
+    "graue_energie_MJ_kg": 2,
+    "lambda_W_mK": 3.5,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Marmor_510",
+   "schluessel": "marmor-510",
+   "verschneidungsprioritaet": 510,
+   "werkstoffklasse": "naturstein"
+  },
+  {
+   "farbe": "#f7e29b",
+   "kennwerte": {
+    "co2_kg_kg": 1.08,
+    "dichte_kg_m3": 40,
+    "graue_energie_MJ_kg": 14.3,
+    "lambda_W_mK": 0.037,
+    "waermekapazitaet_J_kgK": 840
+   },
+   "kurz": "MW",
+   "name": "Mineralwolle 1_615",
+   "schluessel": "mineralwolle-1-615",
+   "verschneidungsprioritaet": 615,
+   "werkstoffklasse": "daemmung_weich"
+  },
+  {
+   "farbe": "#f7e29b",
+   "kennwerte": {
+    "co2_kg_kg": 1.73,
+    "dichte_kg_m3": 160,
+    "graue_energie_MJ_kg": 23.4,
+    "lambda_W_mK": 0.04,
+    "waermekapazitaet_J_kgK": 840
+   },
+   "kurz": "MW",
+   "name": "Mineralwolle 2_745",
+   "schluessel": "mineralwolle-2-745",
+   "verschneidungsprioritaet": 745,
+   "werkstoffklasse": "daemmung_weich"
+  },
+  {
+   "farbe": "#fcfb00",
+   "kennwerte": {
+    "co2_kg_kg": 1.69,
+    "dichte_kg_m3": 115,
+    "graue_energie_MJ_kg": 21.4,
+    "lambda_W_mK": 0.036,
+    "waermekapazitaet_J_kgK": 840
+   },
+   "kurz": "MW",
+   "name": "Mineralwolle 3_740",
+   "schluessel": "mineralwolle-3-740",
+   "verschneidungsprioritaet": 740,
+   "werkstoffklasse": "daemmung_hart"
+  },
+  {
+   "farbe": "#84888f",
+   "kennwerte": {
+    "co2_kg_kg": 0.15,
+    "dichte_kg_m3": 2300,
+    "graue_energie_MJ_kg": 0.92,
+    "lambda_W_mK": 0.8,
+    "waermekapazitaet_J_kgK": 800
+   },
+   "kurz": null,
+   "name": "Mörtel dunkel",
+   "schluessel": "mortel-dunkel",
+   "verschneidungsprioritaet": 330,
+   "werkstoffklasse": "putz"
+  },
+  {
+   "farbe": "#c0c2c7",
+   "kennwerte": {
+    "co2_kg_kg": 0.15,
+    "dichte_kg_m3": 2300,
+    "graue_energie_MJ_kg": 0.92,
+    "lambda_W_mK": 0.8,
+    "waermekapazitaet_J_kgK": 800
+   },
+   "kurz": null,
+   "name": "Mörtel hell_330",
+   "schluessel": "mortel-hell-330",
+   "verschneidungsprioritaet": 330,
+   "werkstoffklasse": "putz"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0,
+    "dichte_kg_m3": 0,
+    "graue_energie_MJ_kg": 0,
+    "lambda_W_mK": 0,
+    "waermekapazitaet_J_kgK": 0
+   },
+   "kurz": null,
+   "name": "Nachbarbebauung_10",
+   "schluessel": "nachbarbebauung-10",
+   "verschneidungsprioritaet": 10,
+   "werkstoffklasse": "sonstiges"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0,
+    "dichte_kg_m3": 0,
+    "graue_energie_MJ_kg": 0,
+    "lambda_W_mK": 0,
+    "waermekapazitaet_J_kgK": 0
+   },
+   "kurz": null,
+   "name": "Niedrige Priorität_0",
+   "schluessel": "niedrige-prioritat-0",
+   "verschneidungsprioritaet": 0,
+   "werkstoffklasse": "sonstiges"
+  },
+  {
+   "farbe": "#f0f7f3",
+   "kennwerte": {
+    "co2_kg_kg": 0.02,
+    "dichte_kg_m3": 2200,
+    "graue_energie_MJ_kg": 0.85,
+    "lambda_W_mK": 1.4,
+    "waermekapazitaet_J_kgK": 750
+   },
+   "kurz": null,
+   "name": "Normalglas_530",
+   "schluessel": "normalglas-530",
+   "verschneidungsprioritaet": 530,
+   "werkstoffklasse": "glas"
+  },
+  {
+   "farbe": "#d9bc95",
+   "kennwerte": {
+    "co2_kg_kg": 0.9,
+    "dichte_kg_m3": 650,
+    "graue_energie_MJ_kg": 15,
+    "lambda_W_mK": 0.13,
+    "waermekapazitaet_J_kgK": 1700
+   },
+   "kurz": "OSB",
+   "name": "OSB Platte_350",
+   "schluessel": "osb-platte-350",
+   "verschneidungsprioritaet": 350,
+   "werkstoffklasse": "holzwerkstoff"
+  },
+  {
+   "farbe": "#bfae8e",
+   "kennwerte": {
+    "co2_kg_kg": 0.9,
+    "dichte_kg_m3": 650,
+    "graue_energie_MJ_kg": 15,
+    "lambda_W_mK": 0.13,
+    "waermekapazitaet_J_kgK": 1700
+   },
+   "kurz": "Parkett",
+   "name": "Parkett_350",
+   "schluessel": "parkett-350",
+   "verschneidungsprioritaet": 350,
+   "werkstoffklasse": "holz"
+  },
+  {
+   "farbe": "#bcc7c1",
+   "kennwerte": {
+    "co2_kg_kg": 0.18,
+    "dichte_kg_m3": 1750,
+    "graue_energie_MJ_kg": 1.5,
+    "lambda_W_mK": 1.3,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Pflaster 8-eck_180",
+   "schluessel": "pflaster-8-eck-180",
+   "verschneidungsprioritaet": 180,
+   "werkstoffklasse": "mauerwerk"
+  },
+  {
+   "farbe": "#b5b2ae",
+   "kennwerte": {
+    "co2_kg_kg": 0.063,
+    "dichte_kg_m3": 500,
+    "graue_energie_MJ_kg": 0.59,
+    "lambda_W_mK": 0.13,
+    "waermekapazitaet_J_kgK": 1290
+   },
+   "kurz": null,
+   "name": "Porenbeton_630",
+   "schluessel": "porenbeton-630",
+   "verschneidungsprioritaet": 630,
+   "werkstoffklasse": "leichtbeton"
+  },
+  {
+   "farbe": "#bbdfd3",
+   "kennwerte": {
+    "co2_kg_kg": 0.59,
+    "dichte_kg_m3": 2000,
+    "graue_energie_MJ_kg": 11.5,
+    "lambda_W_mK": 1.2,
+    "waermekapazitaet_J_kgK": 750
+   },
+   "kurz": null,
+   "name": "Profilitglas_530",
+   "schluessel": "profilitglas-530",
+   "verschneidungsprioritaet": 530,
+   "werkstoffklasse": "glas"
+  },
+  {
+   "farbe": "#a8a8a8",
+   "kennwerte": {
+    "co2_kg_kg": 0,
+    "dichte_kg_m3": 0,
+    "graue_energie_MJ_kg": 0,
+    "lambda_W_mK": 0,
+    "waermekapazitaet_J_kgK": 0
+   },
+   "kurz": null,
+   "name": "Projektspezifisch_800",
+   "schluessel": "projektspezifisch-800",
+   "verschneidungsprioritaet": 800,
+   "werkstoffklasse": "sonstiges"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 3.1,
+    "dichte_kg_m3": 1390,
+    "graue_energie_MJ_kg": 77.2,
+    "lambda_W_mK": 0.17,
+    "waermekapazitaet_J_kgK": 900
+   },
+   "kurz": null,
+   "name": "PVC_350",
+   "schluessel": "pvc-350",
+   "verschneidungsprioritaet": 350,
+   "werkstoffklasse": "kunststoff"
+  },
+  {
+   "farbe": "#ab9181",
+   "kennwerte": {
+    "co2_kg_kg": 0.29,
+    "dichte_kg_m3": 500,
+    "graue_energie_MJ_kg": 6.95,
+    "lambda_W_mK": 0.13,
+    "waermekapazitaet_J_kgK": 1600
+   },
+   "kurz": null,
+   "name": "Reet_770",
+   "schluessel": "reet-770",
+   "verschneidungsprioritaet": 770,
+   "werkstoffklasse": "dachdeckung"
+  },
+  {
+   "farbe": "#94684b",
+   "kennwerte": {
+    "co2_kg_kg": 0.005,
+    "dichte_kg_m3": 1100,
+    "graue_energie_MJ_kg": 0.008,
+    "lambda_W_mK": 2.3,
+    "waermekapazitaet_J_kgK": 1200
+   },
+   "kurz": null,
+   "name": "Sand_110",
+   "schluessel": "sand-110",
+   "verschneidungsprioritaet": 110,
+   "werkstoffklasse": "erdreich"
+  },
+  {
+   "farbe": "#d3c5b6",
+   "kennwerte": {
+    "co2_kg_kg": 0.06,
+    "dichte_kg_m3": 2600,
+    "graue_energie_MJ_kg": 1,
+    "lambda_W_mK": 2.3,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Sandstein_510",
+   "schluessel": "sandstein-510",
+   "verschneidungsprioritaet": 510,
+   "werkstoffklasse": "naturstein"
+  },
+  {
+   "farbe": "#a6aaae",
+   "kennwerte": {
+    "co2_kg_kg": 0.035,
+    "dichte_kg_m3": 2400,
+    "graue_energie_MJ_kg": 5.5,
+    "lambda_W_mK": 2.2,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Schiefer_510",
+   "schluessel": "schiefer-510",
+   "verschneidungsprioritaet": 510,
+   "werkstoffklasse": "naturstein"
+  },
+  {
+   "farbe": "#c0c2c7",
+   "kennwerte": {
+    "co2_kg_kg": 0.48,
+    "dichte_kg_m3": 330,
+    "graue_energie_MJ_kg": 6.5,
+    "lambda_W_mK": 0.13,
+    "waermekapazitaet_J_kgK": 880
+   },
+   "kurz": null,
+   "name": "Schüttung_110",
+   "schluessel": "schuttung-110",
+   "verschneidungsprioritaet": 110,
+   "werkstoffklasse": "erdreich"
+  },
+  {
+   "farbe": "#bdab91",
+   "kennwerte": {
+    "co2_kg_kg": 0.79,
+    "dichte_kg_m3": 600,
+    "graue_energie_MJ_kg": 12.1,
+    "lambda_W_mK": 0.14,
+    "waermekapazitaet_J_kgK": 1700
+   },
+   "kurz": null,
+   "name": "Spanplatte_360",
+   "schluessel": "spanplatte-360",
+   "verschneidungsprioritaet": 350,
+   "werkstoffklasse": "holzwerkstoff"
+  },
+  {
+   "farbe": "#000000",
+   "kennwerte": {
+    "co2_kg_kg": 0.066,
+    "dichte_kg_m3": 1100,
+    "graue_energie_MJ_kg": 2.86,
+    "lambda_W_mK": 0.23,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Sperrschicht_770",
+   "schluessel": "sperrschicht-770",
+   "verschneidungsprioritaet": 770,
+   "werkstoffklasse": "abdichtung"
+  },
+  {
+   "farbe": "#868d8e",
+   "kennwerte": {
+    "co2_kg_kg": 1.46,
+    "dichte_kg_m3": 7800,
+    "graue_energie_MJ_kg": 20.1,
+    "lambda_W_mK": 50,
+    "waermekapazitaet_J_kgK": 450
+   },
+   "kurz": null,
+   "name": "Stahl lackiert_760",
+   "schluessel": "stahl-lackiert-760",
+   "verschneidungsprioritaet": 760,
+   "werkstoffklasse": "metall"
+  },
+  {
+   "farbe": "#98a0a5",
+   "kennwerte": {
+    "co2_kg_kg": 1.46,
+    "dichte_kg_m3": 7800,
+    "graue_energie_MJ_kg": 20.1,
+    "lambda_W_mK": 50,
+    "waermekapazitaet_J_kgK": 450
+   },
+   "kurz": null,
+   "name": "Stahl verzinkt_760",
+   "schluessel": "stahl-verzinkt-760",
+   "verschneidungsprioritaet": 760,
+   "werkstoffklasse": "metall"
+  },
+  {
+   "farbe": "#a5a9ad",
+   "kennwerte": {
+    "co2_kg_kg": 0.107,
+    "dichte_kg_m3": 1800,
+    "graue_energie_MJ_kg": 0.74,
+    "lambda_W_mK": 1.15,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": "StB",
+   "name": "Stahlbeton_670",
+   "schluessel": "stahlbeton-670",
+   "verschneidungsprioritaet": 670,
+   "werkstoffklasse": "stahlbeton"
+  },
+  {
+   "farbe": "#a5a9ad",
+   "kennwerte": {
+    "co2_kg_kg": 0.107,
+    "dichte_kg_m3": 1800,
+    "graue_energie_MJ_kg": 0.74,
+    "lambda_W_mK": 1.15,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": "StB",
+   "name": "Stahlbeton_800",
+   "schluessel": "stahlbeton-800",
+   "verschneidungsprioritaet": 800,
+   "werkstoffklasse": "stahlbeton"
+  },
+  {
+   "farbe": "#c7c7c7",
+   "kennwerte": {
+    "co2_kg_kg": 0.107,
+    "dichte_kg_m3": 1800,
+    "graue_energie_MJ_kg": 0.74,
+    "lambda_W_mK": 1.15,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": "StB",
+   "name": "Stahlbeton Fertigteil 1_670",
+   "schluessel": "stahlbeton-fertigteil-1-670",
+   "verschneidungsprioritaet": 670,
+   "werkstoffklasse": "stahlbeton"
+  },
+  {
+   "farbe": "#c7c7c7",
+   "kennwerte": {
+    "co2_kg_kg": 0.107,
+    "dichte_kg_m3": 1800,
+    "graue_energie_MJ_kg": 0.74,
+    "lambda_W_mK": 1.15,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": "StB",
+   "name": "Stahlbeton Fertigteil 2_670",
+   "schluessel": "stahlbeton-fertigteil-2-670",
+   "verschneidungsprioritaet": 670,
+   "werkstoffklasse": "stahlbeton"
+  },
+  {
+   "farbe": "#938d88",
+   "kennwerte": {
+    "co2_kg_kg": 0.107,
+    "dichte_kg_m3": 1800,
+    "graue_energie_MJ_kg": 0.74,
+    "lambda_W_mK": 1.15,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": "StB",
+   "name": "Stahlbeton Sichtbeton_670",
+   "schluessel": "stahlbeton-sichtbeton-670",
+   "verschneidungsprioritaet": 670,
+   "werkstoffklasse": "stahlbeton"
+  },
+  {
+   "farbe": "#a5a9ad",
+   "kennwerte": {
+    "co2_kg_kg": 0.132,
+    "dichte_kg_m3": 2300,
+    "graue_energie_MJ_kg": 0.88,
+    "lambda_W_mK": 1.7,
+    "waermekapazitaet_J_kgK": 800
+   },
+   "kurz": "StB",
+   "name": "Stahlbeton_WU_800",
+   "schluessel": "stahlbeton-wu-800",
+   "verschneidungsprioritaet": 800,
+   "werkstoffklasse": "stahlbeton"
+  },
+  {
+   "farbe": "#ff4646",
+   "kennwerte": {
+    "co2_kg_kg": 0,
+    "dichte_kg_m3": 0,
+    "graue_energie_MJ_kg": 0,
+    "lambda_W_mK": 0,
+    "waermekapazitaet_J_kgK": 0
+   },
+   "kurz": null,
+   "name": "Staubschutzelemente",
+   "schluessel": "staubschutzelemente",
+   "verschneidungsprioritaet": 0,
+   "werkstoffklasse": "sonstiges"
+  },
+  {
+   "farbe": "#cacaca",
+   "kennwerte": {
+    "co2_kg_kg": 1.66,
+    "dichte_kg_m3": 7800,
+    "graue_energie_MJ_kg": 25.1,
+    "lambda_W_mK": 60,
+    "waermekapazitaet_J_kgK": 460
+   },
+   "kurz": null,
+   "name": "Stehfalz_780",
+   "schluessel": "stehfalz-780",
+   "verschneidungsprioritaet": 780,
+   "werkstoffklasse": "metall"
+  },
+  {
+   "farbe": "#b8a798",
+   "kennwerte": {
+    "co2_kg_kg": 3.9,
+    "dichte_kg_m3": 200,
+    "graue_energie_MJ_kg": 74,
+    "lambda_W_mK": 0.06,
+    "waermekapazitaet_J_kgK": 1300
+   },
+   "kurz": null,
+   "name": "Teppich beige_310",
+   "schluessel": "teppich-beige-310",
+   "verschneidungsprioritaet": 310,
+   "werkstoffklasse": "textil"
+  },
+  {
+   "farbe": "#59729b",
+   "kennwerte": {
+    "co2_kg_kg": 3.9,
+    "dichte_kg_m3": 200,
+    "graue_energie_MJ_kg": 74,
+    "lambda_W_mK": 0.06,
+    "waermekapazitaet_J_kgK": 1300
+   },
+   "kurz": null,
+   "name": "Teppich blau_310",
+   "schluessel": "teppich-blau-310",
+   "verschneidungsprioritaet": 310,
+   "werkstoffklasse": "textil"
+  },
+  {
+   "farbe": "#7a6763",
+   "kennwerte": {
+    "co2_kg_kg": 3.9,
+    "dichte_kg_m3": 200,
+    "graue_energie_MJ_kg": 74,
+    "lambda_W_mK": 0.06,
+    "waermekapazitaet_J_kgK": 1300
+   },
+   "kurz": null,
+   "name": "Teppich braun_310",
+   "schluessel": "teppich-braun-310",
+   "verschneidungsprioritaet": 310,
+   "werkstoffklasse": "textil"
+  },
+  {
+   "farbe": "#757575",
+   "kennwerte": {
+    "co2_kg_kg": 3.9,
+    "dichte_kg_m3": 200,
+    "graue_energie_MJ_kg": 74,
+    "lambda_W_mK": 0.06,
+    "waermekapazitaet_J_kgK": 1300
+   },
+   "kurz": null,
+   "name": "Teppich grau_310",
+   "schluessel": "teppich-grau-310",
+   "verschneidungsprioritaet": 310,
+   "werkstoffklasse": "textil"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0.15,
+    "dichte_kg_m3": 2300,
+    "graue_energie_MJ_kg": 0.92,
+    "lambda_W_mK": 0.8,
+    "waermekapazitaet_J_kgK": 800
+   },
+   "kurz": null,
+   "name": "Tragende Bauteile_600",
+   "schluessel": "tragende-bauteile-600",
+   "verschneidungsprioritaet": 600,
+   "werkstoffklasse": "sonstiges"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0.02,
+    "dichte_kg_m3": 2200,
+    "graue_energie_MJ_kg": 0.85,
+    "lambda_W_mK": 1.4,
+    "waermekapazitaet_J_kgK": 750
+   },
+   "kurz": null,
+   "name": "Trennschicht_400",
+   "schluessel": "trennschicht-400",
+   "verschneidungsprioritaet": 400,
+   "werkstoffklasse": "sonstiges"
+  },
+  {
+   "farbe": "#5b5b5b",
+   "kennwerte": {
+    "co2_kg_kg": 1.48,
+    "dichte_kg_m3": 64,
+    "graue_energie_MJ_kg": 37,
+    "lambda_W_mK": 0.033,
+    "waermekapazitaet_J_kgK": 1030
+   },
+   "kurz": null,
+   "name": "Trennschicht Aussen_700",
+   "schluessel": "trennschicht-aussen-700",
+   "verschneidungsprioritaet": 700,
+   "werkstoffklasse": "sonstiges"
+  },
+  {
+   "farbe": "#fcfb00",
+   "kennwerte": {
+    "co2_kg_kg": 1.48,
+    "dichte_kg_m3": 64,
+    "graue_energie_MJ_kg": 37,
+    "lambda_W_mK": 0.033,
+    "waermekapazitaet_J_kgK": 1030
+   },
+   "kurz": "TSD",
+   "name": "Trittschalldämmung_210",
+   "schluessel": "trittschalldammung-210",
+   "verschneidungsprioritaet": 210,
+   "werkstoffklasse": "daemmung_hart"
+  },
+  {
+   "farbe": "#5b5b5b",
+   "kennwerte": {
+    "co2_kg_kg": 0,
+    "dichte_kg_m3": 0,
+    "graue_energie_MJ_kg": 0,
+    "lambda_W_mK": 0,
+    "waermekapazitaet_J_kgK": 0
+   },
+   "kurz": null,
+   "name": "Überbau + Volumenverschneidung_900",
+   "schluessel": "uberbau-volumenverschneidung-900",
+   "verschneidungsprioritaet": 900,
+   "werkstoffklasse": "sonstiges"
+  },
+  {
+   "farbe": "#7eb4a5",
+   "kennwerte": {
+    "co2_kg_kg": 0.005,
+    "dichte_kg_m3": 1100,
+    "graue_energie_MJ_kg": 0.008,
+    "lambda_W_mK": 2.3,
+    "waermekapazitaet_J_kgK": 1200
+   },
+   "kurz": null,
+   "name": "Umgebung_100",
+   "schluessel": "umgebung-100",
+   "verschneidungsprioritaet": 100,
+   "werkstoffklasse": "sonstiges"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 1.48,
+    "dichte_kg_m3": 64,
+    "graue_energie_MJ_kg": 37,
+    "lambda_W_mK": 0.033,
+    "waermekapazitaet_J_kgK": 1030
+   },
+   "kurz": null,
+   "name": "Unterlage_200",
+   "schluessel": "unterlage-200",
+   "verschneidungsprioritaet": 200,
+   "werkstoffklasse": "sonstiges"
+  },
+  {
+   "farbe": "#ccbeac",
+   "kennwerte": {
+    "co2_kg_kg": 0.29,
+    "dichte_kg_m3": 500,
+    "graue_energie_MJ_kg": 6.95,
+    "lambda_W_mK": 0.13,
+    "waermekapazitaet_J_kgK": 1600
+   },
+   "kurz": null,
+   "name": "Vollholz_350",
+   "schluessel": "vollholz-350",
+   "verschneidungsprioritaet": 350,
+   "werkstoffklasse": "holz"
+  },
+  {
+   "farbe": "#bb786f",
+   "kennwerte": {
+    "co2_kg_kg": 0.36,
+    "dichte_kg_m3": 824,
+    "graue_energie_MJ_kg": 4.5,
+    "lambda_W_mK": 0.139,
+    "waermekapazitaet_J_kgK": 920
+   },
+   "kurz": null,
+   "name": "Vollziegel_625",
+   "schluessel": "vollziegel-625",
+   "verschneidungsprioritaet": 625,
+   "werkstoffklasse": "mauerwerk"
+  },
+  {
+   "farbe": "#b7b6b3",
+   "kennwerte": {
+    "co2_kg_kg": 0.48,
+    "dichte_kg_m3": 600,
+    "graue_energie_MJ_kg": 6,
+    "lambda_W_mK": 0.109,
+    "waermekapazitaet_J_kgK": 920
+   },
+   "kurz": "VMZ",
+   "name": "Vormauerziegel_540",
+   "schluessel": "vormauerziegel-540",
+   "verschneidungsprioritaet": 540,
+   "werkstoffklasse": "mauerwerk"
+  },
+  {
+   "farbe": "#a8a8a8",
+   "kennwerte": {
+    "co2_kg_kg": 0.48,
+    "dichte_kg_m3": 742,
+    "graue_energie_MJ_kg": 6,
+    "lambda_W_mK": 0.125,
+    "waermekapazitaet_J_kgK": 920
+   },
+   "kurz": null,
+   "name": "Wand Bestand_640",
+   "schluessel": "wand-bestand-640",
+   "verschneidungsprioritaet": 640,
+   "werkstoffklasse": "mauerwerk"
+  },
+  {
+   "farbe": "#f90000",
+   "kennwerte": {
+    "co2_kg_kg": 0.48,
+    "dichte_kg_m3": 742,
+    "graue_energie_MJ_kg": 6,
+    "lambda_W_mK": 0.125,
+    "waermekapazitaet_J_kgK": 920
+   },
+   "kurz": null,
+   "name": "Wand Neubau_640",
+   "schluessel": "wand-neubau-640",
+   "verschneidungsprioritaet": 640,
+   "werkstoffklasse": "mauerwerk"
+  },
+  {
+   "farbe": "#fcfb00",
+   "kennwerte": {
+    "co2_kg_kg": 3.29,
+    "dichte_kg_m3": 25,
+    "graue_energie_MJ_kg": 86.6,
+    "lambda_W_mK": 0.035,
+    "waermekapazitaet_J_kgK": 1450
+   },
+   "kurz": null,
+   "name": "Wärmedämmung_210",
+   "schluessel": "warmedammung-210",
+   "verschneidungsprioritaet": 210,
+   "werkstoffklasse": "daemmung_hart"
+  },
+  {
+   "farbe": "#78b1c7",
+   "kennwerte": {
+    "co2_kg_kg": 0.001,
+    "dichte_kg_m3": 1000,
+    "graue_energie_MJ_kg": 0.01,
+    "lambda_W_mK": 0.6,
+    "waermekapazitaet_J_kgK": 4200
+   },
+   "kurz": null,
+   "name": "Wasser_105",
+   "schluessel": "wasser-105",
+   "verschneidungsprioritaet": 105,
+   "werkstoffklasse": "erdreich"
+  },
+  {
+   "farbe": "#c7c7c7",
+   "kennwerte": {
+    "co2_kg_kg": 0.132,
+    "dichte_kg_m3": 2300,
+    "graue_energie_MJ_kg": 0.88,
+    "lambda_W_mK": 1.7,
+    "waermekapazitaet_J_kgK": 800
+   },
+   "kurz": "WU-Beton",
+   "name": "WU-Beton_690",
+   "schluessel": "wu-beton-690",
+   "verschneidungsprioritaet": 690,
+   "werkstoffklasse": "stahlbeton"
+  },
+  {
+   "farbe": "#a2c5d7",
+   "kennwerte": {
+    "co2_kg_kg": 3.42,
+    "dichte_kg_m3": 28,
+    "graue_energie_MJ_kg": 87.4,
+    "lambda_W_mK": 0.032,
+    "waermekapazitaet_J_kgK": 1450
+   },
+   "kurz": "XPS",
+   "name": "XPS_730",
+   "schluessel": "xps-730",
+   "verschneidungsprioritaet": 730,
+   "werkstoffklasse": "daemmung_hart"
+  },
+  {
+   "farbe": "#a2c5d7",
+   "kennwerte": {
+    "co2_kg_kg": 3.42,
+    "dichte_kg_m3": 28,
+    "graue_energie_MJ_kg": 87.4,
+    "lambda_W_mK": 0.032,
+    "waermekapazitaet_J_kgK": 1450
+   },
+   "kurz": "XPS",
+   "name": "XPS hart_400",
+   "schluessel": "xps-hart-400",
+   "verschneidungsprioritaet": 400,
+   "werkstoffklasse": "daemmung_hart"
+  },
+  {
+   "farbe": "#fcfb00",
+   "kennwerte": {
+    "co2_kg_kg": 0.9,
+    "dichte_kg_m3": 151.33,
+    "graue_energie_MJ_kg": 13.5,
+    "lambda_W_mK": 0.046,
+    "waermekapazitaet_J_kgK": 900
+   },
+   "kurz": null,
+   "name": "Zellulose_610",
+   "schluessel": "zellulose-610",
+   "verschneidungsprioritaet": 610,
+   "werkstoffklasse": "daemmung_weich"
+  },
+  {
+   "farbe": "#ffffff",
+   "kennwerte": {
+    "co2_kg_kg": 0.213,
+    "dichte_kg_m3": 1800,
+    "graue_energie_MJ_kg": 1.34,
+    "lambda_W_mK": 1,
+    "waermekapazitaet_J_kgK": 1000
+   },
+   "kurz": null,
+   "name": "Zementputz_370",
+   "schluessel": "zementputz-370",
+   "verschneidungsprioritaet": 370,
+   "werkstoffklasse": "putz"
+  }
+ ],
+ "hinweis": "ERZEUGT aus dem Bauteilkatalog des Harness — nicht von Hand ändern. Neu erzeugen: python -m harness.bauteilkatalog app-export ../packages/nova-core/src/lib/bauteil/katalog/katalog.json",
+ "inhalt_sha256": "7a49b7aa82f9e17e5e442db10de72e3c25e5f74a72ccf49c0e1d06ed79cd42d0",
+ "quelle": "elmonkey-core 0.3.0",
+ "typen": [
+  {
+   "dicke_m": 0.4,
+   "din276": "353",
+   "klasse": "IfcCovering",
+   "kurzname": "Abgehängte Decke 40 cm",
+   "langname": "Luft 375 mm · GKB 12,5 mm · GKB 12,5 mm | 400 mm",
+   "predefined_type": "CEILING",
+   "pset_common": {},
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "luftschicht-horizontal-205",
+     "dicke_m": 0.375,
+     "rolle": null
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "abgehangte-decke-40-cm",
+   "typ_guid": "0FEATvcUbJ8O$fxMAu1AY4",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.15,
+   "din276": "352",
+   "klasse": "IfcCovering",
+   "kurzname": "Boden 15 cm",
+   "langname": "Estrich 65 mm · TSD 85 mm | 150 mm",
+   "predefined_type": "FLOORING",
+   "pset_common": {
+    "IsExternal": false
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.065,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.085,
+     "rolle": "Insulation"
+    }
+   ],
+   "schluessel": "estrich-15-cm",
+   "typ_guid": "2$9hUCYYbTNwU5TzWluXpI",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.15,
+   "din276": "352",
+   "klasse": "IfcCovering",
+   "kurzname": "Boden+Fliesen 15 cm",
+   "langname": "Fliesen anthrazit_350 15 mm · Estrich 65 mm · TSD 70 mm | 150 mm",
+   "predefined_type": "FLOORING",
+   "pset_common": {
+    "IsExternal": false
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "fliesen-anthrazit-350",
+     "dicke_m": 0.015,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.065,
+     "rolle": null
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.07,
+     "rolle": "Insulation"
+    }
+   ],
+   "schluessel": "estrich-fliesen-15-cm",
+   "typ_guid": "1jqMj9PXrKUwxagG7sEFM1",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.15,
+   "din276": "352",
+   "klasse": "IfcCovering",
+   "kurzname": "Estrich + Linoleum 15 cm",
+   "langname": "Linoleum_350 5 mm · Estrich 65 mm · TSD 80 mm | 150 mm",
+   "predefined_type": "FLOORING",
+   "pset_common": {},
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "linoleum-350",
+     "dicke_m": 0.005,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.065,
+     "rolle": null
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.08,
+     "rolle": "Insulation"
+    }
+   ],
+   "schluessel": "estrich-linoleum-15-cm",
+   "typ_guid": "2PysBCDanGb8zoTbC05o$g",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.15,
+   "din276": "352",
+   "klasse": "IfcCovering",
+   "kurzname": "Boden+Parkett 15 cm",
+   "langname": "Parkett 15 mm · Estrich 65 mm · TSD 70 mm | 150 mm",
+   "predefined_type": "FLOORING",
+   "pset_common": {
+    "IsExternal": false
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "parkett-350",
+     "dicke_m": 0.015,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.065,
+     "rolle": null
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.07,
+     "rolle": "Insulation"
+    }
+   ],
+   "schluessel": "estrich-parkett-15-cm",
+   "typ_guid": "3_6MSVkRTPxu5Kspu$LpJM",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.15,
+   "din276": "352",
+   "klasse": "IfcCovering",
+   "kurzname": "Estrich + PVC 15 cm",
+   "langname": "PVC_350 5 mm · Estrich 65 mm · TSD 80 mm | 150 mm",
+   "predefined_type": "FLOORING",
+   "pset_common": {},
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "pvc-350",
+     "dicke_m": 0.005,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.065,
+     "rolle": null
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.08,
+     "rolle": "Insulation"
+    }
+   ],
+   "schluessel": "estrich-pvc-15-cm",
+   "typ_guid": "0inbXYzjPUkwd8BKO_e1lz",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.15,
+   "din276": "352",
+   "klasse": "IfcCovering",
+   "kurzname": "Boden+Teppich 15 cm",
+   "langname": "Teppich grau_310 10 mm · Estrich 65 mm · TSD 75 mm | 150 mm",
+   "predefined_type": "FLOORING",
+   "pset_common": {
+    "IsExternal": false
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "teppich-grau-310",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.065,
+     "rolle": null
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.075,
+     "rolle": "Insulation"
+    }
+   ],
+   "schluessel": "estrich-teppich-15-cm",
+   "typ_guid": "1j5CKbjCrUZvvylcGsbPxT",
+   "version": 1
+  },
+  {
+   "dicke_m": null,
+   "din276": "334",
+   "klasse": "IfcWindow",
+   "kurzname": "F 1 1,26x1,51",
+   "langname": "F 1-flg. 126x151",
+   "oeffnung": {
+    "breite_m": 1.26,
+    "hoehe_m": 1.51,
+    "oeffnungsart": "SINGLE_PANEL"
+   },
+   "predefined_type": "WINDOW",
+   "pset_common": {
+    "IsExternal": true
+   },
+   "rohling": false,
+   "schichten": [],
+   "schluessel": "fenster-1-flg-126x151",
+   "typ_guid": "3hRHea2XjTofBWLqPCDIVC",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.495,
+   "din276": "361",
+   "klasse": "IfcSlab",
+   "kurzname": "Flachdach Kaltdach 49,5 cm",
+   "langname": "Kies_140 30 mm · Spanplatte_360 25 mm · Luft 80 mm · MW 160 mm · StB 200 mm | 495 mm",
+   "predefined_type": "ROOF",
+   "pset_common": {},
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "kies-140",
+     "dicke_m": 0.03,
+     "rolle": null
+    },
+    {
+     "baustoff": "spanplatte-360",
+     "dicke_m": 0.025,
+     "rolle": null
+    },
+    {
+     "baustoff": "luftschicht-horizontal-205",
+     "dicke_m": 0.08,
+     "rolle": null
+    },
+    {
+     "baustoff": "mineralwolle-3-740",
+     "dicke_m": 0.16,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "stahlbeton-670",
+     "dicke_m": 0.2,
+     "rolle": "LoadBearing"
+    }
+   ],
+   "schluessel": "flachdach-kaltdach-49-5-cm",
+   "typ_guid": "1IImMpa3TG7QdUIJ5CM2Ig",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.48,
+   "din276": "361",
+   "klasse": "IfcSlab",
+   "kurzname": "Flachdach Warmdach 48 cm",
+   "langname": "Kies_140 30 mm · EPS 50 mm · MW 100 mm · MW 100 mm · StB 200 mm | 480 mm",
+   "predefined_type": "ROOF",
+   "pset_common": {},
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "kies-140",
+     "dicke_m": 0.03,
+     "rolle": null
+    },
+    {
+     "baustoff": "eps-750",
+     "dicke_m": 0.05,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "mineralwolle-3-740",
+     "dicke_m": 0.1,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "mineralwolle-3-740",
+     "dicke_m": 0.1,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "stahlbeton-670",
+     "dicke_m": 0.2,
+     "rolle": "LoadBearing"
+    }
+   ],
+   "schluessel": "flachdach-warmdach-48-cm",
+   "typ_guid": "3d3oUKDffUsgOxwHcszlSx",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.1,
+   "din276": "342",
+   "klasse": "IfcWall",
+   "kurzname": "GK 10 cm",
+   "langname": "GKB 12,5 mm · GKB 12,5 mm · GW 50 mm (CW50 e=62,5 cm) · GKB 12,5 mm · GKB 12,5 mm | 100 mm",
+   "predefined_type": "PARTITIONING",
+   "pset_common": {
+    "IsExternal": false,
+    "LoadBearing": false
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.05,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "achsabstand_m": 0.625,
+      "norm": "DIN 18183-1",
+      "profil": "CW50",
+      "querriegel": [],
+      "uw_anschluss": true
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "gk-2-lagen-10-cm",
+   "typ_guid": "3y98rxCofTX921PBVbdKZK",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.125,
+   "din276": "342",
+   "klasse": "IfcWall",
+   "kurzname": "GK 2-Lagen 12,5 cm",
+   "langname": "GKB 12,5 mm · GKB 12,5 mm · GW 75 mm (CW75 e=62,5 cm) · GKB 12,5 mm · GKB 12,5 mm | 125 mm",
+   "predefined_type": "PARTITIONING",
+   "pset_common": {
+    "LoadBearing": false
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.075,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "achsabstand_m": 0.625,
+      "norm": "DIN 18183-1",
+      "profil": "CW75",
+      "querriegel": [],
+      "uw_anschluss": true
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "gk-2-lagen-12-5-cm",
+   "typ_guid": "3OB2OZBw1QMhkp41jnUC0x",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.155,
+   "din276": "342",
+   "klasse": "IfcWall",
+   "kurzname": "GK 2-Lagen 15,5 cm",
+   "langname": "GKB 12,5 mm · GKB 12,5 mm · GW 50 mm (CW50 e=62,5 cm) · Luft 5 mm · GW 50 mm (CW50 e=62,5 cm) · GKB 12,5 mm · GKB 12,5 mm | 155 mm",
+   "predefined_type": "PARTITIONING",
+   "pset_common": {
+    "LoadBearing": false
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.05,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "achsabstand_m": 0.625,
+      "norm": "DIN 18183-1",
+      "profil": "CW50",
+      "querriegel": [],
+      "uw_anschluss": true
+     }
+    },
+    {
+     "baustoff": "luftschicht-vertikal-205",
+     "dicke_m": 0.005,
+     "rolle": null
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.05,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "achsabstand_m": 0.625,
+      "norm": "DIN 18183-1",
+      "profil": "CW50",
+      "querriegel": [],
+      "uw_anschluss": true
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "gk-2-lagen-15-5-cm",
+   "typ_guid": "2DZWvpQ61Vq9y6DBKIwB2B",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.15,
+   "din276": "342",
+   "klasse": "IfcWall",
+   "kurzname": "GK 2-Lagen 15 cm",
+   "langname": "GKB 12,5 mm · GKB 12,5 mm · GW 100 mm (CW100 e=62,5 cm) · GKB 12,5 mm · GKB 12,5 mm | 150 mm",
+   "predefined_type": "PARTITIONING",
+   "pset_common": {
+    "LoadBearing": false
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.1,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "achsabstand_m": 0.625,
+      "norm": "DIN 18183-1",
+      "profil": "CW100",
+      "querriegel": [],
+      "uw_anschluss": true
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "gk-2-lagen-15-cm",
+   "typ_guid": "00fcLSS1HT8hr2_gbbs1kU",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.205,
+   "din276": "342",
+   "klasse": "IfcWall",
+   "kurzname": "GK 2-Lagen 20,5 cm",
+   "langname": "GKB 12,5 mm · GKB 12,5 mm · GW 75 mm (CW75 e=62,5 cm) · Luft 5 mm · GW 75 mm (CW75 e=62,5 cm) · GKB 12,5 mm · GKB 12,5 mm | 205 mm",
+   "predefined_type": "PARTITIONING",
+   "pset_common": {
+    "LoadBearing": false
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.075,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "achsabstand_m": 0.625,
+      "norm": "DIN 18183-1",
+      "profil": "CW75",
+      "querriegel": [],
+      "uw_anschluss": true
+     }
+    },
+    {
+     "baustoff": "luftschicht-vertikal-205",
+     "dicke_m": 0.005,
+     "rolle": null
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.075,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "achsabstand_m": 0.625,
+      "norm": "DIN 18183-1",
+      "profil": "CW75",
+      "querriegel": [],
+      "uw_anschluss": true
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "gk-2-lagen-20-5-cm",
+   "typ_guid": "1hS9bPzfDIaB4UUNAzNrnr",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.255,
+   "din276": "342",
+   "klasse": "IfcWall",
+   "kurzname": "GK 2-Lagen 25,5 cm",
+   "langname": "GKB 12,5 mm · GKB 12,5 mm · GW 100 mm (CW100 e=62,5 cm) · Luft 5 mm · GW 100 mm (CW100 e=62,5 cm) · GKB 12,5 mm · GKB 12,5 mm | 255 mm",
+   "predefined_type": "PARTITIONING",
+   "pset_common": {
+    "LoadBearing": false
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.1,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "achsabstand_m": 0.625,
+      "norm": "DIN 18183-1",
+      "profil": "CW100",
+      "querriegel": [],
+      "uw_anschluss": true
+     }
+    },
+    {
+     "baustoff": "luftschicht-vertikal-205",
+     "dicke_m": 0.005,
+     "rolle": null
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.1,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "achsabstand_m": 0.625,
+      "norm": "DIN 18183-1",
+      "profil": "CW100",
+      "querriegel": [],
+      "uw_anschluss": true
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "gk-2-lagen-25-5-cm",
+   "typ_guid": "2$j_l7diPJpQVCqxGDlgpA",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.15,
+   "din276": "342",
+   "klasse": "IfcWall",
+   "kurzname": "GK 15 cm",
+   "langname": "GKB 12,5 mm · GKB 12,5 mm · GKB 12,5 mm · GW 75 mm (CW75 e=62,5 cm) · GKB 12,5 mm · GKB 12,5 mm · GKB 12,5 mm | 150 mm",
+   "predefined_type": "PARTITIONING",
+   "pset_common": {
+    "IsExternal": false,
+    "LoadBearing": false
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.075,
+     "rolle": "Insulation",
+     "staenderwerk": {
+      "achsabstand_m": 0.625,
+      "norm": "DIN 18183-1",
+      "profil": "CW75",
+      "querriegel": [],
+      "uw_anschluss": true
+     }
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": null
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "gk-3-lagen-15-cm",
+   "typ_guid": "3PCl4qd3XRAA09AKCF9Xgj",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.135,
+   "din276": "341",
+   "klasse": "IfcWall",
+   "kurzname": "HLZ 11,5 cm beidseitig Gipsputz",
+   "langname": "Gipsputz 10 mm · HLZ 115 mm · Gipsputz 10 mm | 135 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.115,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "hlz-11-5-cm-beidseitig-gipsputz",
+   "typ_guid": "1blzFuf6jU2Oq4jNBx1$cg",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.195,
+   "din276": "341",
+   "klasse": "IfcWall",
+   "kurzname": "HLZ 17,5 cm beidseitig Gipsputz",
+   "langname": "Gipsputz 10 mm · HLZ 175 mm · Gipsputz 10 mm | 195 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.175,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "hlz-17-5-cm-beidseitig-gipsputz",
+   "typ_guid": "2thZVu1ybTZOpIO1BZ$sVX",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.26,
+   "din276": "341",
+   "klasse": "IfcWall",
+   "kurzname": "HLZ 24 cm beidseitig Gipsputz",
+   "langname": "Gipsputz 10 mm · HLZ 240 mm · Gipsputz 10 mm | 260 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.24,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "hlz-24-cm-beidseitig-gipsputz",
+   "typ_guid": "1qSSAfg95T3e3cJG80Oxae",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.32,
+   "din276": "341",
+   "klasse": "IfcWall",
+   "kurzname": "HLZ 30 cm beidseitig Gipsputz",
+   "langname": "Gipsputz 10 mm · HLZ 300 mm · Gipsputz 10 mm | 320 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.3,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "hlz-30-cm-beidseitig-gipsputz",
+   "typ_guid": "35__qTtynGDAD$j6$SGEQC",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.385,
+   "din276": "341",
+   "klasse": "IfcWall",
+   "kurzname": "HLZ 36,5 cm beidseitig Gipsputz",
+   "langname": "Gipsputz 10 mm · HLZ 365 mm · Gipsputz 10 mm | 385 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.365,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "hlz-36-5-cm-beidseitig-gipsputz",
+   "typ_guid": "3eoy6Wnr5IHf7tSCESNyPV",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.505,
+   "din276": "331",
+   "klasse": "IfcWall",
+   "kurzname": "HLZ + Kerndämmung 50,5 cm",
+   "langname": "VMZ 115 mm · GW 140 mm · HLZ 240 mm · Gipsputz 10 mm | 505 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "IsExternal": true,
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "vormauerziegel-540",
+     "dicke_m": 0.115,
+     "rolle": null
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.14,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.24,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "hlz-kerndammung-50-5-cm",
+   "typ_guid": "3BefKXY_XUAhOVwNPBujFR",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.545,
+   "din276": "331",
+   "klasse": "IfcWall",
+   "kurzname": "HLZ + Luftschicht + WD 54,5 cm",
+   "langname": "VMZ 115 mm · Luft 40 mm · GW 140 mm · HLZ 240 mm · Gipsputz 10 mm | 545 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "IsExternal": true,
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "vormauerziegel-540",
+     "dicke_m": 0.115,
+     "rolle": null
+    },
+    {
+     "baustoff": "luftschicht-vertikal-205",
+     "dicke_m": 0.04,
+     "rolle": null
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.14,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.24,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "hlz-luftschicht-wd-54-5-cm",
+   "typ_guid": "16I9AyE8TJOu8wBFKL64vU",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.3545,
+   "din276": "351",
+   "klasse": "IfcSlab",
+   "kurzname": "Holzrahmen abgehängt 35,5 cm",
+   "langname": "Estrich 50 mm · Folie_770 0 mm · TSD 30 mm · OSB 18 mm · Luft 120 mm · MW 100 mm · Bauholz_520 24 mm · GKB 12,5 mm | 354,5 mm",
+   "predefined_type": "FLOOR",
+   "pset_common": {},
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "estrich-330",
+     "dicke_m": 0.05,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "folie-770",
+     "dicke_m": 0.0,
+     "rolle": null
+    },
+    {
+     "baustoff": "trittschalldammung-210",
+     "dicke_m": 0.03,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "osb-platte-350",
+     "dicke_m": 0.018,
+     "rolle": null
+    },
+    {
+     "baustoff": "luftschicht-horizontal-205",
+     "dicke_m": 0.12,
+     "rolle": null
+    },
+    {
+     "baustoff": "mineralwolle-1-615",
+     "dicke_m": 0.1,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "bauholz-520",
+     "dicke_m": 0.024,
+     "rolle": null
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "holzrahmen-abgehangt-35-5-cm",
+   "typ_guid": "02KVCzaMnLDBh04X$TZulP",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.2445,
+   "din276": "342",
+   "klasse": "IfcWall",
+   "kurzname": "Holzrahmenbau 24,5 cm",
+   "langname": "Lehmputz_370 4 mm · Holzwolledämmplatte_640 50 mm · MW 120 mm · OSB 18 mm · MW 40 mm · GKB 12,5 mm | 244,5 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "LoadBearing": false
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "lehmputz-370",
+     "dicke_m": 0.004,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "holzwolledammplatte-640",
+     "dicke_m": 0.05,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "mineralwolle-1-615",
+     "dicke_m": 0.12,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "osb-platte-350",
+     "dicke_m": 0.018,
+     "rolle": null
+    },
+    {
+     "baustoff": "mineralwolle-1-615",
+     "dicke_m": 0.04,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "ausbauplatte-gkb-355",
+     "dicke_m": 0.0125,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "holzrahmenbau-24-5-cm",
+   "typ_guid": "2oQagNrxzMQxtx_O$_oyaV",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.135,
+   "din276": "341",
+   "klasse": "IfcWall",
+   "kurzname": "KS 11,5 cm zweiseitig Gipsputz",
+   "langname": "Gipsputz 10 mm · KS 115 mm · Gipsputz 10 mm | 135 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "IsExternal": false,
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.115,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "ks-11-5-cm-beidseitig-gipsputz",
+   "typ_guid": "2Q4Pop$iPKMPC6aXvoedUt",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.195,
+   "din276": "341",
+   "klasse": "IfcWall",
+   "kurzname": "KS 17,5 cm beidseitig Gipsputz",
+   "langname": "Gipsputz 10 mm · KS 175 mm · Gipsputz 10 mm | 195 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.175,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "ks-17-5-cm-beidseitig-gipsputz",
+   "typ_guid": "3iRb2pYI5NyuKNX9I_tG57",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.4,
+   "din276": "341",
+   "klasse": "IfcWall",
+   "kurzname": "KS Wohnungstrennwand 0,40 cm",
+   "langname": "Gipsputz 10 mm · KS 175 mm · MW 30 mm · KS 175 mm · Gipsputz 10 mm | 400 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "IsExternal": false,
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.175,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "mineralwolle-1-615",
+     "dicke_m": 0.03,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.175,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "ks-17-5-cm-zweifach-wohnungstrennwand",
+   "typ_guid": "0VZNE9iB1IyRnwCRStPz4G",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.26,
+   "din276": "341",
+   "klasse": "IfcWall",
+   "kurzname": "KS 24 cm beidseitig Gipsputz",
+   "langname": "Gipsputz 10 mm · KS 240 mm · Gipsputz 10 mm | 260 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.24,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "ks-24-cm-beidseitig-gipsputz",
+   "typ_guid": "3bUl5mArnJ8xDmr9ns3AyZ",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.32,
+   "din276": "341",
+   "klasse": "IfcWall",
+   "kurzname": "KS 30 cm beidseitig Gipsputz",
+   "langname": "Gipsputz 10 mm · KS 300 mm · Gipsputz 10 mm | 320 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.3,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "ks-30-cm-beidseitig-gipsputz",
+   "typ_guid": "0SNjwFxNDN$g8XU44Yj8j7",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.385,
+   "din276": "341",
+   "klasse": "IfcWall",
+   "kurzname": "KS 36,5 cm beidseitig Gipsputz",
+   "langname": "Gipsputz 10 mm · KS 365 mm · Gipsputz 10 mm | 385 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.365,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "ks-36-5-cm-beidseitig-gipsputz",
+   "typ_guid": "00VA6nU5HLourvw9aNyYor",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.4,
+   "din276": "341",
+   "klasse": "IfcWall",
+   "kurzname": "KS + Verblender 40 cm",
+   "langname": "VMZ 115 mm · Luft 30 mm · GW 80 mm · KS 175 mm | 400 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "vormauerziegel-540",
+     "dicke_m": 0.115,
+     "rolle": null
+    },
+    {
+     "baustoff": "luftschicht-vertikal-205",
+     "dicke_m": 0.03,
+     "rolle": null
+    },
+    {
+     "baustoff": "glaswolle-220",
+     "dicke_m": 0.08,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.175,
+     "rolle": "LoadBearing"
+    }
+   ],
+   "schluessel": "ks-verblender-40-cm",
+   "typ_guid": "2J_mVzd5jPtAkJS1nYajEV",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.42,
+   "din276": "331",
+   "klasse": "IfcWall",
+   "kurzname": "KS + WDVS 42 cm",
+   "langname": "KH-Putz 10 mm · XPS 160 mm · KS 240 mm · Gipsputz 10 mm | 420 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "IsExternal": true,
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "kunstharzputz-370",
+     "dicke_m": 0.01,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "xps-730",
+     "dicke_m": 0.16,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "kalksandstein-635",
+     "dicke_m": 0.24,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "ks-wdvs-42-cm",
+   "typ_guid": "1XEVHbDKvIjAOSAuxNaIEz",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.45,
+   "din276": "341",
+   "klasse": "IfcWall",
+   "kurzname": "Monolithisch 45 cm",
+   "langname": "KZ-Putz 15 mm · HLZ 425 mm · Gipsputz 10 mm | 450 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "kalkzementputz-370",
+     "dicke_m": 0.015,
+     "rolle": "Outer finish"
+    },
+    {
+     "baustoff": "hochlochziegel-640",
+     "dicke_m": 0.425,
+     "rolle": "LoadBearing"
+    },
+    {
+     "baustoff": "gipsputz-360",
+     "dicke_m": 0.01,
+     "rolle": "Inner finish"
+    }
+   ],
+   "schluessel": "monolithisch-45-cm",
+   "typ_guid": "0PCGjGrVbLUQX1ELy3Hd$e",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.2,
+   "din276": "351",
+   "klasse": "IfcSlab",
+   "kurzname": "Rohdecke StB 20 cm",
+   "langname": "StB 200 mm | 200 mm",
+   "predefined_type": "FLOOR",
+   "pset_common": {
+    "IsExternal": false,
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "stahlbeton-670",
+     "dicke_m": 0.2,
+     "rolle": "LoadBearing"
+    }
+   ],
+   "schluessel": "rohdecke-stb-20-cm",
+   "typ_guid": "0xDENpSFvRtxLaUqXALoXD",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.2,
+   "din276": "350",
+   "klasse": "IfcSlab",
+   "kurzname": "Decke (Rohling)",
+   "langname": "Bauteil_500 200 mm | 200 mm",
+   "predefined_type": "FLOOR",
+   "pset_common": {},
+   "rohling": true,
+   "schichten": [
+    {
+     "baustoff": "bauteil-500",
+     "dicke_m": 0.2,
+     "rolle": null
+    }
+   ],
+   "schluessel": "rohling-decke",
+   "typ_guid": "0VM1y8R2HTV8QQqvk00WLp",
+   "version": 1
+  },
+  {
+   "dicke_m": null,
+   "din276": "334",
+   "klasse": "IfcWindow",
+   "kurzname": "Fenster (Rohling)",
+   "langname": "F 100x100",
+   "oeffnung": {
+    "breite_m": 1.0,
+    "hoehe_m": 1.0,
+    "oeffnungsart": "SINGLE_PANEL"
+   },
+   "predefined_type": "WINDOW",
+   "pset_common": {},
+   "rohling": true,
+   "schichten": [],
+   "schluessel": "rohling-fenster",
+   "typ_guid": "1PkgSwFV5IfhRJqRSVlNjV",
+   "version": 1
+  },
+  {
+   "dicke_m": null,
+   "din276": "344",
+   "klasse": "IfcDoor",
+   "kurzname": "Tür (Rohling)",
+   "langname": "T 100x213,5",
+   "oeffnung": {
+    "breite_m": 1.0,
+    "hoehe_m": 2.135,
+    "oeffnungsart": "SINGLE_SWING_LEFT"
+   },
+   "predefined_type": "DOOR",
+   "pset_common": {},
+   "rohling": true,
+   "schichten": [],
+   "schluessel": "rohling-tuer",
+   "typ_guid": "0ecDpBTa5UlA$9Y4xHp0n$",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.2,
+   "din276": "340",
+   "klasse": "IfcWall",
+   "kurzname": "Wand (Rohling)",
+   "langname": "Bauteil_500 200 mm | 200 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {},
+   "rohling": true,
+   "schichten": [
+    {
+     "baustoff": "bauteil-500",
+     "dicke_m": 0.2,
+     "rolle": null
+    }
+   ],
+   "schluessel": "rohling-wand",
+   "typ_guid": "3ReNbKTM5KAvt6lq2U8aJU",
+   "version": 1
+  },
+  {
+   "dicke_m": 0.38,
+   "din276": "331",
+   "klasse": "IfcWall",
+   "kurzname": "StB Kellerwand + WD 38 cm",
+   "langname": "XPS 140 mm · WU-Beton 240 mm | 380 mm",
+   "predefined_type": "SOLIDWALL",
+   "pset_common": {
+    "IsExternal": true,
+    "LoadBearing": true
+   },
+   "rohling": false,
+   "schichten": [
+    {
+     "baustoff": "xps-730",
+     "dicke_m": 0.14,
+     "rolle": "Insulation"
+    },
+    {
+     "baustoff": "wu-beton-690",
+     "dicke_m": 0.24,
+     "rolle": "LoadBearing"
+    }
+   ],
+   "schluessel": "stb-kellerwand-wd-38-cm",
+   "typ_guid": "0M5A5eA99QzQ9Sy3NhHQRm",
+   "version": 1
+  },
+  {
+   "dicke_m": null,
+   "din276": "344",
+   "klasse": "IfcDoor",
+   "kurzname": "T Innen 1Fl UZ 88,5x213,5",
+   "langname": "T Innen 1-flg. UZ Holz 88,5x213,5",
+   "oeffnung": {
+    "breite_m": 0.885,
+    "hoehe_m": 2.135,
+    "oeffnungsart": "SINGLE_SWING_LEFT"
+   },
+   "predefined_type": "DOOR",
+   "pset_common": {
+    "AcousticRating": "",
+    "FireRating": "",
+    "HandicapAccessible": false,
+    "IsExternal": false
+   },
+   "rohling": false,
+   "schichten": [],
+   "schluessel": "tuer-innen-1-flg-uz-holz-88-5x213-5",
+   "typ_guid": "3y27g$oRzMlwnPbMOAMMck",
+   "version": 1
+  }
+ ]
+}

@@ -99,6 +99,12 @@ export const EN = {
   "Schrittmaß 2s + a außerhalb 59…65 cm": "Step rule 2s + a outside 59…65 cm",
   "Nutzbare Laufbreite unter 0,80 m (DIN 18065 Tab. 1)": "Usable flight width below 0.80 m (DIN 18065 Tab. 1)",
   "Lichte Kopfhöhe unter 2,00 m über der Lauflinie": "Headroom below 2.00 m over the walking line",
+  // 108-03: gable wall up to the roof contour
+  "{{wo}}: {{b}}×{{h}} m (Brüstung {{sill}} m) ragt über die Dachkontur: an dieser Stelle nur {{hw}} m Wandhöhe": "{{wo}}: {{b}}×{{h}} m (sill {{sill}} m) reaches above the roof line: only {{hw}} m of wall height at this position",
+  // 108-05: door hinge and swing ("Anschlag", "links", "rechts", "Spiegeln" live in global parts)
+  "Aufschlag": "Swing",
+  "innen": "inwards",
+  "außen": "outwards",
   // 108-13: dormers on the global roof
   "Gaube": "Dormer",
   "Gauben": "Dormers",

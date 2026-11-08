@@ -7,6 +7,9 @@
         → material library and type library
     python -m harness.bauteilkatalog pruefen <datei.ifc> [--ohne-regeln]
         → check report (schema + WHERE rules, proxies, elements without type, neutrality)
+    python -m harness.bauteilkatalog app-export [<datei.json>]
+        → the neutral base stock as the app's catalogue JSON (114-01; default target: the app copy
+          packages/nova-core/src/lib/bauteil/katalog/katalog.json), name-checked after writing
 
 In:  target folder / IFC file; `bibliothek --projekt` adds the runtime types of a harness project folder
      to the type library. `--schema` is case-insensitive.
@@ -23,6 +26,7 @@ from pathlib import Path
 
 from . import (NichtVerfuegbar, SCHEMATA, katalog, materialbibliothek, muster_projekt, pruefen, schreiben,
                typbibliothek)
+from .app_export import app_export, app_katalog_pfad
 from .neutral import NeutralitaetsFehler
 
 #: Exit code when elmonkey-core / ifcopenshell are missing (2 is taken by argparse for wrong arguments).
@@ -58,6 +62,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("pruefen", help="IFC-Datei prüfen")
     p.add_argument("datei", type=Path)
     p.add_argument("--ohne-regeln", action="store_true", help="ohne WHERE-Regeln (schneller)")
+    p = sub.add_parser("app-export", help="Katalog als JSON für die App (Grundbestand, ohne Laufzeit-Typen)")
+    p.add_argument("datei", type=Path, nargs="?", default=None,
+                   help="Zieldatei (Standard: packages/nova-core/src/lib/bauteil/katalog/katalog.json)")
     a = ap.parse_args(argv)
 
     try:
@@ -68,6 +75,10 @@ def main(argv: list[str] | None = None) -> int:
             b = pruefen(a.datei, regeln=not a.ohne_regeln)
             print(json.dumps(b, ensure_ascii=False, indent=1))
             return 0 if b["gueltig"] and b["neutral"] else 1
+        if a.befehl == "app-export":
+            pfad = app_export(a.datei or app_katalog_pfad())
+            print(json.dumps({"datei": str(pfad), "bytes": pfad.stat().st_size}, ensure_ascii=False))
+            return 0
         k = katalog(getattr(a, "projekt", None))
         berichte = []
         if a.befehl == "muster":

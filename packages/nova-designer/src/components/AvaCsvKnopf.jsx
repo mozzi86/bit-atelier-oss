@@ -10,6 +10,7 @@ import { Button } from "@core/components/ui/button";
 import { useI18n } from "@core/lib/i18n";
 import { useProject } from "@core/lib/ProjectContext";
 import { mengenAlsLvCsv } from "@designer/lib/avaUebergabe";
+import { datumText, heuteLokal } from "@core/lib/kalender/datum";
 
 /**
  * @param {{zeilen: Array<{key: string, label: string, menge: number, einheit: string}>, gewerk: string, quelle: string, datei: string, testid: string, ozPrefix?: string}} props
@@ -19,7 +20,7 @@ export default function AvaCsvKnopf({ zeilen, gewerk, quelle, datei, testid, ozP
   const { project } = useProject();
   const mitMenge = (Array.isArray(zeilen) ? zeilen : []).filter((z) => Number(z?.menge) > 0);
   const laden = () => {
-    const csv = mengenAlsLvCsv(mitMenge, { gewerk, ozPrefix, quelle, stand: new Date().toLocaleDateString("de-DE") });
+    const csv = mengenAlsLvCsv(mitMenge, { gewerk, ozPrefix, quelle, stand: datumText(heuteLokal()) }); // DD.MM.YYYY always (toLocaleDateString gave "8.11.2026" on days 1-9)
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;

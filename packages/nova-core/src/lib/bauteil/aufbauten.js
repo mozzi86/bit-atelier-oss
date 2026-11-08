@@ -24,10 +24,17 @@
 // build-ups of the project. The Studio hands it to setzeProjektAufbauten(); aufbauById() asks that registry FIRST, then the
 // constants (a project id equal to a constant id shadows the constant for this project). Skins stay in mm, aufbauVon() in m.
 //
-// In: element records ({composite?, klasse?, thickness?, dicke_m?, schicht_funktion?, schicht_prioritaet?}).
+// Catalogue types (114-01, D-MH-01…03): a wall (or slab) may name a type of the component catalogue in the optional, additive field
+// `katalog_typ` ("<schluessel>" or "<schluessel>@<version>", bauteil/katalog). aufbauVon() asks it FIRST, before `composite`; the type's
+// layers become a composite build-up (quelle "composite", so layered solids, intersection and the IFC layer set treat it like any other
+// build-up) and the result names the type in `katalog`. A reference that does not resolve (unknown type, catalogue not loaded yet) falls
+// back to composite → klasse → thickness exactly as before and is reported in `katalogOffen`. Elements without the field are unchanged.
+//
+// In: element records ({katalog_typ?, composite?, klasse?, thickness?, dicke_m?, schicht_funktion?, schicht_prioritaet?}).
 // Out: WALL_COMPOSITES, WAND_KLASSEN, WANDSTAERKEN, aufbauVon(), funktionVorschlag(), prioritaetVorschlag(), kernLage(),
 //      aufbauById(), aufbautenListe(), setzeProjektAufbauten(), gibProjektAufbautenFrei(), overridesNachEntfernen(). No I/O (the registry is one module-level map, set by the caller).
 import { materialById } from "./materialien.js";
+import { katalogTyp, katalogAufbau } from "./katalog/index.js";
 
 /** Layer functions (107-03, D-BK-06; German vocabulary, the spec's Core/Finish/Other). */
 export const FUNKTIONEN = Object.freeze(["kern", "bekleidung", "sonstig"]);
@@ -113,13 +120,16 @@ const PRIORITAET_BETON = 850;
 const PRIORITAET_UNBEKANNT = 500;
 
 /**
- * Priority PROPOSAL of a layer from its material (never stored, always "abgeleitet").
- * @param {string|null|undefined} materialId MATERIAL_KATALOG id; unknown or missing material gives 500
+ * Priority PROPOSAL of a layer from its material (never stored, always "abgeleitet"). A catalogue material (`kat:` id, 114-01) proposes
+ * the intersection priority its catalogue states; the app materials the value of their category.
+ * @param {string|null|undefined} materialId MATERIAL_KATALOG id or `kat:<schluessel>`; unknown or missing material gives 500
  * @returns {number} priority 0-999
  */
 export function prioritaetVorschlag(materialId) {
   if (materialId === "beton") return PRIORITAET_BETON;
-  const kat = materialById(materialId)?.kategorie;
+  const mat = materialById(materialId);
+  if (istPrioritaet(mat?.prioritaet)) return /** @type {number} */ (mat?.prioritaet);
+  const kat = mat?.kategorie;
   return (kat && PRIORITAET_KATEGORIE[kat]) || PRIORITAET_UNBEKANNT;
 }
 
@@ -307,18 +317,29 @@ export function aufbautenListe() {
 
 /**
  * Build-up of an element as layers in metres, outside → inside.
- * Looks at `composite` (project build-up first, then the designer constants) first, then `klasse` (workshop), then a single
+ * Looks at `katalog_typ` first (114-01: a catalogue type with layers; reported as quelle "composite" plus `katalog`), then `composite` (project build-up first, then the designer constants) first, then `klasse` (workshop), then a single
  * `thickness`/`dicke_m` layer without material (the data sheet shows it as "Material offen"). Walls and, since 107-03 task 5,
  * slabs (`composite` on customSlabs) use the same function — the table does not care about the element type.
  * Function and priority per layer: the element's own `schicht_funktion[i]` / `schicht_prioritaet[i]` win, then the build-up's stated
  * value, else a proposal (funktionVorschlag, prioritaetVorschlag), marked as derived.
- * @param {{composite?: string|null, klasse?: string, thickness?: number, dicke_m?: number, schicht_funktion?: Record<string, string>|null, schicht_prioritaet?: Record<string, number>|null}} el
- * @returns {{quelle: 'composite'|'klasse'|'dicke'|'keine', name: string, schichten: AufbauSchicht[], dicke_m: number, funktionAbgeleitet: boolean, prioritaetAbgeleitet: boolean, funktionAnnahme: boolean}}
+ * @param {{katalog_typ?: string|null, composite?: string|null, klasse?: string, thickness?: number, dicke_m?: number, schicht_funktion?: Record<string, string>|null, schicht_prioritaet?: Record<string, number>|null}} el
+ * @returns {{quelle: 'composite'|'klasse'|'dicke'|'keine', name: string, schichten: AufbauSchicht[], dicke_m: number, funktionAbgeleitet: boolean, prioritaetAbgeleitet: boolean, funktionAnnahme: boolean,
+ *   katalog?: {schluessel: string, version: number, typ_guid: string, klasse: string}, katalogOffen?: string,
+ *   katalogOhneSchichten?: {schluessel: string, klasse: string}}}
  *   funktionAbgeleitet / prioritaetAbgeleitet: true when at least one layer's value is a proposal ("nur bei Vorschlag");
- *   funktionAnnahme: true when at least one layer's stated function is an [ASSUMED] value of the build-up (timber)
+ *   funktionAnnahme: true when at least one layer's stated function is an [ASSUMED] value of the build-up (timber);
+ *   katalog: the catalogue type the build-up comes from (only when `katalog_typ` resolved); katalogOffen: the stored reference when it did
+ *   NOT resolve (unknown, or the catalogue is not loaded yet) — the build-up then comes from the fields behind it
  */
 export function aufbauVon(el) {
-  const c = el?.composite ? aufbauById(el.composite) : null;
+  const kt = el?.katalog_typ ? katalogTyp(el.katalog_typ) : null;
+  const ka = kt ? katalogAufbau(kt) : null;
+  // three cases (review 114-01): a type with layers → `katalog`; a type that resolves but has no layers (door, window, blank) →
+  // `katalogOhneSchichten` (not "open": the reference is fine, it just cannot give a build-up); unresolved → `katalogOffen`
+  const katalogInfo = kt && ka ? { katalog: { schluessel: kt.schluessel, version: kt.version, typ_guid: kt.typ_guid, klasse: kt.klasse } }
+    : kt ? { katalogOhneSchichten: { schluessel: kt.schluessel, klasse: kt.klasse } }
+      : el?.katalog_typ ? { katalogOffen: String(el.katalog_typ) } : {};
+  const c = ka || (el?.composite ? aufbauById(el.composite) : null);
   const k = !c && el?.klasse ? WAND_KLASSEN[el.klasse] : null;
   const skins = c?.skins || k?.skins || null;
   /** @type {Array<{name: string, material: string|null, dicke_m: number, funktion?: string, prioritaet?: number, funktionAnnahme?: boolean}>} */
@@ -332,7 +353,7 @@ export function aufbauVon(el) {
     name = c ? c.name : /** @type {any} */ (k).material;
   } else {
     const d = Number(el?.thickness ?? el?.dicke_m);
-    if (!(Number.isFinite(d) && d > 0)) return { quelle: "keine", name: "kein Aufbau", schichten: [], dicke_m: 0, funktionAbgeleitet: false, prioritaetAbgeleitet: false, funktionAnnahme: false };
+    if (!(Number.isFinite(d) && d > 0)) return { quelle: "keine", name: "kein Aufbau", schichten: [], dicke_m: 0, funktionAbgeleitet: false, prioritaetAbgeleitet: false, funktionAnnahme: false, ...katalogInfo };
     roh = [{ name: "Kern", material: null, dicke_m: d }];
     quelle = "dicke";
     name = `${Math.round(d * 1000) / 10} cm, Material offen`;
@@ -353,5 +374,5 @@ export function aufbauVon(el) {
   });
   return { quelle, name, schichten, dicke_m: Math.round(schichten.reduce((a, s) => a + s.dicke_m, 0) * 1000) / 1000,
     funktionAbgeleitet: schichten.some((s) => s.funktionAbgeleitet), prioritaetAbgeleitet: schichten.some((s) => s.prioritaetAbgeleitet),
-    funktionAnnahme: schichten.some((s) => s.funktionAnnahme) };
+    funktionAnnahme: schichten.some((s) => s.funktionAnnahme), ...katalogInfo };
 }

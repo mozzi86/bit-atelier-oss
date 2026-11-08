@@ -32,6 +32,7 @@ import { deckenLage, geschossHoeheAusModell, geschosshoehe, elevationOf } from "
 import { treppeBerechnen, treppenLoch, deckeUeber } from "@core/lib/bauteil/treppe.js"; // 108-06: stair symbol on the sheet
 import { treppeSymbol } from "@core/lib/plan/treppeSymbol.js";
 import { gaubeBerechnen } from "@core/lib/bauteil/gauben.js"; // 108-13: dormer outline in the top storey
+import { tuerSymbol, tuerFelder } from "@core/lib/plan/tuerSymbol.js"; // 108-05: one door symbol for screen, PDF and DXF
 import { planDarstellung, schraffur45 } from "@core/lib/plan/brillen.js";
 import { statusFarbe, STATUS_DARSTELLUNG } from "@core/lib/plan/statusDarstellung.js";
 import { bauteilGuid } from "@core/lib/bauteil/steckbrief.js";
@@ -269,7 +270,14 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
   // 107-12 (97-09 rest): opening symbols of the view on their own layer "oeffnung" — rule windows and placed openings of the hull,
   // the entrance door on the ground floor, placed openings of drawn walls; the same positions as the screen plan (BimPlan2D).
   if (opt && zeige("openings")) {
-    const symbol = (/** @type {any} */ w, /** @type {number} */ mitte_u, /** @type {number} */ breite, /** @type {string} */ art, /** @type {string} */ k) => {
+    // 108-05: which side of a hull wall is inside (sign of n · (footprint centroid − wall middle)); drawn walls: +n as before
+    const fpC = Array.isArray(model?.footprint) && model.footprint.length >= 3 ? model.footprint.reduce((s, p) => ({ x: s.x + p.x / model.footprint.length, z: s.z + p.z / model.footprint.length }), { x: 0, z: 0 }) : null;
+    const innenSeite = (/** @type {any} */ w, /** @type {string} */ k) => {
+      if (!fpC || !k.startsWith("env:")) return 1;
+      const dx = w.b.x - w.a.x, dz = w.b.z - w.a.z, mx = (w.a.x + w.b.x) / 2, mz = (w.a.z + w.b.z) / 2;
+      return -dz * (fpC.x - mx) + dx * (fpC.z - mz) >= 0 ? 1 : -1;
+    };
+    const symbol = (/** @type {any} */ w, /** @type {number} */ mitte_u, /** @type {number} */ breite, /** @type {string} */ art, /** @type {string} */ k, /** @type {any} */ rec = null) => {
       const tiefe = sichtbareTiefe.get(k);
       if (tiefe === null) return; // wall hidden by the structure display: its openings go with it
       const g = wandGeometrie(w);
@@ -289,13 +297,15 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
         el.push({ art: "poly", pts: [P(-hw, -hh), P(hw, hh)], fill: null, stroke: "#18181b", breite_mm: lg.duenn, offen: true, ebene: "oeffnung" });
       }
       if (art === "door") {
-        if (opt.tuerAufschlag) {
-          // leaf opened 90° to the +normal side like the screen symbol (BimPlan2D) and the swing as a polyline quarter circle (8 segments)
-          const r = breite;
-          el.push({ art: "poly", pts: [P(-hw, hh), P(-hw, hh + r)], fill: null, stroke: "#18181b", breite_mm: lg.ansicht, offen: true, ebene: "oeffnung" });
-          const bogen = Array.from({ length: 9 }, (_, i) => { const a = (i / 8) * (Math.PI / 2); return P(-hw + r * Math.sin(a), hh + r * Math.cos(a)); });
-          el.push({ art: "poly", pts: bogen, fill: null, stroke: "#18181b", breite_mm: lg.duenn, dash: "2 2", offen: true, ebene: "oeffnung" });
-        }
+        if (opt.tuerAufschlag && rec?.typeId !== "sliding") {
+          // 108-05: DIN 1356-1 symbol from plan/tuerSymbol.js (same as the screen): hinge on the wall face of the swing side, leaf 90°, swing as a
+          // 9-point polyline; anschlag/aufschlag from the record (defaults links/innen), two leaves for doubleLeaf
+          const sym = tuerSymbol({ breite_m: breite, dicke_m: 2 * hh, ...tuerFelder(rec), innenSeite: innenSeite(w, k), fluegel: rec?.typeId === "doubleLeaf" ? 2 : 1 });
+          for (const fl of sym.fluegel) {
+            el.push({ art: "poly", pts: [P(fl.drehpunkt.u, fl.drehpunkt.q), P(fl.blattEnde.u, fl.blattEnde.q)], fill: null, stroke: "#18181b", breite_mm: lg.ansicht, offen: true, ebene: "oeffnung" });
+            el.push({ art: "poly", pts: fl.bogen.map((p) => P(p.u, p.q)), fill: null, stroke: "#18181b", breite_mm: lg.duenn, dash: "2 2", offen: true, ebene: "oeffnung" });
+          }
+        } else if (rec?.typeId === "sliding") el.push({ art: "poly", pts: [P(-hw, 0), P(hw, 0)], fill: null, stroke: "#18181b", breite_mm: lg.ansicht, offen: true, ebene: "oeffnung" });
         // 1:20 (detailgradFuer.zarge): the frame as two small rectangles at the jambs, 5 cm [ASSUMED usual frame depth in the drawing]
         if (dg.zarge) for (const u0 of [-hw, hw - 0.05]) {
           el.push({ art: "poly", pts: [P(u0, hh), P(u0 + 0.05, hh), P(u0 + 0.05, -hh), P(u0, -hh)], fill: null, stroke: "#18181b", breite_mm: lg.duenn, ebene: "oeffnung" });
@@ -308,7 +318,7 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
       if (regelfensterPasst(w)) { const n = Math.max(0, Math.floor(len / AUTO_WINDOW.spacing)); for (let i = 0; i < n; i += 1) symbol(w, len * ((i + 0.5) / n), AUTO_WINDOW.width, "window", `env:${w.level}:${w.edge}`); }
       for (const e of (Array.isArray(envOpenings) ? envOpenings : []).filter((o) => o.level === level && o.edge === w.edge)) {
         const b = oeffnungsMasse(e).w;
-        symbol(w, oeffnungMitte_m(e.u, b, len), b, e.kind === "door" ? "door" : e.kind === "oeffnung" ? "oeffnung" : "window", `env:${w.level}:${w.edge}`);
+        symbol(w, oeffnungMitte_m(e.u, b, len), b, e.kind === "door" ? "door" : e.kind === "oeffnung" ? "oeffnung" : "window", `env:${w.level}:${w.edge}`, e);
       }
     }
     const eg = (model?.walls || []).find((x) => x.level === level);
@@ -321,7 +331,7 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
       const w = wandJe.get(`cw:${o.wallIdx}`);
       if (!w) continue;
       const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z), b = oeffnungsTyp(o).w;
-      symbol(w, oeffnungMitte_m(o.u, b, len), b, o.kind === "door" ? "door" : o.kind === "oeffnung" ? "oeffnung" : "window", `cw:${o.wallIdx}`);
+      symbol(w, oeffnungMitte_m(o.u, b, len), b, o.kind === "door" ? "door" : o.kind === "oeffnung" ? "oeffnung" : "window", `cw:${o.wallIdx}`, o);
     }
   }
   // openings: the mark frames the drawn host wall (an opening of another storey or in a hidden wall gets none)

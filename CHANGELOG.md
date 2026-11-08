@@ -10,6 +10,26 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.14.0] - 2026-11-08
+
+### Neu
+
+- **Giebelwände bis unter das Dach:** Die Außenwände an den Giebeln reichen jetzt bis zur Dachkontur (3D, Grundriss, IFC, Mengen). Fenster im Giebeldreieck werden gegen die Dachlinie geprüft, statt nur in der Kniestockwand zu liegen.
+- **Bauteilkatalog im Gebäudemodell:** Die App kennt den Bauteilkatalog des Python-Bauers (elmonkey-core) mit 42 Wand-, Decken-, Belags-, Tür- und Fenstertypen und 113 Baustoffen. Eine Wand kann auf einen Katalogtyp verweisen und bekommt dann dessen Schichtaufbau und Dicke; die Katalog-Baustoffe stehen als eigene Gruppe „Katalog“ bereit.
+- **Nachgetragen, seit 1.13.0 enthalten:**
+  - **KI-Werkzeuge schreiben sicher:** Über die KI-Anbindung (MCP) legt ein Agent Datensätze nur nach einer Vorschau an oder ändert sie; Löschen geht in einen Papierkorb, aus dem sich der Datensatz mit derselben Kennung zurückholen lässt. Doppelte Datensätze und doppelte Aufrufe werden erkannt. Jeder Werkzeugaufruf steht in einem Protokoll im Datenordner (Schlüssel und Passwörter geschwärzt), und eine angeschlossene KI bekommt beim Verbinden die Arbeitsregeln der App.
+  - **Bauteilkatalog im KI-Werkzeug (Harness):** Der lokale KI-Dienst liest den Katalog, baut Wände aus Katalogtypen als IFC-Datei, legt geänderte Typen als neue Fassung im Projekt ab und prüft IFC-Dateien (Skill `/bauteilkatalog`).
+
+### Geändert
+
+- **Türsymbol nach DIN 1356-1:** Türen werden im Grundriss am Bildschirm, im PDF und im DXF aus derselben Vorlage gezeichnet.
+
+### Behoben
+
+- **Beschriftungen im Grundriss wachsen beim Zoomen nicht mehr mit:** Wandlängen gezeichneter Wände, der Treppentext und die Länge beim Zeichnen bleiben auf dem Bildschirm gleich groß.
+- **AVA-Übergabe:** Das Datum im Kurztext steht immer als TT.MM.JJJJ (vorher an den Tagen 1 bis 9 ohne führende Null).
+- **KI-Werkzeuge schreiben in die laufende App** (seit 1.13.0): Lokale Programme ohne Browser wurden vom Sitzungsschutz für einen Browser gehalten und beim Schreiben abgewiesen; Browser bleiben weiter geschützt.
+
 ## [1.13.0] - 2026-11-08
 
 ### Neu

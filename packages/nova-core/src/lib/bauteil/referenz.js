@@ -40,6 +40,7 @@
 // Out: plain numbers and objects; pure, no I/O, node-testable.
 import { compositeTotalM } from "../buildingModel.js";
 import { aufbauVon, kernLage } from "./aufbauten.js";
+import { katalogTyp } from "./katalog/index.js";
 import { wandHoehe, unterkante } from "./hoehen.js";
 
 /** Stored reference-line values of a wall (English enum, extended additively in 107-01). */
@@ -141,13 +142,17 @@ export function kernVon(w) {
 }
 
 /**
- * Effective wall thickness: total of the build-up if one is set, else the single thickness, else 0.30 m.
- * (The one rule that plan, PDF, 3D and IFC used four times.)
- * @param {{composite?: string|null, thickness?: number|null}} w wall record (thickness in m)
+ * Effective wall thickness: total of the catalogue type if one is set and resolves (114-01, same order as aufbauVon), else total of the
+ * build-up if one is set, else the single thickness, else 0.30 m. (The one rule that plan, PDF, 3D and IFC used four times.)
+ * @param {{katalog_typ?: string|null, composite?: string|null, thickness?: number|null}} w wall record (thickness in m)
  * @returns {number} thickness in m
  */
 export function wandDicke_m(w) {
-  return compositeTotalM(w?.composite) || w?.thickness || STANDARD_DICKE_M;
+  // one source with the layer list (review 114-01): the total of aufbauVon (rounded to 1 mm), not the type's own dicke_m — they
+  // differed by 0.5 mm for a type with a 12.5 mm layer, so plan and layer list disagreed
+  const kat = w?.katalog_typ && katalogTyp(w.katalog_typ) ? aufbauVon({ katalog_typ: w.katalog_typ }) : null;
+  const katDicke = kat?.katalog && kat.dicke_m > 0 ? kat.dicke_m : 0;
+  return katDicke || compositeTotalM(w?.composite) || w?.thickness || STANDARD_DICKE_M;
 }
 
 /**

@@ -9,6 +9,43 @@ import { deckenLage, geschossHoeheAusModell, geschosshoehe, elevationOf } from "
 import { treppeBerechnen, treppenLoch, deckeUeber } from "@core/lib/bauteil/treppe.js"; // 108-06: stair symbol
 import { treppeSymbol } from "@core/lib/plan/treppeSymbol.js";
 import { gaubeBerechnen } from "@core/lib/bauteil/gauben.js"; // 108-13: dormer outline in the top storey
+import { tuerSymbol, tuerFelder } from "@core/lib/plan/tuerSymbol.js"; // 108-05: ONE door symbol (DIN 1356-1) for screen, PDF and DXF
+
+/**
+ * 108-05: SVG of a door symbol (leaf + swing polyline) in the plan. `P(u, q)` maps wall coordinates (u along the wall from the opening
+ * middle, q across = +normal) to plan metres; the hinge sits on the wall face of the swing side (tuerSymbol). Sliding doors get no swing.
+ * @param {{P: (u: number, q: number) => {x: number, z: number}, X: (x: number) => number, Z: (z: number) => number,
+ *   t: {breite_m: number, dicke_m: number, anschlag?: string, aufschlag?: string, innenSeite?: 1|-1, fluegel?: 1|2},
+ *   look: {stroke: string, strokeWidth: string|number, bogen?: boolean}}} props
+ * @returns {import("react").ReactElement}
+ */
+function TuerSymbolSvg({ P, X, Z, t, look }) {
+  const s = tuerSymbol(/** @type {any} */ (t));
+  const pt = (/** @type {{u: number, q: number}} */ p) => { const w = P(p.u, p.q); return `${X(w.x)},${Z(w.z)}`; };
+  return (
+    <g stroke={look.stroke} strokeWidth={look.strokeWidth} fill="none" data-tuer-seite={s.seite}>
+      {s.fluegel.map((f, i) => (
+        <g key={i} data-tuer-drehpunkt={`${P(f.drehpunkt.u, f.drehpunkt.q).x.toFixed(3)},${P(f.drehpunkt.u, f.drehpunkt.q).z.toFixed(3)}`}>
+          <line x1={X(P(f.drehpunkt.u, f.drehpunkt.q).x)} y1={Z(P(f.drehpunkt.u, f.drehpunkt.q).z)} x2={X(P(f.blattEnde.u, f.blattEnde.q).x)} y2={Z(P(f.blattEnde.u, f.blattEnde.q).z)} />
+          {look.bogen !== false && <polyline points={f.bogen.map(pt).join(" ")} strokeDasharray="2 2" strokeWidth={0.6} />}
+        </g>
+      ))}
+    </g>
+  );
+}
+
+/**
+ * 108-05: which side of a hull wall is inside — the sign of n · (footprint centroid − wall middle); drawn walls have no inside (+1).
+ * @param {{a: {x: number, z: number}, b: {x: number, z: number}}} w
+ * @param {Array<{x: number, z: number}>|null|undefined} fp
+ * @returns {1|-1}
+ */
+function innenSeiteVon(w, fp) {
+  if (!Array.isArray(fp) || fp.length < 3) return 1;
+  const c = fp.reduce((s, p) => ({ x: s.x + p.x / fp.length, z: s.z + p.z / fp.length }), { x: 0, z: 0 });
+  const dx = w.b.x - w.a.x, dz = w.b.z - w.a.z, mx = (w.a.x + w.b.x) / 2, mz = (w.a.z + w.b.z) / 2;
+  return -dz * (c.x - mx) + dx * (c.z - mz) >= 0 ? 1 : -1;
+}
 import { fmtLen } from "@core/lib/useBuildingProgram";
 import { planDarstellung, schraffur45 } from "@core/lib/plan/brillen.js"; // 97-04: status look per lens
 // 107-12: one level-of-detail function and the view state (structure display, options, rules) — inert without the `ansicht` prop
@@ -378,8 +415,9 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
       const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z); if (len < 0.3) return;
       const mx = (w.a.x + w.b.x) / 2, mz = (w.a.z + w.b.z) / 2;
       const ang = screenAngle(w.a, w.b);
-      const tx = X(mx), ty = Z(mz) - 3;
-      els.push(<text key={`cwl${i}`} x={tx} y={ty} textAnchor="middle" fontSize="6.5" fill="#0f766e" transform={`rotate(${ang} ${tx} ${ty})`} style={{ pointerEvents: "none" }}>{fmtLen(len, unit, false)}</text>);
+      // screen-fixed like the room labels (75-11 px()): a fixed viewBox size grew with the zoom (user finding 08.11.)
+      const tx = X(mx), ty = Z(mz) - px(3);
+      els.push(<text key={`cwl${i}`} x={tx} y={ty} textAnchor="middle" fontSize={px(9)} fill="#0f766e" transform={`rotate(${ang} ${tx} ${ty})`} style={{ pointerEvents: "none" }}>{fmtLen(len, unit, false)}</text>);
     });
     return els;
   };
@@ -510,7 +548,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
               }
               if (s.art === "text") {
                 const w = Number(s.winkel_grad) || 0; const wk = w > 90 || w < -90 ? w + 180 : w;
-                return <text key={k} x={X(s.pts[0].x)} y={Z(s.pts[0].z)} fontSize={Math.max(7, 0.25 * SCALE)} fill={farbe} textAnchor="middle" dominantBaseline="middle" transform={`rotate(${-wk} ${X(s.pts[0].x)} ${Z(s.pts[0].z)})`} style={{ pointerEvents: "none" }}>{s.text}</text>;
+                return <text key={k} x={X(s.pts[0].x)} y={Z(s.pts[0].z)} fontSize={px(10)} fill={farbe} textAnchor="middle" dominantBaseline="middle" transform={`rotate(${-wk} ${X(s.pts[0].x)} ${Z(s.pts[0].z)})`} style={{ pointerEvents: "none" }}>{s.text}</text>;
               }
               return null;
             })}
@@ -637,12 +675,14 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         const vo = wandGeometrie(w).versatz_m;
         const mittePx = w.a.x + dx * len * 0.5 - dz * vo, pz = w.a.z + dz * len * 0.5 + dx * vo;
         const nx = -dz, nz = dx; const door = 1.0;
-        const hingeX = mittePx - dx * door, hingeZ = pz - dz * door;
-        const openX = hingeX + nx * door, openZ = hingeZ + nz * door;
+        // 108-05: the entrance through the one door helper — 1.00 m leaf centred 0.50 m before the wall middle (the old position), hinge on the
+        // inner wall face, swing to the inside (innenSeiteVon); when the view hides swings only the closed leaf line stays
+        const cxE = mittePx - dx * door / 2, czE = pz - dz * door / 2;
+        const PE = (/** @type {number} */ u, /** @type {number} */ q) => ({ x: cxE + dx * u + nx * q, z: czE + dz * u + nz * q });
+        if (opt?.tuerAufschlag === false) return <g stroke="#0f766e" strokeWidth="1" fill="none" style={{ pointerEvents: "none" }} data-tuer-aufschlag="aus"><line x1={X(PE(-0.5, 0).x)} y1={Z(PE(-0.5, 0).z)} x2={X(PE(0.5, 0).x)} y2={Z(PE(0.5, 0).z)} /></g>;
         return (
-          <g stroke="#0f766e" strokeWidth="1" fill="none" style={{ pointerEvents: "none" }} data-tuer-aufschlag={opt?.tuerAufschlag === false ? "aus" : undefined}>
-            <line x1={X(hingeX)} y1={Z(hingeZ)} x2={X(opt?.tuerAufschlag === false ? mittePx : openX)} y2={Z(opt?.tuerAufschlag === false ? pz : openZ)} />
-            {opt?.tuerAufschlag !== false && <path d={`M${X(openX)},${Z(openZ)} A ${door * SCALE} ${door * SCALE} 0 0 1 ${X(mittePx)} ${Z(pz)}`} strokeDasharray="2 2" />}
+          <g style={{ pointerEvents: "none" }} data-eingang-symbol="din1356">
+            <TuerSymbolSvg P={PE} X={X} Z={Z} t={{ breite_m: door, dicke_m: wallThicknessM(w), anschlag: "links", aufschlag: "innen", innenSeite: innenSeiteVon(w, model?.footprint) }} look={{ stroke: "#0f766e", strokeWidth: "1" }} />
           </g>
         );
       })()}
@@ -733,7 +773,13 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           <g key={`env${i}`} style={ohneF ? { cursor: edit?.tool === "arrow" ? "pointer" : cursor } : { pointerEvents: "none" }} onClick={onPickEnv} data-huell-oeffnung={ohneF ? e._idx : undefined}>
             <path d={`M${X(ax + nx * hh)},${Z(az + nz * hh)} L${X(bx + nx * hh)},${Z(bz + nz * hh)} L${X(bx - nx * hh)},${Z(bz - nz * hh)} L${X(ax - nx * hh)},${Z(az - nz * hh)} Z`}
               fill={e.kind === "door" ? "#fef3c7" : e.kind === "oeffnung" ? "#ffffff" : "#dbeafe"} stroke={gewaehlt ? "#0d9488" : "#60a5fa"} strokeWidth={gewaehlt ? "1.4" : "0.6"} strokeDasharray={e.kind === "oeffnung" && opt?.durchbruchSymbol !== false ? "2 2" : undefined} />
-            {(e.kind === "oeffnung" ? opt?.durchbruchSymbol !== false : opt?.fensterSymbol !== false) && <line x1={X(ax)} y1={Z(az)} x2={X(bx)} y2={Z(bz)} stroke="#3b82f6" strokeWidth="0.9" />}
+            {(e.kind === "oeffnung" ? opt?.durchbruchSymbol !== false : e.kind === "door" ? false : opt?.fensterSymbol !== false) && <line x1={X(ax)} y1={Z(az)} x2={X(bx)} y2={Z(bz)} stroke="#3b82f6" strokeWidth="0.9" />}
+            {/* 108-05: hull doors get the DIN 1356-1 symbol (before: rectangle only); sliding doors keep the plain line */}
+            {e.kind === "door" && opt?.tuerAufschlag !== false && e.typeId !== "sliding" && (
+              <TuerSymbolSvg P={(u, q) => ({ x: cxm + dx * u + nx * q, z: czm + dz * u + nz * q })} X={X} Z={Z}
+                t={{ breite_m: hw * 2, dicke_m: wallThicknessM(w), ...tuerFelder(e), innenSeite: innenSeiteVon(w, model?.footprint), fluegel: e.typeId === "doubleLeaf" ? 2 : 1 }} look={{ stroke: "#0f766e", strokeWidth: "1" }} />
+            )}
+            {e.kind === "door" && e.typeId === "sliding" && <line x1={X(ax)} y1={Z(az)} x2={X(bx)} y2={Z(bz)} stroke="#0f766e" strokeWidth="1" />}
           </g>
         );
       })}
@@ -755,15 +801,15 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         const handle = sel && edit?.tool === "arrow"
           ? <Handle x={X(cxm)} y={Z(czm)} onDown={(ev) => startDrag(ev, { kind: "opening", idx: cw._idx })} />
           : null;
-        if (cw.kind === "door" && opt?.tuerAufschlag !== false) {
-          const ox = cxm - dx * hw, oz = czm - dz * hw;
-          const sw = 2 * hw; const endX = ox + nx * sw, endZ = oz + nz * sw;
+        if (cw.kind === "door" && opt?.tuerAufschlag !== false && cw.typeId !== "sliding") {
+          // 108-05: DIN 1356-1 symbol from the one helper — hinge on the wall face of the swing side, anschlag/aufschlag from the record
+          // (defaults links/innen = the old picture's side), swing as a polyline (no arc flag that a mirrored axis could flip). The opening cut
+          // in the wall stays visible as the jamb-to-jamb rectangle so the door is still clickable.
           return (
             <g key={`cop${i}`} onClick={onClick} style={style} data-oeffnung={cw._idx} data-rahmen={cw.rahmen || undefined} data-glas={cw.glas || undefined}>
-              <g stroke={sel ? "#0d9488" : "#0f766e"} strokeWidth={sel ? "1.4" : "1"} fill="none">
-                <line x1={X(ox)} y1={Z(oz)} x2={X(endX)} y2={Z(endZ)} />
-                <path d={`M${X(endX)},${Z(endZ)} A ${sw * SCALE} ${sw * SCALE} 0 0 1 ${X(bx)} ${Z(bz)}`} strokeDasharray="2 2" />
-              </g>
+              <path d={`M${X(ax + nx * hh)},${Z(az + nz * hh)} L${X(bx + nx * hh)},${Z(bz + nz * hh)} L${X(bx - nx * hh)},${Z(bz - nz * hh)} L${X(ax - nx * hh)},${Z(az - nz * hh)} Z`} fill="#fef3c7" stroke="none" />
+              <TuerSymbolSvg P={(u, q) => ({ x: cxm + dx * u + nx * q, z: czm + dz * u + nz * q })} X={X} Z={Z}
+                t={{ breite_m: ty.w, dicke_m: wallThicknessM(w), ...tuerFelder(cw), innenSeite: 1, fluegel: cw.typeId === "doubleLeaf" ? 2 : 1 }} look={{ stroke: sel ? "#0d9488" : "#0f766e", strokeWidth: sel ? "1.4" : "1" }} />
               {handle}
             </g>
           );
@@ -816,7 +862,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           {hover && draft.length > 0 && (() => {
             const a = draft[draft.length - 1];
             const len = Math.hypot(hover.x - a.x, hover.z - a.z);
-            return <text x={X((a.x + hover.x) / 2)} y={Z((a.z + hover.z) / 2) - 4} textAnchor="middle" fontSize="9" className="fill-teal-700">{len.toFixed(2)} m</text>;
+            return <text x={X((a.x + hover.x) / 2)} y={Z((a.z + hover.z) / 2) - px(4)} textAnchor="middle" fontSize={px(9)} className="fill-teal-700">{len.toFixed(2)} m</text>;
           })()}
         </g>
       )}

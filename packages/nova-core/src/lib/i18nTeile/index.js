@@ -162,6 +162,8 @@ import { EN as SONDERWUNSCH_99 } from "./sonderwunsch-99.js";
 import { EN as BAUHERR_110 } from "./bauherr-110.js";
 import { EN as PLAN_ABLAGE_110 } from "./plan-ablage-110.js";
 import { EN as HUELLE_112 } from "./huelle-112.js";
+// 114-01: group name of the catalogue materials (component catalogue in the app)
+import { EN as BAUTEILKATALOG_114 } from "./bauteilkatalog-114.js";
 import { EN as SPLATS_104 } from "./splats-104.js";
 // Plan 104-09: PDF studio — appending save (original bytes untouched) + crash recovery.
 import { EN as PDF_ANHANG_104 } from "./pdf-anhang-104.js";
@@ -303,4 +305,5 @@ export const TEILE_EN = Object.freeze({
   ...BAUHERR_110,
   ...PLAN_ABLAGE_110,
   ...HUELLE_112,
+  ...BAUTEILKATALOG_114,
 });

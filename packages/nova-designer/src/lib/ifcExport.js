@@ -47,6 +47,7 @@ import { elevationOf, unterkante, wandHoehe, stuetzenHoehe, raumHoehe, geschossh
 import { dachBerechnen, dachVonDachelement, globalerDachAnstieg_m, globalesDach } from "@core/lib/bauteil/dachGeometrie.js";
 import { treppeBerechnen, treppeKoerper, mitTreppenLoechern } from "@core/lib/bauteil/treppe.js"; // 108-06: IfcStair/IfcStairFlight, derived slab openings
 import { gaubeBerechnen } from "@core/lib/bauteil/gauben.js"; // 108-13: dormers on the global roof
+import { mitGiebelProfilen } from "@core/lib/bauteil/giebel.js"; // 108-03: hull walls up to the roof contour (with dachGlobal)
 import { dachImRahmen, wandProfilUnterDach } from "@core/lib/bauteil/seoAnalytik.js";
 import { grenzWaende, nettoFlaeche_m2, raeumeMitNetto, polyAreaXZ } from "@core/lib/bauteil/raeume.js";
 
@@ -131,7 +132,7 @@ const TYPEN_9 = new Set(["IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcRoof"
 
 /**
  * IFC4-STEP-Export des Gebäudemodells plus gezeichneter Elemente.
- * @param {object} model createBuildingModel-Ergebnis
+ * @param {object} modelRoh createBuildingModel-Ergebnis
  * @param {{ customWalls?: Array<object>, customColumns?: Array<object>, customWindows?: Array<object>,
  *   envOpenings?: Array<object>, autoOpenings?: Array<object>, customZones?: Array<object>,
  *   customSlabs?: Array<object>, customRoofs?: Array<object>, customStairs?: Array<any>, gauben?: Array<any>, storeyHeight?: number, geschosse?: Array<{level: number, name?: string, hoehe_m: number}>|null, projectName?: string,
@@ -190,7 +191,7 @@ const TYPEN_9 = new Set(["IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcRoof"
  *   Qto_SpaceBaseQuantities (GrossFloorArea, NetFloorArea in m²) per space; absent/false = byte-identical.
  * @returns {string} STEP-Text
  */
-export function exportIFC(model, { customWalls = [], customColumns = [], customWindows = [], envOpenings = [], autoOpenings = [], customZones = [], customSlabs = [], customRoofs = [], customStairs = [], gauben = [], storeyHeight = 3, geschosse = null, projectName = "BIT-Atelier", timestamp = 0, onWarn = null, netz = null, werkstatt = null, steckbrief: sbOpt = null, tragwerk = null, bauteilAttribute = null, massing = null, durchbrueche = null, instanzTypen = false, verschneidung = null, dachGlobal = null, seo = null, raumGrenzen = false } = {}) {
+export function exportIFC(modelRoh, { customWalls = [], customColumns = [], customWindows = [], envOpenings = [], autoOpenings = [], customZones = [], customSlabs = [], customRoofs = [], customStairs = [], gauben = [], storeyHeight = 3, geschosse = null, projectName = "BIT-Atelier", timestamp = 0, onWarn = null, netz = null, werkstatt = null, steckbrief: sbOpt = null, tragwerk = null, bauteilAttribute = null, massing = null, durchbrueche = null, instanzTypen = false, verschneidung = null, dachGlobal = null, seo = null, raumGrenzen = false } = {}) {
   // 97-02: workshop walls/doors carry the attribute table's decisions (status, KG, trade …).
   if (werkstatt && bauteilAttribute) werkstatt = werkstattMitAttributen(werkstatt, bauteilAttribute);
   // 107-02: storey source — the programme's storey table when it has one, else one height for all storeys (the old behaviour).
@@ -198,6 +199,11 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
   const rows = []; let nid = 0; let gid = 1;
   // Warnings are declared first because the storey lookup below uses them (const → no use before the declaration).
   const warn = (/** @type {string} */ msg, /** @type {string} */ art = undefined, /** @type {Record<string, any>} */ daten = undefined) => { if (typeof onWarn === "function") onWarn(msg, art, daten); };
+  // 108-03: with the global roof in the file (dachGlobal) the hull walls of the top storey carry their roof profile (gable up to the ridge,
+  // bauteil/giebel.js); without the option the model is the caller's object (every older export byte-identical)
+  const model = dachGlobal && dachGlobal.form && dachGlobal.form !== "flach"
+    ? mitGiebelProfilen(modelRoh, globalesDach(modelRoh, dachGlobal.form, Number(dachGlobal.neigung_grad), geschosse)).model
+    : modelRoh;
   // args = Attributliste OHNE äußere Klammern (Listen-Attribute klammern selbst).
   const E = (type, args) => { const id = ++nid; rows.push(`#${id}=${type}(${args});`); return `#${id}`; };
   const G = () => `'${guid(gid++)}'`;
@@ -321,6 +327,8 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
     const ps = E("IFCPROPERTYSET", `${G()},$,${S(name)},$,(${werte.join(",")})`);
     E("IFCRELDEFINESBYPROPERTIES", `${G()},$,$,$,(${ref}),${ps}`);
   };
+  /** 108-03: the gable wall says in its own Pset how high its profile reaches and how large it is (the Pset_WallCommon stays as it is). */
+  const datenblattProfil = (/** @type {string} */ ref, /** @type {any} */ w) => pset(ref, "Pset_BIT_Giebel", [["Profil_Hoehe_max", w.profil.hoehe_max_m], ["Profil_Flaeche", w.profil.flaeche_m2], ["Kniestock_Hoehe", w.roh?.height ?? 0], ["Quer_geneigt", !!w.profil.quer_geneigt]]);
   const bauteilProps = (b) => [
     ["Status", b.status ?? "ohne Status"], ["KG", b.kg ?? "—"], ["Gewerk", b.gewerk ?? "—"], ["Material", b.material ?? "—"],
     ["Bauabschnitt", b.bauabschnitt ?? "—"], ["GUID_Quelle", "Wohnungs-Werkstatt (stabil über Re-Tesselierung)"],
@@ -389,7 +397,8 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
   // per IfcRelVoidsElement genau EINER Wand zugeordnet werden kann (KD-15).
   // Schlüssel: Hüllwand = `env:<level>:<edge>`, gezeichnete Wand = `cw:<_idx>`.
   const wallList = [];
-  (model.walls || []).forEach((w) => wallList.push({ key: `env:${w.level}:${w.edge}`, a: w.a, b: w.b, th: w.thickness, h: w.height, elev: w.elevation, level: w.level, refLine: w.refLine, roh: mitAttributen(huellwandDaten(w), attributeVon(bauteilAttribute, "hull-wall")), quelle: "huelle" }));
+  // 108-03: a hull wall with a roof profile is as high as the profile and carries it (body as IfcArbitraryClosedProfileDef below)
+  (model.walls || []).forEach((w) => wallList.push({ key: `env:${w.level}:${w.edge}`, a: w.a, b: w.b, th: w.thickness, h: w.profil ? w.profil.hoehe_max_m : w.height, elev: w.elevation, level: w.level, refLine: w.refLine, roh: mitAttributen(huellwandDaten(w), attributeVon(bauteilAttribute, "hull-wall")), quelle: "huelle", profil: w.profil || null }));
   customWalls.forEach((w) => wallList.push({ key: `cw:${w._idx}`, a: w.a, b: w.b, th: wandDicke_m(w), h: wandHoehe(w, gs), elev: unterkante(w, gs), level: w.level || 0, refLine: w.refLine, roh: w, quelle: "customWalls" }));
   // 89-03: workshop interior walls (stable GUID, name, property sets) — envelope pieces skipped.
   const wtWaende = (werkstatt?.waende || []).filter((w) => !w.huelle);
@@ -429,7 +438,15 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
         seoSolid = E("IFCEXTRUDEDAREASOLID", `${profDef},${pos3},${dirZ},${f(w.th)}`);
       }
     }
-    const solid = items || seoSolid || rectSolid(len, w.th, w.h);
+    // 108-03: hull wall under the roof — its profile (bauteil/giebel.js) as the body, same frame as the seo profile above
+    let giebelSolid = "";
+    if (w.profil && !items && !seoSolid && w.profil.punkte.length >= 3) {
+      const pts = w.profil.punkte.map((p) => E("IFCCARTESIANPOINT", `(${f(p.x - len / 2)},${f(p.y)})`));
+      const profDef = E("IFCARBITRARYCLOSEDPROFILEDEF", `.AREA.,$,${E("IFCPOLYLINE", `(${[...pts, pts[0]].join(",")})`)}`);
+      const pos3 = E("IFCAXIS2PLACEMENT3D", `${E("IFCCARTESIANPOINT", `(0.,${f(w.th / 2)},0.)`)},${E("IFCDIRECTION", "(0.,-1.,0.)")},${dirX}`);
+      giebelSolid = E("IFCEXTRUDEDAREASOLID", `${profDef},${pos3},${dirZ},${f(w.th)}`);
+    }
+    const solid = items || seoSolid || giebelSolid || rectSolid(len, w.th, w.h);
     const pl = placement(koerperMitte.x, koerperMitte.z, w.elev, ang);
     // 97-02a: hull and drawn walls carry their data sheet (workshop walls keep their own psets below).
     const wTyp = sbOpt && w.roh ? typFuerWand(w.roh) : null;
@@ -455,6 +472,7 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
     // Geometrie für die Öffnungs-Platzierung merken (lokales System der Wand:
     // X entlang a→b ab Wandmitte, Y quer, Z nach oben).
     w.ref = wall; w.pl = pl; w.len = len; w.ang = ang; w.versatz = versatzM; w.guidWert = wandGuid.slice(1, -1);
+    if (w.profil) datenblattProfil(wall, w);
     w.dx = (w.b.x - w.a.x) / len; w.dz = (w.b.z - w.a.z) / len;
     if (!wallByKey.has(w.key)) wallByKey.set(w.key, w);
   });
@@ -678,7 +696,7 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
     const d = oeffnungsMasse(o, anker);
     // Passt die Öffnung überhaupt in die Wand? Sonst NICHT exportieren (ein zu
     // großer Void würde die Wandmenge falsch reduzieren) — mit Meldung.
-    const passt = oeffnungPasst(d, w.len, w.h);
+    const passt = oeffnungPasst(d, w.len, w.h, { profil: w.profil || null, u: o.u ?? null }); // 108-03: against the roof profile of a gable wall
     if (!passt.ok) { warn(`${label}: ${passt.text} — nicht exportiert.`); return; }
     // Position entlang der Wand in den gültigen Bereich legen (Öffnung bleibt
     // vollständig in der Wand; ohne Randabstand gäbe es Nullkanten-Booleans).

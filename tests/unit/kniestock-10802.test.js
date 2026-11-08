@@ -188,7 +188,8 @@ describe("108-02 Mengen (synthHull)", () => {
     const h = synthHull({ ...satz, geschosse: efhGeschosseMitKniestock(1) });
     const wand = h.find((x) => x.id === "hull-wall"), decke = h.find((x) => x.id === "hull-slab");
     // perimeter 43.20 m × (2.75 + 2.90 + 1.25) = 43.20 × 6.90
-    nahe(/** @type {any} */ (wand).mengen.area, 43.2 * 6.9, "Wandfläche", 1e-6);
+    // 108-03: the two gable walls reach the ridge — their triangles above the knee wall (2 × ½ · 10.20 · 5.10 = 52.02 m²) are added
+    nahe(/** @type {any} */ (wand).mengen.area, 43.2 * 6.9 + 52.02, "Wandfläche", 1e-6);
     // two full slabs (KG ceiling, EG ceiling) + the clipped collar-beam floor
     nahe(/** @type {any} */ (decke).mengen.area, 116.28 * 2 + 79.8, "Deckenfläche", 1e-6);
     assert.equal(/** @type {any} */ (decke).mengen.count, 3);

@@ -8,7 +8,6 @@
 import { describe, it, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -17,7 +16,8 @@ import { fileURLToPath } from 'node:url';
 
 const WURZEL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DATEN = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-real-11102-'));
-const SCHLUESSEL = crypto.randomBytes(32).toString('hex');
+// BIT_PERSONAL_SCHLUESSEL is the PATH of the key file (ruheVerschluesselung.js) - a bare value would land as a file in the cwd (repo root)
+const SCHLUESSEL = path.join(DATEN, 'personal.key');
 
 /** A free TCP port on 127.0.0.1. @returns {Promise<number>} */
 function freierPort() {
