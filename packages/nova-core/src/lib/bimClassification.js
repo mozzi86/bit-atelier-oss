@@ -24,7 +24,10 @@ import { normalisiereStatus } from "./kataloge.js";
 // 89-03: workshop components (walls/doors) as classified elements.
 import { werkstattBauteile } from "./werkstattBauteile.js";
 import { aufbauById, aufbauVon } from "./bauteil/aufbauten.js";
-import { oeffnungsGroesse, kniestockGeometrie } from "./buildingModel.js";
+import { oeffnungsGroesse, kniestockGeometrie, createBuildingModel } from "./buildingModel.js";
+import { treppeBerechnen, mitTreppenLoechern } from "./bauteil/treppe.js"; // 108-06: stair quantities, slab area minus the derived openings
+import { gaubeBerechnen } from "./bauteil/gauben.js"; // 108-13: dormer quantities
+import { globalesDach } from "./bauteil/dachGeometrie.js";
 import { attributeVon, istAbgeleitet } from "./bauteil/attribute.js";
 import { wandHoehe, stuetzenHoehe, geschosshoehe, gesamtHoehe, geschosseAus, oberkanteFolgtGeschoss, raumHoehe, elevationOf } from "./bauteil/hoehen.js";
 import { untergeschosseAnzahl } from "./bauteil/ebenen.js";
@@ -273,6 +276,8 @@ export function kgFromKind(kind) {
     window: "330",
     door: "340",
     zone: "390",
+    stair: "351", // 108-06: steckbrief.js "treppe" (KG 351 Deckenkonstruktionen incl. stairs)
+    dormer: "361", // 108-13: roof construction
   };
   return map[kind] || "390";
 }
@@ -290,6 +295,8 @@ export function gewerkFromKind(kind) {
     window: "Fassade",
     door: "Ausbau",
     zone: "Ausbau",
+    stair: "Rohbau", // 108-06
+    dormer: "Dach", // 108-13
   };
   return map[kind] || "Rohbau";
 }
@@ -352,7 +359,11 @@ export function synthHull(bimModel) {
   const knie = kniestockGeometrie({ footprintM: fp, storeys: n, storeyHeight: sh, geschosse: m.geschosse, deckenDicke: m.huelle_decke_dicke_m, deckenBezug: m.huelle_decke_bezug, dachform: m.dachform, dachneigung: m.dachneigung });
   const wandH = knie ? (hSumme != null ? hSumme : sh * n) - geschosshoehe(n - 1, gq) + knie.wandHoehe_m : null;
   const kehlArea = knie && knie.kehlbalken ? num(polygonArea(knie.kehlbalken)) : 0;
-  const deckenArea = knie ? area * (nW - 1) + kehlArea : null;
+  // 108-06: the derived stair openings reduce the slab area like the IFC voids do (same model build as 3D and IFC); 0 without stairs
+  const treppenLoecher = Array.isArray(m.customStairs) && m.customStairs.length
+    ? mitTreppenLoechern(createBuildingModel({ footprintM: fp, storeys: n, storeyHeight: sh, geschosse: m.geschosse, deckenDicke: m.huelle_decke_dicke_m, deckenBezug: m.huelle_decke_bezug, untergeschosse: U, dachform: m.dachform, dachneigung: m.dachneigung }), m.customStairs, gq).loecher.reduce((s, l) => s + l.flaeche_m2, 0)
+    : 0;
+  const deckenArea = knie ? area * (nW - 1) + kehlArea - treppenLoecher : treppenLoecher > 0 ? area * nW - treppenLoecher : null;
   const deckenZahl = knie ? nW - (knie.kehlbalken ? 0 : 1) : nW;
 
   const el = (id, kind, kg, gewerk, schicht, mengen) => ({
@@ -525,6 +536,30 @@ export function classifiedElements(bimModel, building, optionen = {}) {
       }),
     );
   });
+
+  // 108-06: stairs — one piece each (KG 351), length = run, area = run × width (the flight plan area)
+  arr(m.customStairs).forEach((t, i) => {
+    if (!t?.start) return;
+    const erg = treppeBerechnen(t, geschosshoehe(num(t?.level) || 0, gq));
+    const b = Math.max(0.1, num(t?.breite_m) || 1);
+    els.push(normalizeElement(t, `stair-${t?._idx ?? i}`, "stair", { area: erg.laufLaenge_m * b, volume: 0, length: erg.laufLaenge_m, count: 1 }));
+  });
+  // 108-13: dormers — one piece each (KG 361), area = the faces (front + cheeks + dormer roof) on the same roof as 3D and IFC
+  if (arr(m.gauben).length) {
+    const fp = Array.isArray(m.footprintM) && m.footprintM.length >= 3 ? m.footprintM : null;
+    const modell = fp ? createBuildingModel({ footprintM: fp, storeys: Math.max(1, Math.round(num(m.storeys) || 1)), storeyHeight: num(m.storeyHeight) || 3, geschosse: m.geschosse, deckenDicke: m.huelle_decke_dicke_m, deckenBezug: m.huelle_decke_bezug, untergeschosse: untergeschosseAnzahl(m.untergeschosse), dachform: m.dachform, dachneigung: m.dachneigung }) : null;
+    const dach = modell ? globalesDach(modell, m.dachform, m.dachneigung, gq) : null;
+    const flaeche3 = (/** @type {Array<{x: number, y: number, z: number}>} */ p) => {
+      let x = 0, y = 0, z = 0;
+      for (let i = 0; i < p.length; i += 1) { const a = p[i], b = p[(i + 1) % p.length]; x += (a.y - b.y) * (a.z + b.z); y += (a.z - b.z) * (a.x + b.x); z += (a.x - b.x) * (a.y + b.y); }
+      return Math.hypot(x, y, z) / 2;
+    };
+    arr(m.gauben).forEach((g, i) => {
+      const erg = modell ? gaubeBerechnen(g, modell, dach, gq) : null;
+      const area = erg && erg.ok ? erg.flaechen.reduce((s, fl) => s + flaeche3(fl.punkte3d), 0) : 0;
+      els.push(normalizeElement(g, `gaube-${g?._idx ?? i}`, "dormer", { area, volume: 0, length: erg && erg.ok ? erg.breite_m : 0, count: 1 }));
+    });
+  }
 
   arr(m.customRoofs).forEach((r, i) => {
     const area = num(polygonArea(r?.points));

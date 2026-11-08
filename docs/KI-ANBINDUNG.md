@@ -89,7 +89,7 @@ Die gehostete Cloud-Fassung nutzt dieselbe URL-Regel in `supabase/functions/llm/
 
 ## b) Der Harness (Python, optional)
 
-Ein lokaler Dienst mit Werkzeugen (Dateien, IFC, Shell mit Freigabe), Projektgedächtnis und
+Ein lokaler Dienst mit Werkzeugen (Dateien, IFC, Bauteilkatalog, Shell mit Freigabe), Projektgedächtnis und
 Skills; in der App unter **Labor → KI Tool** (`/KiTool`). Voraussetzung: Python ≥ 3.11.
 
 ```powershell
@@ -215,14 +215,18 @@ Modell. **Bestätigen kann ein Agent nie** — es gibt kein Werkzeug dafür (Ent
 | `transformieren` | **Vorschlag**: verschieben (`verschiebung_m`), drehen (`drehung_grad`), skalieren (`faktor`) (Suchwörter `transform_geometry`, `move_element`) | **nur mit `--schreiben`** |
 | `teilen` | **Vorschlag**: Bauteil teilen (`punkt`, `anteil` oder `linie`; Suchwort `split_element`) | **nur mit `--schreiben`** |
 | `vorschlag_verwerfen` | eigenen offenen Vorschlag zurücknehmen (`id`); ändert nichts am Modell | **nur mit `--schreiben`** |
-| `create_record` | Datensatz anlegen (`entity`, `data`) | **nur mit `--schreiben`** |
-| `update_record` | Felder ändern, andere bleiben (`entity`, `id`, `data`) | **nur mit `--schreiben`** |
+| `create_record` | Datensatz anlegen (`entity`, `data`): ohne `ausfuehren` nur **Vorschau**; mit `ausfuehren: true` angelegt, außer mögliche Dublette (gleicher Name/Titel im Projekt; `doppelt_erlaubt`); `idempotenz_schluessel` legt nie zweimal an | **nur mit `--schreiben`** |
+| `update_record` | Felder ändern, andere bleiben (`entity`, `id`, `data`): ohne `ausfuehren` nur **Vorschau** mit vorher/nachher und `stand`; geschrieben nur mit `ausfuehren: true` und diesem `stand` | **nur mit `--schreiben`** |
+| `delete_record` | Datensatz in den **Papierkorb** (`entity`, `id`, optional `grund`): ohne `ausfuehren` nur Vorschau; endgültig gelöscht wird nie; Projekte nicht | **nur mit `--schreiben`** |
+| `papierkorb_lesen` | Papierkorb, neueste zuerst (optional `entity`, `project_id`, `limit`): Eintrags-id, Datensatz, Zeit, Grund, Herkunft | lesen |
+| `wiederherstellen` | Datensatz aus dem Papierkorb zurück, mit derselben id (`id` des Eintrags): ohne `ausfuehren` nur Vorschau; belegte id → „nicht übernommen“ | **nur mit `--schreiben`** |
+| `aufrufprotokoll_lesen` (nur mit `--protokoll-lesen`) | letzte Einträge des Aufrufprotokolls (`anzahl`, optional `werkzeug`, `ergebnis`); erscheint nur, wenn der Server mit `--protokoll-lesen` gestartet wurde — das Protokoll enthält die Argumente jedes Aufrufs | lesen |
 
 Ohne `--schreiben` (Alias `--write`) erscheinen die Schreibwerkzeuge nicht in der Werkzeugliste, und ein
 Aufruf wird abgelehnt. Das frühere Flag `--bestaetigen-erlaubt` gibt es nicht mehr (wird ignoriert, mit
 Hinweis im Protokoll); auch der Umweg über `zeichenflaeche_ausfuehren` mit dem Befehl `bestaetigen` wird
 abgelehnt, und die App verweigert die Bestätigung über den Agentenkanal zusätzlich selbst. Datensätze löscht
-der MCP-Server nie; im Massing-Studio kann `zeichenflaeche_ausfuehren` aber Zeichenelemente sofort löschen
+der MCP-Server nie endgültig (seit 111-02 legt `delete_record` sie in den Papierkorb); im Massing-Studio kann `zeichenflaeche_ausfuehren` aber Zeichenelemente sofort löschen
 (`loeschen`) und zurücknehmen (siehe Grenzen). Antworten über 50.000 Zeichen werden gekürzt (bei Listen:
 weniger Einträge, mit Hinweis; Antworten des Viewers sind kompaktes JSON, die längste Liste verliert Einträge
 vom Ende); das Bild von `ansicht_bild` ist davon ausgenommen. API-Schlüssel (`LlmConnection`) und
@@ -259,7 +263,7 @@ Bekannte Grenzen: In IFC-Dateien lässt sich nur `eigenschaft_setzen` vorschlage
 Änderungsjournal, die Datei bleibt unverändert); Verschieben und Teilen gehen nur bei gezeichneten
 Bauteilen des BIM-Studios. Mehrere Bauteile auf einmal wählt kein Werkzeug. Fenster und Türen lassen sich
 im BIM-Studio nicht anklicken, aber per `guid` wählen. `ansicht_bild` gibt es nur in der 3D-Ansicht. Der Harness
-(`harness/`) hat noch keinen MCP-Client und damit diese Werkzeuge nicht. Die Prüfung `pruefen` kennt keinen
+(`harness/`) erreicht diese Werkzeuge über seinen MCP-Client (seit 106-05, Sprachprofil). Die Prüfung `pruefen` kennt keinen
 Bereich und kein einzelnes Bauteil, nur offene Vorschläge. Bestätigen und Zurücknehmen
 kann ein Agent nie: die App verweigert beides über den Agentenkanal („Ein Agent kann nicht bestätigen …“), der
 MCP-Server bietet kein Werkzeug dafür an. Die Bildbreite wird in der App auf 64 bis
@@ -287,7 +291,10 @@ transformieren {"guid": "0xS3rfBXz1EwBvL5K3Hn2a", "verschiebung_m": [0.5, 0]}
 teilen {"guid": "0xS3rfBXz1EwBvL5K3Hn2a", "anteil": 0.5}
 vorschlag_verwerfen {"id": "a3f9c10b"}
 create_record {"entity": "Notiz", "data": {"text": "Besprechung verschoben"}}
-update_record {"entity": "Notiz", "id": "n1", "data": {"text": "Besprechung entfällt"}}
+update_record {"entity": "Notiz", "id": "n1", "data": {"text": "Besprechung entfällt"}, "ausfuehren": true, "stand": "2026-11-08T10:00:00.000Z"}
+delete_record {"entity": "Notiz", "id": "n1", "grund": "doppelt angelegt"}
+papierkorb_lesen {"entity": "Notiz"}
+wiederherstellen {"id": "pk1"}
 ```
 
 **Beispiel-Dialog: zeigen, ändern, bestätigen**
@@ -309,6 +316,64 @@ Die Person hat im BIM-Studio eine Wand angeklickt und sagt zum Agenten: „Diese
 5. Der Agent sieht das Ergebnis mit `vorschlaege_lesen {}` (Verlauf) oder `auswahl_abfragen {}`
    (Feuerwiderstand jetzt „F90“). Wollte die Person es sich anders überlegen, nimmt der Agent den
    offenen Vorschlag mit `vorschlag_verwerfen {"id": "a3f9c10b"}` zurück.
+
+**Arbeitskontext, Aufrufprotokoll, Begründung, Konvention (seit 111-01)**
+
+- **Arbeitskontext beim Verbinden.** Die Antwort auf `initialize` enthält `instructions` (deutsch): Sprache,
+  Arbeitsweise „erst lesen, dann Vorschau, dann ausführen“, die Konvention unten, die Regel „ein Agent bestätigt nie
+  selbst“, ob Schreibrecht an ist, und das **Arbeitsprojekt** mit Name und id. Annahme: das zuletzt geänderte Projekt —
+  die App meldet ihr geöffnetes Projekt dem MCP-Server nicht. Antwortet die App nicht binnen 1,5 Sekunden, kommt
+  `initialize` trotzdem, mit dem Satz „App nicht erreichbar — bit_status prüft das“.
+- **Aufrufprotokoll.** Jeder Werkzeugaufruf — auch abgelehnte, unbekannte und fehlgeschlagene — schreibt genau eine
+  Zeile nach `<Datenordner>/ki-protokoll/mcp-<JJJJ-MM-TT>.jsonl`: Zeit, Client (aus `initialize`), Person (aus
+  `/auth/me`), Werkzeug, Argumente (je Argument höchstens 2.000 Zeichen), Ergebnis (`ok`, `fehler`, `abgelehnt`,
+  `unbekannt`), Dauer in ms, Schreibrecht und ggf. die Begründung. Schlüssel, Bearer-Token, `…_TOKEN=`-Angaben und das
+  Steuerungs-Token werden geschwärzt (dieselben Muster wie im Harness-Protokoll, plus Steuerungs-Token). Der Datenordner
+  kommt aus `BIT_DATA_DIR`, sonst von der laufenden App; ohne beides gibt es kein Protokoll (eine Zeile auf stderr).
+  Ab 5 MB wird die Datei umbenannt (`-1`, `-2` …), Dateien älter als 30 Tage werden beim Start entfernt. Kann das
+  Protokoll nicht geschrieben werden, bleibt die Antwort des Werkzeugs gleich; der Fehler steht einmal auf stderr.
+  Zurücklesen per `aufrufprotokoll_lesen` nur mit `--protokoll-lesen`.
+- **Begründung.** Jedes Schreibwerkzeug nimmt optional `begruendung` = `{grund, quelle, aussenwirkung}` an
+  (`aussenwirkung`: `keine`, `intern` oder `extern`). Der MCP-Server nimmt sie vor der Ausführung aus den Argumenten;
+  sie steht nur im Protokoll und erreicht die App nie. Der Harness reicht sie unverändert durch.
+- **Eine Konvention.** Jedes Werkzeug hat eine Art (in `tools/list` unter `_meta` als `bit-atelier/art`):
+  `lesen` (ändert nichts Gespeichertes), `vorschlag` (`eigenschaft_setzen`, `transformieren`, `teilen`,
+  `vorschlag_verwerfen` — die Person übernimmt in der App), `vorschau-dann-ausfuehren` (Standard fürs Schreiben:
+  erst die Vorschau, geschrieben wird erst mit `ausfuehren: true`) und `sofort` (nur `zeichenflaeche_ausfuehren`,
+  weil das Massing-Studio Zeichenbefehle sofort ausführt). Seit 111-02 haben `create_record`, `update_record`,
+  `delete_record` und `wiederherstellen` den Schalter `ausfuehren` (Vorgabe: Vorschau). Ein Test
+  (`tests/unit/mcp-konvention-11101.test.js`) prüft die Konvention und dass jeder Aufruf eine Protokollzeile hinterlässt.
+
+**Sicher schreiben: Vorschau, Papierkorb, Doppelschutz, Schutzpfade (seit 111-02)**
+
+- **Vorschau als Standard.** `create_record`, `update_record`, `delete_record` und `wiederherstellen` schreiben ohne
+  `ausfuehren: true` nichts. Sie antworten `{vorher, nachher, geaenderte_felder, probleme, naechster_schritt, stand}`:
+  bei `update_record` ist `vorher` der gespeicherte Satz und `geaenderte_felder` nennt nur wirklich andere Werte, bei
+  `create_record` ist `vorher` null. `naechster_schritt` ist der genaue Folgeaufruf mit `ausfuehren: true` und dem
+  `stand` (das `updated_date` aus der Vorschau). Hat jemand den Satz zwischen Vorschau und Ausführen geändert, prüft
+  das der MCP-Server und zusätzlich die App (`PUT …?stand=`, HTTP 409); die Antwort heißt dann „nicht übernommen:
+  inzwischen geändert — neue Vorschau holen“. „Nicht übernommen“ ist ein normales Ergebnis (`uebernommen: false`,
+  `grund`), kein Fehler.
+- **Papierkorb.** `delete_record` legt den Satz mit Zeit, Grund und Herkunft (`mcp`) in die Sammlung `Papierkorb`
+  und entfernt ihn erst dann aus seiner Sammlung (`POST /api/papierkorb/:entity/:id`). `papierkorb_lesen` listet,
+  `wiederherstellen` legt ihn mit **derselben id** zurück — nur, wenn die id frei ist; sonst „nicht übernommen“ mit
+  Grund, überschrieben wird nichts. Einträge älter als 90 Tage räumt die App beim Start und vor jeder Liste auf
+  (Annahme). Über das allgemeine Speichern (`/entities/Papierkorb`) ist der Papierkorb nur lesbar. Projekte löscht ein
+  Agent nicht (die App hat dafür einen Löschschutz und das Archivieren). Die Löschknöpfe der App löschen weiterhin
+  endgültig — ob auch sie in den Papierkorb gehen, entscheidet ein eigener Plan.
+- **Doppelschutz.** Mit `ausfuehren: true` legt `create_record` nichts an, wenn in derselben Entität (bei
+  `project_id` im selben Projekt) schon ein Satz mit gleichem Namen steht — verglichen wird das erste gefüllte Feld aus
+  `name`, `title`, `titel`, `bezeichnung`, ohne Groß/Klein, mit ä→ae usw., Satzzeichen und mehrfache Leerzeichen als
+  ein Leerzeichen (Annahme). Antwort: „nicht übernommen: mögliche Dublette von <id>“; nur `doppelt_erlaubt: true`
+  legt trotzdem an. Über 2.000 Sätze wird nicht geprüft (Hinweis „nicht geprüft“, Annahme).
+  `idempotenz_schluessel` wird als Feld `ki_vorgang` gespeichert: ein zweiter Aufruf mit demselben Schlüssel liefert
+  den ersten Satz zurück (`status: "schon angelegt"`), auch nach einem Neustart von App und MCP-Server.
+- **Schutzpfade.** API-Schlüssel (`LlmConnection`), KI-Einstellungen (`KiEinstellung`), Personaldaten,
+  Änderungsprotokoll und Befehlsbibliothek (nur die Person) und der Papierkorb selbst lehnt der MCP-Server schon in
+  der Vorschau ab, in jeder Schreibweise. Geschützte Projektfelder — `bild_freigabe` immer, `nda` außer zum
+  Einschalten — stehen als Problem in der Vorschau und werden beim Ausführen nicht gesendet (`nicht_gesetzt` in der
+  Antwort); ebenso `id`, `created_date`, `updated_date` (vergibt die App) und das reservierte `ki_vorgang`.
+  Kein Werkzeug übernimmt einen Vorschlag des Modells — das bleibt bei der Person.
 
 **Am einfachsten aus der App (seit 92-07):** Einstellungen → **KI-Verbindungen** → „Mit einem
 KI-Assistenten verbinden“ zeigt beide Einträge unten fertig ausgefüllt — mit dem echten Pfad dieser
@@ -369,7 +434,10 @@ Basis `http://127.0.0.1:3001/api`, JSON, **ohne Anmeldung**. Quelle: `server/ind
 | GET | `/entities/:entity/:id` | ein Datensatz (404, wenn nicht vorhanden) |
 | POST | `/entities/:entity` | anlegen; `id`, `created_date`, `updated_date` vergibt der Server |
 | PUT | `/entities/:entity/:id` | Felder ändern (Zusammenführen, nicht Ersetzen) |
-| DELETE | `/entities/:entity/:id` | löschen |
+| DELETE | `/entities/:entity/:id` | löschen (endgültig) |
+| POST | `/papierkorb/:entity/:id` | in den Papierkorb legen (`{ grund?, herkunft: "mcp" \| "app" }`), 201 mit dem Eintrag (seit 111-02) |
+| GET | `/papierkorb?entity=&project_id=` | Papierkorb, neueste zuerst; Einträge älter als 90 Tage werden vorher aufgeräumt |
+| POST | `/papierkorb/:id/wiederherstellen` | zurücklegen mit derselben id; belegte id → 409 mit Grund |
 | POST / PUT | `/entities/:entity/bulk` | viele anlegen / per Schlüssel aktualisieren-oder-anlegen (`{ records, key? }`) |
 | GET | `/catalogs` | alle Bürokataloge in einer Antwort |
 | GET, PUT, DELETE | `/blobs`, `/blobs/:id` | große abgeleitete Nutzlasten (Bauteillisten) neben der DB |
@@ -385,7 +453,7 @@ Basis `http://127.0.0.1:3001/api`, JSON, **ohne Anmeldung**. Quelle: `server/ind
 | GET | `/telemetry/config` | Quelle der Baustellen-Telemetrie |
 | GET | `/ifc-files`, `/ifc-test-file`, `/bauteilfilter` | Entwicklungswege (nur mit `IFC_DIR` / `IFC_TEST_FILE` / `BAUTEILFILTER_DIR`) |
 
-`LlmConnection` und die Personal-Entitäten sind über `/entities` gesperrt (403). Unbekannte
+`LlmConnection` und die Personal-Entitäten sind über `/entities` gesperrt (403); `Papierkorb` ist dort nur lesbar. Unbekannte
 `/api`-Pfade antworten im App-Modus mit JSON-404.
 
 ---

@@ -168,6 +168,13 @@ async def test_bridge_offers_exactly_the_allowlist_without_guid_on_the_change_to
         await b.close()
 
 
+def test_the_speech_profile_never_deletes_or_restores_records():
+    # 111-02: delete_record moves a record into the recycle bin, wiederherstellen puts it back - neither is for the speech profile
+    assert {"delete_record", "wiederherstellen", "create_record", "update_record"} <= IMMER_GESPERRT
+    s = McpSettings.from_raw({"tools": ["delete_record", "wiederherstellen", "teilen"]}, REPO)
+    assert s.tools == ("teilen",)
+
+
 @needs_node
 async def test_config_cannot_unlock_the_forbidden_tools():
     s = McpSettings.from_raw({"tools": ["transformieren", "ansicht_bild", "bauteil_waehlen", "vorschlag_bestaetigen", "update_record", "create_record", "zeichenflaeche_ausfuehren"]}, REPO)
@@ -352,6 +359,30 @@ async def test_apps_sentence_marker_goes_into_the_change_calls_and_the_models_ne
         # a read carries no marker
         await reg.dispatch("auswahl_abfragen", {}, CTX)
         assert "satz_marke" not in api.anfragen[-1]["body"]["params"]["params"]
+    finally:
+        await b.close()
+
+
+@needs_node
+async def test_reason_passes_through_the_bridge_into_the_servers_call_log_never_to_the_app(api, tmp_path):
+    """111-01 (K-04): the bridge removes guid / satz_marke only - the optional `begruendung` reaches the MCP server, which takes it out
+    before the app and writes it to its call log, with the harness as client (clientInfo of the handshake)."""
+    import dataclasses
+    s = settings(api)
+    b = McpBridge(dataclasses.replace(s, extra_env={**s.extra_env, "BIT_DATA_DIR": str(tmp_path)}))
+    await b.ensure()
+    try:
+        reg = b.registry(ziel=["GUID-AUS-DEM-STRAHL-01"])
+        schema = {x.name: x for x in reg.schemas("standard")}["eigenschaft_setzen"]
+        assert "begruendung" in (schema.parameters.get("properties") or {}), "the model sees the optional reason"
+        begruendung = {"grund": "Die Person sagte es beim Zeigen", "quelle": "Sprache", "aussenwirkung": "keine"}
+        await reg.dispatch("eigenschaft_setzen", {"name": "feuerwiderstand", "wert": "F90", "begruendung": begruendung}, CTX)
+        p = api.anfragen[-1]["body"]["params"]
+        assert p["befehl"] == "eigenschaft-setzen" and "begruendung" not in p["params"], "the app never gets the reason"
+        zeilen = [json.loads(z) for f in sorted((tmp_path / "ki-protokoll").glob("mcp-*.jsonl")) for z in f.read_text(encoding="utf-8").splitlines() if z]
+        assert [z["werkzeug"] for z in zeilen] == ["eigenschaft_setzen"]
+        assert zeilen[0]["begruendung"] == begruendung
+        assert zeilen[0]["client"].startswith("atelier-ai-harness")
     finally:
         await b.close()
 

@@ -97,6 +97,8 @@ import { wandGeometrie, wandDicke_m, eckfueller } from "@core/lib/bauteil/refere
 import { elevationOf, unterkante, wandHoehe, stuetzenHoehe, geschosshoehe, deckenLage, oberkanteFolgtGeschoss, dachFirsthoehe_m, dachNeigung_grad, dachMigrieren, geschosseAus, MAX_NEIGUNG_GRAD, FLACHDACH_BIS_GRAD, DECKEN_STANDARD, kniestockAus, kniestockVerwaist, patchKniestock, MAX_KNIESTOCK_M } from "@core/lib/bauteil/hoehen.js";
 import { vollgeschossAusDach } from "@core/lib/bauteil/vollgeschoss.js"; // 108-02: full-storey rule of the attic from the roof geometry
 import { dachBerechnen, dachDreiecke, dachVonDachelement, globalesDach, schnittAchseQuerZumFirst, dachEbenen } from "@core/lib/bauteil/dachGeometrie.js"; // 107-10: one roof library for 3D, IFC and solid relations
+import { treppeBerechnen, mitTreppenLoechern, treppeKoerper, treppenText, neueTreppe, deckeUeber, treppenLoch } from "@core/lib/bauteil/treppe.js"; // 108-06: stairs as elements, derived slab openings
+import { gaubeBerechnen, gaubenDreiecke, neueGaube, GAUBE_STANDARD } from "@core/lib/bauteil/gauben.js"; // 108-13: dormers on the global roof
 import { SOLIDRELATIONEN_LEER, relationenVon, relationAnlegen, relationAktivSetzen, aktiveRelationenFuer, relationWirkt, istSeoCacheSchluessel } from "@core/lib/bauteil/seoRelationen.js"; // 107-10: stored solid relations (pure; seo.js loads lazily)
 import { csgWarnungText } from "@core/lib/bauteil/csgWarnung.js";
 import { brilleVon, sichtbarUnter, zeigtStatus, STANDARD_BRILLE } from "@core/lib/plan/brillen.js";
@@ -273,7 +275,7 @@ const HOVER_MIN_PX = 2;
 const WHEEL_PAUSE_MS = 180;
 
 // Kinds mit eigenem Material je Mesh — nur dort ist emissive gefahrlos.
-const EMISSIVE_KINDS = new Set(["wall", "column", "zone", "cslab", "croof"]);
+const EMISSIVE_KINDS = new Set(["wall", "column", "zone", "cslab", "croof", "stair", "gaube"]);
 
 /** Layer a selection type lives on (a locked layer refuses the selection, by mouse and by command). */
 const EBENE_VON_TYP = { wall: "walls", zone: "zones", slab: "shell", roof: "attika", hullwall: "shell", autowin: "openings", opening: "openings", column: "columns" };
@@ -289,6 +291,8 @@ function auraMatches(m, sel) {
     case "zone": return u.kind === "zone" && u.id === sel.index;
     case "slab": return u.kind === "cslab" && u.id === sel.index;
     case "roof": return u.kind === "croof" && u.id === sel.index;
+    case "stair": return u.kind === "stair" && u.id === sel.index; // 108-06
+    case "gaube": return u.kind === "gaube" && u.id === sel.index; // 108-13
     case "hullwall": return u.kind === "wallShell" && (u.level ?? 0) === sel.level && (u.edge ?? 0) === sel.edge;
     case "autowin": return u.kind === sel.kind && u.scope === "auto" && (u.level ?? 0) === sel.level && (u.edge ?? 0) === sel.edge;
     default: return false;
@@ -338,13 +342,27 @@ function applyPickHighlight(t, selected, multi) {
  * @param {THREE.Material} material
  * @returns {THREE.Mesh}
  */
-function dachMesh(dach, material) {
+function dachMesh(dach, material, giebelMaterial = null) {
+  // 108-03 (user 08.11.2026: "die Giebelseiten sind nicht rot, sie sind Hauswand"): the vertical gable triangles are wall, not roof —
+  // with `giebelMaterial` they become their own mesh in the facade material; without it the old single mesh (drawn roofs, massing)
+  const teile = giebelMaterial ? dach.flaechen.filter((f) => f.art !== "giebel") : dach.flaechen;
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(dachDreiecke(dach.flaechen), 3));
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(dachDreiecke(teile), 3));
   geo.computeVertexNormals();
   const mesh = new THREE.Mesh(geo, material);
   mesh.castShadow = true; mesh.receiveShadow = true;
-  return mesh;
+  if (!giebelMaterial) return mesh;
+  const giebel = dach.flaechen.filter((f) => f.art === "giebel");
+  if (!giebel.length) return mesh;
+  const grp = new THREE.Group();
+  grp.add(mesh);
+  const gg = new THREE.BufferGeometry();
+  gg.setAttribute("position", new THREE.Float32BufferAttribute(dachDreiecke(giebel), 3));
+  gg.computeVertexNormals();
+  const gm = new THREE.Mesh(gg, giebelMaterial); gm.castShadow = true; gm.receiveShadow = true;
+  gm.userData.teil = "giebel";
+  grp.add(gm);
+  return grp;
 }
 
 // Footprint-Polygon [{x,z}] zu extrudiertem Mesh (Höhe in m).
@@ -711,6 +729,11 @@ export default function BitBimStudio({ complexData }) {
   const [durchbrueche, setDurchbrueche] = useState(/** @type {any[]} */ ([])); // 97-06: openings planning, read only for the checks
   const [customSlabs, setCustomSlabsRoh] = useState([]); // Decken: [{points,level,_idx}]
   const [customRoofs, setCustomRoofsRoh] = useState([]); // Dächer: [{points,level,pitch,_idx}]
+  const [customStairs, setCustomStairsRoh] = useState(/** @type {any[]} */ ([])); // 108-06 Treppen: [{start,richtung_grad,breite_m,level,_idx}] (bauteil/treppe.js)
+  const [gauben, setGaubenRoh] = useState(/** @type {any[]} */ ([])); // 108-13 Gauben auf dem Gebäudedach: [{edge,u_von_m,u_bis_m,…,_idx}] (bauteil/gauben.js)
+  // additive fields: a record that never had them is not given them (pattern verschneidung/dachform_ifc) — set once a list was loaded or filled
+  const hatteTreppenRef = useRef(false);
+  const hatteGaubenRef = useRef(false);
   const [sketchJson, setSketchJson] = useState(null); // PW-05: Sketch aus dem BIT Sketcher (read-only Overlay)
   const [winType, setWinType] = useState("double"); // aktueller Fenstertyp
   const [doorType, setDoorType] = useState("single"); // aktueller Türtyp
@@ -776,7 +799,7 @@ export default function BitBimStudio({ complexData }) {
   const ansichtDaten = useMemo(() => ansichtLayerNormalisieren(ansichtLayer), [ansichtLayer]);
   const views = ansichtDaten.ausschnitte;
   modellStandRef.current = {
-    customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs,
+    customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs, customStairs, gauben,
     storeys, untergeschosse, footprintM: footprintEdit, footprintQuelle: bp.footprintQuelle,
     storeyHeight, geschosse,
     ausschnitte: views, // 107-12: saving / deleting a view is a step of the drawing undo
@@ -800,6 +823,8 @@ export default function BitBimStudio({ complexData }) {
   const setCustomZones = useCallback((/** @type {any} */ v) => { merken(); setCustomZonesRoh(v); }, [merken]);
   const setCustomSlabs = useCallback((/** @type {any} */ v) => { merken(); setCustomSlabsRoh(v); }, [merken]);
   const setCustomRoofs = useCallback((/** @type {any} */ v) => { merken(); setCustomRoofsRoh(v); }, [merken]);
+  const setCustomStairs = useCallback((/** @type {any} */ v) => { merken(); hatteTreppenRef.current = true; setCustomStairsRoh(v); }, [merken]); // 108-06
+  const setGauben = useCallback((/** @type {any} */ v) => { merken(); hatteGaubenRef.current = true; setGaubenRoh(v); }, [merken]); // 108-13
   const setStoreys = useCallback((/** @type {number} */ v) => { merken(); setStoreysDirekt(v); }, [merken]);
   const setUntergeschosse = useCallback((/** @type {number} */ v) => { merken(); setUntergeschosseDirekt(v); }, [merken]);
   const setStoreyHeight = useCallback((/** @type {number} */ v) => { merken(); setStoreyHeightDirekt(v); }, [merken]);
@@ -863,6 +888,9 @@ export default function BitBimStudio({ complexData }) {
           setCustomZones(m.customZones || []);
           setCustomSlabs(m.customSlabs || []);
           setCustomRoofs((m.customRoofs || []).map(dachMigrieren)); // 107-02: old roofs (only `pitch`, metres) get firsthoehe_m
+          // 108-06 / 108-13: additive lists — a record without them stays without them until one is inserted
+          setCustomStairsRoh(Array.isArray(m.customStairs) ? m.customStairs : []); hatteTreppenRef.current = m.customStairs !== undefined;
+          setGaubenRoh(Array.isArray(m.gauben) ? m.gauben : []); hatteGaubenRef.current = m.gauben !== undefined;
           if (m.envComposite !== undefined) setEnvComposite(m.envComposite);
           setHuelleErscheinungRoh(typeof m.huelle_erscheinung === "string" && m.huelle_erscheinung ? m.huelle_erscheinung : null);
           if (m.envThickness) setEnvThickness(m.envThickness);
@@ -886,12 +914,13 @@ export default function BitBimStudio({ complexData }) {
           // Programmfelder (footprintM/storeys/storeyHeight/unit) setzt der Hook
           // useBimModelSync in die gemeinsame Quelle — hier NICHT doppelt.
           // _idx-Zähler hinter die geladenen Elemente setzen (keine Kollisionen)
-          const maxIdx = Math.max(0, ...[...(m.customWalls || []), ...(m.customColumns || []), ...(m.customWindows || []), ...(m.envOpenings || []), ...(m.customZones || []), ...(m.customSlabs || []), ...(m.customRoofs || [])].map((x) => x._idx || 0));
+          const maxIdx = Math.max(0, ...[...(m.customWalls || []), ...(m.customColumns || []), ...(m.customWindows || []), ...(m.envOpenings || []), ...(m.customZones || []), ...(m.customSlabs || []), ...(m.customRoofs || []), ...(m.customStairs || []), ...(m.gauben || [])].map((x) => x._idx || 0));
           idRef.current = maxIdx + 1;
         } else {
           // Neues Projekt ohne Modell: Editor leeren (kein Übertrag vom Vorprojekt)
           setCustomWalls([]); setCustomColumns([]); setCustomWindows([]); setEnvOpenings([]); setNetzLayer(null); setStatikLayer(null); setAttributLayer(null); setMassingLayer(null);
           setCustomZones([]); setCustomSlabs([]); setCustomRoofs([]);
+          setCustomStairsRoh([]); setGaubenRoh([]); hatteTreppenRef.current = false; hatteGaubenRef.current = false; // 108-06 / 108-13
           setHuelleBezug("center");
           setVerschneidung(false); hatteVerschneidungRef.current = false; // 107-09
           setDachIfc(false); hatteDachIfcRef.current = false; // 107-10 review
@@ -927,12 +956,15 @@ export default function BitBimStudio({ complexData }) {
           ...(dachIfc || hatteDachIfcRef.current ? { dachform_ifc: dachIfc } : {}),
           customWalls: guidsAnheften(customWalls, pid, "customWalls"), customColumns: guidsAnheften(customColumns, pid, "customColumns"), customWindows, envOpenings,
           customZones: guidsAnheften(customZones, pid, "customZones"), customSlabs: guidsAnheften(customSlabs, pid, "customSlabs"), customRoofs: guidsAnheften(customRoofs, pid, "customRoofs"),
+          // 108-06 / 108-13: additive — written only once the record had or got the list (an emptied list is written as [] so a deletion sticks)
+          ...(hatteTreppenRef.current ? { customStairs: guidsAnheften(customStairs, pid, "customStairs") } : {}),
+          ...(hatteGaubenRef.current ? { gauben: guidsAnheften(gauben, pid, "gauben") } : {}),
         });
         setSaveState("saved");
       } catch { setSaveState("error"); }
     }, 1200);
     return () => clearTimeout(t);
-  }, [projectId, envComposite, envThickness, huelleBezug, huelleErscheinung, huelleDeckeDicke, huelleDeckeBezug, parapet, dachform, dachneigung, entranceCfg, customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs, verschneidung, dachIfc]);
+  }, [projectId, envComposite, envThickness, huelleBezug, huelleErscheinung, huelleDeckeDicke, huelleDeckeBezug, parapet, dachform, dachneigung, entranceCfg, customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs, customStairs, gauben, verschneidung, dachIfc]);
 
   // ---- Ebenen (Layers) ----
   const [layers, setLayers] = useState(DEFAULT_LAYERS);
@@ -1853,6 +1885,8 @@ export default function BitBimStudio({ complexData }) {
     const z = ids("zone"); if (z.size) setCustomZones((a) => a.filter((x) => !z.has(x._idx)));
     const s = ids("slab"); if (s.size) setCustomSlabs((a) => a.filter((x) => !s.has(x._idx)));
     const r = ids("roof"); if (r.size) setCustomRoofs((a) => a.filter((x) => !r.has(x._idx)));
+    const st = ids("stair"); if (st.size) setCustomStairs((a) => a.filter((x) => !st.has(x._idx))); // 108-06
+    const ga = ids("gaube"); if (ga.size) setGauben((a) => a.filter((x) => !ga.has(x._idx))); // 108-13
     setMultiSel([]);
   };
   // Polygon-Eckpunkt verschieben (Zone/Decke/Dach) — „alles hat Griffe"
@@ -1916,6 +1950,8 @@ export default function BitBimStudio({ complexData }) {
     if (h.kind === "zone" && h.id != null) setCustomZones((zs) => zs.filter((z) => z._idx !== h.id));
     if (h.kind === "cslab" && h.id != null) setCustomSlabs((ss) => ss.filter((s) => s._idx !== h.id));
     if (h.kind === "croof" && h.id != null) setCustomRoofs((rs) => rs.filter((r) => r._idx !== h.id));
+    if (h.kind === "stair" && h.id != null) setCustomStairs((ts) => ts.filter((t) => t._idx !== h.id)); // 108-06
+    if (h.kind === "gaube" && h.id != null) setGauben((gs2) => gs2.filter((g) => g._idx !== h.id)); // 108-13
     setSelected(null); setCtxMenu(null);
   };
   const deleteSelected = () => {
@@ -1929,8 +1965,13 @@ export default function BitBimStudio({ complexData }) {
     if (selected.type === "zone") setCustomZones((zs) => zs.filter((z) => z._idx !== selected.index));
     if (selected.type === "slab") setCustomSlabs((ss) => ss.filter((s) => s._idx !== selected.index));
     if (selected.type === "roof") setCustomRoofs((rs) => rs.filter((r) => r._idx !== selected.index));
+    if (selected.type === "stair") setCustomStairs((ts) => ts.filter((t) => t._idx !== selected.index)); // 108-06
+    if (selected.type === "gaube") setGauben((gs2) => gs2.filter((g) => g._idx !== selected.index)); // 108-13
     setSelected(null);
   };
+  // 108-06 / 108-13: field patches of a stair / dormer (one undo step each, through the wrapped setters)
+  const patchStair = (/** @type {number} */ idx, /** @type {Record<string, any>} */ p) => setCustomStairs((ts) => ts.map((t) => (t._idx === idx ? { ...t, ...p } : t)));
+  const patchGaube = (/** @type {number} */ idx, /** @type {Record<string, any>} */ p) => setGauben((gs2) => gs2.map((g) => (g._idx === idx ? { ...g, ...p } : g)));
   // ---- Properties: Felder des ausgewählten Objekts ändern ----
   const patchWall = (idx, p) => setCustomWalls((ws) => ws.map((w) => w._idx === idx ? { ...w, ...p } : w));
   const patchColumn = (idx, p) => setCustomColumns((cs) => cs.map((c) => c._idx === idx ? { ...c, ...p } : c));
@@ -2298,7 +2339,7 @@ export default function BitBimStudio({ complexData }) {
   /**
    * 107-08: pins the GlobalIds of the element lists (guidsAnheften, the export source names) and stores the lists that changed.
    * @param {((type: string, el: any) => boolean)|null} [nur] only these elements (default: all; the IFC export pins all)
-   * @returns {{customWalls: any[], customColumns: any[], customZones: any[], customSlabs: any[], customRoofs: any[]}} the pinned lists
+   * @returns {{customWalls: any[], customColumns: any[], customZones: any[], customSlabs: any[], customRoofs: any[], customStairs: any[], gauben: any[]}} the pinned lists
    */
   const alleGuidsAnheften = (nur = null) => {
     const pid = projectId || null;
@@ -2307,12 +2348,15 @@ export default function BitBimStudio({ complexData }) {
       customWalls: guidsAnheften(customWalls, pid, "customWalls", f("wall")), customColumns: guidsAnheften(customColumns, pid, "customColumns", f("column")),
       customZones: guidsAnheften(customZones, pid, "customZones", f("zone")), customSlabs: guidsAnheften(customSlabs, pid, "customSlabs", f("slab")),
       customRoofs: guidsAnheften(customRoofs, pid, "customRoofs", f("roof")),
+      customStairs: guidsAnheften(customStairs, pid, "customStairs", f("stair")), gauben: guidsAnheften(gauben, pid, "gauben", f("gaube")), // 108-06 / 108-13
     };
     if (r.customWalls !== customWalls) setCustomWalls(r.customWalls);
     if (r.customColumns !== customColumns) setCustomColumns(r.customColumns);
     if (r.customZones !== customZones) setCustomZones(r.customZones);
     if (r.customSlabs !== customSlabs) setCustomSlabs(r.customSlabs);
     if (r.customRoofs !== customRoofs) setCustomRoofs(r.customRoofs);
+    if (r.customStairs !== customStairs) setCustomStairs(r.customStairs);
+    if (r.gauben !== gauben) setGauben(r.gauben);
     return r;
   };
   // 107-08 review: selecting an element no longer pins its GUID (that turned a mere look into a save and a sync event on other
@@ -2337,10 +2381,11 @@ export default function BitBimStudio({ complexData }) {
     }
     // 107-08 (lazy GUID): the first export pins the GlobalIds of walls, columns, slabs, roofs and rooms onto the elements (the same
     // derived values, so this file is unchanged); from then on they survive a project copy. Openings keep the derived ones.
-    const gepinnt = projectId ? alleGuidsAnheften() : { customWalls, customColumns, customZones, customSlabs, customRoofs };
+    const gepinnt = /** @type {{customWalls: any[], customColumns: any[], customZones: any[], customSlabs: any[], customRoofs: any[], customStairs: any[], gauben: any[]}} */ (projectId ? alleGuidsAnheften() : { customWalls, customColumns, customZones, customSlabs, customRoofs, customStairs, gauben });
     const ifc = exportIFC(model, {
       customWalls: gepinnt.customWalls, customColumns: gepinnt.customColumns, customWindows, envOpenings, autoOpenings,
       customZones: gepinnt.customZones, customSlabs: gepinnt.customSlabs, customRoofs: gepinnt.customRoofs.map(dachMigrieren), storeyHeight, geschosse, // 107-02: a roof with only `pitch` is read as ridge rise in m, whatever path created it
+      customStairs: gepinnt.customStairs, gauben: gepinnt.gauben, // 108-06: IfcStair + derived slab openings; 108-13: dormers on the global roof (need dachGlobal)
       netz: netzLayer, // Phase 41 (NETZ-05): Leitungen als Segment-Elemente
       // 97-02a: every element with its data sheet (stable GUID, Pset_BIT_Bauteil, material, DIN 276); beams from statik_layer.
       // 107-03: schichtdetails = layer Category/Priority, LayerSetUsage, material psets
@@ -2552,6 +2597,7 @@ export default function BitBimStudio({ complexData }) {
     const vis = ebenenSichtbarkeit(aus, DEFAULT_LAYERS, LAYER_COMBOS) || layerVis;
     const grafik = planGrafik({ model, level: lvl, customWalls: sichtbarUnter(brille, customWalls), customColumns: sichtbarUnter(brille, customColumns),
       customSlabs: sichtbarUnter(brille, customSlabs), customRoofs: sichtbarUnter(brille, customRoofs), customZones, brille,
+      customStairs, gauben, dach: globalDach, geschosse: gs, // 108-06 / 108-13: stair symbol and dormer outline on the sheet
       // 106-11 review: openings only locate the mark of a changed opening on its drawn host wall (the sheet draws no openings)
       customWindows, envOpenings,
       huelleStatus: zeigtStatus(brille, attributeVon(attributLayer, "hull-wall")?.status) ? attributeVon(attributLayer, "hull-wall")?.status ?? null : null, massstab: aus.scale, sw: aus.sw,
@@ -2820,7 +2866,7 @@ export default function BitBimStudio({ complexData }) {
   // model here at once (and into the React state), so the next command in the same tick (auswahl-lesen, a second
   // proposal) already sees it. Every render re-assigns it from the state, which by then holds the same arrays.
   const modellRef = useRef(/** @type {any} */ (null));
-  modellRef.current = { customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs,
+  modellRef.current = { customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs, customStairs, gauben,
     bauteil_attribute_layer: attributLayer, netz_layer: netzLayer };
   /** Restore one drawing-undo snapshot. Raw setters: the wrapped ones would record the restore. */
   const historieAnwenden = (/** @type {any} */ s) => {
@@ -2833,6 +2879,8 @@ export default function BitBimStudio({ complexData }) {
       setCustomZonesRoh(s.customZones);
       setCustomSlabsRoh(s.customSlabs);
       setCustomRoofsRoh(s.customRoofs);
+      if (Array.isArray(s.customStairs)) setCustomStairsRoh(s.customStairs); // 108-06 (older snapshots have none: the stairs stay)
+      if (Array.isArray(s.gauben)) setGaubenRoh(s.gauben); // 108-13
       if (s.entranceCfg) setEntranceCfg(s.entranceCfg); // 108-01 review (snapshots from before have none: the entrance stays)
       if ("huelle_erscheinung" in s) setHuelleErscheinungRoh(s.huelle_erscheinung || null);
       bp.set({
@@ -2853,6 +2901,7 @@ export default function BitBimStudio({ complexData }) {
         ...(modellRef.current || {}),
         customWalls: s.customWalls, customColumns: s.customColumns, customWindows: s.customWindows,
         envOpenings: s.envOpenings, customZones: s.customZones, customSlabs: s.customSlabs, customRoofs: s.customRoofs,
+        ...(Array.isArray(s.customStairs) ? { customStairs: s.customStairs } : {}), ...(Array.isArray(s.gauben) ? { gauben: s.gauben } : {}),
       };
     } finally {
       historieStillRef.current = false;
@@ -3068,7 +3117,7 @@ export default function BitBimStudio({ complexData }) {
     try {
       const alt = modellRef.current;
       const setter = { customWalls: setCustomWalls, customColumns: setCustomColumns, customWindows: setCustomWindows, envOpenings: setEnvOpenings,
-        customZones: setCustomZones, customSlabs: setCustomSlabs, customRoofs: setCustomRoofs };
+        customZones: setCustomZones, customSlabs: setCustomSlabs, customRoofs: setCustomRoofs, customStairs: setCustomStairs, gauben: setGauben };
       const stand = { ...alt };
       for (const [k, set] of Object.entries(setter)) if (neu[k] !== alt[k]) {
         // 107-02: roofs from an agent or an undo may only carry the old `pitch`; they get the split fields here like at load, so editor and export read one meaning
@@ -3818,10 +3867,17 @@ export default function BitBimStudio({ complexData }) {
       });
     });
 
-    model.slabs.forEach((s) => {
+    // 108-06: the hull slabs with the derived stair openings (`oeffnungen_abgeleitet`, Shape.holes like the drawn slabs — no CSG)
+    mitTreppenLoechern(model, customStairs, gs).model.slabs.forEach((s) => {
       const shape = new THREE.Shape();
       s.polygon.forEach((p, i) => (i ? shape.lineTo(p.x, -p.z) : shape.moveTo(p.x, -p.z)));
       shape.closePath();
+      (Array.isArray(s.oeffnungen_abgeleitet) ? s.oeffnungen_abgeleitet : []).forEach((loch) => {
+        const path = new THREE.Path();
+        loch.points.forEach((p, i) => (i ? path.lineTo(p.x, -p.z) : path.moveTo(p.x, -p.z)));
+        path.closePath();
+        shape.holes.push(path);
+      });
       const lage = deckenLage(s, undefined, "huelle"); // 107-02: thickness/side from the slab (default 0.25 m on its plane)
       const geo = new THREE.ExtrudeGeometry(shape, { depth: lage.dicke_m, bevelEnabled: false });
       const m = new THREE.Mesh(geo, slabMat); m.castShadow = true; m.receiveShadow = true;
@@ -3851,17 +3907,47 @@ export default function BitBimStudio({ complexData }) {
         : new THREE.MeshStandardMaterial({ color: 0xb05a3c, roughness: 0.85, side: THREE.DoubleSide });
       // 107-10: roof library (shed: slope as set, see there); 108-01: eaves from globaleTraufhoehe_m (one function for 3D, IFC, section)
       const dd = globalesDach(model, dachform, dachneigung, gs);
-      const roof = dd && dd.ok ? dachMesh(dd, roofMat) : null;
+      const roof = dd && dd.ok ? dachMesh(dd, roofMat, wallMat) : null; // 108-03: gable triangles in the facade material
       if (roof) {
-        roof.userData.layer = "attika"; roof.userData.kind = "globalroof";
+        roof.traverse((c) => { c.userData.layer = "attika"; c.userData.kind = "globalroof"; });
         t.buildingGroup.add(roof);
       }
+      // 108-13: dormers on the global roof — faces from gauben.js (front, cheeks, dormer roof), window as a dark pane on the front; an
+      // overlay on the roof faces (no CSG cut). A dormer the library refuses (gable edge, front under the roof) is left out; the inspector says why.
+      const wandMat = new THREE.MeshStandardMaterial({ color: renderMode ? 0xe7e2d6 : 0xd9d4c7, roughness: 0.9, side: THREE.DoubleSide });
+      const glasMat = new THREE.MeshStandardMaterial({ color: 0x5b7f9a, roughness: 0.2, metalness: 0.3, side: THREE.DoubleSide });
+      gauben.forEach((g) => {
+        const erg = gaubeBerechnen(g, model, dd, gs);
+        if (!erg.ok) return;
+        const grp = new THREE.Group();
+        for (const fl of erg.flaechen) {
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute("position", new THREE.Float32BufferAttribute(gaubenDreiecke({ ...erg, flaechen: [fl] }), 3));
+          geo.computeVertexNormals();
+          const m = new THREE.Mesh(geo, fl.id === "dach" ? roofMat : wandMat); m.castShadow = true; m.receiveShadow = true;
+          m.userData.layer = "attika"; m.userData.kind = "gaube"; m.userData.id = g._idx; m.userData.teil = fl.id;
+          grp.add(m);
+        }
+        if (erg.fenster) {
+          const geo = new THREE.BufferGeometry();
+          // the pane 2 cm in front of the dormer front (towards the outside = away from the ridge line)
+          const n = { x: erg.frontLinie[0].x - erg.grundriss[3].x, z: erg.frontLinie[0].z - erg.grundriss[3].z };
+          const nl = Math.hypot(n.x, n.z) || 1;
+          const pts = erg.fenster.punkte3d.map((p) => ({ x: p.x + (n.x / nl) * 0.02, y: p.y, z: p.z + (n.z / nl) * 0.02 }));
+          geo.setAttribute("position", new THREE.Float32BufferAttribute(gaubenDreiecke({ ...erg, flaechen: [{ id: "front", punkte3d: pts }] }), 3));
+          geo.computeVertexNormals();
+          const m = new THREE.Mesh(geo, glasMat);
+          m.userData.layer = "openings"; m.userData.kind = "gaube"; m.userData.id = g._idx; m.userData.teil = "fenster";
+          grp.add(m);
+        }
+        t.buildingGroup.add(grp);
+      });
     }
 
     applyLayerVisibility(t, layersRef.current);
     // Hülle wurde neu gebaut — Aura auf Hüllwand/Auto-Fenster wiederherstellen
     applyPickHighlight(t, selectedRef.current, multiSelRef.current);
-  }, [model, envOpenings, autoOpenings, renderMode, facadePreset, huelleErscheinung, dachform, dachneigung, customSlabs, gs, durchbruchLoecher, vSolidsAktuell, seoJeSchluessel]);
+  }, [model, envOpenings, autoOpenings, renderMode, facadePreset, huelleErscheinung, dachform, dachneigung, customSlabs, customStairs, gauben, gs, durchbruchLoecher, vSolidsAktuell, seoJeSchluessel]);
 
   // Kamera nur bei Modelländerung neu ausrichten (nicht bei jeder Öffnung)
   useEffect(() => {
@@ -4015,6 +4101,26 @@ export default function BitBimStudio({ complexData }) {
       m.userData.layer = "shell"; m.userData.kind = "cslab"; m.userData.id = s._idx;
       t.customGroup.add(m);
     });
+    // 108-06: stairs — one box per tread (treppeKoerper: tread width × depth, massive down to the flight plate [ASSUMED]), placed along the
+    // direction of ascent from the antritt on the floor of `level`; picked as one element (kind "stair")
+    const stairMat = new THREE.MeshStandardMaterial({ color: 0xb8b2a7, roughness: 0.8 });
+    customStairs.forEach((st) => {
+      if (!st?.start) return;
+      const lvl = Math.round(Number(st.level) || 0);
+      const erg = treppeBerechnen(st, geschosshoehe(lvl, gs));
+      const y0 = elevationOf(lvl, gs);
+      const ang = -Math.atan2(erg.richtung.z, erg.richtung.x);
+      const b = Math.max(0.1, Number(st.breite_m) || 1);
+      treppeKoerper(erg).forEach((k) => {
+        const geo = new THREE.BoxGeometry(k.d1_m - k.d0_m, k.oben_m - k.unten_m, b);
+        const m = new THREE.Mesh(geo, stairMat); m.castShadow = true; m.receiveShadow = true;
+        const dm = (k.d0_m + k.d1_m) / 2;
+        m.position.set(st.start.x + erg.richtung.x * dm, y0 + (k.unten_m + k.oben_m) / 2, st.start.z + erg.richtung.z * dm);
+        m.rotation.y = ang;
+        m.userData.layer = "walls"; m.userData.kind = "stair"; m.userData.id = st._idx;
+        t.customGroup.add(m);
+      });
+    });
     // Dächer (Satteldach über Polygon-BBox)
     customRoofs.forEach((rf) => {
       if (!rf.points || rf.points.length < 3) return;
@@ -4083,13 +4189,13 @@ export default function BitBimStudio({ complexData }) {
     applyLayerVisibility(t, layersRef.current);
     applyPickHighlight(t, selectedRef.current, multiSelRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customWalls, customColumns, customWindows, customZones, customSlabs, customRoofs, storeyHeight, gs, aufbautenKey, model, durchbruchLoecher, durchbruchVormerkungen, vSolidsAktuell, seoJeSchluessel]);
+  }, [customWalls, customColumns, customWindows, customZones, customSlabs, customRoofs, customStairs, storeyHeight, gs, aufbautenKey, model, durchbruchLoecher, durchbruchVormerkungen, vSolidsAktuell, seoJeSchluessel]);
 
   // 3D-Auswahl hervorheben (Aura: emissive + pulsierende Kontur, inkl. Mehrfachauswahl)
   useEffect(() => { applyPickHighlight(three.current, selected, multiSel); }, [selected, multiSel]);
   // 106-03: the element group was rebuilt above - draw the previews of open proposals again (before the next frame)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { vorschauAlleNeu(); }, [customWalls, customColumns, customWindows, customZones, customSlabs, customRoofs, storeyHeight, gs, view]);
+  useEffect(() => { vorschauAlleNeu(); }, [customWalls, customColumns, customWindows, customZones, customSlabs, customRoofs, customStairs, gauben, storeyHeight, gs, view]);
 
   // Räume in die gemeinsame Quelle spiegeln (Massing-Studio zeigt sie dann mit an).
   // KD-18: NICHT unkonditional überschreiben. Der Store enthält auch die Zonen des
@@ -4122,6 +4228,8 @@ export default function BitBimStudio({ complexData }) {
       else if (hit && hit.kind === "zone" && hit.id != null) setSelected({ type: "zone", index: hit.id });
       else if (hit && hit.kind === "cslab" && hit.id != null) setSelected({ type: "slab", index: hit.id });
       else if (hit && hit.kind === "croof" && hit.id != null) setSelected({ type: "roof", index: hit.id });
+      else if (hit && hit.kind === "stair" && hit.id != null) setSelected({ type: "stair", index: hit.id }); // 108-06
+      else if (hit && hit.kind === "gaube" && hit.id != null) setSelected({ type: "gaube", index: hit.id }); // 108-13
       else if (hit && hit.kind === "wallShell") setSelected({ type: "hullwall", level: hit.level ?? 0, edge: hit.edge ?? 0 });
       else if (hit && (hit.kind === "window" || hit.kind === "door") && hit.scope === "auto") setSelected({ type: "autowin", kind: hit.kind, level: hit.level ?? 0, edge: hit.edge ?? 0 });
       else setSelected(null);
@@ -4186,7 +4294,7 @@ export default function BitBimStudio({ complexData }) {
     // 106-01: which element is this mesh? Reads the userData tags and the element arrays (bauteilInfoAus,
     // unit-tested); null for anything that is no element of the model (context buildings, parapet,
     // corner fillers): refused. Hull walls carry the GUID the IFC export gives them.
-    bauteilInfo: (ud) => bauteilInfoAus(ud, { customWalls, customColumns, customZones, customSlabs, customRoofs }, { projektId: projectId || null, uebersetze: tz }),
+    bauteilInfo: (ud) => bauteilInfoAus(ud, { customWalls, customColumns, customZones, customSlabs, customRoofs, customStairs, gauben }, { projektId: projectId || null, uebersetze: tz }),
   };
 
   // ---- Context buildings (echte OSM-Umgebung, extrudiert) ----
@@ -4506,9 +4614,30 @@ export default function BitBimStudio({ complexData }) {
                     <input type="checkbox" checked={dachIfc} onChange={(e) => { setDachIfc(e.target.checked); hatteDachIfcRef.current = true; }} className="accent-primary" data-testid="dach-ifc" aria-label={tz("Gebäudedach ins IFC")} />
                     {tz("ins IFC")}
                   </label>
+                  {/* 108-13: a new Schleppgaube on the first eave edge (gauben.js picks the roof face; a gable edge is refused in the inspector) */}
+                  <button type="button" className="rounded-md border border-border px-1.5 py-0.5 bg-card hover:bg-muted" data-testid="gaube-einfuegen" title={tz("Schleppgaube auf dem Gebäudedach einfügen")}
+                    onClick={() => {
+                      const fp = model.footprint || [];
+                      // the first edge that is an eave (its roof face exists); else edge 0 and the inspector says why
+                      const kante = fp.map((_, i) => i).find((i) => gaubeBerechnen({ edge: i, u_von_m: 0, u_bis_m: 1 }, model, globalDach, gs).ok) ?? 0;
+                      const g = neueGaube(fp, kante, idRef.current++);
+                      setGauben((alt) => [...alt, g]);
+                      setSelected({ type: "gaube", index: g._idx });
+                    }}>{tz("Gaube einfügen")}</button>
                 </>
               )}
             </label>
+            {/* 108-06: a new straight flight in the current storey (neueTreppe: in the largest room of the level, else the footprint; the user moves it) */}
+            <button type="button" className="rounded-md border border-border px-1.5 py-0.5 bg-card text-xs text-muted-foreground hover:bg-muted" data-testid="treppe-einfuegen" title={tz("Gerade Treppe im aktuellen Geschoss einfügen")}
+              onClick={() => {
+                const lvl = ebeneKlemmen(model, planLevel);
+                const raeume = customZones.filter((z) => z.level === lvl && Array.isArray(z.points) && z.points.length >= 3);
+                const flaeche = (/** @type {Array<{x: number, z: number}>} */ pts) => Math.abs(pts.reduce((s, p, i) => { const q = pts[(i + 1) % pts.length]; return s + p.x * q.z - q.x * p.z; }, 0)) / 2;
+                const groesster = raeume.sort((a, b) => flaeche(b.points) - flaeche(a.points))[0];
+                const t = neueTreppe(groesster ? groesster.points : model.footprint, lvl, geschosshoehe(lvl, gs), idRef.current++);
+                setCustomStairs((alt) => [...alt, t]);
+                setSelected({ type: "stair", index: t._idx });
+              }}>{tz("Treppe einfügen")}</button>
             {/* Attika (Brüstung) — nur beim Flachdach sinnvoll */}
             {dachform === "flach" && (
               <label className="flex items-center gap-1.5 text-xs text-slate-600">
@@ -4817,6 +4946,7 @@ export default function BitBimStudio({ complexData }) {
                 schichtFlaechen={planFlaechenMitSeo} schnittFlaechen={schnittAchse === "x" ? schnittMitSeo : null} // 107-10: plus the walls cut under a roof (plan and section, review); 107-09: intersected layers (solid cut or bands), null = today's plan; 108-01: the cut layers exist for A-A only
                 dach={globalDach} achse={schnittAchse} eingang={eingangOeffnung} baufeldUmriss={baufeldUmriss} baufeldMittig={baufeldMittig} // 108-01: roof in the section, section axis, entrance in effect, building envelope
                 layerVis={planLayerVis} envOpenings={huelleSichtbar ? sichtbarUnter(brille, envOpenings) : []} customZones={customZones} customSlabs={sichtbarUnter(brille, customSlabs)} customRoofs={sichtbarUnter(brille, customRoofs)} unit={unit}
+                customStairs={customStairs} gauben={gauben} geschosse={gs} // 108-06 / 108-13: stair symbol (this storey and the one above), dormer outline in the top storey
                 edit={view === "grundriss" && !sketchEdit ? { tool, draft, hover, customWalls: planWalls, customColumns: sichtbarUnter(brille, customColumns), customWindows: planWindows, selected, multiSel, onPoint, onHover: (/** @type {any} */ q, /** @type {any} */ roh, /** @type {any} */ e) => setHover(planFang(q, roh, e)), onFinish, onPick, onMarquee, onClear, onMoveWallPt, onMoveWall, onMoveColumn, onMoveOpening, onMovePolyVert, onMoveFootVert, onMoveFootEdge, onInsertFootVert, onDeleteFootVert, onGriffStart: griffStart, onGriffEnde: griffEnde } : undefined}
                 focus={focus2d}
                 overlayBounds={sketchEdit ? sketchEditBounds : sketchBounds}
@@ -4897,7 +5027,11 @@ export default function BitBimStudio({ complexData }) {
                     <button onClick={ctxDelete} className="w-full text-left px-3 py-1.5 text-rose-600 hover:bg-rose-50">Löschen</button>
                   </>
                 )}
-                {!["wall", "column", "zone", "cslab", "croof"].includes(ctxMenu.hit.kind) && !((ctxMenu.hit.kind === "window" || ctxMenu.hit.kind === "door") && ctxMenu.hit.id != null) && (
+                {/* 108-06 / 108-13: stairs and dormers — delete only (no +1 m copy: a dormer lives on its edge, a stair in its room) */}
+                {["stair", "gaube"].includes(ctxMenu.hit.kind) && ctxMenu.hit.id != null && (
+                  <button onClick={ctxDelete} className="w-full text-left px-3 py-1.5 text-rose-600 hover:bg-rose-50">Löschen</button>
+                )}
+                {!["wall", "column", "zone", "cslab", "croof", "stair", "gaube"].includes(ctxMenu.hit.kind) && !((ctxMenu.hit.kind === "window" || ctxMenu.hit.kind === "door") && ctxMenu.hit.id != null) && (
                   <div className="px-3 py-1.5 text-slate-400">Keine Optionen (Hüllen-/Umgebungselement)</div>
                 )}
               </div>
@@ -5056,6 +5190,54 @@ export default function BitBimStudio({ complexData }) {
                   ...(Object.keys(aufbautenLayer?.aufbauten || {}).length ? [field("Aufbau", <select className={selCls} value={s.composite || ""} data-testid="decke-aufbau" aria-label={tz("Projektaufbau")}
                     onChange={(e) => patchSlab(s._idx, { composite: e.target.value || undefined })}><option value="">—</option>{aufbautenListe().filter((c) => aufbautenLayer?.aufbauten?.[c.id]).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>)] : []),
                   ...zustandFelder(s, (p) => patchSlab(s._idx, p), zfOpts), ...sbFelder(s, "decke", "customSlabs", (p) => patchSlab(s._idx, p), { verschneidung: vInfo(`decke:${s._idx}`) })];
+              } else if (panelSel.type === "stair") {
+                // 108-06: straight flight — storey, antritt, direction, width, overrides; the derived values and the DIN 18065 warnings (never a block)
+                const st = customStairs.find((x) => x._idx === panelSel.index); if (!st) return null;
+                const lvl = Math.round(Number(st.level) || 0);
+                const erg = treppeBerechnen(st, geschosshoehe(lvl, gs));
+                const decke = deckeUeber(model, lvl, gs);
+                const loch = decke ? treppenLoch(st, erg, deckenLage(decke, gs, "huelle").unterkante_m - elevationOf(lvl, gs)) : null;
+                const warnungen = [...erg.warnungen, ...(loch?.warnung ? [loch.warnung] : [])];
+                title = tz("Treppe");
+                body = [
+                  field("Geschoss", <select className={selCls} value={lvl} data-testid="treppe-geschoss" onChange={(e) => patchStair(st._idx, { level: +e.target.value })}>{storeyOpts}</select>),
+                  field(tz("Antritt x / z (m)"), <span className="flex gap-1"><input type="number" className="w-16 rounded border border-border px-1 py-0.5 text-right bg-card" step="0.05" value={st.start.x} aria-label={tz("Antritt x (m)")} onChange={(e) => patchStair(st._idx, { start: { ...st.start, x: +e.target.value } })} />
+                    <input type="number" className="w-16 rounded border border-border px-1 py-0.5 text-right bg-card" step="0.05" value={st.start.z} aria-label={tz("Antritt z (m)")} onChange={(e) => patchStair(st._idx, { start: { ...st.start, z: +e.target.value } })} /></span>),
+                  field(tz("Richtung (°)"), <input type="number" className={numCls} step="15" value={Number(st.richtung_grad) || 0} data-testid="treppe-richtung" aria-label={tz("Richtung (°)")} onChange={(e) => patchStair(st._idx, { richtung_grad: ((+e.target.value % 360) + 360) % 360 })} />),
+                  field(tz("Laufbreite (m)"), <input type="number" className={numCls} step="0.05" min="0.5" max="3" value={Number(st.breite_m) || 1} data-testid="treppe-breite" aria-label={tz("Laufbreite (m)")} onChange={(e) => patchStair(st._idx, { breite_m: +e.target.value })} />),
+                  field(tz("Steigungen"), <input type="number" className={numCls} step="1" min="2" max="30" value={st.steigungen ?? ""} placeholder={String(erg.n)} data-testid="treppe-steigungen" aria-label={tz("Steigungen")} onChange={(e) => patchStair(st._idx, { steigungen: e.target.value === "" ? undefined : +e.target.value })} />),
+                  field(tz("Auftritt (m)"), <input type="number" className={numCls} step="0.01" min="0.15" max="0.5" value={st.auftritt_m ?? ""} placeholder={erg.a_m.toFixed(3)} aria-label={tz("Auftritt (m)")} onChange={(e) => patchStair(st._idx, { auftritt_m: e.target.value === "" ? undefined : +e.target.value })} />),
+                  field(tz("Deckenloch Breite (m)"), <input type="number" className={numCls} step="0.01" min="0.5" max="4" value={st.loch_breite_m ?? ""} placeholder={(Number(st.breite_m) || 1).toFixed(2)} aria-label={tz("Deckenloch Breite (m)")} onChange={(e) => patchStair(st._idx, { loch_breite_m: e.target.value === "" ? undefined : +e.target.value })} />),
+                  field(tz("Ergebnis"), <span data-testid="treppe-ergebnis">{treppenText(erg)} · {tz("Schrittmaß")} {(erg.schrittmass_m * 100).toFixed(1).replace(".", ",")} cm · {tz("Lauflänge")} {erg.laufLaenge_m.toFixed(2).replace(".", ",")} m</span>),
+                  field(tz("Deckenloch"), <span data-testid="treppe-loch">{loch ? `${loch.laenge_m.toFixed(2).replace(".", ",")} × ${loch.breite_m.toFixed(2).replace(".", ",")} m` : tz("keine Decke darüber")}</span>),
+                  ...(warnungen.length ? [field(tz("Hinweise"), <ul className="list-disc pl-4 text-warnung" data-testid="treppe-warnungen">{warnungen.map((w) => <li key={w.code}>{tz(w.text)} ({(w.wert * 100).toFixed(1).replace(".", ",")} cm)</li>)}</ul>)] : []),
+                ];
+              } else if (panelSel.type === "gaube") {
+                // 108-13: Schleppgaube on the global roof — edge, position, slope, setback, front height, window; derived depth/ridge and the checks
+                const g = gauben.find((x) => x._idx === panelSel.index); if (!g) return null;
+                const erg = gaubeBerechnen(g, model, globalDach, gs);
+                const fw = g.fenster === null ? null : { ...GAUBE_STANDARD.fenster, ...(g.fenster || {}) };
+                const kanten = (model.footprint || []).map((_, i) => i);
+                title = tz("Gaube");
+                body = [
+                  field(tz("Traufseite"), <select className={selCls} value={Number(g.edge) || 0} data-testid="gaube-kante" aria-label={tz("Traufseite")} onChange={(e) => patchGaube(g._idx, { edge: +e.target.value })}>{kanten.map((i) => <option key={i} value={i}>{tz("Kante")} {i}</option>)}</select>),
+                  field(tz("Lage von / bis (m)"), <span className="flex gap-1"><input type="number" className="w-16 rounded border border-border px-1 py-0.5 text-right bg-card" step="0.05" min="0" value={g.u_von_m} data-testid="gaube-von" aria-label={tz("Lage von (m)")} onChange={(e) => patchGaube(g._idx, { u_von_m: +e.target.value })} />
+                    <input type="number" className="w-16 rounded border border-border px-1 py-0.5 text-right bg-card" step="0.05" min="0" value={g.u_bis_m} data-testid="gaube-bis" aria-label={tz("Lage bis (m)")} onChange={(e) => patchGaube(g._idx, { u_bis_m: +e.target.value })} /></span>),
+                  field(tz("Neigung (°)"), <input type="number" className={numCls} step="1" min="5" max="45" value={g.neigung_grad ?? GAUBE_STANDARD.neigung_grad} data-testid="gaube-neigung" aria-label={tz("Neigung (°)")} onChange={(e) => patchGaube(g._idx, { neigung_grad: +e.target.value })} />),
+                  field(tz("Rücksprung (m)"), <input type="number" className={numCls} step="0.05" min="0" max="5" value={g.ruecksprung_m ?? GAUBE_STANDARD.ruecksprung_m} aria-label={tz("Rücksprung (m)")} onChange={(e) => patchGaube(g._idx, { ruecksprung_m: +e.target.value })} />),
+                  field(tz("Front OK über Boden (m)"), <input type="number" className={numCls} step="0.05" min="1" max="4" value={g.front_hoehe_m ?? GAUBE_STANDARD.front_hoehe_m} data-testid="gaube-front" aria-label={tz("Front OK über Boden (m)")} onChange={(e) => patchGaube(g._idx, { front_hoehe_m: +e.target.value })} />),
+                  field(tz("Fenster b × h / Brüstung (m)"), fw ? <span className="flex gap-1 items-center">
+                    <input type="number" className="w-14 rounded border border-border px-1 py-0.5 text-right bg-card" step="0.05" min="0.3" value={fw.b} aria-label={tz("Fensterbreite (m)")} onChange={(e) => patchGaube(g._idx, { fenster: { ...fw, b: +e.target.value } })} />
+                    <input type="number" className="w-14 rounded border border-border px-1 py-0.5 text-right bg-card" step="0.05" min="0.3" value={fw.h} aria-label={tz("Fensterhöhe (m)")} onChange={(e) => patchGaube(g._idx, { fenster: { ...fw, h: +e.target.value } })} />
+                    <input type="number" className="w-14 rounded border border-border px-1 py-0.5 text-right bg-card" step="0.05" min="0" value={fw.bruestung_m} aria-label={tz("Brüstung (m)")} onChange={(e) => patchGaube(g._idx, { fenster: { ...fw, bruestung_m: +e.target.value } })} />
+                    <button type="button" className="text-destructive hover:underline" onClick={() => patchGaube(g._idx, { fenster: null })}>{tz("ohne")}</button></span>
+                    : <button type="button" className="underline" onClick={() => patchGaube(g._idx, { fenster: { ...GAUBE_STANDARD.fenster } })}>{tz("Fenster einsetzen")}</button>),
+                  erg.ok
+                    ? field(tz("Ergebnis"), <span data-testid="gaube-ergebnis">{erg.breite_m.toFixed(2).replace(".", ",")} × {erg.tiefe_m.toFixed(2).replace(".", ",")} m · {tz("Front")} {erg.front_m.toFixed(2).replace(".", ",")} m · {tz("Gaubenfirst")} {erg.y_first_m.toFixed(2).replace(".", ",")} m</span>)
+                    : field(tz("Ergebnis"), <span className="text-warnung" data-testid="gaube-fehler">{tz(/** @type {{text: string}} */ (erg).text)}</span>),
+                  ...(erg.ok ? [field(tz("Abstände"), <span data-testid="gaube-abstaende">{tz("Giebel")} {erg.masse.abstandGiebel_m.toFixed(2).replace(".", ",")} m · {tz("unter First")} {erg.masse.abstandFirstVertikal_m.toFixed(2).replace(".", ",")} m</span>)] : []),
+                  ...(erg.ok && erg.warnungen.length ? [field(tz("Hinweise"), <ul className="list-disc pl-4 text-warnung" data-testid="gaube-warnungen">{erg.warnungen.map((w) => <li key={w.code}>{tz(w.text)} ({w.wert.toFixed(2).replace(".", ",")} m)</li>)}</ul>)] : []),
+                ];
               } else if (panelSel.type === "roof") {
                 const rf = customRoofs.find((x) => x._idx === panelSel.index); if (!rf) return null;
                 title = "Dach";
@@ -5235,7 +5417,7 @@ export default function BitBimStudio({ complexData }) {
               {/* Schnitthöhe (Schnittebene) */}
               <div className="px-3 py-1 border-t text-[11px] text-slate-600">
                 <label className="flex items-center justify-between gap-2">Schnitthöhe
-                  <input type="number" step="0.1" min="0.5" max="2.5" value={cutHeight} onChange={(e) => setCutHeight(+e.target.value)} className="w-16 rounded border border-slate-300 px-1 py-0.5 text-right bg-white" /></label>
+                  <input type="number" step="0.1" min="0.5" max="2.5" value={cutHeight} onChange={(e) => setCutHeight(+e.target.value)} className="w-16 rounded border border-border px-1 py-0.5 text-right bg-card" /></label>
               </div>
               {/* 107-12: structure display, view options and the standard rules (lazy block, part of this navigator) */}
               <React.Suspense fallback={null}>
@@ -5308,7 +5490,7 @@ export default function BitBimStudio({ complexData }) {
           <span className="font-medium text-slate-600">Maßstab 1:{scale}</span>
           <span>Geschoss: <b className="text-slate-700">{ebeneName(model, ebeneKlemmen(model, planLevel))}</b></span>
           <span>Werkzeug: <b className="text-slate-700">{PALETTE.flatMap((c) => c.items).find((i) => i.id === tool)?.label || "Pfeil"}</b></span>
-          <span>Wände: <b className="text-slate-700">{customWalls.length}</b> · Stützen: <b className="text-slate-700">{customColumns.length}</b> · Fenster: <b className="text-slate-700">{[...customWindows, ...envOpenings].filter((o) => o.kind !== "door" && o.kind !== "oeffnung").length}</b> · Türen: <b className="text-slate-700">{[...customWindows, ...envOpenings].filter((o) => o.kind === "door").length}</b>{[...customWindows, ...envOpenings].some((o) => o.kind === "oeffnung") && <> · {tz("Öffnungen")}: <b className="text-foreground">{[...customWindows, ...envOpenings].filter((o) => o.kind === "oeffnung").length}</b></>} · Räume: <b className="text-slate-700">{customZones.length}</b> · Decken: <b className="text-slate-700">{customSlabs.length}</b> · Dächer: <b className="text-slate-700">{customRoofs.length}</b></span>
+          <span>Wände: <b className="text-slate-700">{customWalls.length}</b> · Stützen: <b className="text-slate-700">{customColumns.length}</b> · Fenster: <b className="text-slate-700">{[...customWindows, ...envOpenings].filter((o) => o.kind !== "door" && o.kind !== "oeffnung").length}</b> · Türen: <b className="text-slate-700">{[...customWindows, ...envOpenings].filter((o) => o.kind === "door").length}</b>{[...customWindows, ...envOpenings].some((o) => o.kind === "oeffnung") && <> · {tz("Öffnungen")}: <b className="text-foreground">{[...customWindows, ...envOpenings].filter((o) => o.kind === "oeffnung").length}</b></>} · Räume: <b className="text-slate-700">{customZones.length}</b> · Decken: <b className="text-slate-700">{customSlabs.length}</b> · Dächer: <b className="text-slate-700">{customRoofs.length}</b>{customStairs.length > 0 && <> · {tz("Treppen")}: <b className="text-foreground">{customStairs.length}</b></>}{gauben.length > 0 && <> · {tz("Gauben")}: <b className="text-foreground">{gauben.length}</b></>}</span>
           {/* BIM-B: Auswahl-Zähler-Badge + BIM-A/C: Kontextaktionen der Auswahl */}
           {selCount > 0 && (
             <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold" title="Anzahl ausgewählter Elemente (Shift+Klick erweitert)">{selCount} ausgewählt</span>

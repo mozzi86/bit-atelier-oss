@@ -128,6 +128,7 @@ export const EN = {
   "Außenanlagen und Freiflächen": "External works and open spaces",
   "Ausstattung und Kunstwerke": "Furnishings and artworks",
   "Reserve / Unvorhergesehenes": "Contingency",
+  "Sonstige Baunebenkosten": "Other ancillary costs",
   "Kostenstand gesamt (ohne Aufteilung nach Kostengruppen)": "Total cost status (not split by cost group)",
   // 110-05: 3D view of the released building model
   "3D ansehen": "View in 3D",

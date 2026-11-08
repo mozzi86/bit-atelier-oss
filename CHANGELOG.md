@@ -10,6 +10,13 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.13.0] - 2026-11-08
+
+### Neu
+
+- **Treppe als Bauteil im Gebäudemodell:** „Treppe einfügen“ setzt einen geraden Lauf; Steigungen, Auftritt und Lauflänge folgen der Geschosshöhe und der Schrittmaßregel (2 s + a = 63 cm), Abweichungen von DIN 18065 werden als Hinweis gezeigt, nie gesperrt. Die Decke darüber bekommt das Deckenloch (Kopfhöhe 2,00 m) in 3D, IFC und Mengen. Grundriss mit Lauflinie, Pfeil, Schnittlinie und Beschriftung „n Stg s/a“, im Geschoss darüber der obere Teil mit dem Loch; PDF und DXF (Ebene A_TREPPE); IFC als IfcStair mit IfcStairFlight.
+- **Gauben auf dem Gebäudedach:** „Gaube einfügen“ setzt eine Schleppgaube auf eine Traufseite; Lage, Neigung, Rücksprung, Fronthöhe und Fenster sind im Inspektor einstellbar, Abstände zum Giebel und unter dem First werden angezeigt. Gauben erscheinen in 3D, im Grundriss des obersten Geschosses, in PDF/DXF (Ebene A_GAUBE), im IFC (je Gaube ein IfcRoof) und in den Mengen (KG 361).
+
 ## [1.12.0] - 2026-11-08
 
 ### Neu

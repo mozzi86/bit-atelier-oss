@@ -35,7 +35,13 @@ test("Browser-Schreibzugriff braucht das Token; Lesen, Kopplung und Werkzeuge oh
   assert.ok(lauf(mw, { path: "/buero/koppeln", headers: browser }).weiter);
   // Node tools (MCP server, harness, tests' API context): no Origin, no Fetch Metadata.
   assert.ok(lauf(mw, { headers: { "content-type": "application/json" } }).weiter);
-  assert.equal(vomBrowser({ headers: { "sec-fetch-mode": "cors" } }), true);
+  // 113-01 (B-111-01-01): Node's fetch sends "sec-fetch-mode: cors" on every request — that alone is no browser
+  // (until 113-01 this line asserted true, which refused every write of the MCP server with 401).
+  assert.equal(vomBrowser({ headers: { "sec-fetch-mode": "cors" } }), false);
+  assert.ok(lauf(mw, { headers: { "sec-fetch-mode": "cors", "content-type": "application/json" } }).weiter);
+  // Sec-Fetch-Site alone or Origin alone still marks a browser.
+  assert.equal(lauf(mw, { headers: { "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors" } }).status, 401);
+  assert.equal(lauf(mw, { headers: { origin: "http://localhost:5173" } }).status, 401);
 });
 
 /** Fake window: fetch answers /api/sitzung with the current token, writes check it. */

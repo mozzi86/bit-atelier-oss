@@ -67,9 +67,10 @@ export const LAGEPLAN_EBENEN = Object.freeze({
 const GRUNDRISS_EBENE = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({
   wand: "A_WAND", stuetze: "A_STUETZE", decke: "A_DECKE", dach: "A_DACH", schraffur: "A_SCHRAFFUR", raum_text: "A_RAUM_TEXT",
   ki_vermerk: "A_KI_VERMERK", oeffnung: "A_OEFFNUNG",
+  treppe: "A_TREPPE", gaube: "A_GAUBE", // 108-06 / 108-13: stair symbol, dormer outline (additive layers)
 }));
 /** Line types of the floor plan layers (the screen shows slabs dashed, roofs dash-dot; 106-11: AI marks dashed). */
-const GRUNDRISS_LINIENTYP = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({ A_DECKE: "STRICH", A_DACH: "STRICHPUNKT", A_KI_VERMERK: "STRICH" }));
+const GRUNDRISS_LINIENTYP = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({ A_DECKE: "STRICH", A_DACH: "STRICHPUNKT", A_KI_VERMERK: "STRICH", A_GAUBE: "STRICH" }));
 /** 106-11: layer of the visible model state line under the drawing. */
 const PLANKOPF_EBENE = "A_PLANKOPF";
 

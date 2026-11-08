@@ -5,7 +5,10 @@ import { dachSchnittLinie, GLOBAL_DACH_DICKE_M, umrissSpanneBeiZ } from "@core/l
 import { planEbene, globaleTraufhoehe_m } from "@core/lib/bauteil/ebenen.js"; // 107-13: storey levels incl. basements; 108-02: eaves
 import { useI18n, englischErgaenzen } from "@core/lib/i18n";
 import { EN as EN_EFH_108 } from "@core/lib/i18nTeile/efh-108.js"; // 108-01: lazy part (section marks)
-import { deckenLage, geschossHoeheAusModell } from "@core/lib/bauteil/hoehen.js"; // 107-02: the one slab thickness/side (was the literal 0.25)
+import { deckenLage, geschossHoeheAusModell, geschosshoehe, elevationOf } from "@core/lib/bauteil/hoehen.js"; // 107-02: the one slab thickness/side (was the literal 0.25)
+import { treppeBerechnen, treppenLoch, deckeUeber } from "@core/lib/bauteil/treppe.js"; // 108-06: stair symbol
+import { treppeSymbol } from "@core/lib/plan/treppeSymbol.js";
+import { gaubeBerechnen } from "@core/lib/bauteil/gauben.js"; // 108-13: dormer outline in the top storey
 import { fmtLen } from "@core/lib/useBuildingProgram";
 import { planDarstellung, schraffur45 } from "@core/lib/plan/brillen.js"; // 97-04: status look per lens
 // 107-12: one level-of-detail function and the view state (structure display, options, rules) — inert without the `ansicht` prop
@@ -124,7 +127,7 @@ function MaterialSchraffuren({ groesse }) {
   );
 }
 
-function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, overlay, overlayBounds, maxSvgH = 460, readOnly = false, massstab = null, fuellen = false, brille = null, huelleStatus = null, sw = false, werkstattWaende = null, schichtFlaechen = null, ansicht = null, detailMassstab = null, eingang = undefined, baufeldUmriss = null, baufeldMittig = false }) {
+function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, overlay, overlayBounds, maxSvgH = 460, readOnly = false, massstab = null, fuellen = false, brille = null, huelleStatus = null, sw = false, werkstattWaende = null, schichtFlaechen = null, ansicht = null, detailMassstab = null, eingang = undefined, baufeldUmriss = null, baufeldMittig = false, customStairs = null, gauben = null, geschosse = null, dach = null }) {
   const { t } = useI18n(); // 108-01: label "Baufeld"
   // 97-04: look of an element with renovation status under the chosen lens (null = today's look).
   const look = (status) => planDarstellung(brille, status, { sw });
@@ -474,6 +477,59 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
             {sel && edit?.tool === "arrow" && s.points.map((p, vi) => (
               <Handle key={`sh${vi}`} x={X(p.x)} y={Z(p.z)} onDown={(ev) => startDrag(ev, { kind: "polyVert", which: "slab", idx: s._idx, vi })} />
             ))}
+          </g>
+        );
+      })}
+      {/* ---- 108-06: Treppen — Symbol aus plan/treppeSymbol.js: dieses Geschoss (Ansicht „unten“) und das Geschoss darunter (oberer Teil + Deckenloch) ---- */}
+      {show("walls") && (customStairs || []).map((t, i) => {
+        if (!t?.start) return null;
+        const lvl = Math.round(Number(t.level) || 0);
+        if (lvl !== level && lvl !== level - 1) return null;
+        const erg = treppeBerechnen(t, geschosshoehe(lvl, geschosse));
+        const decke = deckeUeber(model, lvl, geschosse);
+        const loch = decke ? treppenLoch(t, erg, deckenLage(decke, geschosse, "huelle").unterkante_m - elevationOf(lvl, geschosse)) : null;
+        const teile = treppeSymbol(erg, lvl === level ? { ansicht: "unten" } : { ansicht: "oben", loch: loch?.points || null });
+        const sel = edit?.selected?.type === "stair" && edit.selected.index === t._idx;
+        const farbe = sel ? "#0f766e" : "#334155";
+        const onClick = (e) => { if (edit?.tool === "arrow" && edit.onPick) { e.stopPropagation(); edit.onPick({ type: "stair", index: t._idx }, e.shiftKey); } };
+        const P = (p) => `${X(p.x)},${Z(p.z)}`;
+        return (
+          <g key={`stair${i}`} data-treppe={t._idx} onClick={onClick} style={{ cursor: edit?.tool === "arrow" ? "pointer" : "inherit" }}>
+            {/* hit area: the flight outline, filled faintly so a click lands */}
+            <path d={erg.umriss.map((p, k) => `${k ? "L" : "M"}${P(p)}`).join(" ") + " Z"} fill={sel ? "#99f6e4" : "#e2e8f0"} fillOpacity={sel ? 0.5 : 0.25} stroke="none" />
+            {teile.map((s, k) => {
+              const sw1 = s.gewicht === "ansicht" ? 0.9 : 0.5;
+              const dash = s.strich === "gestrichelt" ? "3 2" : undefined;
+              if (s.art === "linie") return <line key={k} x1={X(s.pts[0].x)} y1={Z(s.pts[0].z)} x2={X(s.pts[1].x)} y2={Z(s.pts[1].z)} stroke={farbe} strokeWidth={sw1} strokeDasharray={dash} />;
+              if (s.art === "poly") return <path key={k} d={s.pts.map((p, j) => `${j ? "L" : "M"}${P(p)}`).join(" ") + " Z"} fill="none" stroke={farbe} strokeWidth={sw1} strokeDasharray={dash} />;
+              if (s.art === "kreis") return <circle key={k} cx={X(s.pts[0].x)} cy={Z(s.pts[0].z)} r={(s.radius_m || 0.1) * SCALE} fill="none" stroke={farbe} strokeWidth={0.5} />;
+              if (s.art === "pfeil") {
+                const [a, b] = s.pts; const L = Math.hypot(b.x - a.x, b.z - a.z) || 1; const ux = (b.x - a.x) / L, uz = (b.z - a.z) / L; const h = 0.25;
+                const l1 = { x: b.x - ux * h - uz * h * 0.5, z: b.z - uz * h + ux * h * 0.5 }, l2 = { x: b.x - ux * h + uz * h * 0.5, z: b.z - uz * h - ux * h * 0.5 };
+                return <g key={k}><line x1={X(a.x)} y1={Z(a.z)} x2={X(b.x)} y2={Z(b.z)} stroke={farbe} strokeWidth={0.6} /><polyline points={`${P(l1)} ${P(b)} ${P(l2)}`} fill="none" stroke={farbe} strokeWidth={0.6} /></g>;
+              }
+              if (s.art === "text") {
+                const w = Number(s.winkel_grad) || 0; const wk = w > 90 || w < -90 ? w + 180 : w;
+                return <text key={k} x={X(s.pts[0].x)} y={Z(s.pts[0].z)} fontSize={Math.max(7, 0.25 * SCALE)} fill={farbe} textAnchor="middle" dominantBaseline="middle" transform={`rotate(${-wk} ${X(s.pts[0].x)} ${Z(s.pts[0].z)})`} style={{ pointerEvents: "none" }}>{s.text}</text>;
+              }
+              return null;
+            })}
+          </g>
+        );
+      })}
+      {/* ---- 108-13: Gauben im obersten Geschoss — Umriss Front→Gaubenfirst gestrichelt (über der Schnittebene), Front als Linie, Fenster als Doppellinie ---- */}
+      {show("attika") && dach && (gauben || []).length > 0 && level === Math.max(0, ...(model.storeys || []).map((s) => Number(s.level)).filter((l) => Number.isFinite(l) && l >= 0)) && (gauben || []).map((g, i) => {
+        const erg = gaubeBerechnen(g, model, dach, geschosse);
+        if (!erg.ok) return null;
+        const sel = edit?.selected?.type === "gaube" && edit.selected.index === g._idx;
+        const farbe = sel ? "#9a3412" : "#78350f";
+        const onClick = (e) => { if (edit?.tool === "arrow" && edit.onPick) { e.stopPropagation(); edit.onPick({ type: "gaube", index: g._idx }, e.shiftKey); } };
+        const P = (p) => `${X(p.x)},${Z(p.z)}`;
+        return (
+          <g key={`gaube${i}`} data-gaube={g._idx} onClick={onClick} style={{ cursor: edit?.tool === "arrow" ? "pointer" : "inherit" }}>
+            <path d={erg.grundriss.map((p, k) => `${k ? "L" : "M"}${P(p)}`).join(" ") + " Z"} fill={sel ? "#fed7aa" : "#fef3c7"} fillOpacity={sel ? 0.5 : 0.3} stroke={farbe} strokeWidth={0.6} strokeDasharray="3 2" />
+            <line x1={X(erg.frontLinie[0].x)} y1={Z(erg.frontLinie[0].z)} x2={X(erg.frontLinie[1].x)} y2={Z(erg.frontLinie[1].z)} stroke={farbe} strokeWidth={1.2} />
+            {erg.fenster && <line x1={X(erg.fenster.punkte3d[0].x)} y1={Z(erg.fenster.punkte3d[0].z)} x2={X(erg.fenster.punkte3d[1].x)} y2={Z(erg.fenster.punkte3d[1].z)} stroke="#1d4ed8" strokeWidth={2} />}
           </g>
         );
       })}
@@ -1035,6 +1091,9 @@ function NorthArrow({ x, y }) {
  * @property {Array<object>} [customZones]
  * @property {Array<object>} [customSlabs]
  * @property {Array<object>} [customRoofs]
+ * @property {Array<object>|null} [customStairs]  108-06: stairs (symbol in this storey and the one above)
+ * @property {Array<object>|null} [gauben]        108-13: dormers (outline in the top storey)
+ * @property {any} [geschosse]                     storey table for the stair heights
  * @property {string} [unit] Längeneinheit (m | cm | mm)
  * @property {boolean} [fuellen] 75-16: viewBox folgt der Fläche (Füllmodus)
  * @property {object} [focus] Zoom-auf-Auswahl {bbox, nonce} | {reset, nonce}
@@ -1111,7 +1170,7 @@ function NorthArrow({ x, y }) {
  * darunter; interaktive Overlay-Elemente (z.B. Sketch-Handles) dürfen Events
  * bewusst behalten.
  */
-export default function BimPlan2D({ model, mode, level = 0, storeyHeight = 3, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, readOnly = false, overlay, overlayBounds, height = 520, elements, massstab = null, fuellen = false, brille = null, huelleStatus = null, sw = false, werkstattWaende = null, schichtFlaechen = null, schnittFlaechen = null, ansicht = null, detailMassstab = null, dach = null, achse = null, eingang = undefined, baufeldUmriss = null, baufeldMittig = false }) {
+export default function BimPlan2D({ model, mode, level = 0, storeyHeight = 3, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, readOnly = false, overlay, overlayBounds, height = 520, elements, massstab = null, fuellen = false, brille = null, huelleStatus = null, sw = false, werkstattWaende = null, schichtFlaechen = null, schnittFlaechen = null, ansicht = null, detailMassstab = null, dach = null, achse = null, eingang = undefined, baufeldUmriss = null, baufeldMittig = false, customStairs = null, gauben = null, geschosse = null }) {
   // 107-13: clamped between the lowest (basement) and the highest storey of the model; the old clamp only bounded the top by the
   // list LENGTH, which is wrong once basements are appended to the list. A model WITHOUT basements keeps the old behaviour for a
   // negative level (planEbene: no clamp downwards) - callers such as WohnungsFokus pass the level of a cellar zone (−1) and draw its
@@ -1129,7 +1188,7 @@ export default function BimPlan2D({ model, mode, level = 0, storeyHeight = 3, ed
     <div className="w-full bg-slate-50 flex items-center justify-center overflow-hidden" style={{ height }} data-bim-plan2d>
       {mode === "schnitt"
         ? <Schnitt model={model} storeyHeight={storeyHeight} layerVis={layerVis} unit={unit} maxSvgH={maxSvgH} brille={brille} huelleStatus={huelleStatus} sw={sw} schnittFlaechen={schnittFlaechen} ansicht={ansicht} dach={dach} achse={achse} />
-        : <Grundriss model={model} level={lvl} edit={editEff} layerVis={layerVis} envOpenings={envOpenings} customZones={customZones} customSlabs={customSlabs} customRoofs={customRoofs} unit={unit} focus={focus} overlay={overlay} overlayBounds={overlayBounds} maxSvgH={maxSvgH} readOnly={readOnly} massstab={massstab} fuellen={fuellen} brille={brille} huelleStatus={huelleStatus} sw={sw} werkstattWaende={werkstattWaende} schichtFlaechen={schichtFlaechen} ansicht={ansicht} detailMassstab={detailMassstab} eingang={eingang} baufeldUmriss={baufeldUmriss} baufeldMittig={baufeldMittig} />}
+        : <Grundriss model={model} level={lvl} edit={editEff} layerVis={layerVis} envOpenings={envOpenings} customZones={customZones} customSlabs={customSlabs} customRoofs={customRoofs} unit={unit} focus={focus} overlay={overlay} overlayBounds={overlayBounds} maxSvgH={maxSvgH} readOnly={readOnly} massstab={massstab} fuellen={fuellen} brille={brille} huelleStatus={huelleStatus} sw={sw} werkstattWaende={werkstattWaende} schichtFlaechen={schichtFlaechen} ansicht={ansicht} detailMassstab={detailMassstab} eingang={eingang} baufeldUmriss={baufeldUmriss} baufeldMittig={baufeldMittig} customStairs={customStairs} gauben={gauben} geschosse={geschosse} dach={dach} />}
     </div>
   );
 }

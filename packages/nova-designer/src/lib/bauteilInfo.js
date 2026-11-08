@@ -33,7 +33,7 @@ export function huellwandGuid(projektId, level, edge) {
 /**
  * Resolve a mesh to a building element of the studio.
  * @param {Record<string, any>|null|undefined} ud  mesh.userData of the hit mesh.
- * @param {{customWalls?: any[], customColumns?: any[], customZones?: any[], customSlabs?: any[], customRoofs?: any[]}} daten
+ * @param {{customWalls?: any[], customColumns?: any[], customZones?: any[], customSlabs?: any[], customRoofs?: any[], customStairs?: any[], gauben?: any[]}} daten
  *   The element arrays of the studio; elements are found by their persistent `_idx`.
  * @param {{projektId?: string|number|null, uebersetze?: (de: string) => string}} [opt]
  *   projektId: project of the model (part of the derived GUID); uebersetze: UI translation of the labels.
@@ -53,6 +53,8 @@ export function bauteilInfoAus(ud, daten, opt = {}) {
   else if (ud.kind === "zone") { const z = finde(daten.customZones, ud.id); if (z) info = { label: t("Raum"), guid: bauteilGuid(pid, "customZones", z), name: z.name }; }
   else if (ud.kind === "cslab") { const s = finde(daten.customSlabs, ud.id); if (s) info = { label: t("Decke"), guid: bauteilGuid(pid, "customSlabs", s) }; }
   else if (ud.kind === "croof") { const r = finde(daten.customRoofs, ud.id); if (r) info = { label: t("Dach"), guid: bauteilGuid(pid, "customRoofs", r) }; }
+  else if (ud.kind === "stair") { const s = finde(daten.customStairs, ud.id); if (s) info = { label: t("Treppe"), guid: bauteilGuid(pid, "customStairs", s) }; } // 108-06
+  else if (ud.kind === "gaube") { const g = finde(daten.gauben, ud.id); if (g) info = { label: t("Gaube"), guid: bauteilGuid(pid, "gauben", g) }; } // 108-13
   else if (ud.kind === "wallShell") info = { label: t("Hüllwand"), guid: huellwandGuid(pid, ud.level ?? 0, ud.edge ?? 0) };
   if (!info) return null;
   return { guid: info.guid, name: info.name || "", label: info.label, kind: ud.kind, bauteilId: ud.id ?? null, schluessel: bauteilSchluessel(ud), userData: ud };

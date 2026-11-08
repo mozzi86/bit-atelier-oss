@@ -327,6 +327,154 @@ def pruefen(datei: "Union[str, Path, ifcopenshell.file]", regeln: bool = True) -
     return bericht
 
 
+# ── reading helpers and the single-wall model (109-02: harness tools)
+
+#: Surface resistances in m²K/W for horizontal heat flow, DIN EN ISO 6946:2018 Tab. 7: R_si inside,
+#: R_se outside. An internal wall has an inside surface on both sides (R_si twice).
+R_SI_HORIZONTAL = 0.13
+R_SE = 0.04
+
+
+def u_wert(t: dict, k: "Katalog") -> dict:
+    """Thermal transmittance of a wall type, simplified method of DIN EN ISO 6946 (homogeneous layers).
+
+    U = 1 / (R_si + Σ d_i/λ_i + R_se) in W/(m²K); d in m, λ in W/(mK). Only for `IfcWall` (horizontal heat
+    flow — slabs need the flow direction, which the type does not know). External wall (pset_common
+    IsExternal true): R_si + R_se; otherwise R_si on both sides (IsExternal missing: computed as internal and
+    said so in `annahme`). [ASSUMED] every layer is homogeneous and not
+    ventilated (rear-ventilated cladding would need R_se only up to the air layer, not modelled here).
+    Returns `{u_W_m2K, r_gesamt_m2K_W, rsi, rse, schichten: [{baustoff, dicke_m, lambda_W_mK, r_m2K_W}], norm,
+    annahme}` or `{u_W_m2K: None, grund}` when it cannot be computed (stud layer = inhomogeneous, missing λ,
+    no layers, not a wall)."""
+    if t.get("ifc", {}).get("klasse") != "IfcWall":
+        return {"u_W_m2K": None, "grund": "nur für Wände berechnet (Wärmestrom horizontal)"}
+    schichten = t.get("schichten") or []
+    if not schichten:
+        return {"u_W_m2K": None, "grund": "Typ ohne Schichten"}
+    zeilen = []
+    for s in schichten:
+        b = k.baustoff(s["baustoff"])
+        name = b.get("kurz") or b.get("name") or s["baustoff"]
+        if s.get("staenderwerk"):
+            return {"u_W_m2K": None, "grund": f"Schicht {name} mit Ständerwerk ist inhomogen — U-Wert braucht das "
+                                              "Verfahren mit oberem/unterem Grenzwert (DIN EN ISO 6946 Abs. 6.7), "
+                                              "nicht berechnet"}
+        lam = (b.get("kennwerte") or {}).get("lambda_W_mK")
+        if not lam:
+            return {"u_W_m2K": None, "grund": f"Baustoff {name} ohne Wärmeleitfähigkeit λ"}
+        d = float(s["dicke_m"])
+        zeilen.append({"baustoff": s["baustoff"], "name": name, "dicke_m": d, "lambda_W_mK": float(lam),
+                       "r_m2K_W": round(d / float(lam), 4)})
+    exposition = (t.get("pset_common") or {}).get("IsExternal")
+    aussen = exposition is True
+    rse = R_SE if aussen else R_SI_HORIZONTAL
+    r = R_SI_HORIZONTAL + sum(z["r_m2K_W"] for z in zeilen) + rse
+    return {"u_W_m2K": round(1.0 / r, 3), "r_gesamt_m2K_W": round(r, 3), "rsi": R_SI_HORIZONTAL, "rse": rse,
+            "schichten": zeilen, "norm": "DIN EN ISO 6946:2018, vereinfachtes Verfahren (homogene Schichten)",
+            "annahme": "[ASSUMED] Schichten homogen und nicht hinterlüftet; "
+                       + ("Außenwand: Rsi 0,13 + Rse 0,04" if aussen else
+                          "Innenwand: Rsi 0,13 beidseitig" if exposition is False else
+                          "Lage unbekannt (IsExternal fehlt im Typ), als Innenwand gerechnet: Rsi 0,13 beidseitig")}
+
+
+def typ_info(t: dict, k: "Katalog", ausfuehrlich: bool = False) -> dict:
+    """Plain description of a catalogue type for tools and reports.
+
+    Always: schluessel, version, ebene, rohling, klasse, predefined_type, kurzname, langname, dicke_m (sum of
+    the layers in m, None for doors/windows), din276 (cost group or None), u_W_m2K. With `ausfuehrlich`:
+    schichten (baustoff key + name, dicke_m, rolle, staenderwerk), pset_common, oeffnung (breite_m/hoehe_m
+    of doors/windows), versionen (all versions of the key), basiert_auf, typ_guid and the full U-value record."""
+    from elmonkey.katalog import modell
+    n = modell.benennen(t, k)
+    sch = n.get("schichten") or []
+    u = u_wert(n, k)
+    aus: dict[str, Any] = {
+        "schluessel": n["schluessel"], "version": int(n.get("version", 1)), "ebene": n.get("ebene", "grundbestand"),
+        "rohling": bool(n.get("rohling")), "klasse": n["ifc"]["klasse"],
+        "predefined_type": n["ifc"].get("predefined_type"), "kurzname": n["kurzname"], "langname": n["langname"],
+        "dicke_m": round(modell.gesamtdicke(n), 4) if sch else None,
+        "din276": ((n.get("klassifizierung") or {}).get("din276") or {}).get("kg"),
+        "u_W_m2K": u.get("u_W_m2K"),
+    }
+    if not ausfuehrlich:
+        return aus
+    zeilen = []
+    for s in sch:
+        b = k.baustoff(s["baustoff"])
+        z = {"baustoff": s["baustoff"], "name": b.get("kurz") or b.get("name"), "dicke_m": s["dicke_m"],
+             "rolle": s.get("rolle")}
+        if s.get("staenderwerk"):
+            z["staenderwerk"] = s["staenderwerk"]
+        zeilen.append(z)
+    aus.update({
+        "schichten": zeilen, "pset_common": n.get("pset_common") or {},
+        "versionen": sorted(k.versionen.get(n["schluessel"], {})), "basiert_auf": n.get("basiert_auf"),
+        "typ_guid": typ_guid(n), "u_wert": u,
+    })
+    if n["ifc"]["klasse"] in ("IfcDoor", "IfcWindow"):
+        aus["oeffnung"] = {"breite_m": n.get("breite_m"), "hoehe_m": n.get("hoehe_m"),
+                           "oeffnungsart": n.get("oeffnungsart")}
+    return aus
+
+
+def wand_projekt(typ_ref: str, von: list[float], bis: list[float], hoehe_m: float, z0_m: float = 0.0,
+                 verstaerkungen: Optional[list[dict]] = None, staenderwand_als: str = "teile",
+                 oeffnungen: Optional[list[dict]] = None, schema: str = "IFC4", k: "Optional[Katalog]" = None,
+                 projekt_ordner: Union[str, Path, None] = None,
+                 geschoss: str = "EG") -> "tuple[ifcopenshell.file, dict]":
+    """IFC model of ONE straight wall from a catalogue type, with doors/windows, neutralised.
+
+    von/bis: wall axis start/end in the storey plane, metres [x, y]; hoehe_m: wall height in m; z0_m: base
+    above the storey in m; verstaerkungen: as `wand`; staenderwand_als: "teile" | "schichten";
+    oeffnungen: `[{typ (door/window type key), abstand_m (from the wall start to the opening's left edge, m),
+    bruestung_m (sill above the wall base, m, default 0)}]`. Site → building → storey `geschoss`, the wall
+    typed with its catalogue type (layered: IfcMaterialLayerSetUsage; stud wall: decomposed into parts).
+    Element GlobalIds are derived from type and axis, so the same call gives the same file.
+    Returns (IFC file, info `{bauplan, laenge_m, winkel_grad, oeffnungen, zaehler, nachlauf}`); ValueError /
+    KatalogFehler (German message) on unusable input — nothing is written here."""
+    import math
+    ek = _katalog_modul()
+    ei = _ifc_modul()
+    from elmonkey.katalog import bauen
+    k = k or katalog(projekt_ordner)
+    if staenderwand_als not in ("teile", "schichten"):
+        raise ValueError(f"staenderwand_als {staenderwand_als!r} unbekannt — erlaubt: teile, schichten")
+    try:
+        von2 = [float(von[0]), float(von[1])]
+        bis2 = [float(bis[0]), float(bis[1])]
+    except (TypeError, ValueError, IndexError) as e:
+        raise ValueError("von/bis: je zwei Zahlen [x, y] in Metern") from e
+    t = k.typ(typ_ref)
+    if t["ifc"]["klasse"] != "IfcWall":
+        raise ValueError(f"{t['schluessel']} ist kein Wandtyp ({t['ifc']['klasse']}) — bauen kann nur Wände")
+    laenge, winkel = bauen.achse(von2, bis2)
+    plan = ek.bauen.wand(k, typ_ref, laenge, float(hoehe_m), verstaerkungen, staenderwand_als)
+    s = ei.Schreiber(k, _schema(schema), f"BIT-Atelier Wand {plan.typ.get('kurzname_fest') or t['schluessel']}",
+                     **_schreiber_kw())
+    gs = s.struktur(geschoss)
+    for rel in gs.Decomposes or ():
+        rel.RelatingObject.Name = "Gebäude"  # elmonkey names the building of its sample "Muster"
+    bauteil_id = f"wand-{t['schluessel']}@{t.get('version', 1)}-{von2[0]:.3f},{von2[1]:.3f}-{bis2[0]:.3f},{bis2[1]:.3f}"
+    w = s.wand(plan, bauteil_id, von2, winkel, float(z0_m))
+    gesetzt = []
+    for i, o in enumerate(oeffnungen or [], 1):
+        if not isinstance(o, dict) or not o.get("typ"):
+            raise ValueError(f"oeffnungen[{i}]: {{typ, abstand_m, bruestung_m?}} erwartet")
+        ot = k.typ(str(o["typ"]))
+        if ot["ifc"]["klasse"] not in ("IfcDoor", "IfcWindow"):
+            raise ValueError(f"oeffnungen[{i}]: {ot['schluessel']} ist weder Tür noch Fenster")
+        abstand = float(o.get("abstand_m", 0.0))
+        bruestung = float(o.get("bruestung_m", 0.0))
+        s.oeffnung(w, plan, str(o["typ"]), f"{bauteil_id}-oeffnung-{i}", abstand, bruestung)
+        gesetzt.append({"typ": ot["schluessel"], "klasse": ot["ifc"]["klasse"], "abstand_m": abstand,
+                        "bruestung_m": bruestung})
+    f = s.fertig()
+    info = {"bauplan": plan.zusammenfassung(), "laenge_m": round(laenge, 4),
+            "winkel_grad": round(math.degrees(winkel), 4), "oeffnungen": gesetzt, "zaehler": dict(s.zaehler)}
+    info["nachlauf"] = _fertig(f, k)
+    return f, info
+
+
 def schreiben(f: "ifcopenshell.file", pfad: Union[str, Path]) -> Path:
     """Write an IFC file (creates the folder); returns the path."""
     p = Path(pfad)
@@ -339,5 +487,5 @@ __all__ = [
     "DATEN", "LAUFZEIT_ORDNER", "MUSTER_ROLLEN", "NAME_MATERIALBIBLIOTHEK", "NAME_MUSTER", "NAME_TYPBIBLIOTHEK",
     "NichtVerfuegbar", "PSET_PRAEFIX", "SCHEMATA", "TEXTUR_URL", "bearbeiten", "katalog", "laufzeit_typen",
     "materialbibliothek", "muster_projekt", "neutral", "pruefen", "schreiben", "speichern", "typ_guid",
-    "typbibliothek", "verfuegbar", "wand",
+    "typbibliothek", "typ_info", "u_wert", "verfuegbar", "wand", "wand_projekt",
 ]

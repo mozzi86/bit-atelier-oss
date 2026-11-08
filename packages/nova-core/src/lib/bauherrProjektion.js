@@ -381,11 +381,29 @@ export function projektionAus(art, entity, q, opt = {}) {
           else if (rest < -0.5) hinweise.push('Die Summe der Positionen liegt über dem angegebenen Kostenstand.');
         }
       }
-      // KG 700 (fees, expert reports, permit fees) is not in the LV. A row only with a
-      // structured value on the cost status (kg700_netto, optional kg700_brutto — fees
-      // like permit charges are partly VAT-free); otherwise a visible note.
+      // KG 700 (fees, expert reports, permit fees) is not in the LV. Rows only from
+      // structured values on the cost status, never parsed from the internal note:
+      //  - kg700_zeilen: [{kg, bezeichnung, betrag_netto, betrag_brutto?, ust_satz?}] —
+      //    one row per sub-group, so the client sees what each fee is for (decision
+      //    08.11.2026: full transparency, the architect's fee as its own row);
+      //  - else kg700_netto (+ optional kg700_brutto): one row "Baunebenkosten".
+      // Fees like permit charges are VAT-free, hence gross per row (ust_satz 0).
+      // A kg700_netto above the sum of kg700_zeilen adds the rest as its own row, so
+      // the KG 700 total the office states is never silently dropped.
       const kg700 = zahl(q.kg700_netto);
-      if (kg700 !== undefined) {
+      const kg700Zeilen = (Array.isArray(q.kg700_zeilen) ? q.kg700_zeilen : [])
+        .filter((/** @type {any} */ z) => z && typeof z === 'object' && zahl(z.betrag_netto) !== undefined)
+        .map((/** @type {any} */ z) => {
+          const n = /** @type {number} */ (zahl(z.betrag_netto));
+          const b = zahl(z.betrag_brutto) !== undefined ? zahl(z.betrag_brutto) : cent(n * (1 + ustSatz(z.ust_satz, ust)));
+          const kg = text(String(z.kg ?? '')) || '700';
+          return ohneLeere({ kg, bezeichnung: text(z.bezeichnung) || KG_NAMEN['700'], betrag_netto: cent(n), betrag_brutto: cent(b) });
+        });
+      if (kg700Zeilen.length) {
+        zeilen.push(...kg700Zeilen);
+        const rest = kg700 === undefined ? 0 : kg700 - kg700Zeilen.reduce((sum, z) => sum + (Number(z.betrag_netto) || 0), 0);
+        if (rest > 0.5) zeilen.push({ kg: '790', bezeichnung: 'Sonstige Baunebenkosten', betrag_netto: cent(rest), betrag_brutto: brutto(rest) });
+      } else if (kg700 !== undefined) {
         const kg700b = zahl(q.kg700_brutto);
         zeilen.push({ kg: '700', bezeichnung: KG_NAMEN['700'], betrag_netto: cent(kg700), betrag_brutto: kg700b !== undefined ? cent(kg700b) : brutto(kg700) });
       } else {

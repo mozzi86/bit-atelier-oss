@@ -45,7 +45,8 @@ import { typesafeRouter } from '../packages/nova-core/server/typesafe.js';
 import { pricesRouter } from '../packages/nova-ausschreibung/server/routes.js';
 import { geoRouter } from '../packages/nova-designer/server/routes.js';
 import { ifcTestPfad } from './ifcTestDatei.js';
-import { aenderungsStrom, aenderungenMelden, aenderungsRouter } from './aenderungsStrom.js';
+import { aenderungsStrom, aenderungenMelden, aenderungsRouter, clientAus, ereignisAusSchreiben, STROM_ENTITAETEN } from './aenderungsStrom.js';
+import { papierkorbRouter, papierkorbSperre } from '../packages/nova-core/server/papierkorbRouter.js';
 
 /** Path notation of this machine for the path rule (104-10). */
 const PLATTFORM = process.platform === 'win32' ? 'win32' : 'posix';
@@ -171,7 +172,19 @@ app.use('/api', authRouter());
 // 106-09: every write of the model record / IFC journal becomes one event of the project's change stream (before entitiesRouter).
 app.use('/api', aenderungenMelden(strom, db, { geraetVon: geraetVonAnfrage }));
 app.use('/api', aenderungsRouter(strom, { db, geraetVon: geraetVonAnfrage, nochGueltig: stromNochGueltig }));
+// 111-02 (K-07): the generic CRUD only reads the recycle bin (before entitiesRouter); deleting and restoring have their own routes.
+app.use('/api', papierkorbSperre());
 app.use('/api', entitiesRouter(db));
+// 111-02: soft delete - a record moves into the collection Papierkorb and comes back with the same id. A move of a streamed
+// entity (model record, IFC journal) is reported to the change stream like a generic write.
+app.use('/api', papierkorbRouter(db, {
+  nachAenderung: (w) => {
+    if (!STROM_ENTITAETEN.includes(w.entitaet)) return;
+    const e = ereignisAusSchreiben({ methode: w.methode, entitaet: w.entitaet, id: w.id, datensatz: w.datensatz, vorher: w.vorher,
+      geraet: geraetVonAnfrage(w.req), client: clientAus(w.req) });
+    if (e) strom.melden(e);
+  },
+}));
 app.use('/api', personalRouter(personalDb, personalBlobs, { lokalGebunden, anfrageEntfernt }));
 app.use('/api', blobsRouter(blobs));
 // 93-12: the Python harness as a child process (loopback only) — created here so "Nur lokale KI" can

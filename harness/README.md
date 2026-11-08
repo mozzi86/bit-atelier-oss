@@ -355,6 +355,22 @@ der Harness liefert nur die neutralen Daten und einen Adapter (`harness/bauteilk
 Exit-Code: 0 gültig und neutral, 1 Prüfung fehlgeschlagen oder Eingabe unbrauchbar, 2 falsche Argumente,
 3 Bauer nicht installiert.
 
+### Werkzeuge und Skill (Plan 109-02)
+
+Der Agent nutzt den Katalog über fünf Werkzeuge (beide Modi) und den Skill `/bauteilkatalog`:
+
+| Werkzeug | Was es tut | Schreibt |
+|---|---|---|
+| `bauteilkatalog_lesen` | Typen/Baustoffe filtern; mit `schluessel` ein Typ ausführlich (Schichten, U-Wert nach DIN EN ISO 6946, Versionen) | nichts |
+| `bauteilkatalog_bauen` | eine gerade Wand aus einem Wandtyp (Achse `von`/`bis` in m, `hoehe_m`, Türen/Fenster, Verstärkungen) | neue Datei `model/katalog-<typ>.ifc` |
+| `bauteilkatalog_bearbeiten` | Operationen → neuer Laufzeit-Typ bzw. neue Version | `bauteilkatalog/typen/<schluessel>.json` |
+| `bauteilkatalog_bibliothek` | Material-/Typbibliothek oder Muster als IFC4/IFC4X3 | neue Datei in `bauteilkatalog/ifc/` |
+| `bauteilkatalog_pruefen` | WHERE-Regeln, Proxys, Bauteile ohne Typ, Neutralität, benutzte Katalogtypen | nichts |
+
+Geschrieben wird nur im aktiven Projekt und nie überschrieben (belegter Name → `_v2`, `_v3`, …) — derselbe Weg
+wie `ifc_run schreibe`, ohne Rückfrage. Das Sprachprofil sieht diese Werkzeuge nicht. In der App erscheinen
+sie im Chat unter **Labor → KI Tool**; eine gebaute Wand liefert das Viewer-Ziel wie `ifc_run`.
+
 Beispiele (IFC4, über die CLI erzeugt): `examples/bauteilkatalog/`. Daten neu umsetzen (einmalig, aus einem
 gelieferten Datenordner): `tools/bauteilkatalog_neutral.py <ordner>`.
 

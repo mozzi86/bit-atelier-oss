@@ -140,6 +140,9 @@ server/.oeffnen-schluessel
 server/dateiquelle.json
 server/vor-import/
 
+# Plan 111-01: call log of the MCP server; a source checkout without BIT_DATA_DIR has server/ as data folder.
+server/ki-protokoll/
+
 # Manual acceptance (Station 3, 17.10.2026): own data folder of the test instance
 abnahme-daten/
 

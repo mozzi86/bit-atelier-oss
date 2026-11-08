@@ -210,6 +210,31 @@ describe('projektionAus — liest keine internen Felder', () => {
     assert.equal(ohne.gruppen.length, 1);
     assert.equal(ohne.summe_brutto, 952);
   });
+  it('Kosten: KG 700 aufgeschlüsselt — jede Leistung eine Zeile, Gebühren ohne USt, Summe unverändert', () => {
+    const gruppen = kostenAusLv([{ din276: '331', quantity: 1, unit_price: 1000 }]);
+    const ks = {
+      project_id: 'P1', stufe: 'kostenschaetzung', betrag: 1000, kg700_netto: 450, kg700_brutto: 9999,
+      kg700_zeilen: [
+        { kg: '731', bezeichnung: 'Architektenleistungen Gebäude', betrag_netto: 300 },
+        { kg: '771', bezeichnung: 'Gebühren Baugenehmigung', betrag_netto: 100, ust_satz: 0 },
+        { kg: '745', bezeichnung: 'Vermessung', betrag_netto: '20', betrag_brutto: 23.8 },
+        { kg: '799', bezeichnung: 'ohne Betrag' }, 'kaputt', null,
+      ],
+    };
+    const p = /** @type {any} */ (projektionAus('BauherrKosten', 'KostenStand', ks, { gruppen }));
+    assert.deepEqual(p.gruppen.slice(1).map((/** @type {any} */ g) => [g.kg, g.bezeichnung, g.betrag_netto, g.betrag_brutto]), [
+      ['731', 'Architektenleistungen Gebäude', 300, 357],
+      ['771', 'Gebühren Baugenehmigung', 100, 100],
+      ['745', 'Vermessung', 20, 23.8],
+      ['790', 'Sonstige Baunebenkosten', 30, 35.7],
+    ]);
+    assert.equal(p.summe_netto, 1450, 'KG 700 gesamt = kg700_netto, Rest als eigene Zeile');
+    assert.equal(p.summe_brutto, 1190 + 357 + 100 + 23.8 + 35.7, 'kg700_brutto wird bei Einzelzeilen nicht benutzt');
+    assert.equal(p.hinweis, undefined);
+    // Portal order: KG rows by number, the 700 rows after 600.
+    const d = portalAufbereiten({ BauherrKosten: [p] });
+    assert.deepEqual(d.abschnitte.BauherrKosten[0].gruppen.map((/** @type {any} */ g) => g.kg), ['300', '731', '745', '771', '790']);
+  });
   it('Portal sortiert KG-Zeilen, Reserve bleibt am Ende', () => {
     const d = portalAufbereiten({ BauherrKosten: [{ gruppen: [{ bezeichnung: 'Reserve / Unvorhergesehenes' }, { kg: '400' }, { kg: '300' }] }] });
     assert.deepEqual(d.abschnitte.BauherrKosten[0].gruppen.map((/** @type {any} */ g) => g.kg || g.bezeichnung), ['300', '400', 'Reserve / Unvorhergesehenes']);

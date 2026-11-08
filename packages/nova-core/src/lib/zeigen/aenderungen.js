@@ -532,6 +532,8 @@ const ARRAYS = [
   { name: "customZones", art: "zone", wort: "Raum", kuerzel: "R", quelle: "customZones" },
   { name: "customSlabs", art: "decke", wort: "Decke", kuerzel: "D", quelle: "customSlabs" },
   { name: "customRoofs", art: "dach", wort: "Dach", kuerzel: "Da", quelle: "customRoofs" },
+  { name: "customStairs", art: "treppe", wort: "Treppe", kuerzel: "T", quelle: "customStairs" }, // 108-06
+  { name: "gauben", art: "gaube", wort: "Gaube", kuerzel: "G", quelle: "gauben" }, // 108-13
 ];
 const OEFFNUNG_ARRAYS = [{ name: "customWindows", env: false }, { name: "envOpenings", env: true }];
 
@@ -578,7 +580,7 @@ export function bauteilImModell(modell, guid, opt = {}) {
 /** Next free `_idx` over all element arrays of a model (what the studio's idRef would hand out). @param {any} modell @returns {number} */
 export function naechsteFreieIdx(modell) {
   let max = 0;
-  for (const k of ["customWalls", "customColumns", "customZones", "customSlabs", "customRoofs", "customWindows", "envOpenings"]) {
+  for (const k of ["customWalls", "customColumns", "customZones", "customSlabs", "customRoofs", "customWindows", "envOpenings", "customStairs", "gauben"]) {
     for (const el of Array.isArray(modell?.[k]) ? modell[k] : []) if (Number.isFinite(el?._idx) && el._idx > max) max = el._idx;
   }
   return max + 1;

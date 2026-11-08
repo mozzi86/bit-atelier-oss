@@ -12,10 +12,14 @@
 //
 // Who is NOT asked for the token:
 //  - reads (GET/HEAD/OPTIONS);
-//  - non-browser clients on this machine (no Origin AND no Sec-Fetch-* header:
+//  - non-browser clients on this machine (no Origin AND no Sec-Fetch-Site:
 //    the MCP server, the AI harness, update and import tools, tests). A local
 //    process can read the data files directly anyway — the header guards
-//    against browsers, not against the machine's own programs;
+//    against browsers, not against the machine's own programs. Sec-Fetch-Mode
+//    alone does NOT count as a browser (plan 113-01, finding B-111-01-01):
+//    Node's global fetch (undici) sends "sec-fetch-mode: cors" on every request
+//    and cannot leave it out, so until 113-01 every write of the MCP server and
+//    of the Node migration tools was refused with 401;
 //  - the office-mode pairing routes (an unpaired device has no session yet;
 //    bueroRouter.js checks code, cookie and origin itself).
 //
@@ -51,14 +55,18 @@ export function sitzungsToken() {
 }
 
 /**
- * Whether a request comes from a browser: browsers send Origin on every
- * non-GET request and Sec-Fetch-* on every request (Fetch Metadata).
+ * Whether a request comes from a browser. Browsers send Origin on every request except GET/HEAD (Fetch
+ * standard, "append a request Origin header", same-origin included) and send Sec-Fetch-Site together with
+ * Sec-Fetch-Mode (Fetch Metadata, sent to potentially trustworthy targets such as localhost). So every
+ * browser WRITE carries Origin, and every Fetch-Metadata browser also Sec-Fetch-Site. Sec-Fetch-Mode is left
+ * out on purpose: Node's fetch (undici) sends "sec-fetch-mode: cors" on every request — counting it made the
+ * MCP server and the Node tools look like browsers (B-111-01-01, fixed in 113-01).
  * @param {{headers: Record<string, string|string[]|undefined>}} req
  * @returns {boolean}
  */
 export function vomBrowser(req) {
   const h = req.headers || {};
-  return Boolean(h.origin || h['sec-fetch-site'] || h['sec-fetch-mode']);
+  return Boolean(h.origin || h['sec-fetch-site']);
 }
 
 /**

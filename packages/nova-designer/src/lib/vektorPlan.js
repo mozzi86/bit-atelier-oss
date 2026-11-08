@@ -28,7 +28,10 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { wandGeometrie, huellSchnittWaende, ugSchnittWaende, schnittErsetzt, modellImSchnitt } from "@core/lib/bauteil/referenz.js";
 import { dachSchnittLinie, GLOBAL_DACH_DICKE_M, umrissSpanneBeiZ } from "@core/lib/bauteil/dachGeometrie.js"; // 108-01: roof triangle in the section; 108-02: collar-beam floor
-import { deckenLage, geschossHoeheAusModell } from "@core/lib/bauteil/hoehen.js"; // 107-02: slab thickness and side from the slab (default 0.25 m standing on its plane)
+import { deckenLage, geschossHoeheAusModell, geschosshoehe, elevationOf } from "@core/lib/bauteil/hoehen.js"; // 107-02: slab thickness and side from the slab (default 0.25 m standing on its plane)
+import { treppeBerechnen, treppenLoch, deckeUeber } from "@core/lib/bauteil/treppe.js"; // 108-06: stair symbol on the sheet
+import { treppeSymbol } from "@core/lib/plan/treppeSymbol.js";
+import { gaubeBerechnen } from "@core/lib/bauteil/gauben.js"; // 108-13: dormer outline in the top storey
 import { planDarstellung, schraffur45 } from "@core/lib/plan/brillen.js";
 import { statusFarbe, STATUS_DARSTELLUNG } from "@core/lib/plan/statusDarstellung.js";
 import { bauteilGuid } from "@core/lib/bauteil/steckbrief.js";
@@ -79,7 +82,7 @@ const POCHE = "#3f3f46";
 
 /**
  * Plan primitives in metres for one storey.
- * @param {{model: any, level: number, customWalls?: any[], customColumns?: any[], customSlabs?: any[], customRoofs?: any[], customZones?: any[], customWindows?: any[], envOpenings?: any[], brille?: any, huelleStatus?: string|null, massstab?: number, sw?: boolean, layerVis?: Record<string, boolean>|null, werkstattWaende?: any[]|null, kiMarken?: {guids: ReadonlyArray<string>, projektId?: string|number|null}|null, schichtFlaechen?: Map<string, {baender: Array<{schicht?: number, ringe: Array<Array<{x: number, z: number}>>}>}>|null, ansicht?: {strukturdarstellung?: string, optionen?: Partial<Record<string, boolean>>|null, regeln?: any[]|null}|null, eingang?: object|null}} e
+ * @param {{model: any, level: number, customWalls?: any[], customColumns?: any[], customSlabs?: any[], customRoofs?: any[], customZones?: any[], customWindows?: any[], envOpenings?: any[], brille?: any, huelleStatus?: string|null, massstab?: number, sw?: boolean, layerVis?: Record<string, boolean>|null, werkstattWaende?: any[]|null, kiMarken?: {guids: ReadonlyArray<string>, projektId?: string|number|null}|null, schichtFlaechen?: Map<string, {baender: Array<{schicht?: number, ringe: Array<Array<{x: number, z: number}>>}>}>|null, ansicht?: {strukturdarstellung?: string, optionen?: Partial<Record<string, boolean>>|null, regeln?: any[]|null}|null, eingang?: object|null, customStairs?: any[], gauben?: any[], dach?: any, geschosse?: any}} e
  *   eingang (108-01): the effective automatic entrance of the studio or null when it is off (no door symbol); undefined = as before
  * layerVis: the plan's layer switches (BitBimStudio DEFAULT_LAYERS ids; missing = visible) — the
  * export prints what the screen shows (before 22.10.2026 a hidden layer was printed anyway).
@@ -99,7 +102,7 @@ const POCHE = "#3f3f46";
  * @returns {{elemente: Array<{art: 'poly', pts: Array<{x: number, z: number}>, fill: string|null, stroke: string, breite_mm: number, dash?: string, deckkraft?: number, offen?: boolean, ebene?: string, guid?: string} | {art: 'text', x: number, z: number, text: string, groesse_mm: number, ebene?: string, ausrichtung?: 'links'|'rechts', guid?: string, farbe?: string}>, bbox: {x0: number, z0: number, x1: number, z1: number}|null, markiert?: string[]}}
  *   markiert: GUIDs that got a mark on this sheet (106-11); farbe: text colour (hex), default dark grey.
  */
-export function planGrafik({ model, level, customWalls = [], customColumns = [], customSlabs = [], customRoofs = [], customZones = [], customWindows = [], envOpenings = [], brille = null, huelleStatus = null, massstab = 100, sw = false, layerVis = null, werkstattWaende = null, kiMarken = null, schichtFlaechen = null, ansicht = null, eingang = undefined }) {
+export function planGrafik({ model, level, customWalls = [], customColumns = [], customSlabs = [], customRoofs = [], customZones = [], customWindows = [], envOpenings = [], brille = null, huelleStatus = null, massstab = 100, sw = false, layerVis = null, werkstattWaende = null, kiMarken = null, schichtFlaechen = null, ansicht = null, eingang = undefined, customStairs = [], gauben = [], dach = null, geschosse = null }) {
   const lg = linienGruppe(massstab);
   // 107-12: view state — structure display, options (opening symbols, hatches), graphic rules; all inert without `ansicht`
   const dg = detailgradFuer(massstab, brille);
@@ -134,6 +137,47 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
   const wirte = new Map();
   if (zeige("shell")) for (const s of auf(customSlabs)) if (s.points?.length >= 3) { el.push({ art: "poly", pts: s.points, fill: null, stroke: "#71717a", breite_mm: lg.duenn, dash: "4 2", ebene: "decke" }); merke("customSlabs", s, s.points); }
   if (zeige("attika")) for (const r of auf(customRoofs)) if (r.points?.length >= 3) { el.push({ art: "poly", pts: r.points, fill: null, stroke: "#71717a", breite_mm: lg.duenn, dash: "6 2 1 2", ebene: "dach" }); merke("customRoofs", r, r.points); }
+  // 108-06: stair symbol (plan/treppeSymbol.js) — this storey's flights seen from below the section plane, the storey below's upper part
+  // through the slab opening (ebene "treppe", DXF A_TREPPE). Arrow = line + two short strokes, circle = 12-gon (the sheet has no circle primitive).
+  if (zeige("walls")) {
+    const symbolTeile = (/** @type {any[]} */ teile) => {
+      for (const s of teile) {
+        const strich = s.gewicht === "ansicht" ? lg.ansicht : lg.duenn;
+        const dash = s.strich === "gestrichelt" ? "3 2" : undefined;
+        if (s.art === "linie") el.push({ art: "poly", pts: s.pts, fill: null, stroke: "#18181b", breite_mm: strich, dash, offen: true, ebene: "treppe" });
+        else if (s.art === "poly") el.push({ art: "poly", pts: s.pts, fill: null, stroke: "#18181b", breite_mm: strich, dash, ebene: "treppe" });
+        else if (s.art === "kreis") { const c = s.pts[0], r = s.radius_m || 0.1; el.push({ art: "poly", pts: Array.from({ length: 12 }, (_, i) => ({ x: c.x + r * Math.cos((i / 12) * 2 * Math.PI), z: c.z + r * Math.sin((i / 12) * 2 * Math.PI) })), fill: null, stroke: "#18181b", breite_mm: lg.duenn, ebene: "treppe" }); }
+        else if (s.art === "pfeil") {
+          const [a, b] = s.pts; const L = Math.hypot(b.x - a.x, b.z - a.z) || 1; const ux = (b.x - a.x) / L, uz = (b.z - a.z) / L; const k = 0.25;
+          el.push({ art: "poly", pts: [a, b], fill: null, stroke: "#18181b", breite_mm: lg.duenn, offen: true, ebene: "treppe" });
+          el.push({ art: "poly", pts: [{ x: b.x - ux * k - uz * k * 0.5, z: b.z - uz * k + ux * k * 0.5 }, b, { x: b.x - ux * k + uz * k * 0.5, z: b.z - uz * k - ux * k * 0.5 }], fill: null, stroke: "#18181b", breite_mm: lg.duenn, offen: true, ebene: "treppe" });
+        } else if (s.art === "text") el.push({ art: "text", x: s.pts[0].x, z: s.pts[0].z, text: s.text, groesse_mm: 2.5, ebene: "treppe" });
+      }
+    };
+    for (const t of Array.isArray(customStairs) ? customStairs : []) {
+      if (!t?.start) continue;
+      const lvl = Math.round(Number(t.level) || 0);
+      if (lvl !== level && lvl !== level - 1) continue;
+      const erg = treppeBerechnen(t, geschosshoehe(lvl, geschosse));
+      const decke = deckeUeber(model, lvl, geschosse);
+      const loch = decke ? treppenLoch(t, erg, deckenLage(decke, geschosse, "huelle").unterkante_m - elevationOf(lvl, geschosse)) : null;
+      symbolTeile(treppeSymbol(erg, lvl === level ? { ansicht: "unten" } : { ansicht: "oben", loch: loch?.points || null }));
+      merke("customStairs", t, erg.umriss);
+    }
+  }
+  // 108-13: dormers in the plan of the top storey — outline front → dormer ridge (dashed, above the section plane), the front as a line, the
+  // window as a double line on the front (ebene "gaube", DXF A_GAUBE); only with the global roof handed in (`dach`)
+  if (zeige("attika") && dach && Array.isArray(gauben) && gauben.length) {
+    const oben = Math.max(0, ...(model.storeys || []).map((s) => Number(s.level)).filter((l) => Number.isFinite(l) && l >= 0));
+    if (level === oben) for (const g of gauben) {
+      const erg = gaubeBerechnen(g, model, dach, geschosse);
+      if (!erg.ok) continue;
+      el.push({ art: "poly", pts: erg.grundriss, fill: null, stroke: "#18181b", breite_mm: lg.duenn, dash: "3 2", ebene: "gaube" });
+      el.push({ art: "poly", pts: erg.frontLinie, fill: null, stroke: "#18181b", breite_mm: lg.ansicht, offen: true, ebene: "gaube" });
+      if (erg.fenster) el.push({ art: "poly", pts: erg.fenster.punkte3d.slice(0, 2).map((p) => ({ x: p.x, z: p.z })), fill: null, stroke: "#18181b", breite_mm: lg.schnitt, offen: true, ebene: "gaube" });
+      merke("gauben", g, erg.grundriss);
+    }
+  }
   /**
    * 107-09: the cleaned layer outlines of a wall key drawn as poché, true when at least one ring was drawn (then its rectangle is not
    * drawn). An entry without a ring (review 107-09) keeps the rectangle — a wall never vanishes from the sheet.

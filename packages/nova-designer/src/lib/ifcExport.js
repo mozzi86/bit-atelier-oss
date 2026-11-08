@@ -44,7 +44,9 @@ import { oeffnungsMasse, oeffnungPasst, oeffnungMitte_m, wirtVon, ankerFuerWand,
 import { durchbruchSteckbriefe } from "@core/lib/bauteil/durchbruchSteckbrief.js";
 import { istBodenplatte, huellPlattenId, huellwandDaten, untersterLevel, globaleTraufhoehe_m } from "@core/lib/bauteil/ebenen.js";
 import { elevationOf, unterkante, wandHoehe, stuetzenHoehe, raumHoehe, geschosshoehe, deckenLage, dachNeigung_grad, geschosseAus, FLACHDACH_BIS_GRAD, DECKEN_STANDARD } from "@core/lib/bauteil/hoehen.js";
-import { dachBerechnen, dachVonDachelement, globalerDachAnstieg_m } from "@core/lib/bauteil/dachGeometrie.js";
+import { dachBerechnen, dachVonDachelement, globalerDachAnstieg_m, globalesDach } from "@core/lib/bauteil/dachGeometrie.js";
+import { treppeBerechnen, treppeKoerper, mitTreppenLoechern } from "@core/lib/bauteil/treppe.js"; // 108-06: IfcStair/IfcStairFlight, derived slab openings
+import { gaubeBerechnen } from "@core/lib/bauteil/gauben.js"; // 108-13: dormers on the global roof
 import { dachImRahmen, wandProfilUnterDach } from "@core/lib/bauteil/seoAnalytik.js";
 import { grenzWaende, nettoFlaeche_m2, raeumeMitNetto, polyAreaXZ } from "@core/lib/bauteil/raeume.js";
 
@@ -132,7 +134,7 @@ const TYPEN_9 = new Set(["IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcRoof"
  * @param {object} model createBuildingModel-Ergebnis
  * @param {{ customWalls?: Array<object>, customColumns?: Array<object>, customWindows?: Array<object>,
  *   envOpenings?: Array<object>, autoOpenings?: Array<object>, customZones?: Array<object>,
- *   customSlabs?: Array<object>, customRoofs?: Array<object>, storeyHeight?: number, geschosse?: Array<{level: number, name?: string, hoehe_m: number}>|null, projectName?: string,
+ *   customSlabs?: Array<object>, customRoofs?: Array<object>, customStairs?: Array<any>, gauben?: Array<any>, storeyHeight?: number, geschosse?: Array<{level: number, name?: string, hoehe_m: number}>|null, projectName?: string,
  *   timestamp?: number, onWarn?: ((msg: string, art?: string, daten?: Record<string, any>) => void)|null, netz?: object|null, werkstatt?: any, dachGlobal?: {form: string, neigung_grad?: number}|null, seo?: {waende: Map<string, any[]>}|null,
  *   steckbrief?: {projektId?: string|number|null, schichtdetails?: boolean}|null, tragwerk?: object|null, bauteilAttribute?: object|null, massing?: object|null, durchbrueche?: Array<object>|null, instanzTypen?: boolean,
  *   verschneidung?: {jeSchluessel: Map<string, Array<{umrisse: Array<Array<{x: number, z: number}>>}>>, decken?: Map<number, {kerne: boolean, waende: string[]}>|null}|null, raumGrenzen?: boolean }} [opts]
@@ -188,7 +190,7 @@ const TYPEN_9 = new Set(["IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcRoof"
  *   Qto_SpaceBaseQuantities (GrossFloorArea, NetFloorArea in m²) per space; absent/false = byte-identical.
  * @returns {string} STEP-Text
  */
-export function exportIFC(model, { customWalls = [], customColumns = [], customWindows = [], envOpenings = [], autoOpenings = [], customZones = [], customSlabs = [], customRoofs = [], storeyHeight = 3, geschosse = null, projectName = "BIT-Atelier", timestamp = 0, onWarn = null, netz = null, werkstatt = null, steckbrief: sbOpt = null, tragwerk = null, bauteilAttribute = null, massing = null, durchbrueche = null, instanzTypen = false, verschneidung = null, dachGlobal = null, seo = null, raumGrenzen = false } = {}) {
+export function exportIFC(model, { customWalls = [], customColumns = [], customWindows = [], envOpenings = [], autoOpenings = [], customZones = [], customSlabs = [], customRoofs = [], customStairs = [], gauben = [], storeyHeight = 3, geschosse = null, projectName = "BIT-Atelier", timestamp = 0, onWarn = null, netz = null, werkstatt = null, steckbrief: sbOpt = null, tragwerk = null, bauteilAttribute = null, massing = null, durchbrueche = null, instanzTypen = false, verschneidung = null, dachGlobal = null, seo = null, raumGrenzen = false } = {}) {
   // 97-02: workshop walls/doors carry the attribute table's decisions (status, KG, trade …).
   if (werkstatt && bauteilAttribute) werkstatt = werkstattMitAttributen(werkstatt, bauteilAttribute);
   // 107-02: storey source — the programme's storey table when it has one, else one height for all storeys (the old behaviour).
@@ -467,7 +469,8 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
   });
 
   // ---- Decken (Slabs) ----
-  (model.slabs || []).forEach((s) => {
+  // 108-06: the hull slabs with the derived stair openings (`oeffnungen_abgeleitet`); without stairs the same slab objects as before
+  mitTreppenLoechern(model, customStairs, gs).model.slabs.forEach((s) => {
     // 107-02: thickness and side from the slab (dicke_m/bezug), default 0.25 m standing on its plane = the old literals
     const lage = deckenLage(s, gs, "huelle");
     const solid = polySolid(s.polygon, lage.dicke_m);
@@ -477,13 +480,48 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
     // the base slab and the ceiling of the first basement would hash to the same GlobalId.
     const hTyp = istBodenplatte(model, s) ? "bodenplatte" : "decke";
     const hSb = sbOpt ? sb(mitAttributen({ ...s, id: huellPlattenId(s), points: s.polygon }, attributeVon(bauteilAttribute, hTyp === "bodenplatte" ? "hull-floor" : "hull-slab")), hTyp, "huelle-decke") : null;
+    const hPl = placement(0, 0, lage.unterkante_m);
     const slab = hSb
-      ? E("IFCSLAB", `${sguid(hSb)},$,${S(hSb.label)},$,$,${placement(0, 0, lage.unterkante_m)},${shape(solid)},$,.${hSb.ifc.typ}.`)
-      : E("IFCSLAB", `${G()},$,'Decke',$,$,${placement(0, 0, lage.unterkante_m)},${shape(solid)},$,.FLOOR.`);
+      ? E("IFCSLAB", `${sguid(hSb)},$,${S(hSb.label)},$,$,${hPl},${shape(solid)},$,.${hSb.ifc.typ}.`)
+      : E("IFCSLAB", `${G()},$,'Decke',$,$,${hPl},${shape(solid)},$,.FLOOR.`);
     // 107-13: the base slab lies in the lowest storey (EG without basements, as before), a basement ceiling in its basement
     contain(Math.max(untersterLevel(model), s.level), slab);
     // 108-02: the collar-beam floor above the attic storey (outline clipped to the roof in the model) says so in its data sheet
     if (hSb) datenblatt(slab, hSb, [["Dicke", lage.dicke_m], ...(s.kehlbalkenlage ? [["Kehlbalkenlage", true]] : [])]);
+    // 108-06: derived stair openings — IfcOpeningElement through the slab (+2 cm each side) + IfcRelVoidsElement, GUID from the stair id
+    (Array.isArray(s.oeffnungen_abgeleitet) ? s.oeffnungen_abgeleitet : []).forEach((loch) => {
+      const op = E("IFCOPENINGELEMENT", `'${bauteilGuid(projektId, "treppe-loch", { id: `${huellPlattenId(s)}:${loch.id}` })}',$,${S("Deckenöffnung Treppe")},$,$,${placement(0, 0, -0.02, 0, hPl)},${shape(polySolid(loch.points, lage.dicke_m + 0.04))},$,.OPENING.`);
+      E("IFCRELVOIDSELEMENT", `${G()},$,$,$,${slab},${op}`);
+    });
+  });
+
+  // ---- 108-06: Treppen (IfcStair → IfcStairFlight, one straight flight each) ----
+  // Body: one box per tread (treppeKoerper, massive flight [ASSUMED]) in the storey frame, placed at the floor of `level`. IFC4
+  // IfcStairFlight carries NumberOfRisers/NumberOfTreads/RiserHeight/TreadLength as attributes; Pset_StairCommon on the stair.
+  (customStairs || []).forEach((t, ti) => {
+    if (!t?.start) return;
+    const lvl = Math.round(Number(t.level) || 0);
+    const erg = treppeBerechnen(t, geschosshoehe(lvl, gs));
+    const y0 = elevationOf(lvl, gs);
+    const b = Math.max(0.1, Number(t.breite_m) || 1);
+    const q = erg.quer, d = erg.richtung;
+    const at = (/** @type {number} */ s, /** @type {number} */ qq) => ({ x: t.start.x + d.x * s + q.x * qq, z: t.start.z + d.z * s + q.z * qq });
+    const kasten = (/** @type {{d0_m: number, d1_m: number, unten_m: number, oben_m: number}} */ k) => {
+      const ring = [at(k.d0_m, -b / 2), at(k.d1_m, -b / 2), at(k.d1_m, b / 2), at(k.d0_m, b / 2)].map((p) => E("IFCCARTESIANPOINT", `(${f(p.x)},${f(p.z)})`));
+      const prof = E("IFCARBITRARYCLOSEDPROFILEDEF", `.AREA.,$,${E("IFCPOLYLINE", `(${[...ring, ring[0]].join(",")})`)}`);
+      const pos3 = E("IFCAXIS2PLACEMENT3D", `${E("IFCCARTESIANPOINT", `(0.,0.,${f(k.unten_m)})`)},${dirZ},${dirX}`);
+      return E("IFCEXTRUDEDAREASOLID", `${prof},${pos3},${dirZ},${f(k.oben_m - k.unten_m)}`);
+    };
+    const koerper = treppeKoerper(erg).map(kasten).join(",");
+    const id = t._idx ?? `t${ti}`;
+    const stairGuid = t.guid || bauteilGuid(projektId, "customStairs", t);
+    const stairPl = placement(0, 0, y0);
+    const stair = E("IFCSTAIR", `'${stairGuid}',$,${S("Treppe")},$,$,${stairPl},$,$,.STRAIGHT_RUN_STAIR.`);
+    const flight = E("IFCSTAIRFLIGHT", `'${bauteilGuid(projektId, "customStairs-lauf", { id })}',$,${S("Treppenlauf")},$,$,${placement(0, 0, 0, 0, stairPl)},${shape(koerper)},$,${erg.n},${erg.n - 1},${f(erg.s_m)},${f(erg.a_m)},.STRAIGHT.`);
+    E("IFCRELAGGREGATES", `${G()},$,$,$,${stair},(${flight})`);
+    contain(lvl, stair);
+    pset(stair, "Pset_StairCommon", [["NumberOfRiser", erg.n], ["NumberOfTreads", erg.n - 1], ["RiserHeight", erg.s_m], ["TreadLength", erg.a_m], ["IsExternal", false], ["LoadBearing", true]]);
+    pset(stair, "Pset_BIT_Bauteil", [["Bauteiltyp", "Treppe (gerade)"], ["Laufbreite", b], ["Lauflaenge", erg.laufLaenge_m], ["Schrittmass", erg.schrittmass_m], ["KG", "351"], ["Hinweise", erg.warnungen.map((w) => w.text).join("; ") || "—"]]);
   });
 
   // ---- Gezeichnete Decken + Dächer ----
@@ -551,7 +589,23 @@ export function exportIFC(model, { customWalls = [], customColumns = [], customW
       const roof = E("IFCROOF", `'${bauteilGuid(projektId, "dach-global", { id: "global" })}',$,${S("Dach")},$,$,${placement(0, 0, traufe)},${shape(dachPlatten(dd, DECKEN_STANDARD.dach.dicke_m))},$,.${DACHTYP[dd.form]}.`);
       contain(oben, roof);
       pset(roof, "Pset_BIT_Bauteil", [["Bauteiltyp", "Dach (Gebäudeform)"], ["Dachform", dd.form], ["Neigung", dd.neigung_grad], ["Firsthoehe", dd.anstieg_m]]);
+      // 108-13: dormers on this roof — IfcRoof USERDEFINED "Gaube" with one plate per face (front, cheeks, dormer roof; absolute heights,
+      // gauben.js on the same roof as the 3D view), the window as a Pset (no IfcWindow: the front is no wall of the model). A dormer the
+      // library refuses is reported and left out. IfcRoofTypeEnum has no DORMER, hence USERDEFINED + ObjectType.
+      const ddAbs = globalesDach(model, dachGlobal.form, Number(dachGlobal.neigung_grad), gs);
+      (gauben || []).forEach((g, gi) => {
+        const erg = gaubeBerechnen(g, model, ddAbs, gs);
+        if (!erg.ok) { warn(`Gaube ${g._idx ?? gi + 1}: ${/** @type {{text: string}} */ (erg).text} — nicht im IFC.`, WARNART_DACH, { nr: g._idx ?? null, gaube: true }); return; }
+        const platten = erg.flaechen.map((fl) => geneigtePlatte(fl.punkte3d, DECKEN_STANDARD.dach.dicke_m)).join(",");
+        const gaube = E("IFCROOF", `'${g.guid || bauteilGuid(projektId, "gauben", g)}',$,${S("Gaube")},$,${S("Schleppgaube")},${placement(0, 0, 0)},${shape(platten)},$,.USERDEFINED.`);
+        contain(erg.level, gaube);
+        pset(gaube, "Pset_BIT_Bauteil", [["Bauteiltyp", "Gaube (Schleppgaube)"], ["Breite", erg.breite_m], ["Tiefe", erg.tiefe_m], ["Neigung", Number(g.neigung_grad) || 20], ["Fronthoehe", erg.front_m], ["Gaubenfirst", erg.y_first_m], ["KG", "361"],
+          ...(erg.fenster ? [["Fenster_Breite", erg.fenster.b], ["Fenster_Hoehe", erg.fenster.h], ["Fenster_Bruestung", erg.fenster.bruestung_m]] : []),
+          ["Abstand_Giebel", erg.masse.abstandGiebel_m], ["Abstand_unter_First", erg.masse.abstandFirstVertikal_m]]);
+      });
     }
+  } else if ((gauben || []).length) {
+    warn(`${gauben.length} Gaube(n) nicht im IFC — dafür am Dach „ins IFC“ einschalten.`, WARNART_DACH, { nr: null, gaube: true });
   }
 
   // ---- Räume (Spaces) — Modell-Spaces + gezeichnete Zonen ----

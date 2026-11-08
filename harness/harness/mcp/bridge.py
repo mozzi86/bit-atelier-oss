@@ -47,8 +47,10 @@ DEFAULT_TOOLS: tuple[str, ...] = (
 )
 
 #: Tools that must never be offered, whatever config.yaml says: they confirm, change records directly, or send an image.
+#: 111-02: the speech profile never deletes or restores records either (delete_record, wiederherstellen).
 IMMER_GESPERRT: frozenset[str] = frozenset({
     "vorschlag_bestaetigen", "bestaetigen", "zeichenflaeche_ausfuehren", "create_record", "update_record", "ansicht_bild", "bauteil_waehlen",
+    "delete_record", "wiederherstellen",
 })
 
 #: Arguments removed from a call (and from the schema): the change tools act on the selection, never on a guid the model picked.

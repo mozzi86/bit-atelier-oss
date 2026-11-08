@@ -57,6 +57,9 @@ function fakeApi() {
         if (a.params?.befehl === 'weg') return json(504, { id: a.id, ok: false, status: 'not-run', error: 'keine Zeichenfläche' });
         return json(200, { id: a.id, ok: true, result: a.params });
       }
+      // 111-02: the preview reads before it writes (record, duplicate search, overview)
+      if (req.method === 'GET' && url.pathname === '/api/entities/Notiz') return json(200, []);
+      if (req.method === 'GET' && url.pathname === '/api/entities/Notiz/n1') return json(200, { id: 'n1', text: 'hallo', updated_date: '2026-11-08T10:00:00.000Z' });
       if (req.method === 'POST' && url.pathname === '/api/entities/Notiz') return json(201, { id: 'n1', ...JSON.parse(body) });
       if (req.method === 'PUT' && url.pathname === '/api/entities/Notiz/n1') return json(200, { id: 'n1', ...JSON.parse(body) });
       return json(404, { error: 'Not found' });
@@ -153,7 +156,7 @@ describe('MCP server — protocol', () => {
     const namen = r.result.tools.map((w) => w.name);
     // 106-04 added the viewer read tools; the full per-flag lists are checked against the doc in mcp-server-10604.test.js
     assert.deepEqual(namen, ['bit_status', 'list_entity_types', 'list_projects', 'get_project', 'list_records', 'get_record', 'zeichenflaeche_befehle',
-      'auswahl_abfragen', 'bauteil_waehlen', 'modell_bauteile', 'vorschlaege_lesen', 'pruefen', 'ansicht_bild']);
+      'auswahl_abfragen', 'bauteil_waehlen', 'modell_bauteile', 'vorschlaege_lesen', 'pruefen', 'ansicht_bild', 'papierkorb_lesen']); // 111-02: reading the bin
     for (const w of r.result.tools) {
       assert.equal(w.inputSchema.type, 'object', w.name);
       assert.ok(w.description.includes(' / '), `${w.name}: description DE / EN`);
@@ -233,17 +236,21 @@ describe('MCP server — read tools', () => {
 
 describe('MCP server — write permission', () => {
   for (const schalter of ['--schreiben', '--write']) {
-    it(`${schalter}: create_record und update_record erscheinen und schreiben`, async () => {
+    it(`${schalter}: create_record und update_record erscheinen und schreiben (mit ausfuehren)`, async () => {
       const api = await fakeApi();
       const mcp = starteMcp(api.url, [schalter]);
       try {
         const namen = (await mcp.rpc('tools/list')).result.tools.map((w) => w.name);
         assert.ok(namen.includes('create_record') && namen.includes('update_record'));
-        const neu = await mcp.werkzeug('create_record', { entity: 'Notiz', data: { text: 'hallo' } });
-        assert.deepEqual(neu.json, { id: 'n1', text: 'hallo' });
-        const geaendert = await mcp.werkzeug('update_record', { entity: 'Notiz', id: 'n1', data: { text: 'neu' } });
-        assert.equal(geaendert.json.text, 'neu');
-        assert.deepEqual(api.anfragen.filter((a) => a.methode !== 'GET').map((a) => `${a.methode} ${a.url}`), ['POST /api/entities/Notiz', 'PUT /api/entities/Notiz/n1']);
+        // 111-02: without ausfuehren only a preview; the write needs ausfuehren: true (update also the stand of the preview)
+        assert.equal((await mcp.werkzeug('create_record', { entity: 'Notiz', data: { text: 'hallo' } })).json.vorschau, true);
+        const neu = await mcp.werkzeug('create_record', { entity: 'Notiz', data: { text: 'hallo' }, ausfuehren: true });
+        assert.deepEqual(neu.json.datensatz, { id: 'n1', text: 'hallo' });
+        const vorschau = await mcp.werkzeug('update_record', { entity: 'Notiz', id: 'n1', data: { text: 'neu' } });
+        assert.equal(vorschau.json.stand, '2026-11-08T10:00:00.000Z');
+        const geaendert = await mcp.werkzeug('update_record', vorschau.json.naechster_schritt.argumente);
+        assert.equal(geaendert.json.datensatz.text, 'neu');
+        assert.deepEqual(api.anfragen.filter((a) => a.methode !== 'GET').map((a) => `${a.methode} ${a.url}`), ['POST /api/entities/Notiz', 'PUT /api/entities/Notiz/n1?stand=2026-11-08T10%3A00%3A00.000Z']);
         const ohneDaten = await mcp.werkzeug('create_record', { entity: 'Notiz', data: 'kein objekt' });
         assert.equal(ohneDaten.isError, true);
         // 104-04: drawing surface — token from the data folder, answers passed through
