@@ -4,9 +4,6 @@ module.exports = {
     content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}", "./packages/*/src/**/*.{ts,tsx,js,jsx}"],
   theme: {
   	extend: {
-  		// 101-05: work surface of the drawing pages (no page scroll) only on windows that are wide AND tall
-  		// enough — below 760 px height the drawing would get too small, normal page scrolling stays.
-  		screens: { ws: { raw: '(min-width: 1024px) and (min-height: 760px)' } },
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
@@ -72,6 +69,9 @@ module.exports = {
   				'2': 'hsl(var(--brand-2))',
   				foreground: 'hsl(var(--brand-foreground))'
   			},
+  			// Channel green of the existing "Per WhatsApp senden" button (#25D366).
+  			// Named so the portal does not carry an arbitrary hex class.
+  			whatsapp: '#25D366',
   			chart: {
   				'1': 'hsl(var(--chart-1))',
   				'2': 'hsl(var(--chart-2))',
@@ -114,5 +114,17 @@ module.exports = {
   		}
   	}
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+  	require("tailwindcss-animate"),
+  	// 101-05: work surface of the drawing pages (no page scroll) only on windows that are wide AND tall enough — below
+  	// 760 px height the drawing would get too small, normal page scrolling stays. Same media query as the
+  	// #hauptinhalt:has([data-arbeitsflaeche]) rule in packages/nova-core/src/index.css (change both together).
+  	// 112-01 (foreign review point 4): a VARIANT, not a `screens` entry. An object screen ({ raw: … }) makes Tailwind drop
+  	// every min-*/max-* variant ("The `min-*` and `max-*` variants are not supported with a `screens` configuration
+  	// containing objects") — since 101-05 `min-[1440px]:inline-flex` of the portfolio chip in Layout.jsx was never
+  	// generated. Cascade note: Tailwind 3.4 emits plugin variants BEFORE the responsive ones (sm…2xl, min-*), the old screen
+  	// came after 2xl. Checked 08.11.2026: no element combines a ws: utility with a breakpoint utility on the same property,
+  	// so nothing changes today — keep it that way (tests/unit/tailwindVarianten-11201.test.js guards it).
+  	({ addVariant }) => addVariant("ws", "@media (min-width: 1024px) and (min-height: 760px)"),
+  ],
 }

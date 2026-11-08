@@ -22,7 +22,7 @@ describe('zugriffRegeln — Rollen', () => {
     for (const r of ROLLEN_EXTERN) {
       const m = mitgliedschaftFuerExterne(r);
       assert.equal(m.can_edit_model || m.can_export_ifc || m.can_view_audit_reports, false, r);
-      assert.equal(m.can_submit_bid, r !== 'gast', r);
+      assert.equal(m.can_submit_bid, r === 'bidder' || r === 'investor', r);
     }
     assert.throws(() => mitgliedschaftFuerExterne('planner'), /Keine externe Rolle/);
   });
@@ -52,7 +52,7 @@ describe('zugriffRegeln — Einladung prüfen', () => {
     assert.equal(r.daten.email, 'bieter@example.de');
   });
   it('interne Rolle, fehlendes Projekt, Bieter ohne Vergabe, kaputte Ids → Klartext', () => {
-    assert.match(einladungPruefen({ ...basis, rolle: 'owner' }).fehler, /bidder, investor oder gast/);
+    assert.match(einladungPruefen({ ...basis, rolle: 'owner' }).fehler, /bidder, investor, gast oder bauherr/);
     assert.match(einladungPruefen({ ...basis, projekt_id: '' }).fehler, /projekt_id fehlt/);
     assert.match(einladungPruefen({ ...basis, vergabe_id: '' }).fehler, /vergabe_id fehlt/);
     assert.match(einladungPruefen({ ...basis, vergabe_id: '../x' }).fehler, /vergabe_id ist ungültig/);

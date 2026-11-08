@@ -10,6 +10,27 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.12.0] - 2026-11-08
+
+### Neu
+
+- **Bauherrenzugang (Cloud):** Das Büro gibt einem Bauherrn ausgewählte Projektinhalte frei (Kosten, Termine, Pläne, Dokumente, Gebäudemodell) und lädt ihn per Einladelink ein, auch ohne E-Mail-Versand. Der Bauherr sieht nur das Freigegebene in einem eigenen Portal und kann Rückmeldungen geben; das Büro sieht seine Ansicht vorab über „Ansicht als … Bauherr“.
+- **3D-Ansicht für den Bauherrn:** Ist das Gebäudemodell freigegeben, sieht der Bauherr im Portal dieselbe Szene wie im Gebäudemodell; sie wird nach jeder gespeicherten Änderung erneuert.
+- **Plan aus dem Gebäudemodell ablegen:** Ein Plan-PDF aus dem Gebäudemodell lässt sich direkt einem Plan der Planliste zuordnen.
+- **Massing-Kennzahlen fürs Einfamilienhaus:** Wohneinheiten und Stellplätze kommen aus Wohnungsmix und Stellplatzschlüssel der Baufeld-Planung und lassen sich von Hand überschreiben. Unterschiedliche Geschosshöhen werden je Geschoss gezeigt. Die BGF nach DIN 277 enthält den Keller; die Fläche für die GFZ zählt nur die Vollgeschosse.
+
+### Geändert
+
+- **Portfolio-Seite:** Zeigt nur noch Zahlen aus echten Projektangaben (Projektanzahl, Fläche laut Projektangaben, Screening) und die zuletzt geänderten Projekte. Kennzahlen ohne Datenquelle und der feste „Systemzustand“ sind entfernt.
+- **Schneller Start:** Die Module der lokalen Browser-Datenbank werden nur noch geladen, wenn sie gebraucht werden; die PDF-Bibliothek liegt in einem eigenen Paket.
+- **Kostenansicht für den Bauherrn:** Zeilen ergeben die Summe, Mehrwertsteuer je Position, Reserve und Nebenkosten (KG 700) sind sichtbar.
+
+### Behoben
+
+- **Kopfzeile:** Der Hinweis „Seite über alle Projekte“ neben der Projektauswahl erscheint ab 1440 px wieder (eine Tailwind-Einstellung hatte ihn seit Oktober unsichtbar gemacht).
+- **Gleichzeitiges Bearbeiten:** Änderungen an Personaldaten werden wie andere Datensätze gegen einen zwischenzeitlich geänderten Stand geprüft; eigene Kopfzeilen einer Anfrage überschreiben nicht mehr die Kennung des Tabs.
+- **Deinstallation:** Der Installer wartet, bis der Server wirklich beendet ist, bevor er Daten sichert oder löscht. Unter Windows erscheinen Fehlermeldungen mit Umlauten wieder lesbar.
+
 ## [1.11.0] - 2026-11-06
 
 ### Neu

@@ -12,8 +12,17 @@
 
 /** Internal roles after migration 0006. */
 export const ROLLEN_INTERN = Object.freeze(['owner', 'planner', 'leser']);
-/** External roles after migration 0006 — the only ones an invitation may grant. */
-export const ROLLEN_EXTERN = Object.freeze(['bidder', 'investor', 'gast']);
+/** External roles after migrations 0006 + 0016 (bauherr, 110-01) — the only ones an invitation may grant. */
+export const ROLLEN_EXTERN = Object.freeze(['bidder', 'investor', 'gast', 'bauherr']);
+
+/**
+ * Entities whose file the edge function `freigabe` signs (records.data.datei):
+ * the bidder's model view (0012) and the client projections with a file (0016).
+ * @type {ReadonlyArray<string>}
+ */
+export const FREIGABE_DATEI_ENTITAETEN = Object.freeze([
+  'ModellFreigabe', 'BauherrPlan', 'BauherrModell', 'BauherrDokument', 'BauherrFoto', 'BauherrRechnung',
+]);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -78,7 +87,7 @@ export function einladungPruefen(body) {
 
   const rolle = String(b.rolle || '');
   if (!ROLLEN_EXTERN.includes(rolle)) {
-    return { ok: false, fehler: 'rolle muss bidder, investor oder gast sein — interne Rollen vergibt nur das Freischalt-Skript.' };
+    return { ok: false, fehler: 'rolle muss bidder, investor, gast oder bauherr sein — interne Rollen vergibt nur das Freischalt-Skript.' };
   }
   if (!projektId) return { ok: false, fehler: 'projekt_id fehlt — eine Einladung gilt immer für ein Projekt.' };
   if (rolle === 'bidder' && !vergabeId) return { ok: false, fehler: 'vergabe_id fehlt — ein Bieter wird zu einer Vergabe eingeladen.' };
@@ -119,16 +128,19 @@ export function istIfcDatei(datei) {
  * Object path of a released file in bucket `freigaben`, built ONLY from the
  * record — never from the request (A-32: the neighbour file with the same stem
  * must not be reachable by a crafted name).
- * @param {{ org_id?: string, projekt_id?: string|null, vergabe_id?: string|null,
- *   data?: { datei?: string, project_id?: string, tender_id?: string } }} zeile ModellFreigabe row
- * @returns {string|null} '<org>/<projekt>/<vergabe|_allgemein>/<datei>' or null when not buildable
+ * Client projections (entity Bauherr…, 0016) live in the segment `_bauherr`:
+ * a bidder's general file and a client's plan never share a folder.
+ * @param {{ org_id?: string, entity?: string, projekt_id?: string|null, vergabe_id?: string|null,
+ *   data?: { datei?: string, project_id?: string, tender_id?: string } }} zeile ModellFreigabe or Bauherr… row
+ * @returns {string|null} '<org>/<projekt>/<vergabe|_allgemein|_bauherr>/<datei>' or null when not buildable
  */
 export function freigabePfad(zeile) {
   const org = String(zeile?.org_id || '');
   const projekt = String(zeile?.projekt_id || zeile?.data?.project_id || '');
-  const vergabe = String(zeile?.vergabe_id || zeile?.data?.tender_id || '') || '_allgemein';
+  const bauherr = String(zeile?.entity || '').startsWith('Bauherr');
+  const vergabe = bauherr ? '_bauherr' : (String(zeile?.vergabe_id || zeile?.data?.tender_id || '') || '_allgemein');
   const datei = String(zeile?.data?.datei || '');
-  if (!UUID.test(org) || !ID.test(projekt) || !(vergabe === '_allgemein' || ID.test(vergabe))) return null;
+  if (!UUID.test(org) || !ID.test(projekt) || !(vergabe === '_allgemein' || vergabe === '_bauherr' || ID.test(vergabe))) return null;
   if (!datei || /[\\/]/.test(datei) || datei.startsWith('.') || datei.length > 200) return null;
   return `${org}/${projekt}/${vergabe}/${datei}`;
 }

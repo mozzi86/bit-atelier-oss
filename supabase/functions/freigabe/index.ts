@@ -1,6 +1,8 @@
 // freigabe/index.ts — download of a released file WITH proof (Phase 74-01 Task 9).
 //
-// POST { org_id, record_id }  (record_id = a ModellFreigabe row, 0012)
+// POST { org_id, record_id }  (record_id = a ModellFreigabe row, 0012, or a
+//   client projection with a file — BauherrPlan/-Modell/-Dokument/-Foto/
+//   -Rechnung, 0016; list: FREIGABE_DATEI_ENTITAETEN)
 //   1. caller is a member of org_id (mitgliedFuerOrg — JWT verified);
 //   2. VISIBILITY is decided by the database under the CALLER's JWT: a client
 //      with the anon key plus the caller's bearer token reads the row, so RLS
@@ -24,7 +26,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { adminClient, AuthFehler, mitgliedFuerOrg, protokollieren } from "../_shared/auth.ts";
 import { fehlerAntwort, jsonAntwort, optionsAntwort } from "../_shared/cors.ts";
-import { freigabePfad, istIfcDatei } from "../_shared/zugriffRegeln.js";
+import { FREIGABE_DATEI_ENTITAETEN, freigabePfad, istIfcDatei } from "../_shared/zugriffRegeln.js";
 
 /** Lifetime of a signed URL, in seconds. */
 const GUELTIG_S = 60;
@@ -67,7 +69,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .select("id, org_id, entity, projekt_id, vergabe_id, data")
       .eq("id", recordId)
       .eq("org_id", mitglied.orgId)
-      .eq("entity", "ModellFreigabe")
+      .in("entity", [...FREIGABE_DATEI_ENTITAETEN])
       .maybeSingle() as { data: Record<string, any> | null; error: { message: string } | null };
     if (error) throw new AuthFehler(`Freigabe nicht lesbar: ${error.message}`, 500);
     if (!zeile) return await abweisen("nicht sichtbar");
@@ -80,7 +82,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (signiert.error || !signiert.data?.signedUrl) return await abweisen("Datei fehlt im Bucket");
 
     await protokollieren({
-      orgId: mitglied.orgId, projektId: zeile.projekt_id ?? null, aktion: "download", entity: "ModellFreigabe",
+      orgId: mitglied.orgId, projektId: zeile.projekt_id ?? null, aktion: "download", entity: String(zeile.entity),
       recordId, detail: { datei: zeile.data?.datei ?? null, vergabe_id: zeile.vergabe_id ?? null, gueltig_s: GUELTIG_S },
       akteur: mitglied.userId,
     });

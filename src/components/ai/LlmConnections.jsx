@@ -7,7 +7,7 @@ import {
   ShieldCheck, Zap, ListRestart, Cpu,
 } from "lucide-react";
 import { toast } from "sonner";
-import { bitApi } from "@core/api/bitApi";
+import { bitApi, kopfZeilenMischen } from "@core/api/bitApi";
 import { useI18n } from "@core/lib/i18n";
 // 83-03: presets (Anthropic, OpenAI, Gemini, Mistral, OpenRouter, Groq, DeepSeek,
 // Qwen, LM Studio, Ollama, custom) and the endpoint rule live in ONE module that
@@ -34,10 +34,13 @@ const EMPTY_FORM = { id: null, name: "", vorlage: "anthropic", provider: "anthro
 // 80-03 (DEMO-JOURNEY-08): der Server antwortet manchmal mit `fehler` statt
 // `error` (uneinheitlich gewachsen) — beide Felder lesen, statt auf „Fehler 503“
 // zurückzufallen, wenn der Body eine deutsche Meldung trägt.
+// 112-01 review (rule 8, same pattern as bitApi.request): the caller's headers are merged, not allowed to replace the
+// whole object - `...options` after `headers` silently dropped Content-Type for a caller with a header of its own.
 async function api(path, options = {}) {
+  const { headers, ...rest } = options;
   const res = await bitApi.apiFetch(`/api${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
+    ...rest,
+    headers: kopfZeilenMischen({ "Content-Type": "application/json" }, headers),
   });
   if (!res.ok) {
     let msg = `Fehler ${res.status}`;

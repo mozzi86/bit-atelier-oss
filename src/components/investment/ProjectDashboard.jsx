@@ -1,8 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@core/components/ui/card';
 import { Badge } from '@core/components/ui/badge';
-import { Progress } from '@core/components/ui/progress';
-import { FileSignature, User, Users } from 'lucide-react';
+import { FileSignature } from 'lucide-react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -46,25 +45,14 @@ export default function ProjectDashboard({ contracts, user }) {
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <h4 className="font-semibold text-sm mb-2">Beteiligte</h4>
-                <div className="flex items-center gap-4 text-xs text-slate-600">
-                  <div className="flex items-center gap-1"><User className="w-3 h-3"/>Grundstückseigentümer</div>
-                  <div className="flex items-center gap-1"><Users className="w-3 h-3"/>Projektentwickler</div>
-                  <div className="flex items-center gap-1"><User className="w-3 h-3"/>Architekt</div>
-                </div>
-              </div>
+              {/* 112-01 review (rule 8): the fixed "Beteiligte" row (landowner, developer, architect on every card) is gone
+                  for the same reason as the 30 % bar - the record names no parties, so the row stated roles nobody entered. */}
               <div>
                 <h4 className="font-semibold text-sm mb-2">Gesamtprojektwert</h4>
                 <p className="text-xl font-bold">{contract.contract_value.toLocaleString("de-DE")} €</p>
               </div>
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span>Projektfortschritt</span>
-                  <span className="font-semibold">30%</span>
-                </div>
-                <Progress value={30} className="h-2" />
-              </div>
+              {/* 112-01: the fixed "Projektfortschritt 30 %" bar is gone — a ProjectContract record has no progress
+                  field and nothing computes one; a made-up bar on a contract card reads like a reported figure. */}
             </CardContent>
           </Card>
         ))}

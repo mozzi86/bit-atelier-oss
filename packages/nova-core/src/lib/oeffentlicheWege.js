@@ -25,6 +25,8 @@ export const OEFFENTLICHE_WEGE = Object.freeze([
   '/rueckerstattung',
   '/cookies',
   '/barrierefreiheit',
+  // 110-06: invitation by link — the invitee has no account yet.
+  '/einladung',
 ]);
 
 /**

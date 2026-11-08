@@ -227,7 +227,9 @@ export function grenzenAus(werte, pufferProzent, benannte, benannteAssets = []) 
 }
 
 /** Named manual chunks of vite.config.js (manualChunks) that get a limit of their own. */
-export const BENANNTE_CHUNKS = Object.freeze(['three', 'charts', 'map', 'motion', 'planegcs', 'ifc', 'csg']); // 107-14: + csg (since 107-18 the JS part of manifold-3d, lazy)
+// 107-14: + csg (since 107-18 the JS part of manifold-3d, lazy). 112-01: + pdflib (manualChunk of vite.config.js) - without it a
+// later --schreiben would drop grenzen.chunks.pdflib and pdf-lib would fall back under chunk_max (one source, rule 9).
+export const BENANNTE_CHUNKS = Object.freeze(['three', 'charts', 'map', 'motion', 'planegcs', 'ifc', 'csg', 'pdflib']);
 
 /** WebAssembly assets that get a limit of their own (107-18: the binary of the CSG library manifold-3d, lazy). */
 export const BENANNTE_ASSETS = Object.freeze(['manifold']);

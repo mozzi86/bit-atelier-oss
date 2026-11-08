@@ -22,8 +22,30 @@ import {
   inBatches,
   blobIdsPruefen,
   importiere,
+  zeileMitZeitstempeln,
 } from '../../scripts/supabase-import.mjs';
 import { zeileAusDatensatz, neueId } from '@core/api/abfrage.js';
+
+// 06.11.2026 (110-04, first live run): a record without created_date stopped the
+// import with "null value in column created_date" — PostgREST fills a key that
+// is missing in some rows of a batch with NULL. Every row now carries both.
+describe('zeileMitZeitstempeln — Zeitstempel immer gesetzt', () => {
+  const ORG = '11111111-1111-4111-8111-111111111111';
+  const JETZT = '2026-11-06T12:00:00.000Z';
+  it('eigene Werte bleiben erhalten', () => {
+    const z = zeileMitZeitstempeln('Project', ORG, { id: 'p1', created_date: '2026-01-01T00:00:00Z', updated_date: '2026-02-01T00:00:00Z' }, JETZT);
+    assert.equal(z.created_date, '2026-01-01T00:00:00Z');
+    assert.equal(z.updated_date, '2026-02-01T00:00:00Z');
+  });
+  it('fehlt eines, gilt das andere; fehlen beide, der Importzeitpunkt', () => {
+    const a = zeileMitZeitstempeln('LVPosition', ORG, { id: 'l1', updated_date: '2026-03-01T00:00:00Z' }, JETZT);
+    assert.equal(a.created_date, '2026-03-01T00:00:00Z');
+    const b = zeileMitZeitstempeln('LVPosition', ORG, { id: 'l2' }, JETZT);
+    assert.equal(b.created_date, JETZT);
+    assert.equal(b.updated_date, JETZT);
+    assert.equal('created_date' in b.data, false, 'nicht im jsonb');
+  });
+});
 
 // --- Fixtures in a temp dir (never touch server/db.json) ---------------------
 

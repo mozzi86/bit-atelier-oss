@@ -40,6 +40,15 @@ const FUNKTIONEN_AUTHENTICATED = [
   'rueckfrage_beantworten(p_tender text, p_frage text, p_antwort text)',
   'als_uuid(p text)', 'blob_ist_modell(p_org uuid, p_name text)',
   'set_updated_date()',
+  // 0016 (110-01): client role — guards, whitelists, release/withdraw/answer.
+  'projekt_rolle(p_org uuid, p_projekt text)', 'entity_zielrolle(p_entity text)',
+  'entity_extern_schreibbar(p_entity text)', 'ist_zielgruppe(p_org uuid, p_projekt text, p_entity text)',
+  'bauherr_felder(p_art text)', 'bauherr_bereinigen(p_art text, p_inhalt jsonb)', 'bauherr_quellen(p_art text)',
+  'bauherr_freigeben(p_art text, p_quelle text, p_inhalt jsonb, p_datei text)',
+  'bauherr_zuruecknehmen(p_projektion text)', 'bauherr_antworten(p_rueckmeldung text, p_antwort text)',
+  // 0017 (110-06): invitation by link — create (owner), redeem (signed-in invitee), withdraw (owner).
+  'einladungscode_erstellen(p_projekt text, p_rolle text, p_tage integer, p_nutzungen integer)',
+  'einladungscode_einloesen(p_code text)', 'einladungscode_widerrufen(p_id uuid)',
 ];
 
 /**
@@ -48,7 +57,7 @@ const FUNKTIONEN_AUTHENTICATED = [
  * @type {ReadonlyArray<string>}
  */
 export const SOLL = Object.freeze([
-  ...['orgs', 'org_members', 'records', 'projekt_zugang', 'vergabe_teilnehmer', 'entity_regeln', 'submission']
+  ...['orgs', 'org_members', 'records', 'projekt_zugang', 'vergabe_teilnehmer', 'entity_regeln', 'submission', 'einladungscode']
     .map((t) => `authenticated|table|${t}|SELECT`),
   'authenticated|view|zugriffsprotokoll_sicht|SELECT',
   'authenticated|table|records|DELETE',

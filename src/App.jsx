@@ -19,12 +19,11 @@ import { istOeffentlicherWeg } from '@core/lib/oeffentlicheWege';
 // host has no SPA fallback for sub-paths, deep links would otherwise be 404.
 const Router = SERVERLOS ? HashRouter : BrowserRouter;
 import PageNotFound from '@core/lib/PageNotFound';
-import { ModulFehlergrenze } from '@core/components/ModulFehlergrenze';
-import { exportProjekt } from '@core/api/projektDatei';
+import { ModulFehlergrenze, TeilFehlergrenze } from '@core/components/ModulFehlergrenze';
 import Layout from '@/Layout';
 import { AuthProvider, useAuth } from '@core/lib/AuthContext';
 import { ProjectProvider } from '@core/lib/ProjectContext';
-import { ZugriffProvider } from '@core/lib/ZugriffContext.jsx';
+import { ZugriffProvider, useZugriff } from '@core/lib/ZugriffContext.jsx';
 import { ladeZugriffsdaten } from '@/lib/zugriffLader.js';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Seitenwechsel from '@/components/Seitenwechsel';
@@ -80,6 +79,8 @@ const Correspondence = React.lazy(() => import('./pages/Correspondence'));
 // Login + password reset (57-02 Task 4) — @core pages, lazy like every route.
 const Anmeldung = React.lazy(() => import('@core/pages/Anmeldung'));
 const PasswortZuruecksetzen = React.lazy(() => import('@core/pages/PasswortZuruecksetzen'));
+// 110-06: invitation by link (code → own e-mail + password or Google → access to one project).
+const Einladung = React.lazy(() => import('@core/pages/Einladung'));
 // Access request with manual approval (83-02) — public, like the login.
 const Registrieren = React.lazy(() => import('@core/pages/Registrieren'));
 // Legal pages (57-06 Task 1). Public, sessionless, in every build mode.
@@ -91,6 +92,10 @@ const Cookies = React.lazy(() => import('@core/pages/Cookies'));
 const Barrierefreiheit = React.lazy(() => import('@core/pages/Barrierefreiheit'));
 // Bidder portal (74-01 Task 14): the whole app for external roles in the cloud build.
 const BieterPortal = React.lazy(() => import('./pages/BieterPortal'));
+// Client portal (110-02): the whole app for the role bauherr in the cloud build.
+const BauherrPortal = React.lazy(() => import('./pages/BauherrPortal'));
+// Office side of the client portal (110-03): releases, preview, invitation, feedback.
+const Bauherrenzugang = React.lazy(() => import('./pages/Bauherrenzugang'));
 
 // Routes that render outside the auth gate: the list lives in @core so a unit
 // test can check that every entry also has a <Route> below (57-06 Task 8).
@@ -174,6 +179,7 @@ const HauptApp = () => {
     <Route path="/Baustelle" element={<Baustelle />} />
     <Route path="/ModelVersions" element={<ModelVersions />} />
     <Route path="/Modellfreigabe" element={<Modellfreigabe />} />
+    <Route path="/Bauherrenzugang" element={<Bauherrenzugang />} />
     <Route path="/ModelCheck" element={<ModelCheck />} />
     <Route path="/IfcViewer" element={<IfcViewer />} />
     <Route path="/SketchStudio" element={<PlanSketchStudio />} />
@@ -211,12 +217,21 @@ const HauptApp = () => {
   );
 };
 
-/** 70-07: saves the browser-held project as .bitproj from the error card (serverless builds only). */
-const projektSichern = () => exportProjekt();
+/**
+ * 70-07: saves the browser-held project as .bitproj from the error card (serverless builds only).
+ * 112-01: imported on click — a static import pulled projektDatei → demoDb → demoIdb into the entry chunk of every
+ * build (also server and cloud, where the browser database is never used). Why the import resolves in practice even when
+ * a chunk load is what crashed the page: in the serverless build SpeicherStatus (header, mounted with the layout) imports
+ * projektDatei statically, so the module is already in memory; should the import fail anyway, Fehlerkarte catches it and
+ * shows "Sichern fehlgeschlagen" (ModulFehlergrenze.jsx).
+ * @returns {Promise<string>} the offered file name (exportProjekt)
+ */
+const projektSichern = async () => (await import('@core/api/projektDatei')).exportProjekt();
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, isAuthenticated, user } = useAuth();
   const location = useLocation();
+  const zugriff = useZugriff();
 
   // Login and password reset live OUTSIDE the gate (57-02, review correction
   // #1): the recovery session only exists once /passwort-zuruecksetzen has
@@ -244,6 +259,7 @@ const AuthenticatedApp = () => {
           <Route path="/anmeldung" element={<Anmeldung />} />
           <Route path="/registrieren" element={<Registrieren />} />
           <Route path="/passwort-zuruecksetzen" element={<PasswortZuruecksetzen />} />
+          <Route path="/einladung" element={<Einladung />} />
           <Route path="/impressum" element={<Impressum />} />
           <Route path="/datenschutz" element={<Datenschutz />} />
           <Route path="/nutzungsbedingungen" element={<Nutzungsbedingungen />} />
@@ -292,10 +308,26 @@ const AuthenticatedApp = () => {
   // admin/mitglied, so the portal cannot appear there; a user without any
   // membership keeps the office shell and its "no office assigned" message.
   if (DATENQUELLE === 'supabase' && user?.extern === true) {
+    // 110-02: the client of a project gets their own portal, every other
+    // external role the bidder portal.
+    const bauherr = user?.role === 'bauherr';
     return (
-      <ModulFehlergrenze key="bieterportal" pfad={location.pathname}>
+      <ModulFehlergrenze key={bauherr ? 'bauherrportal' : 'bieterportal'} pfad={location.pathname}>
         <React.Suspense fallback={<Ladeanzeige />}>
-          <BieterPortal />
+          {bauherr ? <BauherrPortal /> : <BieterPortal />}
+        </React.Suspense>
+      </ModulFehlergrenze>
+    );
+  }
+
+  // 110-03 "Ansicht als … Bauherr (Vorschau)" (local data paths only): the office
+  // sees the active project as its client will — the same portal, the released
+  // projections only (fuerBauherrSichtbar), no office shell, no office module.
+  if (DATENQUELLE !== 'supabase' && zugriff.bauherrVorschau === true) {
+    return (
+      <ModulFehlergrenze key="bauherrvorschau" pfad={location.pathname}>
+        <React.Suspense fallback={<Ladeanzeige />}>
+          <BauherrPortal vorschau />
         </React.Suspense>
       </ModulFehlergrenze>
     );
@@ -339,7 +371,10 @@ function App() {
               slot (70-01). */}
           {SERVERLOS && <UpdateHinweis />}
           {(SERVERLOS || (DATENQUELLE === 'express' && /[?&]import=/.test(START_SUCHE))) && (
-            <React.Suspense fallback={null}><DateiOeffnenEmpfang suche={START_SUCHE} /></React.Suspense>
+            // 112-01 review: own boundary - this lazy part sits outside the route boundary (see TeilFehlergrenze).
+            <TeilFehlergrenze teil="DateiOeffnenEmpfang" hinweis="Datei-Empfang nicht verfügbar – neu laden" className="fixed bottom-4 left-4 z-50">
+              <React.Suspense fallback={null}><DateiOeffnenEmpfang suche={START_SUCHE} /></React.Suspense>
+            </TeilFehlergrenze>
           )}
         </ProjectProvider>
         </ZugriffProvider>

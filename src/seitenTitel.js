@@ -34,6 +34,8 @@ export const RECHTSWEG_TITEL = Object.freeze({
   "/anmeldung": "Anmeldung",
   "/registrieren": "Registrieren",
   "/passwort-zuruecksetzen": "Passwort zurücksetzen",
+  // 110-06: invitation by link.
+  "/einladung": "Einladung",
 });
 
 /**

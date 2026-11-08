@@ -38,6 +38,7 @@ import {
   Landmark,
   LayoutDashboard,
   Mail,
+  UserCheck,
   PencilRuler,
   PenTool,
   Radio,
@@ -110,6 +111,8 @@ export const navGroups = [
       { title: 'Projekte', url: seite('Projects'), modul: 'projekte', icon: FolderKanban, querschnitt: true },
       // Phase 82 (82-01, E-02): deadlines and appointments of all modules, without a project.
       { title: 'Fristen & Termine', url: seite('Deadlines'), modul: 'fristen', icon: CalendarClock, projektfrei: true, umfang: 'portfolio', querschnitt: true },
+      // Phase 110: what the client of the active project sees, releases, invitation, feedback.
+      { title: 'Bauherrenzugang', url: seite('Bauherrenzugang'), modul: 'projekte', icon: UserCheck, querschnitt: true },
     ],
   },
   // NAV-PLAN 2026-10-13: from here the groups follow the office workflow (stations 0–10)

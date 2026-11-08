@@ -26,6 +26,8 @@
 
 import express from 'express';
 import { istPersonalEntitaet } from '../src/api/personalEntitaeten.js';
+// 112-01: the ONE strict-write check of 106-09 (single source; the entity route uses the same two exports).
+import { standVeraltet, veralteterStand, STAND_KONFLIKT_TEXT } from './routes.js';
 
 /**
  * @param {ReturnType<typeof import('./db.js').createDb>} db the personal.json store
@@ -96,8 +98,18 @@ export function personalRouter(db, blobs, { lokalGebunden, anfrageEntfernt = () 
 
   r.put('/personal/:entity/:id', (req, res) => {
     if (!pruefeEntitaet(res, req.params.entity)) return;
+    // 112-01 (foreign review point 3): same strict write as PUT /entities/:entity/:id (106-09) — an outdated ?stand is
+    // refused with 409 and the stored record instead of silently overwriting an HR record changed on another device.
+    // 112-01 review: also the hint header of the entity route (93-03) for a write without ?stand whose body carries an
+    // older updated_date - last write still wins, the client (bitApi.request) only learns that it replaced a newer version.
+    const vorher = db.get(req.params.entity, req.params.id);
+    if (vorher && standVeraltet(vorher, req.query?.stand)) {
+      return res.status(409).json({ error: STAND_KONFLIKT_TEXT, konflikt: true, gespeichert: vorher });
+    }
+    const hinweis = vorher && veralteterStand(vorher, req.body);
     const record = db.update(req.params.entity, req.params.id, req.body || {});
     if (!record) return res.status(404).json({ error: 'Not found' });
+    if (hinweis) res.setHeader('X-Bit-Hinweis', 'zwischenzeitlich-geaendert');
     res.json(record);
   });
 

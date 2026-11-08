@@ -116,6 +116,47 @@ export class ModulFehlergrenze extends React.Component {
 }
 
 /**
+ * Compact hint in place of a failed part of the app shell: a button that names what is missing and reloads the page.
+ * @param {{hinweis: string, fehler: unknown, className?: string}} p hinweis = German i18n key (t() translates it)
+ */
+function TeilHinweis({ hinweis, fehler, className = "" }) {
+  const { t } = useI18n();
+  return (
+    <button type="button" role="alert" data-testid="teil-fehlergrenze" title={meldungVon(fehler)} onClick={() => window.location.reload()}
+      className={`shrink-0 whitespace-nowrap rounded-md border border-warnung-rand bg-warnung-flaeche px-2 py-1 text-[11px] text-warnung ${className}`}>
+      {t(hinweis)}
+    </button>
+  );
+}
+
+/**
+ * 112-01 review: boundary around ONE lazily loaded part of the app shell (storage status in the header, the page-wide sync
+ * card, the file-open receiver). Those parts sit outside the route boundary (ModulFehlergrenze) - without this one a chunk
+ * that is missing after a deploy, or offline without a service-worker copy, would reach WurzelFehlergrenze and replace the
+ * whole interface instead of only the part. No automatic reload here: the part is optional, the page keeps working.
+ * @extends {React.Component<{children: React.ReactNode, teil: string, hinweis: string, className?: string}, {hatFehler: boolean, fehler: unknown}>}
+ */
+export class TeilFehlergrenze extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hatFehler: false, fehler: null };
+  }
+
+  static getDerivedStateFromError(fehler) {
+    return { hatFehler: true, fehler: fehler ?? new Error("Unbekannter Fehler") };
+  }
+
+  componentDidCatch(fehler, info) {
+    console.error(`[Fehlergrenze ${this.props.teil}]`, fehler, info?.componentStack || "");
+  }
+
+  render() {
+    if (!this.state.hatFehler) return this.props.children;
+    return <TeilHinweis hinweis={this.props.hinweis} fehler={this.state.fehler} className={this.props.className} />;
+  }
+}
+
+/**
  * Last-resort boundary around the whole app (outside router and I18nProvider):
  * no hooks, German and English side by side.
  * @extends {React.Component<{children: React.ReactNode}, {hatFehler: boolean, fehler: unknown}>}

@@ -20,18 +20,39 @@ import { baueZugriff, rolleAusServerRolle } from "./rechte.js";
 export const ANSICHT_ALS_SCHLUESSEL = "bit-atelier-ansicht-als";
 
 /**
+ * "Ansicht als" value of the client preview (phase 110): no user record, the
+ * office sees the active project as its client will — the client portal with
+ * the released projections only, no office module. Local data paths only; in
+ * the cloud the client is a real account (role bauherr, migration 0016).
+ */
+export const BAUHERR_VORSCHAU_ID = "__bauherr__";
+
+/**
  * @param {{
  *   user?: Record<string, any>|null, serverRolle?: {role?: string, buero_rolle?: string}|null,
  *   nutzerListe?: ReadonlyArray<Record<string, any>>, zuordnungen?: ReadonlyArray<any>|null, einstellung?: Record<string, any>|null,
  *   datenquelle: string, gespeicherteNutzerId?: string|null, freigabe?: boolean,
  * }} eingabe
- * @returns {{zugriff: import("./rechte.js").Zugriff, nutzerListe: Array<Record<string, any>>, aktiverNutzerId: string|null, kannWechseln: boolean}}
- *   nutzerListe: the active users (for the switch); kannWechseln: "Ansicht als" is offered
+ * @returns {{zugriff: import("./rechte.js").Zugriff & {bauherrVorschau?: boolean}, nutzerListe: Array<Record<string, any>>,
+ *   aktiverNutzerId: string|null, kannWechseln: boolean, kannBauherrVorschau: boolean}}
+ *   nutzerListe: the active users (for the switch); kannWechseln: "Ansicht als" is offered;
+ *   kannBauherrVorschau: the switch offers "Bauherr (Vorschau)" (local only, phase 110);
+ *   zugriff.bauherrVorschau: the client preview is active — rolle 'bauherr', every module 'aus'
  */
 export function ermittleZugriff({ user = null, serverRolle = null, nutzerListe = [], zuordnungen = null, einstellung = null, datenquelle, gespeicherteNutzerId = null, freigabe }) {
   const aktive = (nutzerListe || []).filter((n) => n && n.id && n.aktiv !== false);
   const cloud = datenquelle === "supabase";
   const basis = { serverRolle: cloud ? serverRolle : null, einstellung, zuordnungen, datenquelle, ...(freigabe !== undefined ? { freigabe } : {}) };
+  if (!cloud && gespeicherteNutzerId === BAUHERR_VORSCHAU_ID) {
+    // Every office module off, like an external role (rolleAusServerRolle → null):
+    // the client sees no office area. App.jsx renders the client portal instead
+    // of the office shell, reading only the released projections.
+    const z = baueZugriff({ ...basis, rolle: "bauherr", nutzer: null });
+    return {
+      zugriff: { ...z, rolle: "bauherr", bauherrVorschau: true },
+      nutzerListe: aktive, aktiverNutzerId: BAUHERR_VORSCHAU_ID, kannWechseln: true, kannBauherrVorschau: true,
+    };
+  }
   /** @type {Record<string, any>|null} */
   let nutzer = null;
   if (cloud) {
@@ -42,5 +63,5 @@ export function ermittleZugriff({ user = null, serverRolle = null, nutzerListe =
   }
   const rolle = cloud ? rolleAusServerRolle(serverRolle) ?? "mitarbeiter" : "inhaber";
   const zugriff = baueZugriff({ ...basis, rolle, nutzer });
-  return { zugriff, nutzerListe: aktive, aktiverNutzerId: nutzer?.id ?? null, kannWechseln: !cloud && aktive.length > 1 };
+  return { zugriff, nutzerListe: aktive, aktiverNutzerId: nutzer?.id ?? null, kannWechseln: !cloud && aktive.length > 1, kannBauherrVorschau: !cloud };
 }

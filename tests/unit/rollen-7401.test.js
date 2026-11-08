@@ -30,10 +30,10 @@ describe('rollen — Vokabular', () => {
     for (const r of ROLLEN_EXTERN) assert.equal(istExterneRolle(r), true, r);
     assert.equal(istExterneRolle(undefined), true, 'fehlende Rolle ist extern');
   });
-  it('die Rollenliste deckt sich mit dem Check der Migration 0006', () => {
-    const sql = fs.readFileSync(path.join(WURZEL, 'supabase/migrations/0006_rollen.sql'), 'utf8');
+  it('die Rollenliste deckt sich mit dem letzten Check der Migrationen (0006, seit 110-01: 0016)', () => {
+    const sql = fs.readFileSync(path.join(WURZEL, 'supabase/migrations/0016_bauherr.sql'), 'utf8');
     const m = /org_members_rolle_check\s+check \(role in \(([^)]*)\)\)/.exec(sql);
-    assert.ok(m, 'Check in 0006 nicht gefunden');
+    assert.ok(m, 'Check in 0016 nicht gefunden');
     const ausSql = [...m[1].matchAll(/'([a-z]+)'/g)].map((x) => x[1]).sort();
     assert.deepEqual(ausSql, [...ROLLEN_INTERN, ...ROLLEN_EXTERN].sort());
   });

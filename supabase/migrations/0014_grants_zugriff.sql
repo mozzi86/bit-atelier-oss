@@ -55,6 +55,17 @@ grant execute on function public.protokoll_schreiben(uuid, text, text, text, tex
 revoke all on all tables in schema public from anon;
 revoke all on all sequences in schema public from anon;
 
+-- 3a. authenticated: the stage-1 tables back to what 0005 meant (06.11.2026).
+-- Found on the live project: tables created through the dashboard SQL editor
+-- are owned by postgres, so Supabase's project default privileges applied and
+-- gave authenticated FULL DML (incl. TRUNCATE) on orgs and org_members — 0005
+-- only ever granted SELECT there; the self-check below stopped the first run.
+-- TRUNCATE/REFERENCES/TRIGGER are taken from every table: TRUNCATE is not
+-- subject to RLS, one signed-in account could empty records.
+revoke insert, update, delete on public.orgs, public.org_members from authenticated;
+revoke truncate, references, trigger on all tables in schema public from authenticated;
+alter default privileges in schema public revoke truncate, references, trigger on tables from authenticated;
+
 -- 4. The privilege matrix. -----------------------------------------------------------
 -- One row per (role, object, privilege) that is GRANTED, for anon and
 -- authenticated, over every table, view and function of schema public, plus
@@ -106,10 +117,11 @@ begin
       v_fehler := v_fehler || format(' authenticated darf %s schreiben;', v_t);
     end if;
   end loop;
-  -- records: table-level INSERT/UPDATE must be gone (column grants of 0008 only)
+  -- records: table-level INSERT/UPDATE must be gone (column grants of 0008 only),
+  -- and TRUNCATE never (it bypasses RLS)
   if exists (select 1 from public.grants_bericht()
-              where rolle = 'authenticated' and art = 'table' and objekt = 'records' and recht in ('INSERT', 'UPDATE')) then
-    v_fehler := v_fehler || ' authenticated hat Tabellen-INSERT/UPDATE auf records;';
+              where rolle = 'authenticated' and art = 'table' and objekt = 'records' and recht in ('INSERT', 'UPDATE', 'TRUNCATE')) then
+    v_fehler := v_fehler || ' authenticated hat Tabellen-INSERT/UPDATE/TRUNCATE auf records;';
   end if;
   -- the log writer is never a client function
   if exists (select 1 from public.grants_bericht() where art = 'function' and objekt like 'protokoll_schreiben(%') then

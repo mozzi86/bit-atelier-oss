@@ -52,7 +52,6 @@ import ThemeToggle from "@core/components/theme/ThemeToggle";
 import { I18nProvider, useI18n, LANGS } from "@core/lib/i18n";
 import { useBriefkopf } from "@core/lib/useBriefkopf";
 import AlhambraAssistantButton from "./components/AlhambraAssistantButton";
-import SpeicherStatus from "./demo/SpeicherStatus";
 import { navGroups } from "./navigation";
 import Befehlspalette from "./components/Befehlspalette";
 import KeinZugriff from "./components/KeinZugriff";
@@ -63,6 +62,13 @@ import { cloudGesperrt } from "@core/lib/rechte.js";
 import KuerzelHilfe from "./components/KuerzelHilfe";
 import { aktionenFuer, passtKuerzel, parseKuerzel, abonnieren, aktionenVersion } from "@core/lib/aktionen";
 import { SERVERLOS, DATENQUELLE } from "@core/lib/umgebung";
+// 112-01: storage status of the serverless edition, lazy and only there (pattern of ClientTor in main.jsx). The static import
+// put demoDb, schnappschuesse and demoIdb into the entry chunk of every build; SERVERLOS is a compile-time constant, so the
+// server and cloud builds drop the import entirely.
+const SpeicherStatus = SERVERLOS ? React.lazy(() => import("./demo/SpeicherStatus")) : null;
+// 112-01 review: the lazy shell parts (SpeicherStatus, AbgleichHinweise) sit outside the route boundary - each gets its own
+// small boundary so a chunk that fails to load replaces only that part with a hint, not the whole shell.
+import { TeilFehlergrenze } from "@core/components/ModulFehlergrenze";
 import { useAuth } from "@core/lib/AuthContext";
 // 92-01: self-update of the downloaded app.
 import UpdateHinweis from "@/components/update/UpdateHinweis";
@@ -127,10 +133,12 @@ function AbgleichSeitenkarte({ t, darfAendern }) {
   const quellen = [...new Set(s.konflikte.map((k) => k.quelle))].filter((q) => !abgleichStand.angezeigt(q));
   if (!quellen.length) return null;
   return (
-    <React.Suspense fallback={null}>
-      <AbgleichHinweise t={t} darfAendern={darfAendern} quellen={quellen} nurKonflikte
-        className="fixed bottom-4 right-4 z-50 w-[24rem] max-w-[calc(100vw-2rem)] max-h-[60vh] overflow-y-auto" />
-    </React.Suspense>
+    <TeilFehlergrenze teil="AbgleichHinweise" hinweis="Abgleich-Hinweise nicht verfügbar – neu laden" className="fixed bottom-4 right-4 z-50">
+      <React.Suspense fallback={null}>
+        <AbgleichHinweise t={t} darfAendern={darfAendern} quellen={quellen} nurKonflikte
+          className="fixed bottom-4 right-4 z-50 w-[24rem] max-w-[calc(100vw-2rem)] max-h-[60vh] overflow-y-auto" />
+      </React.Suspense>
+    </TeilFehlergrenze>
   );
 }
 
@@ -641,6 +649,10 @@ function LayoutInner({ children }) {
                 ))}
               </SelectContent>
             </Select>
+            {/* The status badge below shows from 1024 px only. 72-10 had made it visible 640-767 px as well (sm:max-md), but that
+                variant was dead from 101-05 until 112-01 (Tailwind dropped every max-* variant while the ws screen was an object).
+                Reviving it overflowed the header at 700 px next to the extended user switcher (phase 110), so 112-01 removed it;
+                portfolio-112-01.spec.js checks 700 px without overflow (768-1023 px overflows for other reasons, finding in the SUMMARY). */}
             {/* 72-10: a page that spans all projects says so next to the select —
                 the select alone suggests every page works on the chosen project.
                 Visible only from the width where the header still has room
@@ -672,7 +684,7 @@ function LayoutInner({ children }) {
               ))}
             </div>
             {project && (
-              <Badge className={`${statusInfo(project.status).color} hidden sm:max-md:inline-flex lg:inline-flex shrink-0 whitespace-nowrap`}>
+              <Badge data-projekt-status className={`${statusInfo(project.status).color} hidden lg:inline-flex shrink-0 whitespace-nowrap`}>
                 {statusInfo(project.status).label}
               </Badge>
             )}
@@ -694,7 +706,13 @@ function LayoutInner({ children }) {
               </button>
               {/* Nur in der lokalen Fassung: dort ist der Browser die einzige
                   Ablage, also muss sichtbar sein, ob gespeichert wurde (65-02). */}
-              {SERVERLOS && <SpeicherStatus hinweisZiel={hinweisZiel} />}
+              {SpeicherStatus && (
+                <TeilFehlergrenze teil="SpeicherStatus" hinweis="Speicherstatus nicht verfügbar – neu laden">
+                  <React.Suspense fallback={null}>
+                    <SpeicherStatus hinweisZiel={hinweisZiel} />
+                  </React.Suspense>
+                </TeilFehlergrenze>
+              )}
               {/* Nur im Cloud-Betrieb (57-02 Task 4): wer angemeldet ist und wie
                   man herauskommt. express/serverlos haben keinen echten Login —
                   dort bleibt die Kopfzeile unverändert. */}

@@ -441,7 +441,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           const czm = z.points.reduce((s, p) => s + p.z, 0) / z.points.length;
           const onClick = (e) => { if (edit?.tool === "arrow" && edit.onPick) { e.stopPropagation(); edit.onPick({ type: "zone", index: z._idx }, e.shiftKey); } };
           return (
-            <g key={`zone${k.i}`} onClick={onClick} style={{ cursor: edit?.tool === "arrow" ? "pointer" : "inherit" }}>
+            <g key={`zone${k.i}`} onClick={onClick} data-zone={z._idx} data-belag={z.belag || undefined} style={{ cursor: edit?.tool === "arrow" ? "pointer" : "inherit" }}>
               <path d={d} fill={sel ? "#7dd3fc" : "#bae6fd"} fillOpacity={sel ? 0.55 : 0.35} stroke={sel ? "#0284c7" : "#38bdf8"} strokeWidth={sel ? "1.2" : "0.6"} />
               {show("labels") && sichtbar.has(k.i) && (
                 <text data-plan-label x={X(cxm)} y={Z(czm)} textAnchor="middle" fontSize={px(fontPx)} fontWeight="600" className="fill-sky-800" style={{ pointerEvents: "none" }}>
@@ -606,7 +606,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           const o = wallRectXZ(w);
           const umriss = `M${X(o[0].x)},${Z(o[0].z)} L${X(o[1].x)},${Z(o[1].z)} L${X(o[2].x)},${Z(o[2].z)} L${X(o[3].x)},${Z(o[3].z)} Z`;
           return (
-            <g key={`cw${i}`} onClick={onClick} style={style} data-wand={w._idx} data-status={w.status || undefined} opacity={lk?.opacity} data-verschneidung={vf?.quelle}>
+            <g key={`cw${i}`} onClick={onClick} style={style} data-wand={w._idx} data-erscheinung={w.erscheinung || undefined} data-status={w.status || undefined} opacity={lk?.opacity} data-verschneidung={vf?.quelle}>
               {lr && !sel && regelNr == null && <path d={umriss} fill="none" stroke={lr.stroke} strokeWidth={lr.strokeWidth} strokeDasharray={lr.dash} />}
               {bands.length === 0 && <path d={umriss} fill="transparent" stroke="none" data-struktur-verborgen="1" />}
               {bands.map((b, k) => <path key={k} d={bandPfad(b)} fillRule={b.ringe ? "evenodd" : undefined} fill={b.color} stroke="#475569" strokeWidth="0.3" data-schicht={b.ringe ? b.schicht : undefined}><title>{b.name}</title></path>)}
@@ -623,9 +623,9 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         }
         const r = wallRectXZ(w);
         const d = `M${X(r[0].x)},${Z(r[0].z)} L${X(r[1].x)},${Z(r[1].z)} L${X(r[2].x)},${Z(r[2].z)} L${X(r[3].x)},${Z(r[3].z)} Z`;
-        if (verborgen(w, tragend)) return <path key={`cw${i}`} d={d} fill="transparent" stroke="none" onClick={onClick} style={style} data-wand={w._idx} data-struktur-verborgen="1" />;
+        if (verborgen(w, tragend)) return <path key={`cw${i}`} d={d} fill="transparent" stroke="none" onClick={onClick} style={style} data-wand={w._idx} data-erscheinung={w.erscheinung || undefined} data-struktur-verborgen="1" />;
         return <path key={`cw${i}`} d={d} fill={sel ? "#0ea5a4" : lr ? lr.fill : "#0f766e"} stroke={sel ? "#0d9488" : lr ? lr.stroke : "#134e4a"} strokeWidth={lr ? lr.strokeWidth : "0.6"}
-          strokeDasharray={lr?.dash} opacity={lr?.opacity} onClick={onClick} style={style} data-wand={w._idx} data-status={w.status || undefined} data-sw={lr?.schraffur ? "schraffur" : lr?.leer ? "leer" : undefined} data-regel={/** @type {any} */ (lr)?.regel ?? undefined} />;
+          strokeDasharray={lr?.dash} opacity={lr?.opacity} onClick={onClick} style={style} data-wand={w._idx} data-erscheinung={w.erscheinung || undefined} data-status={w.status || undefined} data-sw={lr?.schraffur ? "schraffur" : lr?.leer ? "leer" : undefined} data-regel={/** @type {any} */ (lr)?.regel ?? undefined} />;
       })}
 
       {/* 97-04b: hatch of S/W new-build walls (45°, 2 mm on paper at the lens scale [ASSUMED]) */}
@@ -703,7 +703,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           const ox = cxm - dx * hw, oz = czm - dz * hw;
           const sw = 2 * hw; const endX = ox + nx * sw, endZ = oz + nz * sw;
           return (
-            <g key={`cop${i}`} onClick={onClick} style={style}>
+            <g key={`cop${i}`} onClick={onClick} style={style} data-oeffnung={cw._idx} data-rahmen={cw.rahmen || undefined} data-glas={cw.glas || undefined}>
               <g stroke={sel ? "#0d9488" : "#0f766e"} strokeWidth={sel ? "1.4" : "1"} fill="none">
                 <line x1={X(ox)} y1={Z(oz)} x2={X(endX)} y2={Z(endZ)} />
                 <path d={`M${X(endX)},${Z(endZ)} A ${sw * SCALE} ${sw * SCALE} 0 0 1 ${X(bx)} ${Z(bz)}`} strokeDasharray="2 2" />
@@ -713,7 +713,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           );
         }
         return (
-          <g key={`cop${i}`} onClick={onClick} style={style}>
+          <g key={`cop${i}`} onClick={onClick} style={style} data-oeffnung={cw._idx} data-rahmen={cw.rahmen || undefined} data-glas={cw.glas || undefined}>
             <path d={`M${X(ax + nx * hh)},${Z(az + nz * hh)} L${X(bx + nx * hh)},${Z(bz + nz * hh)} L${X(bx - nx * hh)},${Z(bz - nz * hh)} L${X(ax - nx * hh)},${Z(az - nz * hh)} Z`}
               fill={cw.kind === "oeffnung" ? "#ffffff" : cw.kind === "door" ? "#fef3c7" : "#dbeafe"} stroke={sel ? "#0d9488" : "#60a5fa"} strokeWidth={sel ? "1.2" : "0.6"} strokeDasharray={cw.kind === "oeffnung" && opt?.durchbruchSymbol !== false ? "2 2" : undefined} />
             {(cw.kind === "oeffnung" ? opt?.durchbruchSymbol !== false : cw.kind === "door" ? false : opt?.fensterSymbol !== false) && <line x1={X(ax)} y1={Z(az)} x2={X(bx)} y2={Z(bz)} stroke="#3b82f6" strokeWidth="0.9" />}

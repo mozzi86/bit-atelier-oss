@@ -130,6 +130,11 @@ export const NAECHSTE_SCHRITTE = Object.freeze({
   // Phase 82 (82-01): deadlines lead to the mail register, absences and the books;
   // absences back to the deadlines and the hours; correspondence to the agenda,
   // the contacts and the reports. English routes only.
+  // Phase 110: what goes to the client comes from the plan list and the documents.
+  "/Bauherrenzugang": [
+    { text: "Werkplanung", ziel: "/Werkplanung" },
+    { text: "Berichte & Dokumente", ziel: "/Reports" },
+  ],
   "/Deadlines": [
     { text: "Posteingang prüfen", ziel: "/Correspondence?tab=register" },
     { text: "Abwesenheiten", ziel: "/Absences" },

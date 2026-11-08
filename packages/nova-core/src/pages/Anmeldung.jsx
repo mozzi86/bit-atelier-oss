@@ -54,6 +54,7 @@ export function Anmeldung() {
   const [passwort, setPasswort] = useState('');
   const [fehler, setFehler] = useState('');
   const [busy, setBusy] = useState(false);
+  const [linkHinweis, setLinkHinweis] = useState('');
   // Guard: this page only works on the supabase path. Reaching it on express
   // or serverlos is a routing mistake — say so instead of failing silently.
   const [fehlkonfiguriert] = useState(() => DATENQUELLE !== 'supabase');
@@ -86,6 +87,41 @@ export function Anmeldung() {
       // Success: onAuthStateChange takes over — no state to set here.
     } catch (err) {
       setFehler(`Anmeldung fehlgeschlagen: ${err?.message || err}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Magic link (110-01, D-BH-03): sign in without a password — the way an
+   * invited client signs in. `shouldCreateUser: false`: the link never opens an
+   * account; accounts come only from the invitation (edge function einladung)
+   * or the manual approval. The answer is the SAME text whether or not the
+   * address has an account (no existence oracle) — Supabase refuses unknown
+   * addresses with "Signups not allowed for otp", which is swallowed on purpose
+   * and only that one; every other error is shown.
+   */
+  const linkSenden = async () => {
+    setFehler('');
+    setLinkHinweis('');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setFehler(t('Bitte zuerst die E-Mail-Adresse eintragen.'));
+      return;
+    }
+    setBusy(true);
+    try {
+      const client = await holeClient();
+      const { error } = await client.auth.signInWithOtp({
+        email: email.trim(),
+        options: { shouldCreateUser: false, emailRedirectTo: `${window.location.origin}/` },
+      });
+      if (error && !/signups? not allowed/i.test(error.message)) {
+        setFehler(`${t('Anmeldelink nicht gesendet')}: ${error.message}`);
+      } else {
+        setLinkHinweis(t('Wenn zu dieser Adresse ein Zugang besteht, ist ein Anmeldelink unterwegs. Bitte den Link in der E-Mail auf diesem Gerät öffnen.'));
+      }
+    } catch (err) {
+      setFehler(`${t('Anmeldelink nicht gesendet')}: ${err?.message || err}`);
     } finally {
       setBusy(false);
     }
@@ -157,6 +193,21 @@ export function Anmeldung() {
           <button type="submit" className={knopfKlasse} disabled={fehlkonfiguriert || busy}>
             {busy ? 'Anmeldung läuft …' : 'Anmelden'}
           </button>
+
+          <button
+            type="button"
+            onClick={linkSenden}
+            data-testid="anmeldung-link"
+            className="w-full rounded-md border border-input bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={fehlkonfiguriert || busy}
+          >
+            {t('Ohne Passwort: Anmeldelink per E-Mail')}
+          </button>
+          {linkHinweis && (
+            <p role="status" className="rounded-md border border-erfolg-rand bg-erfolg-flaeche px-3 py-2 text-sm text-erfolg">
+              {linkHinweis}
+            </p>
+          )}
 
           <p className="text-center text-xs text-slate-500">
             <a

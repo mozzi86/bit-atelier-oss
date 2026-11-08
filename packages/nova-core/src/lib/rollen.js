@@ -17,8 +17,8 @@
 /** Internal roles after 0006, in descending power. @type {ReadonlyArray<string>} */
 export const ROLLEN_INTERN = Object.freeze(['owner', 'planner', 'leser']);
 
-/** External roles after 0006. @type {ReadonlyArray<string>} */
-export const ROLLEN_EXTERN = Object.freeze(['bidder', 'investor', 'gast']);
+/** External roles after 0006 + 0016 (`bauherr`, the client portal of phase 110). @type {ReadonlyArray<string>} */
+export const ROLLEN_EXTERN = Object.freeze(['bidder', 'investor', 'gast', 'bauherr']);
 
 /** The four permission flags of org_members (0006). @type {ReadonlyArray<string>} */
 export const RECHTE = Object.freeze(['can_edit_model', 'can_export_ifc', 'can_view_audit_reports', 'can_submit_bid']);

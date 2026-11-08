@@ -196,6 +196,7 @@ Wegwerf-Projekt grün ist und der Betreiber zugestimmt hat (74-01 Task 11).
 | `0013_storage.sql` | `blobs` nur intern (Modelle mit `can_export_ifc`), neue Buckets `freigaben` und `gebote` |
 | `0014_grants_zugriff.sql` | Grant-Durchgang, Default-Privilegien zu, `grants_bericht()`, Selbstprüfung |
 | `0015_wohnung_sonderwunsch.sql` | Phase 99: Katalogzeilen `Wohneinheit`, `AusstattungsOption`, `Sonderwunsch` als `projekt`, nicht extern — ändert kein Verhalten (noch nicht eingespielt) |
+| `0016_bauherr.sql` | Phase 110: Rolle `bauherr`, Zielgruppe `zielrolle` im Katalog, Policies mit `ist_zielgruppe`, RPCs `bauherr_freigeben`/`_zuruecknehmen`/`_antworten`, Trigger `records_bauherr`, Bucket `bauherr` — **ändert Verhalten** (Policies), nicht eingespielt; Nachweis `supabase/tests/110-01_bauherr.sql`, Rückweg `rueckweg/0016_down.sql` (vor 0015_down) |
 
 **Nachweis vor jedem Einspielen** (Wegwerf-Projekt mit 0001–0011, nie das Echtsystem):
 

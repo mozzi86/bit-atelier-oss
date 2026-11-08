@@ -27,6 +27,7 @@ import { demoIdb, speicherDauerhaft, speicherStand } from './demoIdb.js';
 // storage class's own module reuses them instead of growing a second copy.
 import { neueId as id, sortiereDatensaetze as sortRecords, passtFilter } from './sammlungKern.js';
 import { mitBehaltenem } from './projektDateiFormat.js';
+import { schnappschussAusDaten } from './schnappschussRing.js';
 
 const STORE_KEY = 'bit-atelier-demo-db-v1'; // legacy localStorage blob, read only to migrate it
 
@@ -287,10 +288,9 @@ export async function demoDbErsetzen(db, grund = 'vor Import', { behalte = [], b
   let schnappschussFehler = null;
   if (grund != null) {
     try {
-      // Dynamic import: schnappschuesse.js reads demoDbAuslesen from this
-      // module — a static circle would violate the no-import-cycle rule.
-      const { schnappschussAnlegen } = await import('./schnappschuesse.js');
-      schnappschuss = await schnappschussAnlegen(grund);
+      // 112-01: the ring module never imports demoDb, so this is a static import without a cycle (was a dynamic import
+      // of schnappschuesse.js that Vite reported as ineffective — both always share a chunk).
+      schnappschuss = await schnappschussAusDaten(grund, await demoDbAuslesen());
     } catch (err) {
       schnappschussFehler = err?.message || String(err);
     }

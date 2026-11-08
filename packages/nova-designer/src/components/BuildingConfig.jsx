@@ -131,7 +131,7 @@ export default function BuildingConfig({ complexData, onBuildingsChange, onUnits
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-3">
             <NumberField label="Stellplätze gesamt" value={parking.total_spaces} onChange={(v) => updParking({ total_spaces: v })} />
-            <NumberField label="Stellplatzschlüssel" value={parking.parking_key} onChange={(v) => updParking({ parking_key: v })} />
+            <NumberField label="Stellplatzschlüssel" value={parking.parking_key} onChange={(v) => updParking({ parking_key: v, parking_key_gesetzt: true })} />{/* 108-12 review: marks a typed-in key (also 1.0) as a planning decision for the massing key figures */}
             <NumberField label="Barrierefrei" value={parking.barrier_free_spaces} onChange={(v) => updParking({ barrier_free_spaces: v })} />
             <NumberField label="E-Ladepunkte" value={parking.ev_charging_stations} onChange={(v) => updParking({ ev_charging_stations: v })} />
             <div className="col-span-2 grid grid-cols-2 gap-3">

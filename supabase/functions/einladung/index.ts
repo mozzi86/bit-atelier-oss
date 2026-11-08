@@ -1,6 +1,6 @@
 // einladung/index.ts — invite or revoke an EXTERNAL person (Phase 74-01 Task 9).
 //
-// POST { aktion: 'einladen', org_id, email, rolle: 'bidder'|'investor'|'gast',
+// POST { aktion: 'einladen', org_id, email, rolle: 'bidder'|'investor'|'gast'|'bauherr' (0016),
 //        projekt_id, vergabe_id?, kontakt_id?, gueltig_bis?, weiterleitung? }
 //   → finds the account (page by page) or invites it (inviteUserByEmail),
 //     writes org_members with the flags FIXED BY THE ROLE (never from the

@@ -79,6 +79,10 @@ const PAKET_VERSION = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'packag
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  // 112-01: a second dev server (E2E on 5183 beside a running 5173) can use its own dependency cache, e.g.
+  // BIT_VITE_CACHE_DIR=node_modules/.vite-e2e — two servers re-optimising ONE node_modules/.vite clear each other's deps
+  // (108-08 SUMMARY, "Stolperstein der Umgebung"). Unset: Vite's default, unchanged.
+  cacheDir: process.env.BIT_VITE_CACHE_DIR || 'node_modules/.vite',
   define: {
     __APP_VERSION__: JSON.stringify(PAKET_VERSION),
   },
@@ -98,6 +102,9 @@ export default defineConfig(({ mode }) => ({
       '@designer': path.resolve(__dirname, './packages/nova-designer/src'),
       '@sketch': path.resolve(__dirname, './packages/bit-sketch/src'),
       '@': path.resolve(__dirname, './src'),
+      // 112-01: the Emscripten loaders of planegcs and manifold-3d import the Node built-in only in their Node branch; the
+      // shim replaces Vite's "externalized for browser compatibility" stub and throws in plain text if ever called.
+      'node:module': path.resolve(__dirname, './src/shims/nodeModul.js'),
     },
   },
   build: {
@@ -127,10 +134,17 @@ export default defineConfig(({ mode }) => ({
           // csg/kern.js imports it, so the chunk is never on the start path and is measured on its own (budget.json
           // chunks.csg); its WebAssembly binary is a separate asset (budget.json assets.manifold).
           if (p.includes('/node_modules/manifold-3d/')) return 'csg';
+          // 110-05: glTF exporter (BIM studio writes the client's 3D file) and loader (client portal viewer) are reached only by
+          // dynamic imports; in the shared `three` chunk they would ride along on every 3D page (budget chunks.three).
+          if (/\/node_modules\/three\/examples\/jsm\/(exporters\/GLTFExporter|loaders\/GLTFLoader)\.js$/.test(p)) return 'three-gltf';
           if (p.includes('/node_modules/three/') || p.includes('three-stdlib')) return 'three';
           if (p.includes('/node_modules/recharts/') || p.includes('victory-vendor') || /\/node_modules\/d3-/.test(p)) return 'charts';
           if (p.includes('/node_modules/maplibre-gl/')) return 'map';
           if (p.includes('/node_modules/framer-motion/')) return 'motion';
+          // 112-01: pdf-lib in its own chunk. It is imported statically by the PDF tools (nova-pdf, VHB form, check
+          // stamp, vector plan) and dynamically by zeigen/planStandLaden.js; without a chunk of its own Rollup put it next to
+          // that dynamic importer and Vite warned "dynamic import will not move module into another chunk".
+          if (p.includes('/node_modules/pdf-lib/') || p.includes('/node_modules/@pdf-lib/')) return 'pdflib';
           // LGPL-Compliance: planegcs (LGPL-2.1+) als eigener, austauschbarer
           // Chunk — nie ins App-Bundle mischen (siehe THIRD-PARTY-LICENSES.md).
           if (p.includes('planegcs')) return 'planegcs';
@@ -156,7 +170,9 @@ export default defineConfig(({ mode }) => ({
   // 107-14/107-18: pre-bundle the CSG library at dev start. It is reached only through a dynamic import (csg/laden.js), so the
   // optimizer would discover it on first use and reload the page. Its WebAssembly binary is not part of the pre-bundle: the
   // URL comes from csg/manifoldWasm.js (`?url`). Dev server only — the build is unaffected.
-  optimizeDeps: { include: ['manifold-3d'] },
+  // 110-05: same for the glTF exporter/loader (client 3D file, "3D ansehen") — found on first use, the reload threw away the
+  // click (E2E bauherrenzugang-110-03).
+  optimizeDeps: { include: ['manifold-3d', 'three/examples/jsm/exporters/GLTFExporter.js', 'three/examples/jsm/loaders/GLTFLoader.js'] },
   // 69-21: the IFC reading worker imports the WASM bootstrap dynamically (code splitting) —
   // only the ES worker format supports that.
   worker: { format: 'es' },

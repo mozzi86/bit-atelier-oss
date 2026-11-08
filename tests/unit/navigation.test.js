@@ -210,6 +210,7 @@ test("verbindliche Namenstabelle: Gruppen, Reihenfolge und Titel je Route", () =
       ["/Dashboard", "Projektübersicht"],
       ["/Projects", "Projekte"],
       ["/Deadlines", "Fristen & Termine"],
+      ["/Bauherrenzugang", "Bauherrenzugang"],
     ]],
     ["Akquise & Auftrag", [
       ["/RealEstateFeasibility", "Machbarkeit"],

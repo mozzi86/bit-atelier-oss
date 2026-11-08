@@ -188,7 +188,8 @@
       "motion": 41984,
       "planegcs": 16384,
       "ifc": 444416,
-      "csg": 35840
+      "csg": 35840,
+      "pdflib": 233472
     },
     "assets": {
       "manifold": 595968

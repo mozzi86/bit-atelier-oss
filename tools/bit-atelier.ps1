@@ -26,6 +26,10 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Set-Location -LiteralPath $App
+# 112-01: Node writes its messages as UTF-8; PowerShell decodes captured native output with [Console]::OutputEncoding
+# (the OEM code page by default), so umlauts in an error text arrived garbled in the message box. try: a host without
+# a console handle refuses the setter - then the old decoding stays, the start itself must not fail over it.
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 if ($Datei) {
   $ausgabe = & node (Join-Path $App 'tools\datei-oeffnen.mjs') $Datei 2>&1
 } else {

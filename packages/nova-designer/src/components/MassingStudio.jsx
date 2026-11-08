@@ -12,7 +12,11 @@ import { createBuildingModel } from "@core/lib/buildingModel"; // 107-10: baseme
 import { useProject } from "@core/lib/ProjectContext";
 import { useOsmBuildings } from "@designer/lib/useOsmBuildings";
 import { metersPerPixel } from "@core/lib/geo";
-import { kennzahlenJeTyp, nufFuerKennzahlen } from "@designer/lib/kennzahlen";
+import { kennzahlenJeTyp, nufFuerKennzahlen, handZahl } from "@designer/lib/kennzahlen";
+import { flaechenKennzahlen, geschossHoehenUebersicht, reglerGeschosshoehe, koerperHoehe_m } from "@core/lib/massing/flaechenKennzahlen.js"; // 108-12: BGF (DIN 277) vs. GFZ area, heights per storey
+import { vollgeschossAusDach } from "@core/lib/bauteil/vollgeschoss.js"; // 108-12 review: full-storey rule of the attic for the GF of the GFZ
+import { dachEbenen } from "@core/lib/bauteil/dachGeometrie.js";
+import { geschossLabel } from "@core/lib/bauteil/ebenen.js";
 import { werkstattBauteile } from "@core/lib/werkstattBauteile";
 import { usePlanViewport } from "@core/lib/usePlanViewport";
 import { useSvgDrag } from "@core/lib/useSvgDrag";
@@ -81,6 +85,9 @@ englischErgaenzen(EN_EFH_108); // 108-08: lazy i18n part of phase 108
 // `onBaufeldChange`/`onGrundstueckChange` receive canvas-px polygons back.
 // 108-08 (D-EFH-09): `buildings` (BuildingComplex.buildings[], canvas px + metre mirror) is the fallback source of the start
 // position after the footprint area of `baufelder`; default empty, existing callers render as before.
+// 108-12 (finding 15a): `wohnungsmix` (BuildingComplex.unit_types), `stellplatzPlanung` (BuildingComplex.parking) and `kennzahlenHand`
+// ({wohneinheiten, stellplaetze} typed in by hand, BuildingComplex.kennzahlen_hand) feed the dwelling and parking figures;
+// `onKennzahlenHandChange` receives the new hand values (null = automatic). All default to null: existing callers render as before.
 export default function MassingStudio({
   lat = 50.1,
   projectName = "",
@@ -92,11 +99,15 @@ export default function MassingStudio({
   onGrundstueckChange = null,
   onNordwinkelChange = null,
   buildings = KEINE,
+  wohnungsmix = null,
+  stellplatzPlanung = null,
+  kennzahlenHand = null,
+  onKennzahlenHandChange = null,
 }) {
   // --- Gemeinsamer Store (eine Quelle der Wahrheit) ---
   const store = useBuildingProgram();
   const { project } = useProject();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
 
   // --- Freier Polygon-Footprint (Gestaltungsfreiheit) ------------------------
   // Der Store hält das Polygon ZENTRIERT um den Ursprung ({x,z}); lokal liegt es
@@ -352,10 +363,13 @@ export default function MassingStudio({
   // 108-11 review: the storey-height slider follows the store (a deep link mounts the studio before the record is loaded — the slider
   // kept the store default 3.0 m while the roofed body, the focus zones and the bars of another source used the loaded 2.90 m). The
   // slider itself writes the store (setAlleGeschosshoehen), so its own echo is a no-op here.
+  // 108-12 review: with a storey table whose rows share one height the slider shows THAT height, also when storeyHeight is stale (per-storey
+  // edits in the BIM studio do not write storeyHeight) - the slider never shows a value the body is not computed with.
+  const reglerSoll = reglerGeschosshoehe({ storeys: floors, storeyHeight: store.storeyHeight, geschosse: store.geschosse, untergeschosse: store.untergeschosse }, floors);
   useEffect(() => {
-    const h = Number(store.storeyHeight);
+    const h = reglerSoll;
     if (h > 0) setFloorH((alt) => (Math.abs(alt - h) > 1e-9 ? h : alt));
-  }, [store.storeyHeight]);
+  }, [reglerSoll]);
 
   // 86-07: axis frame = footprint bbox centre (the same centring as footprintM).
   const polyMitte = (pts) => { const b = polyBBox(pts); return { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 }; };
@@ -834,16 +848,20 @@ export default function MassingStudio({
       : t("Zeichenfeld [ASSUMED]");
   const footArea = shoelace(poly); // echte Polygonfläche (freie Form)
   const grz = footArea / siteArea;
-  const bgf = footArea * floors;
-  const gfz = bgf / siteArea;
+  // 108-12 (finding 15c): `bgf` stays the floor area of the storeys above ground (base of NUF and of the commercial parking estimate as
+  // before, = programMetrics.bgf); `bgfDin277` is the BGF after DIN 277 with the basements (the BGF tile). Without basements both are
+  // footprint × storeys. The GF of the GFZ (full storeys, BauNVO § 20 Abs. 3) follows below the roof (108-12 review: full-storey check).
+  const flaechen = flaechenKennzahlen({ grundflaeche_m2: footArea, geschosse: floors, untergeschosse: store.untergeschosse });
+  const bgf = flaechen.oberirdisch_m2;
+  const bgfDin277 = flaechen.bgf_m2;
   // 75-08 Task 5 H/I: camera state survives the 2D ↔ Iso ↔ Split remounts
   // (the iso mounts at different tree positions per mode). isoInfo feeds the
-  // hover tooltip: `bgf` is EXACTLY the KPI tile value (one computation path,
+  // hover tooltip: `bgfDin277` is EXACTLY the BGF tile value (DIN 277, basements included; one computation path,
   // MS-03) — NOT programMetrics, which lags during a drag (Objective note 6).
   const isoKameraRef = useRef(null);
   const isoInfo = useMemo(
-    () => ({ name: projectName || t("Baukörper"), geschosse: floors, bgfM2: bgf }),
-    [projectName, floors, bgf, t]
+    () => ({ name: projectName || t("Baukörper"), geschosse: floors, bgfM2: bgfDin277 }),
+    [projectName, floors, bgfDin277, t]
   );
   // 75-06 Task 5 (MS-06): part of the body OUTSIDE the envelope — visible
   // (red hatch / dashed border) and quantified (KPI), never silently corrected.
@@ -859,7 +877,24 @@ export default function MassingStudio({
     () => (!baufeldBekannt && Array.isArray(parcelPts) && parcelPts.length >= 3 ? flaecheAusserhalb(poly, parcelPts) : null),
     [poly, parcelPts, baufeldBekannt]
   );
-  const height = floors * floorH;
+  // 108-12 (finding 15b): storey heights per storey from the storey table (basements first, knee wall of the top storey). With a table the
+  // box height is the sum of the table heights (koerperHoehe_m = elevationOf, as the building model and programMetrics.height) instead of
+  // storeys × one value - 108-12 review: also for a uniform table that differs from storeyHeight; without a table exactly the old product.
+  const hoehenUebersicht = useMemo(
+    () => geschossHoehenUebersicht({ storeys: floors, storeyHeight: store.storeyHeight, geschosse: store.geschosse, untergeschosse: store.untergeschosse }, floors),
+    [floors, store.storeyHeight, store.geschosse, store.untergeschosse]
+  );
+  const height = koerperHoehe_m(store, floors, floorH);
+  // 108-12: with differing heights the slider is locked until the person unlocks it on purpose ("Alle Geschosse gleich setzen"); the
+  // unlock belongs to one project (review: reset on a project switch)
+  const [hoehenFrei, setHoehenFrei] = useState(false);
+  useEffect(() => { if (!hoehenUebersicht.ungleich) setHoehenFrei(false); }, [hoehenUebersicht.ungleich]);
+  useEffect(() => { setHoehenFrei(false); }, [project?.id]);
+  // numbers in the format of the active language; storey names without a table name translated (geschossLabel)
+  const zahlFmt = (/** @type {number} */ v) => v.toLocaleString(lang === "en" ? "en-GB" : "de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const hoehenText = hoehenUebersicht.zeilen
+    .map((z) => `${z.ausTabelle ? z.name : geschossLabel(z.level, t)} ${zahlFmt(z.hoehe_m)}${z.kniestock_m != null ? ` + ${t("Kniestock {{wert}}").replace("{{wert}}", zahlFmt(z.kniestock_m))}` : ""}`)
+    .join(" · ");
   // 108-11: the main body WITH the global roof of the building model (roof form/slope of the record, knee wall of the storey table):
   // eaves, ridge and roof faces from massing/hauptdach.js — the same createBuildingModel + globalesDach call as the BIM studio. The
   // live polygon goes in as site metres {x, z: y}, so the faces come back in the frame of the 3D view. Flat roof / no roof form → null:
@@ -871,6 +906,15 @@ export default function MassingStudio({
   }), [modellDachFelder, poly, floors, store.storeyHeight, floorH, store.geschosse, store.untergeschosse]);
   // height of the body for camera, shadow and the key figure: the ridge with a roof, else the box height
   const hoeheKoerper = hauptdach ? hauptdach.firsthoehe_m : height;
+  // 108-12 review: full-storey rule of the attic storey (top storey with a knee wall under the pitched roof) from the same roof, as the BIM
+  // studio does it (BitBimStudio vollgeschossDg): floor = eaves − knee wall [ASSUMED: no floor build-up], area = the live footprint. A
+  // storey that fails the 2/3 rule is left out of the GF of the GFZ; null (no attic, no roof) keeps the assumption "all full".
+  const vollgeschossDg = useMemo(() => {
+    if (!hauptdach || hauptdach.kniestock_m == null) return null;
+    return vollgeschossAusDach({ grundriss: poly.map((p) => ({ x: p.x, z: p.y })), dachEbenen: dachEbenen(hauptdach.dach), boden_m: hauptdach.traufhoehe_m - hauptdach.kniestock_m });
+  }, [hauptdach, poly]);
+  const gf = flaechenKennzahlen({ grundflaeche_m2: footArea, geschosse: floors, untergeschosse: store.untergeschosse, obersterVoll: vollgeschossDg?.voll ?? null });
+  const gfz = gf.gfzFlaeche_m2 / siteArea;
   // 108-11: the small 3D massing model (BimModelViewer) — without a roof exactly the old object {floors, area_net} (schematic stack);
   // with a roof it draws THIS body to scale: outline, storey planes, eaves and the faces of hauptkoerperDach (review: no own roof
   // computation in the viewer any more). Outline and faces in site metres, the viewer centres them.
@@ -908,7 +952,54 @@ export default function MassingStudio({
   }, [bgf, store.zones, poly, store.storeyHeight, store.geschosse, floors]);
   // 72-01 A-5 (Befund N-05): Kennzahlen je Projekttyp — Gewerbe zeigt
   // Arbeitsplätze + BGF-Stellplätze, Wohnen zeigt WE + Schlüssel 1,0.
-  const dichteKpis = kennzahlenJeTyp(project?.type ?? null, { nuf, bgf });
+  // 108-12 (finding 15a): the use of the project first (hand value, unit mix + parking key of the site planning, workshop typology "efh"),
+  // the NUF estimate only when nothing is known; `dichteAuto` = the same without the hand values (placeholder of the inputs).
+  const nutzung = { wohnungsmix, stellplatzPlanung, werkstattTyp: wtLayer?.typ ?? null, hand: kennzahlenHand };
+  const dichteKpis = kennzahlenJeTyp(project?.type ?? null, { nuf, bgf }, nutzung);
+  const dichteAuto = kennzahlenJeTyp(project?.type ?? null, { nuf, bgf }, { ...nutzung, hand: null });
+  const autoWert = (/** @type {string} */ key) => dichteAuto.find((k) => k.key === key)?.value;
+  /** @param {"wohneinheiten"|"stellplaetze"} feld @param {string} roh input text */
+  const handSetzen = (feld, roh) => {
+    if (!onKennzahlenHandChange) return;
+    const neu = { wohneinheiten: handZahl(kennzahlenHand?.wohneinheiten), stellplaetze: handZahl(kennzahlenHand?.stellplaetze), [feld]: handZahl(roh) };
+    onKennzahlenHandChange(neu.wohneinheiten == null && neu.stellplaetze == null ? null : neu);
+  };
+  // 108-12 review: the inputs keep the typed text as a draft; only a whole number ≥ 0 or a truly empty field is saved. A half-typed
+  // value ("2," gives an empty value with badInput), a decimal (stepMismatch) or a negative number stays in the field, is marked and
+  // NOT saved (before it cleared the field and saved "automatic", or rounded 2.4 to 2 silently). Leaving the field drops the draft.
+  const [handEntwurf, setHandEntwurf] = useState(/** @type {Partial<Record<"wohneinheiten"|"stellplaetze", {text: string, ungueltig: boolean}>>} */ ({}));
+  useEffect(() => { setHandEntwurf({}); }, [project?.id]);
+  /** @param {"wohneinheiten"|"stellplaetze"} feld @param {HTMLInputElement} el */
+  const handEingabe = (feld, el) => {
+    const v = el.validity;
+    const ungueltig = v.badInput || v.stepMismatch || v.rangeUnderflow || (el.value !== "" && !/^\d+$/.test(el.value.trim()));
+    setHandEntwurf((d) => ({ ...d, [feld]: { text: el.value, ungueltig } }));
+    if (!ungueltig) handSetzen(feld, el.value);
+  };
+  /** @param {"wohneinheiten"|"stellplaetze"} feld */
+  const handEntwurfWeg = (feld) => setHandEntwurf((d) => { const rest = { ...d }; delete rest[feld]; return rest; });
+  /** @param {"wohneinheiten"|"stellplaetze"} feld @returns {string|number} */
+  const handWert = (feld) => handEntwurf[feld]?.text ?? handZahl(kennzahlenHand?.[feld]) ?? "";
+  /** Subtitle of a density tile by the source of its value (108-12); the [ASSUMED] estimate keeps its old text. @param {any} kpi */
+  const dichteSub = (kpi) => {
+    const schluessel = Number(kpi.schluessel ?? 0).toLocaleString("de-DE", { maximumFractionDigits: 2 });
+    const basis = kpi.quelle === "hand" ? t("von Hand eingegeben")
+      : kpi.quelle === "wohnungsmix" ? t("Wohnungsmix der Baufeld-Planung")
+        : kpi.quelle === "efh" && kpi.key === "wohneinheiten" ? t("Einfamilienhaus (Werkstatt-Typ)")
+          : kpi.quelle === "efh" ? t("Schlüssel {{s}} je Einfamilienhaus [ASSUMED]").replace("{{s}}", schluessel)
+            : kpi.quelle === "planung" ? t("Schlüssel {{s}} je WE (Baufeld-Planung)").replace("{{s}}", schluessel)
+              : kpi.sub;
+    // 108-12 review: the planned spaces only next to a value of the use (the [ASSUMED] estimate keeps its old subtitle)
+    return kpi.geplant != null && kpi.quelle !== "schaetzung" ? `${basis} · ${t("geplant {{n}}").replace("{{n}}", String(kpi.geplant))}` : basis;
+  };
+  // 108-12 (finding 15c, review): the GF of the GFZ is named when it differs from the BGF tile (basement) or the attic was checked by the
+  // roof geometry; the subtitle says which way the check went. [ASSUMED]: 2/3 and 2.30 m of the rule, 1.40-m terrain rule unchecked.
+  const gfText = Math.round(gf.gfzFlaeche_m2).toLocaleString("de-DE");
+  const gfUntertitel = vollgeschossDg?.voll === false
+    ? t("GF {{gf}} m² (Vollgeschosse, BauNVO § 20; oberstes Geschoss kein Vollgeschoss nach Dachgeometrie) [ASSUMED]").replace("{{gf}}", gfText)
+    : vollgeschossDg?.voll === true
+      ? t("GF {{gf}} m² (Vollgeschosse, BauNVO § 20; oberstes Geschoss Vollgeschoss nach Dachgeometrie) [ASSUMED]").replace("{{gf}}", gfText)
+      : flaechen.untergeschosse > 0 ? t("GF {{gf}} m² (Vollgeschosse, BauNVO § 20) [ASSUMED]").replace("{{gf}}", gfText) : "";
   // 75-02: proportion KPI (Bürostandard φ [ASSUMED]); free polygons are judged by their bbox.
   const istRechteck = istAchsparallelesRechteck(poly);
   // Unrounded bbox — `foot` rounds to 0.1 m for labels, which would turn an exact phi snap into "1 : 1,61".
@@ -1023,10 +1114,11 @@ export default function MassingStudio({
     ? `${Math.min(...tiefen).toFixed(1)}–${Math.max(...tiefen).toFixed(1)}`
     : Math.max(abstandMin, abstandFaktor * (abstandHoehen ? abstandHoehen[0].hoehe_m : height)).toFixed(1);
 
-  const Slider = ({ label, value, min, max, step, set, unit }) => (
+  // 108-12: `gesperrt` locks the slider (greyed), `anzeige` replaces the value text (e.g. "je Geschoss")
+  const Slider = ({ label, value, min, max, step, set, unit, gesperrt = false, anzeige = undefined }) => (
     <div>
-      <div className="flex justify-between text-xs text-slate-500 mb-1"><span>{label}</span><span className="font-medium text-slate-700">{value}{unit}</span></div>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => set(Number(e.target.value))} className="w-full" />
+      <div className="flex justify-between text-xs text-slate-500 mb-1"><span>{label}</span><span className="font-medium text-slate-700">{anzeige ?? `${value}${unit}`}</span></div>
+      <input type="range" min={min} max={max} step={step} value={value} disabled={gesperrt} onChange={(e) => set(Number(e.target.value))} className={`w-full${gesperrt ? " opacity-50 cursor-not-allowed" : ""}`} />
     </div>
   );
 
@@ -1729,7 +1821,52 @@ export default function MassingStudio({
               </div>
               <Slider label="Geschosse" value={floors} min={1} max={25} step={1} unit=" OG" set={setFloorsVonHand} />
               {/* 107-02: the slider sets ALL storeys (also the rows of an existing storey table), like the height input of the BIM studio */}
-              <Slider label="Geschosshöhe" value={floorH} min={2.5} max={4.5} step={0.1} unit=" m" set={(v) => { setFloorH(v); store.setAlleGeschosshoehen(v); }} />
+              {/* 108-12 (finding 15b): differing storey heights are listed per storey; the slider then sets ALL storeys only after the
+                  person unlocked it on purpose - no single value next to a table that says otherwise */}
+              {hoehenUebersicht.jeGeschoss && (
+                <div className="text-xs text-muted-foreground rounded-md border border-border bg-muted px-2 py-1.5" data-testid="ms-geschosshoehen">
+                  <div className="font-medium text-foreground">{t("Geschosshöhen je Geschoss")}</div>
+                  <div>{hoehenText} m</div>
+                </div>
+              )}
+              <Slider label="Geschosshöhe" value={floorH} min={2.5} max={4.5} step={0.1} unit=" m" set={(v) => { setFloorH(v); store.setAlleGeschosshoehen(v); }}
+                gesperrt={hoehenUebersicht.ungleich && !hoehenFrei} anzeige={hoehenUebersicht.ungleich && !hoehenFrei ? t("je Geschoss") : undefined} />
+              {hoehenUebersicht.ungleich && (
+                <div className="text-[11px] leading-snug text-muted-foreground" data-testid="ms-geschosshoehe-hinweis">
+                  {hoehenFrei
+                    ? t("Der Regler setzt alle Geschosse auf einen Wert (auch das Untergeschoss); der Kniestock bleibt.")
+                    : <>
+                      {t("Einzelne Geschosshöhen ändern im Gebäudemodell (Geschosstabelle).")}{" "}
+                      <button type="button" className="underline text-foreground" onClick={() => setHoehenFrei(true)} data-testid="ms-geschosshoehe-frei">{t("Alle Geschosse gleich setzen")}</button>
+                    </>}
+                </div>
+              )}
+              {/* 108-12 (finding 15a): dwellings / parking spaces by hand per project (empty = automatic, placeholder = automatic value) */}
+              {onKennzahlenHandChange && (
+                <div className="grid grid-cols-2 gap-2" data-testid="ms-kennzahlen-hand">
+                  {dichteKpis.some((k) => k.key === "wohneinheiten") && (
+                    <label className="text-xs text-muted-foreground space-y-0.5">
+                      <span className="block">{t("Wohneinheiten von Hand")}</span>
+                      <input type="number" min={0} step={1} inputMode="numeric" data-testid="ms-we-hand"
+                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground"
+                        value={handWert("wohneinheiten")} placeholder={`${t("automatisch")} ${autoWert("wohneinheiten") ?? ""}`}
+                        aria-invalid={handEntwurf.wohneinheiten?.ungueltig || undefined}
+                        onChange={(e) => handEingabe("wohneinheiten", e.target)} onBlur={() => handEntwurfWeg("wohneinheiten")} />
+                    </label>
+                  )}
+                  <label className="text-xs text-muted-foreground space-y-0.5">
+                    <span className="block">{t("Stellplätze von Hand")}</span>
+                    <input type="number" min={0} step={1} inputMode="numeric" data-testid="ms-stpl-hand"
+                      className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground"
+                      value={handWert("stellplaetze")} placeholder={`${t("automatisch")} ${autoWert("stellplaetze") ?? ""}`}
+                      aria-invalid={handEntwurf.stellplaetze?.ungueltig || undefined}
+                      onChange={(e) => handEingabe("stellplaetze", e.target)} onBlur={() => handEntwurfWeg("stellplaetze")} />
+                  </label>
+                  {(handEntwurf.wohneinheiten?.ungueltig || handEntwurf.stellplaetze?.ungueltig) && (
+                    <div className="col-span-2 text-[11px] text-destructive" data-testid="ms-hand-ungueltig">{t("Nur ganze Zahlen ab 0 — nicht gespeichert")}</div>
+                  )}
+                </div>
+              )}
               <div className="border-t pt-2 mt-1 space-y-3">
                 {/* 75-13: escape-route paths from the workshop solver — only meaningful
                     while the workshop rule "Rettungsweg" is on (the label says so). */}
@@ -1891,7 +2028,9 @@ export default function MassingStudio({
             <KPI icon={Maximize2} label="Grundstück" value={`${Math.round(siteArea).toLocaleString("de-DE")} m²`} sub={flaechenQuelleText} tint="text-slate-500" testid="ms-kpi-grundstueck" />
             <KPI icon={Building2} label="Bebaut (BF)" value={`${Math.round(footArea).toLocaleString("de-DE")} m²`} tint="text-blue-500" />
             <KPI icon={Layers} label="GRZ" value={grz.toFixed(2)} sub={`${grz > 0.4 ? "über Regelwert 0,4" : "≤ 0,4 ok"} · auf ${flaechenQuelleText}`} tint="text-violet-500" />
-            <KPI icon={Layers} label="GFZ" value={gfz.toFixed(2)} sub={`${gfz > 1.2 ? "hoch" : "moderat"} · auf ${flaechenQuelleText}`} tint="text-violet-500" />
+            {/* 108-12 (finding 15c): the GFZ counts the full storeys only (BauNVO § 20 Abs. 3) - with a basement its area is named, it differs from the BGF */}
+            <KPI icon={Layers} label="GFZ" value={gfz.toFixed(2)} testid="ms-kpi-gfz"
+              sub={`${gfz > 1.2 ? "hoch" : "moderat"} · auf ${flaechenQuelleText}${gfUntertitel ? ` · ${gfUntertitel}` : ""}`} tint="text-violet-500" />
             {/* 75-06 Task 5 (MS-06): envelope violation as a number — only when
                 an envelope exists; concave envelopes honestly without m². */}
             {baufeldBekannt && (
@@ -1927,7 +2066,11 @@ export default function MassingStudio({
               sub={`${proportion.status === "gelb" ? proportion.text : t("Bürostandard φ [ASSUMED]")}${proportion.naeherung ? ` · ${t("Bbox-Näherung")}` : ""}`}
               tint={proportion.status === "gruen" ? "text-emerald-500" : "text-amber-500"}
             />
-            <KPI icon={Building2} label="BGF" value={`${Math.round(bgf).toLocaleString("de-DE")} m²`} tint="text-emerald-500" testid="ms-kpi-bgf" />
+            {/* 108-12 (finding 15c): BGF after DIN 277 over ALL storeys, basements included; without a basement the old value and no subtitle */}
+            <KPI icon={Building2} label="BGF" value={`${Math.round(bgfDin277).toLocaleString("de-DE")} m²`} tint="text-emerald-500" testid="ms-kpi-bgf"
+              sub={flaechen.untergeschosse > 0
+                ? t("DIN 277, alle Geschosse · davon Untergeschoss {{ug}} m²").replace("{{ug}}", Math.round(flaechen.untergeschossFlaeche_m2).toLocaleString("de-DE"))
+                : undefined} />
             {/* 108-11: with the roof of the building model the ridge height, the eaves as second value */}
             <KPI
               icon={Ruler}
@@ -1959,8 +2102,9 @@ export default function MassingStudio({
                 key={kpi.key}
                 icon={kpi.icon === "home" ? Home : kpi.icon === "car" ? Car : Users}
                 label={kpi.label}
-                value={`~${kpi.value}`}
-                sub={kpi.sub}
+                value={kpi.quelle === "schaetzung" ? `~${kpi.value}` : `${kpi.value}`}
+                sub={dichteSub(kpi)}
+                testid={`ms-kpi-${kpi.key}`}
                 tint={kpi.icon === "car" ? "text-slate-500" : "text-amber-500"}
               />
             ))}

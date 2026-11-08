@@ -39,6 +39,8 @@ export const BUERO_ORGA_EREIGNIS = "bueroOrga:geaendert";
  *   wechsleNutzer: (nutzerId: string|null) => void,
  *   nutzerListe?: Array<Record<string, any>>,
  *   kannWechseln?: boolean,
+ *   kannBauherrVorschau?: boolean,
+ *   bauherrVorschau?: boolean,
  *   ladeFehler?: string|null,
  *   neuLaden?: () => Promise<void>,
  *   zuordnungen?: Array<{mitarbeiter_id: string, alle: boolean, zuordnungen: Array<{project_id: string, funktion: string|null, von: string|null, bis: string|null}>}>,
@@ -133,7 +135,7 @@ export function ZugriffProvider({ children, wert = null, lade = null }) {
       user, serverRolle, nutzerListe: daten?.nutzer || [], zuordnungen: daten?.zuordnungen || null,
       einstellung: daten?.einstellung || null, datenquelle: DATENQUELLE, gespeicherteNutzerId: nutzerId,
     });
-    return mitHelfern(r.zugriff, wechsleNutzer, { nutzerListe: r.nutzerListe, kannWechseln: r.kannWechseln, ladeFehler, neuLaden, zuordnungen: daten?.zuordnungen || [] });
+    return mitHelfern(r.zugriff, wechsleNutzer, { nutzerListe: r.nutzerListe, kannWechseln: r.kannWechseln, kannBauherrVorschau: r.kannBauherrVorschau, ladeFehler, neuLaden, zuordnungen: daten?.zuordnungen || [] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lade, daten, nutzerId, user, ladeFehler, wechsleNutzer, neuLaden]);
 

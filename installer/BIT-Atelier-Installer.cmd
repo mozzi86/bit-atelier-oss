@@ -148,7 +148,14 @@ if ("$env:BIT_INSTALLER_ARGS" -match '(^|\s)[/-]{1,2}(entfernen|uninstall)(\s|$)
         if ($e -and $e.Name -eq 'cmd.exe') { Stop-Process -Id $e.ProcessId -Force -ErrorAction SilentlyContinue }
       }
       Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue
-      Start-Sleep -Seconds 2
+      # 112-01: wait until the server really ended (max 15 s) instead of a fixed 2 s - copying or deleting daten while the
+      # process still writes leaves a half-written backup. Still running: stop here, nothing copied or deleted.
+      $warten = 0
+      while ((Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue) -and $warten -lt 15) { Start-Sleep -Seconds 1; $warten++ }
+      if (Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue) {
+        Say "BIT-Atelier (process $($c.OwningProcess)) is still running after 15 seconds - nothing was copied or deleted. Close it and run this again.  [Deutsch: BIT-Atelier laeuft nach 15 Sekunden noch - nichts kopiert oder geloescht. Bitte beenden und erneut starten.]"
+        exit 1
+      }
       Say "Stopped the running BIT-Atelier (port $Port)."
     }
   }

@@ -1,3 +1,13 @@
+// AtelierDeveloper.jsx — "Portfolio (Projektentwicklung)": the projects the role may see, their key figures,
+// latest activities and quick links.
+//
+// 112-01 (foreign review 08.11.2026, point 1): every figure comes from a record. Gone: the fixed "mock" KPIs
+// (125 000 m² BGF, 82.4 % efficiency, 23.1 % energy savings, 45.6 Mio. € portfolio value — the Project schema has none
+// of these fields), three invented activities and a static "system state" (98/94/100 %, /api/status reports no module
+// health). Count, area and screening use the role-filtered list, not the raw one.
+//
+// In: Project and EnergyScenario records (bitApi). Out: UI only.
+
 import { seitenWurzel } from "@core/lib/utils";
 import React, { useState, useEffect, useMemo } from "react";
 import { projekteNachZugriff } from "@core/lib/rechte.js";
@@ -6,16 +16,13 @@ import { Project } from "@/entities/Project";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Button } from "@core/components/ui/button";
 import { Badge } from "@core/components/ui/badge";
-import { Progress } from "@core/components/ui/progress";
 import { 
   Building, 
   Zap, 
   Euro, 
-  TrendingUp, 
   MapPin,
   Calculator,
   Calendar,
-  AlertTriangle,
   CheckCircle,
   Eye,
   Plus
@@ -24,12 +31,20 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@core/utils";
 import { STATUS_LABELS, labelFor } from "../components/projects/labels";
-import { useI18n } from "@core/lib/i18n";
+import { useI18n, englischErgaenzen } from "@core/lib/i18n";
+import { EN as PORTFOLIO_112_EN } from "@core/lib/i18nTeile/portfolio-112.js";
 import { bitApi } from "@core/api/bitApi";
-import { screeningZaehlung, KEIN_GEG_NACHWEIS } from "@core/lib/energieScreening";
+import { KEIN_GEG_NACHWEIS } from "@core/lib/energieScreening";
+import { portfolioKennzahlen, letzteAktivitaeten } from "@/lib/portfolio/portfolioKennzahlen.js";
+
+// Lazy dictionary part (see the file header of portfolio-112.js).
+englischErgaenzen(PORTFOLIO_112_EN);
 
 // Opens the create form on /Projects (Projects.jsx reads ?neu=1).
 const NEUES_PROJEKT = `${createPageUrl("Projects")}?neu=1`;
+
+/** Day of a record timestamp, e.g. "08.11.2026"; "—" for a missing date. */
+const tagDe = (iso) => (iso ? new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—");
 
 export default function AtelierDeveloper() {
   // 72-08 (N-02): the h1 is the menu title (src/navigation.js), same key.
@@ -38,40 +53,11 @@ export default function AtelierDeveloper() {
   const zugriff = useZugriff();
   const [rohProjekte, setProjects] = useState([]);
   const projects = useMemo(() => projekteNachZugriff(rohProjekte, zugriff), [rohProjekte, zugriff]);
+  const [szenarien, setSzenarien] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [kpis, setKpis] = useState({
-    total_projects: 0,
-    total_gfa: 0,
-    avg_efficiency: 0,
-    avg_energy_savings: 0,
-    total_value: 0,
-    // Energy screening (guide value) — counted from stored EnergyScenario records, never a GEG proof.
-    screening: { eingehalten: 0, mitErgebnis: 0 }
-  });
-
-  const [recentActivity, setRecentActivity] = useState([
-    {
-      id: 1,
-      type: "feasibility",
-      message: "Eco Village München – Baumassen-Szenario A freigegeben",
-      timestamp: "vor 2 Stunden",
-      status: "success"
-    },
-    {
-      id: 2,
-      type: "energy",
-      message: "Bürohochhaus Berlin – Energie-Screening: Richtwert eingehalten",
-      timestamp: "vor 4 Stunden",
-      status: "success"
-    },
-    {
-      id: 3,
-      type: "bim",
-      message: "Wohnanlage – IFC-Modell importiert",
-      timestamp: "vor 6 Stunden",
-      status: "info"
-    }
-  ]);
+  // 112-01: computed from the FILTERED list on render (the old code counted the raw list once after loading).
+  const kpis = useMemo(() => portfolioKennzahlen(projects, szenarien), [projects, szenarien]);
+  const aktivitaeten = useMemo(() => letzteAktivitaeten(projects, szenarien, 5), [projects, szenarien]);
 
   useEffect(() => {
     loadDashboardData();
@@ -81,23 +67,13 @@ export default function AtelierDeveloper() {
     setIsLoading(true);
     try {
       // B-87-12: list(sort) takes no limit (express, demo and supabase all ignored the
-      // old second argument). All projects are needed anyway: total_projects counts them,
+      // old second argument). All projects are needed anyway: the count uses them,
       // the list below shows the first five by updated_date.
       const projectsData = await Project.list('-updated_date');
       setProjects(projectsData);
-      // Liability (12.10.2026): this KPI was a GEG conformity rate = a flat 89 % of all projects. Now it counts the
-      // projects whose newest energy screening stays below the reference guide value (energieScreening.js).
-      const szenarien = await bitApi.entities.EnergyScenario.list().catch(() => []);
-      
-      // Calculate KPIs (mock data for now)
-      setKpis({
-        total_projects: projectsData.length,
-        total_gfa: 125000,
-        avg_efficiency: 82.4,
-        avg_energy_savings: 23.1,
-        total_value: 45600000,
-        screening: screeningZaehlung(projectsData, szenarien)
-      });
+      // Liability (12.10.2026): the screening KPI counts the projects whose newest energy screening stays below the
+      // reference guide value (energieScreening.js) — never a GEG proof.
+      setSzenarien(await bitApi.entities.EnergyScenario.list().catch(() => []));
     } catch (error) {
       console.error("Error loading dashboard data:", error);
     }
@@ -112,15 +88,6 @@ export default function AtelierDeveloper() {
       handover: "bg-green-100 text-green-800"
     };
     return colors[phase] || "bg-gray-100 text-gray-800";
-  };
-
-  const getStatusIcon = (status) => {
-    switch(status) {
-      case "success": return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case "warning": return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
-      case "error": return <AlertTriangle className="w-4 h-4 text-red-500" />;
-      default: return <Eye className="w-4 h-4 text-blue-500" />;
-    }
   };
 
   return (
@@ -149,15 +116,16 @@ export default function AtelierDeveloper() {
           </Link>
         </motion.div>
 
-        {/* KPI-Karten */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        {/* KPI-Karten — 112-01: only figures with a data source (see the file header). */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="border-0 shadow-sm rounded-xl hover:shadow-md transition-shadow">
             <CardContent className="p-6 text-center">
               <div className="inline-flex p-2.5 rounded-xl bg-blue-50 mb-2">
                 <Building className="w-6 h-6 text-blue-600" />
               </div>
-              <h3 className="text-2xl font-bold text-slate-800 mb-1">{kpis.total_projects.toLocaleString("de-DE")}</h3>
-              <p className="text-xs text-slate-500">Aktive Projekte</p>
+              <h3 className="text-2xl font-bold text-slate-800 mb-1" data-portfolio-anzahl>{kpis.anzahl.toLocaleString("de-DE")}</h3>
+              {/* 112-01 review: counts every visible project (no status filter), so the label says "Projekte", not "Aktive". */}
+              <p className="text-xs text-slate-500" data-portfolio-anzahl-label>{t("Projekte")}</p>
             </CardContent>
           </Card>
 
@@ -166,38 +134,18 @@ export default function AtelierDeveloper() {
               <div className="inline-flex p-2.5 rounded-xl bg-violet-50 mb-2">
                 <Calculator className="w-6 h-6 text-violet-600" />
               </div>
-              <h3 className="text-2xl font-bold text-slate-800 mb-1">{Math.round(kpis.total_gfa / 1000).toLocaleString("de-DE")} Tsd.</h3>
-              <p className="text-xs text-slate-500">BGF gesamt (m²)</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm rounded-xl hover:shadow-md transition-shadow">
-            <CardContent className="p-6 text-center">
-              <div className="inline-flex p-2.5 rounded-xl bg-emerald-50 mb-2">
-                <TrendingUp className="w-6 h-6 text-emerald-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-slate-800 mb-1">{kpis.avg_efficiency.toLocaleString("de-DE")} %</h3>
-              <p className="text-xs text-slate-500">Ø Flächeneffizienz</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm rounded-xl hover:shadow-md transition-shadow">
-            <CardContent className="p-6 text-center">
-              <div className="inline-flex p-2.5 rounded-xl bg-amber-50 mb-2">
-                <Zap className="w-6 h-6 text-amber-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-slate-800 mb-1">{kpis.avg_energy_savings.toLocaleString("de-DE")} %</h3>
-              <p className="text-xs text-slate-500">Energieeinsparung</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm rounded-xl hover:shadow-md transition-shadow">
-            <CardContent className="p-6 text-center">
-              <div className="inline-flex p-2.5 rounded-xl bg-teal-50 mb-2">
-                <Euro className="w-6 h-6 text-teal-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-slate-800 mb-1">{(kpis.total_value / 1000000).toLocaleString("de-DE", { maximumFractionDigits: 1 })} Mio. €</h3>
-              <p className="text-xs text-slate-500">Portfoliowert</p>
+              {/* Sum of the areas entered per project (building_area / area_net), not a computed BGF. */}
+              <h3 className="text-2xl font-bold text-slate-800 mb-1" data-portfolio-flaeche>
+                {kpis.flaecheM2 == null ? "—" : Math.round(kpis.flaecheM2).toLocaleString("de-DE")}
+              </h3>
+              <p className="text-xs text-slate-500">{t("Fläche lt. Projektangaben (m²)")}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {kpis.flaecheM2 == null
+                  ? t("Keine Flächenangabe in den Projekten")
+                  : t("{{n}} von {{gesamt}} Projekten mit Flächenangabe")
+                      .replace("{{n}}", String(kpis.mitFlaeche))
+                      .replace("{{gesamt}}", String(kpis.anzahl))}
+              </p>
             </CardContent>
           </Card>
 
@@ -220,13 +168,13 @@ export default function AtelierDeveloper() {
         {/* Hauptinhalt */}
         <div className="grid lg:grid-cols-3 gap-8">
           
-          {/* Aktive Projekte */}
+          {/* 112-01 review: the five most recently changed visible projects (list sorted by -updated_date, no status filter). */}
           <div className="lg:col-span-2">
             <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-slate-800">
                   <Building className="w-5 h-5 text-emerald-600" />
-                  Aktive Projekte
+                  {t("Zuletzt geänderte Projekte")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -248,13 +196,7 @@ export default function AtelierDeveloper() {
                           {labelFor(STATUS_LABELS, project.status)}
                         </Badge>
                         <p className="text-sm text-slate-500 mt-1">
-                          {project.updated_date
-                            ? new Date(project.updated_date).toLocaleDateString("de-DE", {
-                                day: "2-digit",
-                                month: "2-digit",
-                                year: "numeric",
-                              })
-                            : "—"}
+                          {tagDe(project.updated_date)}
                         </p>
                       </div>
                     </div>
@@ -312,60 +254,38 @@ export default function AtelierDeveloper() {
               </CardContent>
             </Card>
 
-            {/* Letzte Aktivitäten */}
+            {/* Letzte Aktivitäten — 112-01: from record timestamps (letzteAktivitaeten), empty state otherwise.
+                The former "Systemzustand" card (fixed 98/94/100 %) is gone: no endpoint reports module health. */}
             <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-slate-800">
                   <Calendar className="w-5 h-5 text-emerald-600" />
-                  Letzte Aktivitäten
+                  {t("Letzte Aktivitäten")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-3">
-                      {getStatusIcon(activity.status)}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-800">
-                          {activity.message}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {activity.timestamp}
-                        </p>
+                {aktivitaeten.length === 0 ? (
+                  <p className="text-sm text-muted-foreground" data-portfolio-aktivitaeten-leer>{t("Noch keine Aktivitäten")}</p>
+                ) : (
+                  <div className="space-y-4" data-portfolio-aktivitaeten>
+                    {aktivitaeten.map((a) => (
+                      <div key={a.id} className="flex items-start gap-3">
+                        {a.art === "screening"
+                          ? <Zap className="w-4 h-4 text-muted-foreground" />
+                          : <Building className="w-4 h-4 text-muted-foreground" />}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {a.projektName || t("(ohne Namen)")} – {a.art === "screening"
+                              ? t("Energie-Screening gespeichert")
+                              : a.art === "angelegt" ? t("Projekt angelegt") : t("Projektdaten geändert")}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{tagDe(a.datum)}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Systemzustand */}
-            <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="text-slate-800">Systemzustand</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>BIM-Verarbeitung</span>
-                    <span>98 %</span>
+                    ))}
                   </div>
-                  <Progress value={98} className="h-2" />
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Energieberechnungen</span>
-                    <span>94 %</span>
-                  </div>
-                  <Progress value={94} className="h-2" />
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>KI-Assistent</span>
-                    <span>100 %</span>
-                  </div>
-                  <Progress value={100} className="h-2" />
-                </div>
+                )}
+                <p className="mt-4 text-[10px] text-muted-foreground">{t("Aus den Anlage- und Änderungsdaten der Projekte und den gespeicherten Energie-Screenings.")}</p>
               </CardContent>
             </Card>
           </div>

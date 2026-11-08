@@ -16,6 +16,7 @@
 /** @type {Record<string, string>} bare specifier → file relative to the repo root */
 const UMLEITUNGEN = {};
 
+import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
@@ -52,5 +53,25 @@ export async function resolve(specifier, context, nextResolve) {
     }
     throw new Error(`Alias "${specifier}" nicht auflösbar (geprüft: ${base}{${EXTENSIONS.join(",")}})`);
   }
+  if (specifier.endsWith(".json")) {
+    // Node 22 rejects a JSON import without an import attribute. The app sources
+    // stay plain `import x from "./datei.json"` so ESLint and Vite keep parsing
+    // them; this hook serves the JSON as a default export for the unit tests.
+    const url = new URL(specifier, context.parentURL).href;
+    return { url, shortCircuit: true };
+  }
   return nextResolve(specifier, context);
+}
+
+/**
+ * @param {string} url
+ * @param {object} context
+ * @param {(url: string, context: object) => Promise<any>} nextLoad
+ */
+export async function load(url, context, nextLoad) {
+  if (url.endsWith(".json")) {
+    const source = `export default ${readFileSync(fileURLToPath(url), "utf8")}`;
+    return { format: "module", source, shortCircuit: true };
+  }
+  return nextLoad(url, context);
 }

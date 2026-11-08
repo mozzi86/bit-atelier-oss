@@ -81,7 +81,11 @@ describe('grants-pruefen — Matrix', () => {
   it('jede Funktion, die 0014 für authenticated freigibt, steht im Soll', () => {
     const sql = fs.readFileSync(path.join(WURZEL, 'supabase/migrations/0014_grants_zugriff.sql'), 'utf8');
     const block = sql.slice(sql.indexOf('grant execute on function\n'), sql.indexOf('to authenticated;'));
-    const namen = [...block.matchAll(/public\.([a-z_]+)\(/g)].map((m) => m[1]).sort();
+    // Since 110-01: plus every function 0016 grants to authenticated (each create is followed by its grant).
+    const sql16 = fs.readFileSync(path.join(WURZEL, 'supabase/migrations/0016_bauherr.sql'), 'utf8');
+    const sql17 = fs.readFileSync(path.join(WURZEL, 'supabase/migrations/0017_einladungscodes.sql'), 'utf8');
+    const neu16 = [...(sql16 + sql17).matchAll(/grant execute on function public\.([a-z_]+)\([^)]*\) to authenticated/g)].map((m) => m[1]);
+    const namen = [...new Set([...[...block.matchAll(/public\.([a-z_]+)\(/g)].map((m) => m[1]), ...neu16])].sort();
     const imSoll = [...new Set(SOLL.filter((k) => k.includes('|function|')).map((k) => k.split('|')[2].split('(')[0]))].sort();
     assert.deepEqual(namen, imSoll);
   });

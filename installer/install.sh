@@ -81,6 +81,14 @@ datei_entfernen() {
   say "Removed the .bitproj file association."
 }
 
+# True while at least one of the given process ids still exists (kill -0 sends no signal, it only asks).
+laeuft_noch() {
+  for P in "$@"; do
+    if kill -0 "$P" 2>/dev/null; then return 0; fi
+  done
+  return 1
+}
+
 entfernen() {
   case "$ZIEL" in ""|/|"$HOME"|"$HOME/") say "Refusing to remove $ZIEL."; exit 1 ;; esac
   say "Uninstalling BIT-Atelier from $ZIEL  [Deutsch: BIT-Atelier wird entfernt]"
@@ -93,7 +101,16 @@ entfernen() {
     if [ -z "$PIDS" ]; then say "BIT-Atelier runs on port $PORT, but its process was not found - stop it (Ctrl+C) and run this again."; exit 1; fi
     # shellcheck disable=SC2086 # several PIDs on purpose
     kill $PIDS 2>/dev/null || true
-    sleep 2
+    # 112-01: wait until the server really ended (kill -0 = "does it still exist", max 15 s). A fixed sleep 2 went on to
+    # copy and delete while the server could still write into daten/ - a half-written backup or a folder that comes back.
+    WARTEZEIT=0
+    # shellcheck disable=SC2086 # several PIDs on purpose
+    while laeuft_noch $PIDS && [ "$WARTEZEIT" -lt 15 ]; do sleep 1; WARTEZEIT=$((WARTEZEIT + 1)); done
+    # shellcheck disable=SC2086 # several PIDs on purpose
+    if laeuft_noch $PIDS; then
+      say "BIT-Atelier (process $PIDS) is still running after 15 seconds - nothing was copied or deleted. Stop it (Ctrl+C in its window) and run this again.  [Deutsch: BIT-Atelier laeuft nach 15 Sekunden noch - nichts kopiert oder geloescht. Bitte beenden und erneut starten.]"
+      exit 1
+    fi
     say "Stopped the running BIT-Atelier (port $PORT)."
   fi
   # b) The data folder stays unless the user says otherwise; a backup copy is offered before deleting.

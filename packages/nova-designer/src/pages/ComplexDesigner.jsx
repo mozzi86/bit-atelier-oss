@@ -118,6 +118,9 @@ function komplexStart() {
     riegel: [],
     unit_types: [],
     parking: { total_spaces: 0, parking_key: 1.0, barrier_free_spaces: 0, ev_charging_stations: 0 },
+    // 108-12 (finding 15a): dwellings / parking spaces typed in by hand in the massing studio, ADDITIVE
+    // ({ wohneinheiten: number|null, stellplaetze: number|null }); null = automatic (unit mix, parking key, estimate). Old records load with null.
+    kennzahlen_hand: null,
     energy_systems: [],
     topography: { elevation_points: [], slope_analysis: {}, drainage_plan: [] },
     // 103-03: design flood levels typed in the flood tab, ADDITIVE ({ hq: [{ id, name, pegelNHN, quelle }] });
@@ -685,6 +688,11 @@ export default function ComplexDesigner() {
                   baufelder={complexData.designated_areas}
                   /* 108-08 (D-EFH-09): blocks of the site planning = fallback start position of the body */
                   buildings={complexData.buildings}
+                  /* 108-12 (finding 15a): use of the project for the dwelling / parking figures, hand values saved with the design */
+                  wohnungsmix={complexData.unit_types}
+                  stellplatzPlanung={complexData.parking}
+                  kennzahlenHand={complexData.kennzahlen_hand ?? null}
+                  onKennzahlenHandChange={(werte) => updateComplexData("kennzahlen_hand", werte)}
                   grundstueck={complexData.grundstueck}
                   nordwinkel={complexData.nordwinkel}
                   onBaufeldChange={(points) => {

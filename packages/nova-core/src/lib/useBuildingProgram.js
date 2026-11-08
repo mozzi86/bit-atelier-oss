@@ -87,7 +87,10 @@ export function programMetrics(s) {
   const footArea = footprintAreaM(s?.footprintM);
   const storeys = Math.max(0, Math.round(s?.storeys || 0));
   const storeyHeight = s?.storeyHeight || 3;
-  const bgf = footArea * storeys;          // Bruttogrundfläche (alle Geschosse)
+  // gross floor area of the storeys ABOVE GROUND only (footprint × storeys), m² - basements (`untergeschosse`) are NOT included, so this is
+  // not the BGF after DIN 277 (the massing studio shows that one with basements, massing/flaechenKennzahlen.js, 108-12). The cost
+  // calculator and the planners read this value; switching them to the DIN 277 BGF is an open decision (108-12 review, golden 86-05a).
+  const bgf = footArea * storeys;
   // Nettogrundfläche ~80 % BGF [ASSUMED] — ALWAYS the flat value, above ground, also when zones exist (107-11 review): every planner
   // that reads pm.ngf (apartment, building services, landscape, drainage, accessibility) keeps the flat rate. The zone-aware DIN 277
   // areas (bauteil/raeume.js din277Flaechen) are used only by the massing studio's NUF (kennzahlen.js nufFuerKennzahlen) and the DIN 277

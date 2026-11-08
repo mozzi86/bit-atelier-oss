@@ -45,10 +45,56 @@ const API_BASE = import.meta.env?.VITE_API_BASE_URL || '/api';
  */
 export const ZWISCHENZEITLICH_GEAENDERT = 'bit:zwischenzeitlich-geaendert';
 
-async function request(path, options = {}) {
+/**
+ * Merges the caller's headers over the defaults (112-01 review). Header names are case-insensitive: a caller's
+ * "content-type" replaces the default "Content-Type" instead of sending both (fetch would join them to one value).
+ * @param {Record<string, string>} vorgaben default headers
+ * @param {HeadersInit|undefined} eigene the caller's headers: plain object, Headers instance or entry list
+ * @returns {Record<string, string>} plain object (the unit test reads it as such)
+ */
+export function kopfZeilenMischen(vorgaben, eigene) {
+  /** @type {Record<string, string>} */
+  const ergebnis = { ...vorgaben };
+  // globalThis.Headers: present in browsers and Node >= 18; read through globalThis so a runtime without it falls to the
+  // plain-object branch instead of throwing.
+  const H = /** @type {any} */ (globalThis).Headers;
+  /** @type {Array<[string, string]>} */
+  const eintraege = !eigene
+    ? []
+    : Array.isArray(eigene)
+      ? /** @type {Array<[string, string]>} */ (eigene)
+      : H && eigene instanceof H
+        ? [.../** @type {any} */ (eigene).entries()]
+        : Object.entries(/** @type {Record<string, string>} */ (eigene));
+  for (const [name, wert] of eintraege) {
+    for (const k of Object.keys(ergebnis)) if (k.toLowerCase() === name.toLowerCase()) delete ergebnis[k];
+    ergebnis[name] = String(wert);
+  }
+  return ergebnis;
+}
+
+/**
+ * One call of the express API (path below API_BASE). Throws an Error with `.status` and `.data` on a non-2xx answer,
+ * returns null for 204, else the parsed JSON body. Side effect: dispatches ZWISCHENZEITLICH_GEAENDERT when the server
+ * reports that the write replaced a newer version.
+ *
+ * 112-01 (foreign review point 3): the caller's `options.headers` are MERGED over the defaults. Before, `...options`
+ * replaced the whole headers object, so a caller passing one header of its own silently lost Content-Type (express then
+ * leaves req.body empty) and the client id of 106-09 (the change stream then echoes the tab's own writes back to it).
+ * A caller may still override a default on purpose by naming the same header. A Headers instance or an entry list is
+ * normalised first (spreading a Headers instance yields {} - its entries are no own enumerable properties).
+ *
+ * Exported only for the unit test (bitApiHaertung-11201). It is the bare express path: it bypasses the serverless,
+ * cloud and PERSONAL_NUR_LOKAL routing of bitApi.* - app code calls bitApi.entities / bitApi.personal / bitApi.apiFetch.
+ * @param {string} path API path below API_BASE, e.g. "/entities/Project?sort=-updated_date"
+ * @param {RequestInit} [options] fetch options; headers as a plain object, a Headers instance or an entry list
+ * @returns {Promise<any>} parsed JSON body, or null for 204
+ */
+export async function request(path, options = {}) {
+  const { headers, ...rest } = options;
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', [CLIENT_KOPF]: clientKennung() },
-    ...options,
+    ...rest,
+    headers: kopfZeilenMischen({ 'Content-Type': 'application/json', [CLIENT_KOPF]: clientKennung() }, headers),
   });
   if (res.headers?.get?.('X-Bit-Hinweis') === 'zwischenzeitlich-geaendert' && typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(ZWISCHENZEITLICH_GEAENDERT, { detail: { pfad: path } }));
@@ -145,7 +191,17 @@ function entityClient(name) {
  * @property {(id: string) => Promise<any>} get
  * @property {(data: Record<string, any>) => Promise<any>} create
  * @property {(id: string, data: Record<string, any>, opts?: {stand?: string|null}) => Promise<any>} update
- *   opts.stand (106-09, express path only): updated_date of the base; an outdated base answers 409 (err.status, err.data.gespeichert)
+ *   opts.stand (106-09; for bitApi.personal since 112-01): ISO updated_date of the base; an outdated base answers 409
+ *   (err.status, err.data.gespeichert). Only the express path checks it.
+ *   The serverless path (demoDb / personalDb) ignores it and has NO conflict check across tabs: IndexedDB belongs to the
+ *   origin and is shared by every tab of the browser, so two tabs of the same browser are two writers and the last write
+ *   wins between them (personalDb.js reads the store on every call, so a tab never writes from a stale cache, but a
+ *   concurrent edit in the other tab is still overwritten). Left open on purpose: the serverless edition has one person
+ *   at one device; a cross-tab check (Web Locks / BroadcastChannel) would be a plan of its own.
+ *   The cloud path (supabase) ignores it too: records are written row-wise under RLS by the one owner (see the E-20 note
+ *   in umgebung.js) and HR entities never go there (PERSONAL_NUR_LOKAL) — a conflict check there belongs to phase 74.
+ *   No HR form passes stand yet (MitarbeiterFormular, GehaltsVerlauf …): until they do, personal writes stay
+ *   last-write-wins on the express path as well.
  * @property {(id: string) => Promise<any>} delete
  */
 
@@ -199,7 +255,10 @@ function personalEntityClient(name) {
     filter: (query, sort) => request(`/personal/${name}${buildQuery(query, sort)}`),
     get: (id) => request(`/personal/${name}/${id}`),
     create: (data) => request(`/personal/${name}`, { method: 'POST', body: JSON.stringify(data) }),
-    update: (id, data) => request(`/personal/${name}/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    // 112-01 (foreign review point 3): opts.stand like the entity route (106-09) — the server answers 409 when the stored
+    // record is newer than the base the write was built on (personalRouter.js uses the same standVeraltet check).
+    update: (id, data, opts) =>
+      request(`/personal/${name}/${id}${opts?.stand ? `?stand=${encodeURIComponent(opts.stand)}` : ''}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id) => request(`/personal/${name}/${id}`, { method: 'DELETE' }),
   };
 }

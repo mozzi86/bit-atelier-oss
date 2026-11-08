@@ -19,6 +19,9 @@ import { DATENQUELLE, SERVERLOS } from "@core/lib/umgebung";
 import { wahrheitFuer } from "@core/lib/speicherWahrheit";
 import { speicherStand, speicherDauerhaft } from "@core/api/demoIdb";
 import { demoDbAuslesen, letzteSicherungLesen } from "@core/api/demoDb";
+// 112-01: static — speicherDialoge.jsx (below) imports the snapshot module statically anyway, so the former dynamic
+// import moved nothing out of this chunk and Vite reported it as ineffective.
+import { schnappschuesseListe } from "@core/api/schnappschuesse";
 import { exportProjekt } from "@core/api/projektDatei";
 import { tageZwischen, heuteLokal } from "@core/lib/kalender/datum.js";
 import { geraetespeicherSchluessel } from "@core/lib/browserSpeicher.js";
@@ -144,7 +147,6 @@ export default function DatenBereich({ kontext }) {
   const snapshotsOeffnen = async () => {
     setSnapFehler("");
     try {
-      const { schnappschuesseListe } = await import("@core/api/schnappschuesse");
       setSnapshots(await schnappschuesseListe());
     } catch (e) {
       setSnapshots([]);
@@ -156,7 +158,6 @@ export default function DatenBereich({ kontext }) {
     try {
       await aktionen.snapshotWiederherstellen(id);
     } catch (e) {
-      const { schnappschuesseListe } = await import("@core/api/schnappschuesse");
       setSnapFehler(t(String(e?.message || e)));
       setSnapshots(await schnappschuesseListe().catch(() => []));
     }

@@ -133,13 +133,22 @@ export function blobIdsPruefen(ids) {
  * row so sorting and audit dates survive the move unchanged.
  * @param {string} entity entity name (e.g. "Project")
  * @param {string} orgId target org uuid
+ *
+ * Both columns are ALWAYS set (06.11.2026, first live run): PostgREST builds
+ * one column list per batch and fills a key missing in some rows with NULL,
+ * not with the column default — a record without created_date (e.g. older
+ * LVPosition rows) then hits the NOT NULL constraint and stops the import.
+ * Fallback chain: own value → the other timestamp → the moment of the import.
+ * @param {string} entity entity name (e.g. "Project")
+ * @param {string} orgId target org uuid
  * @param {object} datensatz record from db.json (id required — see leseDbJson)
+ * @param {string} [jetzt] ISO time of the import run (fallback)
  * @returns {object} row for upsert
  */
-function zeileMitZeitstempeln(entity, orgId, datensatz) {
+export function zeileMitZeitstempeln(entity, orgId, datensatz, jetzt = new Date().toISOString()) {
   const zeile = zeileAusDatensatz(entity, orgId, datensatz);
-  if (datensatz.created_date) zeile.created_date = datensatz.created_date;
-  if (datensatz.updated_date) zeile.updated_date = datensatz.updated_date;
+  zeile.created_date = datensatz.created_date || datensatz.updated_date || jetzt;
+  zeile.updated_date = datensatz.updated_date || datensatz.created_date || jetzt;
   return zeile;
 }
 
