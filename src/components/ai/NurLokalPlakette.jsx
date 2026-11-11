@@ -33,7 +33,7 @@ export default function NurLokalPlakette({ aktiv }) {
     <span
       data-testid="nur-lokal-plakette"
       title={t("Anfragen an KI-Dienste außerhalb dieses Rechners werden vom Server abgewiesen.")}
-      className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200"
+      className="inline-flex items-center gap-1 rounded-full border border-erfolg-rand bg-erfolg-flaeche px-2 py-0.5 text-xs font-medium text-erfolg"
     >
       <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" /> {t("Nur lokale KI")}
     </span>

@@ -10,6 +10,7 @@ import { treppeBerechnen, treppenLoch, deckeUeber } from "@core/lib/bauteil/trep
 import { treppeSymbol } from "@core/lib/plan/treppeSymbol.js";
 import { gaubeBerechnen } from "@core/lib/bauteil/gauben.js"; // 108-13: dormer outline in the top storey
 import { tuerSymbol, tuerFelder } from "@core/lib/plan/tuerSymbol.js"; // 108-05: ONE door symbol (DIN 1356-1) for screen, PDF and DXF
+import { innenSeiteVon } from "@core/lib/bauteil/grundrissBearbeiten.js"; // 108-05 inside rule, one place for plan symbol and door tool
 
 /**
  * 108-05: SVG of a door symbol (leaf + swing polyline) in the plan. `P(u, q)` maps wall coordinates (u along the wall from the opening
@@ -34,18 +35,6 @@ function TuerSymbolSvg({ P, X, Z, t, look }) {
   );
 }
 
-/**
- * 108-05: which side of a hull wall is inside — the sign of n · (footprint centroid − wall middle); drawn walls have no inside (+1).
- * @param {{a: {x: number, z: number}, b: {x: number, z: number}}} w
- * @param {Array<{x: number, z: number}>|null|undefined} fp
- * @returns {1|-1}
- */
-function innenSeiteVon(w, fp) {
-  if (!Array.isArray(fp) || fp.length < 3) return 1;
-  const c = fp.reduce((s, p) => ({ x: s.x + p.x / fp.length, z: s.z + p.z / fp.length }), { x: 0, z: 0 });
-  const dx = w.b.x - w.a.x, dz = w.b.z - w.a.z, mx = (w.a.x + w.b.x) / 2, mz = (w.a.z + w.b.z) / 2;
-  return -dz * (c.x - mx) + dx * (c.z - mz) >= 0 ? 1 : -1;
-}
 import { fmtLen } from "@core/lib/useBuildingProgram";
 import { planDarstellung, schraffur45 } from "@core/lib/plan/brillen.js"; // 97-04: status look per lens
 // 107-12: one level-of-detail function and the view state (structure display, options, rules) — inert without the `ansicht` prop
@@ -68,6 +57,18 @@ englischErgaenzen(EN_EFH_108);
 // 48 keeps 1:50 reachable for buildings up to ≈ 400 m edge length. Only used
 // when the `massstab` prop is set; every other caller keeps the hook default.
 const MASSSTAB_MAX_ZOOM = 48;
+
+/**
+ * Grundriss-Bedienung part 1: hit tolerance of thin drawn elements (walls, columns, openings) in SCREEN pixels beyond their outline.
+ * [ASSUMED] 6 px — about half a fingertip on a mouse screen, the usual CAD pick box; no norm value.
+ */
+const TREFFER_PX = 6;
+
+/**
+ * Grundriss-Bedienung part 2: a press on the selection becomes a drag only after the pointer moved this many SCREEN pixels; below
+ * it stays a click (pick / Shift toggle as before). [ASSUMED] 4 px — the usual drag threshold of desktop toolkits, no norm value.
+ */
+const ZUG_SCHWELLE_PX = 4;
 
 // 2D-Ableitung aus DEMSELBEN Gebäudemodell (buildingModel.js).
 // "Grundriss" = Draufsicht eines Geschosses, "Schnitt" = vertikaler Schnitt z=0.
@@ -215,7 +216,10 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
   // 108-01: the building envelope of the site planning (type "baufeld", m in the model frame) stays inside the drawing
   const baufeld = Array.isArray(baufeldUmriss) && baufeldUmriss.length >= 3 ? baufeldUmriss.filter((p) => Number.isFinite(p?.x) && Number.isFinite(p?.z)) : null;
   if (baufeld) all.push(...baufeld);
-  const bb = bboxXZ(all.length >= 3 ? all : fp);
+  // Grundriss-Bedienung part 2: while the selection is dragged the bounds stay those of the press — the moved elements would
+  // otherwise refit SCALE and origin under the pointer on every move, and pointer and model would drift apart (refit after release)
+  const bbFestRef = useRef(/** @type {any} */ (null));
+  const bb = bbFestRef.current || bboxXZ(all.length >= 3 ? all : fp);
   const PAD = 4;
   const wM = bb.maxX - bb.minX, hM = bb.maxZ - bb.minZ;
   const SCALE = Math.min(620 / (wM + PAD * 2), 360 / (hM + PAD * 2));
@@ -305,13 +309,16 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
 
   const dragRef = useRef(null);
   const startDrag = (e, d) => {
-    e.stopPropagation(); e.preventDefault();
+    // Grundriss-Bedienung part 1: no preventDefault on the grip's pointerdown — cancelling it suppresses the compatibility mouse events
+    // (mousemove/mouseup) until pointerup (Pointer Events spec), so in Chrome the plan's onMouseMove never saw the drag and grips did
+    // not move. handleDown below already ignores the mousedown of a grip (dragRef is set first).
+    e.stopPropagation();
     if (!dragRef.current) edit?.onGriffStart?.(); // one undo step for the whole grip drag
     dragRef.current = d;
   };
 
   // Markierungsrahmen auswerten → Liste betroffener Custom-Elemente (umschließend vs. berührend).
-  const finalizeMarquee = (m) => {
+  const finalizeMarquee = (m, additiv = false) => {
     const r = { minX: Math.min(m.sx, m.cx), maxX: Math.max(m.sx, m.cx), minZ: Math.min(m.sz, m.cz), maxZ: Math.max(m.sz, m.cz) };
     const crossing = m.cx < m.sx; // von rechts nach links gezogen = berührend (crossing), sonst umschließend
     const list = [];
@@ -325,19 +332,27 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
     (customZones || []).filter((z) => z.level === level).forEach((z) => { if (polyHit(z.points, r, crossing)) list.push({ type: "zone", index: z._idx }); });
     (customSlabs || []).filter((s) => s.level === level).forEach((s) => { if (polyHit(s.points, r, crossing)) list.push({ type: "slab", index: s._idx }); });
     (customRoofs || []).filter((rf) => rf.level === level).forEach((rf) => { if (polyHit(rf.points, r, crossing)) list.push({ type: "roof", index: rf._idx }); });
-    edit?.onMarquee?.(list, { crossing });
+    edit?.onMarquee?.(list, { crossing, additiv }); // Grundriss-Bedienung part 1: Shift at release = add to the selection
   };
 
+  // Grundriss-Bedienung part 2: after a selection drag the click that follows the release must not pick the element under the
+  // pointer (it would cut a multiple selection down to that one) — eaten in the capture phase, cleared after the event turn
+  const zugKlickSperre = useRef(false);
   const handleDown = (e) => {
     if (dragRef.current) return; // Griff-Drag hat Vorrang (pointerdown feuert vor mousedown)
     if (e.button === 1 || (e.button === 0 && vp.leertaste())) { e.preventDefault(); vp.beginPan(e); return; } // Mittel-Taste oder Leertaste+Ziehen (95-03) = verschieben
+    // Grundriss-Bedienung part 2: a press on an element of the selection may become a drag of the selection (not a frame)
+    if (e.button === 0 && edit?.tool === "arrow" && edit.zugTreffer) {
+      const roh = rawMeters(e);
+      if (roh && edit.zugTreffer(roh, bildschirmPxJeM)) { dragRef.current = { kind: "auswahl", sx: e.clientX, sy: e.clientY, roh, an: false }; return; }
+    }
     if (e.button === 0 && edit?.tool === "arrow") { const p = rawMeters(e); if (p) marqRef.current = { sx: p.x, sz: p.z, cx: p.x, cz: p.z, moved: false }; }
   };
   const handleClick = (e) => {
     if (suppressClick.current) { suppressClick.current = false; return; } // nach Rahmen/Drag keinen Klick auswerten
     if (dragRef.current) return;
     if (edit?.tool === "arrow") { if (!e.shiftKey) edit.onClear?.(); return; } // Klick ins Leere hebt Auswahl auf (nicht bei Shift)
-    if (edit?.onPoint) edit.onPoint(toMeters(e), e, rawMeters(e)); // 107-07: raw point for the snap core of the studio
+    if (edit?.onPoint) edit.onPoint(toMeters(e), e, rawMeters(e), bildschirmPxJeM); // 107-07: raw point for the snap core of the studio; screen px per m for its capture radius
   };
   const handleMove = (e) => {
     const raw = rawMeters(e); if (raw) setCursorM(raw);
@@ -349,28 +364,47 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
       return;
     }
     const d = dragRef.current;
+    if (d?.kind === "auswahl") {
+      if (!d.an) {
+        if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < ZUG_SCHWELLE_PX) return;
+        d.an = true; bbFestRef.current = bb; edit?.onAuswahlZugStart?.(d.roh, bildschirmPxJeM);
+      }
+      edit?.onAuswahlZug?.(raw, e, bildschirmPxJeM);
+      return;
+    }
     if (d) {
       const p = toMeters(e); if (!p) return;
-      if (d.kind === "wallA") edit.onMoveWallPt?.(d.idx, "a", p);
-      else if (d.kind === "wallB") edit.onMoveWallPt?.(d.idx, "b", p);
-      else if (d.kind === "wallMid") { edit.onMoveWall?.(d.idx, { x: p.x - d.last.x, z: p.z - d.last.z }); d.last = p; }
-      else if (d.kind === "col") edit.onMoveColumn?.(d.idx, p);
+      // Grundriss-Bedienung part 1: wall end, wall middle and column grips also hand over the raw pointer, the event (Shift, Alt) and
+      // the screen scale, so the studio can put them through its object snap; callers without a snap read only the grid point `p`
+      const fang = { roh: raw, e, pxJeM: bildschirmPxJeM };
+      if (d.kind === "wallA") edit.onMoveWallPt?.(d.idx, "a", p, fang);
+      else if (d.kind === "wallB") edit.onMoveWallPt?.(d.idx, "b", p, fang);
+      else if (d.kind === "wallMid") { edit.onMoveWall?.(d.idx, { x: p.x - d.last.x, z: p.z - d.last.z }, fang); d.last = p; }
+      else if (d.kind === "col") edit.onMoveColumn?.(d.idx, p, fang);
       else if (d.kind === "opening") edit.onMoveOpening?.(d.idx, p);
       else if (d.kind === "polyVert") edit.onMovePolyVert?.(d.which, d.idx, d.vi, p);
       else if (d.kind === "footVert") edit.onMoveFootVert?.(d.vi, p);
       else if (d.kind === "footEdge") { edit.onMoveFootEdge?.(d.edge, { x: p.x - d.last.x, z: p.z - d.last.z }); d.last = p; }
       return;
     }
-    if (edit?.onHover) edit.onHover(toMeters(e), rawMeters(e), e); // review 107-07: the event too (Alt = free, as the click)
+    if (edit?.onHover) edit.onHover(toMeters(e), rawMeters(e), e, bildschirmPxJeM); // review 107-07: the event too (Alt = free, as the click)
   };
-  const endDrag = () => {
+  const endDrag = (/** @type {any} */ e) => {
     vp.endPan();
     if (marqRef.current) {
       const m = marqRef.current; marqRef.current = null;
-      if (m.moved) { finalizeMarquee(m); suppressClick.current = true; }
+      if (m.moved) { finalizeMarquee(m, !!e?.shiftKey); suppressClick.current = true; }
       setMarquee(null);
     }
-    if (dragRef.current) { suppressClick.current = true; edit?.onGriffEnde?.(); } // nach Griff-Drag kein versehentliches Deselektieren
+    const d = dragRef.current;
+    if (d?.kind === "auswahl") {
+      bbFestRef.current = null;
+      if (d.an) {
+        suppressClick.current = true; zugKlickSperre.current = true;
+        setTimeout(() => { suppressClick.current = false; zugKlickSperre.current = false; }, 0);
+        edit?.onAuswahlZugEnde?.(e);
+      }
+    } else if (d) { suppressClick.current = true; edit?.onGriffEnde?.(); } // nach Griff-Drag kein versehentliches Deselektieren
     dragRef.current = null;
   };
   const handleDbl = (e) => { if (edit?.onFinish) { e.preventDefault(); edit.onFinish(); } };
@@ -425,10 +459,10 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
   return (
     <div className="relative w-full flex items-center justify-center">
     {/* 75-16: fill mode — fixed SVG height, the viewBox takes the box aspect (usePlanViewport fuellen). */}
-    <svg ref={svgRef} viewBox={vp.viewBox} className="w-full" style={fuellen ? { height: maxSvgH, cursor } : { maxHeight: maxSvgH, cursor }}
+    <svg ref={svgRef} data-testid="bim-plan" viewBox={vp.viewBox} className="w-full" style={fuellen ? { height: maxSvgH, cursor } : { maxHeight: maxSvgH, cursor }}
       /* review 107-07: plan frame for tests and agents — local unit = (metre − x0|z0) × skala (the inverse of rawMeters) */
       data-plan-skala={SCALE} data-plan-x0={bb.minX - PAD} data-plan-z0={bb.minZ - PAD}
-      onMouseDown={handleDown} onClick={handleClick} onMouseMove={handleMove} onDoubleClick={handleDbl} onMouseUp={endDrag} onMouseLeave={endDrag}>
+      onMouseDown={handleDown} onClickCapture={(e) => { if (zugKlickSperre.current) { zugKlickSperre.current = false; e.stopPropagation(); } }} onClick={handleClick} onMouseMove={handleMove} onDoubleClick={handleDbl} onMouseUp={endDrag} onMouseLeave={endDrag}>
       {fuellen
         ? <rect x={vp.sicht.x} y={vp.sicht.y} width={vp.sicht.w} height={vp.sicht.h} fill="#f8fafc" />
         : <rect x="0" y="0" width={W} height={H} fill="#f8fafc" />}
@@ -744,6 +778,16 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           data-werkstattwand={w.guid} data-status={w.status} style={{ pointerEvents: "none" }} />;
       })}
 
+      {/* Grundriss-Bedienung part 1: wider, invisible hit area around each drawn wall (TREFFER_PX screen px beyond its outline), so a thin
+          wall is still hit at a low zoom. Drawn before columns and openings — the later layers lie above, so the rank opening > column
+          > wall of the click stays. Only while the arrow tool picks. */}
+      {show("walls") && edit?.tool === "arrow" && edit.onPick && customWalls.map((w) => {
+        const r = wallRectXZ(w);
+        return <path key={`cwt${w._idx}`} d={`M${X(r[0].x)},${Z(r[0].z)} L${X(r[1].x)},${Z(r[1].z)} L${X(r[2].x)},${Z(r[2].z)} L${X(r[3].x)},${Z(r[3].z)} Z`}
+          fill="none" stroke="transparent" strokeWidth={px(2 * TREFFER_PX)} strokeLinejoin="round" pointerEvents="stroke" style={{ cursor: "pointer" }} data-wand-treffer={w._idx}
+          onClick={(e) => { e.stopPropagation(); edit.onPick({ type: "wall", index: w._idx }, e.shiftKey); }} />;
+      })}
+
       {/* ---- Custom-Stützen ---- */}
       {show("columns") && customCols.map((c, i) => {
         const s = (c.size || 0.4);
@@ -753,6 +797,13 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           fill={sel ? "#0ea5a4" : lk ? lk.fill : "#475569"} stroke={lk ? lk.stroke : "#1e293b"} strokeWidth={lk ? lk.strokeWidth : "0.6"} strokeDasharray={lk?.dash} opacity={lk?.opacity} data-status={c.status || undefined}
           onClick={(e) => { if (edit?.tool === "arrow" && edit.onPick) { e.stopPropagation(); edit.onPick({ type: "column", index: c._idx }, e.shiftKey); } }}
           style={{ cursor: edit?.tool === "arrow" ? "pointer" : cursor }} />;
+      })}
+      {/* Grundriss-Bedienung part 1: hit area of the columns (above the walls' one, below the openings) */}
+      {show("columns") && edit?.tool === "arrow" && edit.onPick && customCols.map((c) => {
+        const s = (c.size || 0.4);
+        return <rect key={`cct${c._idx}`} x={X(c.x - s / 2)} y={Z(c.z - s / 2)} width={s * SCALE} height={s * SCALE} fill="none" stroke="transparent" strokeWidth={px(2 * TREFFER_PX)}
+          pointerEvents="stroke" style={{ cursor: "pointer" }} data-stuetze-treffer={c._idx}
+          onClick={(e) => { e.stopPropagation(); edit.onPick({ type: "column", index: c._idx }, e.shiftKey); }} />;
       })}
 
       {/* ---- Hüllwand-Öffnungen (platziert) als Symbol ---- */}
@@ -801,6 +852,9 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         const handle = sel && edit?.tool === "arrow"
           ? <Handle x={X(cxm)} y={Z(czm)} onDown={(ev) => startDrag(ev, { kind: "opening", idx: cw._idx })} />
           : null;
+        // Grundriss-Bedienung part 1: invisible hit band around the opening (TREFFER_PX screen px), part of the group so its click picks it
+        const treffer = edit?.tool === "arrow" ? <path d={`M${X(ax + nx * hh)},${Z(az + nz * hh)} L${X(bx + nx * hh)},${Z(bz + nz * hh)} L${X(bx - nx * hh)},${Z(bz - nz * hh)} L${X(ax - nx * hh)},${Z(az - nz * hh)} Z`}
+          fill="none" stroke="transparent" strokeWidth={px(2 * TREFFER_PX)} strokeLinejoin="round" pointerEvents="stroke" data-oeffnung-treffer={cw._idx} /> : null;
         if (cw.kind === "door" && opt?.tuerAufschlag !== false && cw.typeId !== "sliding") {
           // 108-05: DIN 1356-1 symbol from the one helper — hinge on the wall face of the swing side, anschlag/aufschlag from the record
           // (defaults links/innen = the old picture's side), swing as a polyline (no arc flag that a mirrored axis could flip). The opening cut
@@ -808,6 +862,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           return (
             <g key={`cop${i}`} onClick={onClick} style={style} data-oeffnung={cw._idx} data-rahmen={cw.rahmen || undefined} data-glas={cw.glas || undefined}>
               <path d={`M${X(ax + nx * hh)},${Z(az + nz * hh)} L${X(bx + nx * hh)},${Z(bz + nz * hh)} L${X(bx - nx * hh)},${Z(bz - nz * hh)} L${X(ax - nx * hh)},${Z(az - nz * hh)} Z`} fill="#fef3c7" stroke="none" />
+              {treffer}
               <TuerSymbolSvg P={(u, q) => ({ x: cxm + dx * u + nx * q, z: czm + dz * u + nz * q })} X={X} Z={Z}
                 t={{ breite_m: ty.w, dicke_m: wallThicknessM(w), ...tuerFelder(cw), innenSeite: 1, fluegel: cw.typeId === "doubleLeaf" ? 2 : 1 }} look={{ stroke: sel ? "#0d9488" : "#0f766e", strokeWidth: sel ? "1.4" : "1" }} />
               {handle}
@@ -816,6 +871,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         }
         return (
           <g key={`cop${i}`} onClick={onClick} style={style} data-oeffnung={cw._idx} data-rahmen={cw.rahmen || undefined} data-glas={cw.glas || undefined}>
+            {treffer}
             <path d={`M${X(ax + nx * hh)},${Z(az + nz * hh)} L${X(bx + nx * hh)},${Z(bz + nz * hh)} L${X(bx - nx * hh)},${Z(bz - nz * hh)} L${X(ax - nx * hh)},${Z(az - nz * hh)} Z`}
               fill={cw.kind === "oeffnung" ? "#ffffff" : cw.kind === "door" ? "#fef3c7" : "#dbeafe"} stroke={sel ? "#0d9488" : "#60a5fa"} strokeWidth={sel ? "1.2" : "0.6"} strokeDasharray={cw.kind === "oeffnung" && opt?.durchbruchSymbol !== false ? "2 2" : undefined} />
             {(cw.kind === "oeffnung" ? opt?.durchbruchSymbol !== false : cw.kind === "door" ? false : opt?.fensterSymbol !== false) && <line x1={X(ax)} y1={Z(az)} x2={X(bx)} y2={Z(bz)} stroke="#3b82f6" strokeWidth="0.9" />}

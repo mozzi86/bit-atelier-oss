@@ -22,7 +22,7 @@ import {
 
 const eur = (v) => (v == null ? "—" : Number(v).toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }));
 const pct = (a) => (a == null ? "—" : `${(a * 100).toFixed(1).replace(".", ",")} %`);
-const AMPEL_KLASSE = { gruen: "bg-emerald-500", gelb: "bg-amber-400", rot: "bg-rose-600" };
+const AMPEL_KLASSE = { gruen: "bg-erfolg", gelb: "bg-amber-400", rot: "bg-rose-600" };
 const AMPEL_TEXT = { gruen: "unter der Obergrenze", gelb: "nahe der Obergrenze", rot: "über der Obergrenze" };
 
 /**
@@ -133,7 +133,7 @@ export default function KostenstaendeKarte({ live }) {
                   <td className="py-1.5 px-2 text-xs text-slate-500">
                     {z.herkunft === "erfasst" ? `${t("erfasst")} ${z.datum ? new Date(z.datum).toLocaleDateString("de-DE") : ""}` : z.herkunft === "live" ? `${t("live")}: ${t(z.quelle)}` : "—"}
                   </td>
-                  <td className={`py-1.5 px-2 text-right tabular-nums ${z.deltaVorstufe > 0 ? "text-rose-600" : z.deltaVorstufe < 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                  <td className={`py-1.5 px-2 text-right tabular-nums ${z.deltaVorstufe > 0 ? "text-rose-600" : z.deltaVorstufe < 0 ? "text-erfolg" : "text-slate-400"}`}>
                     {z.deltaVorstufe == null ? "—" : `${eur(z.deltaVorstufe)} (${pct(z.deltaVorstufeAnteil)})`}
                   </td>
                   <td className="py-1.5 px-2 text-right tabular-nums">

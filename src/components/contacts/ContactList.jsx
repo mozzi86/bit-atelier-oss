@@ -60,7 +60,7 @@ export default function ContactList({ contacts = [], isLoading, onEdit }) {
             <CardContent className="p-5 space-y-4">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm">
+                  <div className="w-11 h-11 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
                     {initials(contact.name)}
                   </div>
                   <div>

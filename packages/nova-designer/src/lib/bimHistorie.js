@@ -52,6 +52,21 @@ export function zieheEnde(h) {
 }
 
 /**
+ * Grundriss-Bedienung part 2: a drag was cancelled (Esc) and the caller has written the state of the press back. The step this drag
+ * stored is taken off again, so the next undo does not land on a state equal to the present one. Only removed when the newest
+ * undo entry equals `vorher` (JSON), i.e. really is the snapshot of this drag; the redo branch the drag cleared stays cleared.
+ * @param {{ stack: {past: any[], future: any[]}, ziehe: boolean, gemerkt: boolean }} h
+ * @param {any} vorher snapshot of the press (the state written back)
+ * @returns {{ stack: {past: any[], future: any[]}, ziehe: boolean, gemerkt: boolean }} drag closed (ziehe false)
+ */
+export function zieheAbbrechen(h, vorher) {
+  const past = h.stack.past;
+  const letzter = past[past.length - 1];
+  const weg = h.ziehe && h.gemerkt && letzter !== undefined && JSON.stringify(letzter) === JSON.stringify(vorher);
+  return { stack: weg ? { past: past.slice(0, -1), future: h.stack.future } : h.stack, ziehe: false, gemerkt: false };
+}
+
+/**
  * @param {{ stack: {past: any[], future: any[]}, ziehe: boolean, gemerkt: boolean }} h
  * @param {any} aktuell state now (moves to the redo branch)
  * @returns {{ historie: {stack: {past: any[], future: any[]}, ziehe: boolean, gemerkt: boolean}, snapshot: any }|null}

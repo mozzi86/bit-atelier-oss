@@ -53,7 +53,7 @@ export default function BuildingConfig({ complexData, onBuildingsChange, onUnits
   return (
     <div className="space-y-6">
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: BGF {Math.round(pm.bgf).toLocaleString("de-DE")} m² · {pm.storeys} Geschosse · Höhe {Math.round(pm.height).toLocaleString("de-DE")} m
         </div>
       )}
@@ -147,7 +147,7 @@ export default function BuildingConfig({ complexData, onBuildingsChange, onUnits
                   Stellplatz-Soll erst berechenbar, wenn Nutzungseinheiten und Stellplatzschlüssel erfasst sind.
                 </span>
               ) : parkingDelta >= 0 ? (
-                <span className="text-emerald-700">
+                <span className="text-erfolg">
                   Stellplatznachweis erfüllt — {parkingDelta.toLocaleString("de-DE")} Stellplätze über dem Soll.
                 </span>
               ) : (

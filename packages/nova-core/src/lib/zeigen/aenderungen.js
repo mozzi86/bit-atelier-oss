@@ -21,6 +21,7 @@
 import { normalizeStatus } from "../bimClassification.js";
 import { BAUTEIL_TYPEN, bauteilGuid } from "../bauteil/steckbrief.js";
 import { wandTeilen, deckeTeilen } from "./teilen.js";
+import { ANLEGEN_OBJEKTE, WANDARTEN, anlegenBauen } from "./anlegen.js";
 
 /**
  * Origins of a change (guard rail 2). Every step records ONE main origin `quelle` (read by older code and stored entries) and, since
@@ -80,8 +81,8 @@ export function herkunftText(x, t = (s) => s) {
   return herkunftQuellen(x).map((q) => t(HERKUNFT_LABEL[/** @type {keyof typeof HERKUNFT_LABEL} */ (q)] ?? q)).join(HERKUNFT_TRENNER);
 }
 
-/** Kinds of change a proposal can carry. */
-export const AENDERUNG_ARTEN = Object.freeze(["eigenschaft", "transformieren", "teilen"]);
+/** Kinds of change a proposal can carry. 261111-zs1: "anlegen" creates a wall, a door or a plan note (anlegen.js). */
+export const AENDERUNG_ARTEN = Object.freeze(["eigenschaft", "transformieren", "teilen", "anlegen"]);
 
 /** Human channels that may confirm a proposal; an agent can never confirm its own (see vorschlag.js). */
 export const BESTAETIGUNG_KANAELE = Object.freeze(["hand", "sprache", "tastatur"]);
@@ -103,6 +104,10 @@ export const SATZ_VORLAGEN = Object.freeze({
   skalieren: "auf {prozent} % skalieren",
   teilenWand: "{ziel}: bei {t} m teilen → {laengeA} m + {laengeB} m",
   teilenFlaeche: "{ziel}: entlang der Linie teilen → {flaecheA} m² + {flaecheB} m²",
+  // 261111-zs1: creating elements ({zusatz}: ", T30-RS, DIN links" - norm words, not translated)
+  anlegenWand: "Neu: {wandart} {dicke} cm, {laenge} m lang (Status Neubau)",
+  anlegenTuer: "Neu: Tür {breite} m in Wand W-{wand}, Mitte bei {u} m{zusatz} (Status Neubau)",
+  anlegenNotiz: "Neu: Notiz „{text}“ bei {x} / {z} m",
 });
 
 /**
@@ -226,6 +231,12 @@ export const EIGENSCHAFTEN = Object.freeze([
     return `${m[1]}${m[1].length > 1 ? " " : ""}${m[2]}${m[3] || ""}`;
   } },
   { feld: "statik_vermerk", label: "Statik-Vermerk", namen: ["statik_vermerk", "statikvermerk", "vermerk"], parse: (w) => String(w).trim() },
+  // 261111-zs1: the name of a room ("Raum 1.05 heißt jetzt Lager") - the zone's existing field `name`; at most 60 characters [ASSUMED: one stamp line]
+  { feld: "name", label: "Name", namen: ["name", "raumname", "bezeichnung"], parse: (w) => {
+    const s = String(w).trim();
+    if (s.length > 60) throw new Error("Der Name darf höchstens 60 Zeichen haben");
+    return s;
+  } },
 ]);
 
 /**
@@ -400,13 +411,15 @@ function eigenschaftSetzenIfc(bauteil, eig, opt) {
 /**
  * Kind of a drawn element from its shape.
  * @param {any} el
- * @returns {"wand"|"stuetze"|"flaeche"|"oeffnung"|null}
+ * @returns {"wand"|"stuetze"|"flaeche"|"oeffnung"|"notiz"|null}  notiz (261111-zs1): a plan note {x, z, text}, checked before the column
+ *   (which has x/z too but no text).
  */
 export function elementArt(el) {
   if (!el || typeof el !== "object") return null;
   if (el.a && el.b) return "wand";
   if (Array.isArray(el.points)) return "flaeche";
   if (el.wallIdx != null || el.edge != null) return "oeffnung";
+  if (typeof el.text === "string" && Number.isFinite(el.x) && Number.isFinite(el.z)) return "notiz";
   if (Number.isFinite(el.x) && Number.isFinite(el.z)) return "stuetze";
   return null;
 }
@@ -534,6 +547,7 @@ const ARRAYS = [
   { name: "customRoofs", art: "dach", wort: "Dach", kuerzel: "Da", quelle: "customRoofs" },
   { name: "customStairs", art: "treppe", wort: "Treppe", kuerzel: "T", quelle: "customStairs" }, // 108-06
   { name: "gauben", art: "gaube", wort: "Gaube", kuerzel: "G", quelle: "gauben" }, // 108-13
+  { name: "planNotizen", art: "notiz", wort: "Notiz", kuerzel: "N", quelle: "planNotizen" }, // 261111-zs1: text notes of the plan
 ];
 const OEFFNUNG_ARRAYS = [{ name: "customWindows", env: false }, { name: "envOpenings", env: true }];
 
@@ -556,7 +570,7 @@ export function oeffnungGuid(projektId, o, env) {
  * @param {any} modell  Model record with the arrays customWalls, customColumns, customZones, customSlabs, customRoofs, customWindows, envOpenings.
  * @param {string} guid  22-character GlobalId.
  * @param {{projektId?: string|number|null}} [opt]  Project of the derived GUIDs.
- * @returns {{art: "wand"|"stuetze"|"zone"|"decke"|"dach"|"oeffnung", arrayName: string, element: any, guid: string,
+ * @returns {{art: "wand"|"stuetze"|"zone"|"decke"|"dach"|"oeffnung"|"notiz", arrayName: string, element: any, guid: string,
  *   kurzname: string}|null}  kurzname: "Wand W-12" style name; null when no drawn element has this GUID.
  */
 export function bauteilImModell(modell, guid, opt = {}) {
@@ -580,7 +594,7 @@ export function bauteilImModell(modell, guid, opt = {}) {
 /** Next free `_idx` over all element arrays of a model (what the studio's idRef would hand out). @param {any} modell @returns {number} */
 export function naechsteFreieIdx(modell) {
   let max = 0;
-  for (const k of ["customWalls", "customColumns", "customZones", "customSlabs", "customRoofs", "customWindows", "envOpenings", "customStairs", "gauben"]) {
+  for (const k of ["customWalls", "customColumns", "customZones", "customSlabs", "customRoofs", "customWindows", "envOpenings", "customStairs", "gauben", "planNotizen"]) {
     for (const el of Array.isArray(modell?.[k]) ? modell[k] : []) if (Number.isFinite(el?._idx) && el._idx > max) max = el._idx;
   }
   return max + 1;
@@ -629,6 +643,25 @@ function satzBauen(art, ziel, params, vorher, nachher, t) {
     const werte = { ziel: name, schritte: schritte.join(", ") };
     return { vorlage: SATZ_VORLAGEN.transformieren, werte, satz: satzAusVorlage(t(SATZ_VORLAGEN.transformieren), werte) };
   }
+  if (art === "anlegen") {
+    // 261111-zs1: the sentence says what WILL be made, from the element the drawing function built for the preview
+    const el = nachher?.element || {};
+    /** @type {string} */ let vorlage;
+    /** @type {Record<string, string|number>} */ let werte;
+    if (params?.objekt === "wand") {
+      vorlage = SATZ_VORLAGEN.anlegenWand;
+      werte = { wandart: t(WANDARTEN[params.wandart]?.label ?? WANDARTEN.wand.label), dicke: zahlText(Number(params.dicke_m) * 100),
+        laenge: zahlText(Math.hypot((el.b?.x ?? 0) - (el.a?.x ?? 0), (el.b?.z ?? 0) - (el.a?.z ?? 0))) };
+    } else if (params?.objekt === "tuer") {
+      vorlage = SATZ_VORLAGEN.anlegenTuer;
+      const zusatz = [params.feuerwiderstand, params.din_anschlag ? `DIN ${params.din_anschlag}` : null].filter(Boolean).join(", ");
+      werte = { breite: zahlText(el.width ?? params.breite_m), wand: el.wallIdx ?? params.wandIdx ?? "", u: zahlText(el.u ?? params.u_m), zusatz: zusatz ? `, ${zusatz}` : "" };
+    } else {
+      vorlage = SATZ_VORLAGEN.anlegenNotiz;
+      werte = { text: String(params?.text ?? ""), x: zahlText(el.x ?? params?.punkt?.x), z: zahlText(el.z ?? params?.punkt?.z) };
+    }
+    return { vorlage, werte, satz: satzAusVorlage(t(vorlage), werte) };
+  }
   const teile = nachher?.teile || [];
   if (teile[0]?.laenge_m != null) {
     const werte = { ziel: name, t: zahlText(nachher.t_m), laengeA: zahlText(teile[0].laenge_m), laengeB: zahlText(teile[1]?.laenge_m) };
@@ -645,7 +678,7 @@ function satzBauen(art, ziel, params, vorher, nachher, t) {
  *  - transformieren: `{geometrie}` (see geometrieVon),
  *  - teilen: vorher `{element, laenge_m | flaeche_m2, oeffnungen}`, nachher `{teile: [{_idx, guid, laenge_m | flaeche_m2}, x2],
  *    t_m?, oeffnungen}` (the undo record needs the old element and its openings).
- * @param {{art: "eigenschaft"|"transformieren"|"teilen", ziel: {guid: string, klasse?: string, name?: string, quelle?: "bim"|"ifc", modell?: string},
+ * @param {{art: "eigenschaft"|"transformieren"|"teilen"|"anlegen", ziel: {guid: string, klasse?: string, name?: string, quelle?: "bim"|"ifc", modell?: string},
  *   params: any, herkunft: {quelle: "hand"|"text"|"sprache"|"agent"|"bild", quellen?: string[], befehl_text?: string|null}, vorher: any, nachher: any, pruefung?: any}} eingabe
  *   params: eigenschaft {pset?, name, wert}; transformieren {verschiebung_m?, drehung_grad?, faktor?, zentrum?};
  *   teilen {punkt_m: {x, z}} (wall, m) or {linie: {a, b}} (slab, m); herkunft is mandatory; herkunft.quellen (D-IM-07): all origins in
@@ -758,11 +791,13 @@ const markiert = (el, marke) => (marke ? { ...el, [MARKE_FELD]: marke } : el);
  * @param {any} modell  Model record (see bauteilImModell).
  * @param {{art: string, ziel: {guid: string, quelle?: string, modell?: string}, params: any, vorher?: any, nachher?: any, herkunft?: any}} vorschlag
  * @param {{projektId?: string|number|null, naechsteIdx?: number, geschosshoehe_m?: number, zeit?: string, bestaetigt_durch?: string,
- *   marke?: {herkunft: string, herkunft_quellen?: string[], befehl_text: string|null, zeit: string, vorschlag_id: string, bestaetigt_durch?: string, satz?: string|null}}} [opt]
- *   naechsteIdx: free `_idx` for the second part of a split (default: naechsteFreieIdx(modell)); marke: origin mark written
- *   onto the changed element(s) as MARKE_FELD (only the real execution passes it, the check works on an unmarked copy).
+ *   marke?: {herkunft: string, herkunft_quellen?: string[], befehl_text: string|null, zeit: string, vorschlag_id: string, bestaetigt_durch?: string, satz?: string|null},
+ *   zeichnen?: import("./anlegen.js").ZeichenFunktionen|null}} [opt]
+ *   naechsteIdx: free `_idx` for the second part of a split / the new element (default: naechsteFreieIdx(modell)); marke: origin mark written
+ *   onto the changed element(s) as MARKE_FELD (only the real execution passes it, the check works on an unmarked copy); zeichnen
+ *   (261111-zs1): the studio's drawing functions, required for "anlegen".
  * @returns {{modell: any, journal?: ReturnType<typeof journalEintragAus>, warnungen: string[], neu: string[], entfernt: string[],
- *   element?: any, teile?: any[], oeffnungenNach?: any[]}}
+ *   element?: any, teile?: any[], oeffnungenNach?: any[], arrayName?: string}}  arrayName: list of the created element ("anlegen").
  *   neu / entfernt: GUIDs of elements that were created / removed (a split removes one and creates two); element: the changed
  *   element (property, transformation); teile: the two parts of a split, as stored; oeffnungenNach: the openings of the two
  *   wall parts after a wall split, as stored (the reversal compares against them).
@@ -770,6 +805,14 @@ const markiert = (el, marke) => (marke ? { ...el, [MARKE_FELD]: marke } : el);
  */
 export function modellMitAenderung(modell, vorschlag, opt = {}) {
   const pid = opt.projektId ?? null;
+  if (vorschlag.art === "anlegen") {
+    // 261111-zs1: the studio's drawing function builds the element on THIS model (anlegen.js); the studio's counter wins, else the
+    // number the preview announced, else the next free one - like the second part of a split
+    const idx = opt.naechsteIdx ?? vorschlag.nachher?.element?._idx ?? naechsteFreieIdx(modell);
+    const r = anlegenBauen(modell, vorschlag.params, { zeichnen: opt.zeichnen, projektId: pid, naechsteIdx: idx, geschosshoehe_m: opt.geschosshoehe_m });
+    const element = markiert(r.element, opt.marke);
+    return { modell: { ...r.modell, [r.arrayName]: ersetze(r.modell[r.arrayName], element) }, warnungen: [], neu: [r.guid], entfernt: [], element, arrayName: r.arrayName };
+  }
   if (vorschlag.art === "eigenschaft" && vorschlag.ziel.quelle === "ifc") {
     return { modell, journal: journalEintragAus(vorschlag, { projektId: pid, zeit: opt.zeit, bestaetigt_durch: opt.bestaetigt_durch }), warnungen: [], neu: [], entfernt: [] };
   }
@@ -844,6 +887,21 @@ export function aenderungUmkehren(modell, eintrag, opt = {}) {
     return { modell, journal: { loeschen: { modell: String(eintrag.ziel.modell), guid: eintrag.ziel.guid, pset: n.pset, eigenschaft: n.eigenschaft, ...(jz ? { zeit: jz } : {}) } } };
   }
   const weg = () => new Error("Dieser Schritt lässt sich nicht zurücknehmen — das Bauteil gibt es nicht mehr");
+  if (eintrag.art === "anlegen") {
+    // 261111-zs1: undoing a creation removes the element - only while it is exactly as the step made it, and a wall only while no
+    // opening was put into it afterwards (removing it would orphan that door)
+    const arrayName = eintrag.nachher?.arrayName || ANLEGEN_OBJEKTE[/** @type {"wand"|"tuer"|"notiz"} */ (eintrag.params?.objekt)]?.arrayName;
+    const arr = modell[arrayName || ""] || [];
+    const el = arr.find((/** @type {any} */ x) => x.guid === eintrag.ziel?.guid);
+    if (!arrayName || !el) throw weg();
+    if (eintrag.nachher?.element && stabil(el) !== stabil(eintrag.nachher.element)) {
+      throw new Error("Das neue Bauteil wurde danach noch verändert — erst die späteren Schritte zurücknehmen, sonst gingen sie verloren");
+    }
+    if (arrayName === "customWalls" && (modell.customWindows || []).some((/** @type {any} */ o) => o.wallIdx === el._idx)) {
+      throw new Error(`In der neuen Wand W-${el._idx} steht inzwischen eine Öffnung — erst die Öffnung zurücknehmen`);
+    }
+    return { modell: { ...modell, [arrayName]: arr.filter((/** @type {any} */ x) => x !== el) } };
+  }
   if (eintrag.art === "teilen") {
     const teile = eintrag.nachher?.teile || [];
     const alt = eintrag.vorher?.element;

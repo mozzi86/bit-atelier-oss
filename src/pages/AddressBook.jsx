@@ -68,14 +68,14 @@ export default function AddressBook() {
           className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4"
         >
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold text-foreground">
               Adressbuch
             </h1>
             <p className="text-slate-600 mt-1">Projektbeteiligte und Team-Kontakte verwalten</p>
           </div>
           <Button
             onClick={() => setShowForm(true)}
-            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg"
+            className="bg-primary hover:bg-primary/90 shadow-sm"
           >
             <Plus className="w-4 h-4 mr-2" />
             Neuer Kontakt
@@ -90,7 +90,7 @@ export default function AddressBook() {
             placeholder="Kontakte durchsuchen"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 border-slate-200 focus:border-emerald-500"
+            className="pl-10 border-slate-200 focus:border-ring"
           />
         </div>
         

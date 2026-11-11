@@ -207,6 +207,7 @@ test.describe("107-04 Öffnungskette: Wirt, Maße, Höhenanker, fülllose Öffnu
       await page.getByTestId("oeffnung-width").fill("1.2");
       await page.getByTestId("oeffnung-height").fill("1");
       await page.getByTestId("oeffnung-sill").fill("0.5");
+      await page.getByTestId("oeffnung-sill").press("Enter"); // a number field commits once, on blur or Enter (ZahlFeld, one undo step per edit)
       await expect.poll(async () => (await modellStand(page)).customWindows.find((o) => o._idx === fenster._idx)?.height).toBe(1);
       await expect(page.getByTestId("oeffnung-sturz")).toHaveText("1.50");
       await page.getByTestId("oeffnung-bezug").selectOption("okff");
@@ -221,12 +222,14 @@ test.describe("107-04 Öffnungskette: Wirt, Maße, Höhenanker, fülllose Öffnu
       expect(ifc).toMatch(/'Bruestung_Bezug',\$,IFCLABEL\('OKFF'\)/);
       // a too tight opening: named in the hint (3D clamps it, the IFC leaves it out), no silent clamp
       await page.getByTestId("oeffnung-width").fill("9");
+      await page.getByTestId("oeffnung-width").press("Enter");
       await expect(page.locator("body")).toContainText("passt nicht in die Wand", { timeout: 10000 });
       await expect(page.locator("body")).toContainText("im 3D auf die Wand begrenzt");
       const meldIfc = await ifcLaden("fenster-zu-breit.ifc");
       expect(fensterAnWand1(meldIfc).length, "der Export lässt sie aus").toBe(0);
       await expect(page.locator("body")).toContainText("NICHT enthalten");
       await page.getByTestId("oeffnung-width").fill("1.2");
+      await page.getByTestId("oeffnung-width").press("Enter");
       await expect(page.locator("body")).not.toContainText("im 3D auf die Wand begrenzt", { timeout: 10000 });
 
       // ---- hull wall with build-up: a new opening's hole goes through EVERY layer ----
@@ -246,6 +249,7 @@ test.describe("107-04 Öffnungskette: Wirt, Maße, Höhenanker, fülllose Öffnu
       await page.locator("[data-huell-oeffnung]").first().click();
       await expect(page.getByTestId("oeffnung-width")).toBeVisible({ timeout: 10000 });
       await page.getByTestId("oeffnung-width").fill("1.1");
+      await page.getByTestId("oeffnung-width").press("Enter");
       await expect.poll(async () => (await modellStand(page)).envOpenings[0]?.width, { timeout: 15000 }).toBe(1.1);
       await page.getByRole("button", { name: /Auswahl löschen/ }).click();
       await expect.poll(async () => (await modellStand(page)).envOpenings.length, { timeout: 15000 }).toBe(0);

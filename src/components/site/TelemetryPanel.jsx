@@ -12,8 +12,8 @@ const SOURCES = [
 ];
 
 const statusBadge = {
-  connected: "bg-emerald-100 text-emerald-800",
-  ready: "bg-emerald-100 text-emerald-800",
+  connected: "bg-erfolg-flaeche text-erfolg",
+  ready: "bg-erfolg-flaeche text-erfolg",
   connecting: "bg-blue-100 text-blue-800",
   not_configured: "bg-slate-100 text-slate-600",
   package_missing: "bg-amber-100 text-amber-800",

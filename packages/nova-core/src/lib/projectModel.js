@@ -82,12 +82,12 @@ export function daysToCompletion(project) {
  */
 export function projectHealth(project) {
   const s = normalisiereStatus(project?.status);
-  if (s === "completed" || s === "operation") return { level: "done", label: "Abgeschlossen", color: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" };
+  if (s === "completed" || s === "operation") return { level: "done", label: "Abgeschlossen", color: "bg-erfolg-flaeche text-erfolg", dot: "bg-erfolg" };
   const d = daysToCompletion(project);
   if (d == null) return { level: "offen", label: "Kein Termin", color: "bg-slate-100 text-slate-600", dot: "bg-slate-400" };
   if (d < 0) return { level: "late", label: "Termin überschritten", color: "bg-rose-100 text-rose-700", dot: "bg-rose-500" };
   if (d < 120) return { level: "watch", label: "Beobachten", color: "bg-amber-100 text-amber-800", dot: "bg-amber-500" };
-  return { level: "ok", label: "Auf Kurs", color: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" };
+  return { level: "ok", label: "Auf Kurs", color: "bg-erfolg-flaeche text-erfolg", dot: "bg-erfolg" };
 }
 
 export const projectArea = (p) => p?.building_area || p?.area_net || 0;

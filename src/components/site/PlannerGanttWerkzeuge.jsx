@@ -73,7 +73,7 @@ export default function PlannerGanttWerkzeuge({ tasks, projectId, project, onRel
         </select>
         <Button size="sm" variant="outline" onClick={pdf} disabled={!tasks.length} data-testid="pg-pdf"><Printer className="mr-1.5 h-4 w-4" /> {t("Gantt als PDF")}</Button>
       </div>
-      {info && <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-800" role="status">{info}</div>}
+      {info && <div className="rounded border border-erfolg-rand bg-erfolg-flaeche px-3 py-1.5 text-xs text-erfolg" role="status">{info}</div>}
       {fehler && !offen && <div className="rounded border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs text-rose-800" role="alert" data-testid="pg-fehler">{fehler}</div>}
 
       {offen && (
@@ -105,7 +105,7 @@ export default function PlannerGanttWerkzeuge({ tasks, projectId, project, onRel
             )}
             <div className="flex justify-end gap-2 pt-1">
               <Button type="button" variant="outline" onClick={() => setOffen(false)}>{t("Abbrechen")}</Button>
-              <Button type="button" onClick={uebernehmen} disabled={!stand || !auswahl.length || busy} data-testid="pg-uebernehmen" className="bg-gradient-to-r from-emerald-600 to-teal-600">{busy ? t("Speichern…") : t("Importieren")}</Button>
+              <Button type="button" onClick={uebernehmen} disabled={!stand || !auswahl.length || busy} data-testid="pg-uebernehmen" className="bg-primary hover:bg-primary/90">{busy ? t("Speichern…") : t("Importieren")}</Button>
             </div>
           </div>
         </FormModal>

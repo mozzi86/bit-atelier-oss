@@ -118,8 +118,8 @@ function ProjectCard({ project, delay, onPick }) {
 
           {(project.energy_target || project.sustainability_rating) && (
             <div className="flex flex-wrap gap-1">
-              {project.energy_target && <Badge variant="outline" className="text-[10px] border-emerald-200 text-emerald-700">{project.energy_target}</Badge>}
-              {project.sustainability_rating && <Badge variant="outline" className="text-[10px] border-teal-200 text-teal-700">{project.sustainability_rating}</Badge>}
+              {project.energy_target && <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{project.energy_target}</Badge>}
+              {project.sustainability_rating && <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{project.sustainability_rating}</Badge>}
             </div>
           )}
 
@@ -202,12 +202,12 @@ export default function Dashboard() {
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div>
             {/* h1 stays "Projektübersicht": menu name (navigation.js) and cloud-smoke.spec.js:62. */}
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">{t("Projektübersicht")}</h1>
+            <h1 className="text-3xl font-bold text-foreground">{t("Projektübersicht")}</h1>
             <p className="text-slate-600 mt-1">{t("Portfolio – alle Projekte")}</p>
           </div>
           {/* 72-01 A-9 (Befund N-13): direkt das Formular öffnen — der Button
               führte vorher nur auf die Projektliste ohne Aktion. */}
-          <Button asChild className="bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg">
+          <Button asChild className="bg-primary hover:bg-primary/90 shadow-sm">
             <Link to={`${createPageUrl("Projects")}?neu=1`}>
               <Plus className="w-4 h-4 mr-2" aria-hidden="true" /> {t("Neues Projekt")}
             </Link>
@@ -225,12 +225,12 @@ export default function Dashboard() {
         {/* KPI strip (real numbers) */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <Kpi icon={Building2} label={t("Projekte gesamt")} value={total} tint="bg-slate-100 text-slate-700" />
-          <Kpi icon={Hammer} label={t("Im Bau")} value={inBau} tint="bg-amber-100 text-amber-700" />
-          <Kpi icon={Ruler} label={t("In Planung")} value={inPlanung} tint="bg-blue-100 text-blue-700" />
-          <Kpi icon={CheckCircle2} label={t("Fertig")} value={fertig} tint="bg-emerald-100 text-emerald-700" />
+          <Kpi icon={Hammer} label={t("Im Bau")} value={inBau} tint="bg-muted text-foreground" />
+          <Kpi icon={Ruler} label={t("In Planung")} value={inPlanung} tint="bg-muted text-foreground" />
+          <Kpi icon={CheckCircle2} label={t("Fertig")} value={fertig} tint="bg-erfolg-flaeche text-erfolg" />
           {/* 72-09: full German number instead of "61.2k"; the unit leads the label so the tile's truncation cannot hide it. */}
-          <Kpi icon={Boxes} label={t("m² gesamt")} value={Math.round(flaeche).toLocaleString("de-DE")} tint="bg-violet-100 text-violet-700" />
-          <Kpi icon={CalendarClock} label={t("Fällig <6 Mon.")} value={faellig} tint="bg-rose-100 text-rose-700" />
+          <Kpi icon={Boxes} label={t("m² gesamt")} value={Math.round(flaeche).toLocaleString("de-DE")} tint="bg-muted text-muted-foreground" />
+          <Kpi icon={CalendarClock} label={t("Fällig <6 Mon.")} value={faellig} tint="bg-warnung-flaeche text-warnung" />
         </div>
 
         {/* 80-10 Task 7 (D-P80-24): In-App-Erinnerung, kein Push/Mail. Eigener
@@ -246,14 +246,14 @@ export default function Dashboard() {
           <div className="lg:col-span-3 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-800">{t("Projekte")}</h2>
-              <Link to={createPageUrl("Projects")} className="text-sm text-emerald-700 hover:underline flex items-center gap-1">
+              <Link to={createPageUrl("Projects")} className="text-sm text-link hover:underline flex items-center gap-1">
                 {t("Alle verwalten")} <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
               </Link>
             </div>
             {isLoading ? (
               <LoadingState variant="cards" rows={6} className="grid-cols-1" />
             ) : ladeFehler ? (
-              <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 flex flex-wrap items-center gap-3">
+              <div role="alert" className="rounded-xl border border-fehler-rand bg-fehler-flaeche p-4 text-sm text-fehler flex flex-wrap items-center gap-3">
                 <TriangleAlert aria-hidden="true" className="w-4 h-4 shrink-0" />
                 <span className="min-w-0 flex-1">
                   {fuellen(t("Die Projekte konnten nicht geladen werden: {fehler}"), { fehler: ladeFehler })}
@@ -261,7 +261,7 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setVersuch((v) => v + 1)}
-                  className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 font-medium text-rose-800 hover:bg-rose-100"
+                  className="rounded-lg border border-fehler-rand bg-background px-3 py-1.5 font-medium text-fehler hover:bg-fehler-flaeche"
                 >
                   {t("Erneut versuchen")}
                 </button>
@@ -272,7 +272,7 @@ export default function Dashboard() {
                 title={t("Noch keine Projekte")}
                 description={t("Legen Sie das erste Projekt an, um es hier in der Übersicht zu sehen.")}
                 action={(
-                  <Button asChild className="bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg">
+                  <Button asChild className="bg-primary hover:bg-primary/90 shadow-sm">
                     <Link to={`${createPageUrl("Projects")}?neu=1`}>
                       <Plus className="w-4 h-4 mr-2" aria-hidden="true" /> {t("Neues Projekt")}
                     </Link>
@@ -316,7 +316,7 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-emerald-600 to-teal-600 text-white">
+            <Card className="border-0 shadow-sm bg-primary text-primary-foreground">
               <CardContent className="p-5 space-y-3">
                 <h3 className="font-semibold">{t("Schnellzugriff")}</h3>
                 {[

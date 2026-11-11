@@ -59,8 +59,8 @@ export default function EnergyOptimizer({ data, massingData, onChange }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Stat label="PV-Jahresertrag" value={`${annualYield.toLocaleString("de-DE")} kWh`} accent="text-amber-600" />
-            <Stat label="Zertifikat" value={data.green_building_cert || "—"} accent="text-emerald-600" />
+            <Stat label="PV-Jahresertrag" value={`${annualYield.toLocaleString("de-DE")} kWh`} accent="text-foreground" />
+            <Stat label="Zertifikat" value={data.green_building_cert || "—"} accent="text-foreground" />
           </div>
           <div>
             <div className="flex justify-between text-sm mb-1">

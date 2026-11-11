@@ -28,6 +28,7 @@ import { hardwareErmitteln } from './hardware.js';
 import {
   mitgelieferterKatalog, katalogHolen, katalogUrl, lokaleServerErkennen, ollamaTags, pullManager, benchmarkAusfuehren,
 } from './ollamaDienst.js';
+import { harnessErreichbar, HARNESS_PORT } from './harnessProzess.js';
 
 const LLM_ENTITY = 'LlmConnection';
 
@@ -105,6 +106,20 @@ export function kiLokalRouter(o) {
   // --- Harness ---
   const harnessAntwort = () => ({ ...(o.harness ? o.harness.status() : { zustand: 'nicht-eingerichtet', eingerichtet: false, log: [] }), autostart: kiEinstellungenLesen(o.db).harness_autostart, nurLokal: kiEinstellungenLesen(o.db).nur_lokal });
   r.get('/ki/harness', (_req, res) => res.json(harnessAntwort()));
+  // Quiet probe for the browser: the optional harness on :8765 is asked here, so a
+  // refused connection never becomes an ERR_CONNECTION_REFUSED in the page console.
+  // `{erreichbar:false}` when nothing answers; otherwise the harness status JSON.
+  r.get('/ki/harness/dienst', async (_req, res) => {
+    const da = await harnessErreichbar(HARNESS_PORT, 800);
+    if (!da) return res.json({ erreichbar: false });
+    try {
+      const r2 = await fetch(`http://127.0.0.1:${HARNESS_PORT}/status`, { signal: AbortSignal.timeout(800) });
+      if (!r2.ok) return res.json({ erreichbar: false });
+      res.json(await r2.json());
+    } catch {
+      res.json({ erreichbar: false });
+    }
+  });
   r.post('/ki/harness/:aktion', async (req, res) => {
     if (!o.harness) return res.status(501).json({ error: 'Harness-Verwaltung ist in diesem Build nicht verfügbar.' });
     const umgebung = harnessUmgebung(o.db, [...erlaubteOrigins]);

@@ -27,7 +27,7 @@ function expected(task, ms) {
 const ZELLE_KLASSE = {
   offen: "border-dashed border-slate-300 bg-white text-slate-400",
   laeuft: "border-amber-300 bg-amber-50 text-amber-900",
-  fertig: "border-emerald-300 bg-emerald-100 text-emerald-900",
+  fertig: "border-erfolg-rand bg-erfolg-flaeche text-erfolg",
 };
 const ZUSTAND_TEXT = { offen: "nicht begonnen", laeuft: "läuft", fertig: "fertig" };
 
@@ -151,7 +151,7 @@ export default function FourDFiveD({ tasks = [], projektName = "" }) {
                 </div>
               )}
               <div className="flex flex-wrap items-center gap-3">
-                <Stat label={t("Baufortschritt (Soll, dauergewichtet)")} value={`${Math.round(matrix.gesamtSoll * 100)} %`} accent="text-emerald-600" />
+                <Stat label={t("Baufortschritt (Soll, dauergewichtet)")} value={`${Math.round(matrix.gesamtSoll * 100)} %`} accent="text-foreground" />
                 <div>
                   <div className="text-xs text-slate-500 mb-1">{t("Auf der Baustelle am")} {format(new Date(scrub), "dd.MM.yyyy")}</div>
                   <div className="flex flex-wrap gap-1" data-testid="zs-aktiv">
@@ -179,7 +179,7 @@ export default function FourDFiveD({ tasks = [], projektName = "" }) {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3 mb-2">
-              <Stat label="Kosten bis Datum" value={eur(costToDate)} accent="text-purple-600" />
+              <Stat label="Kosten bis Datum" value={eur(costToDate)} accent="text-foreground" />
               <Stat label="Gesamtbudget" value={eur(totalBudget)} />
             </div>
             <div className="h-44">

@@ -1,12 +1,14 @@
 // <AnsichtOptionen> — the three new view parameters of plan 107-12 in the BIM studio's navigator ("Mappe"): structure display, view
-// options and the switch for the two standard graphic rules. No rule editor (D-BK-23: phase 55 builds it on the data form of
-// @core/lib/plan/ansichtszustand.js). Loaded lazily (React.lazy) so the studio chunk does not grow; it is a part of the existing
-// navigator, not a second editor.
+// options and the switch for graphic rules. Phase 55-01: when rules are on, the RegelEditor (lazy) creates/edits/reorders them and
+// loads project presets — still ONE form from @core/lib/plan/ansichtszustand.js (D-BK-23 / D-UEB-01). Loaded lazily (React.lazy)
+// so the studio chunk does not grow.
 //
-// In:  current values (structure display, effective options, rules on/off), change callbacks, translator.
-// Out: a compact block of select + checkboxes (token classes only).
+// In:  current values (structure display, effective options, rules, presets), change callbacks, translator.
+// Out: a compact block of select + checkboxes + optional RegelEditor (token classes only).
 import React from "react";
 import { STRUKTURDARSTELLUNGEN, OPTIONEN_FELDER } from "@core/lib/plan/ansichtszustand.js";
+
+const RegelEditor = React.lazy(() => import("@designer/components/RegelEditor.jsx"));
 
 /** German labels (i18n keys) of the structure display values. */
 const STRUKTUR_LABEL = /** @type {Record<string, string>} */ ({
@@ -31,11 +33,18 @@ const OPTION_LABEL = /** @type {Record<string, string>} */ ({
  * @param {(v: string) => void} p.onStruktur
  * @param {Record<string, boolean>} p.optionen effective options (optionenFuer)
  * @param {(k: string, v: boolean) => void} p.onOption
- * @param {boolean} p.regelnAn the standard rules are switched on
- * @param {(v: boolean) => void} p.onRegeln
+ * @param {boolean} p.regelnAn the graphic rules are switched on
+ * @param {(v: boolean) => void} p.onRegeln toggle: on → standard rules (caller), off → null
+ * @param {any[]|null} [p.regeln] current rule list when on (55-01 editor)
+ * @param {(regeln: any[]|null) => void} [p.onRegelnChange] edit/reorder/preset load
+ * @param {Array<{id: string, name: string, regeln: any[]}>} [p.vorlagen] project presets
+ * @param {(vorlage: {id: string, name: string, regeln: any[]}) => void} [p.onVorlageSpeichern]
  * @param {(s: string) => string} p.t translator (@core/lib/i18n)
  */
-export default function AnsichtOptionen({ strukturdarstellung, onStruktur, optionen, onOption, regelnAn, onRegeln, t }) {
+export default function AnsichtOptionen({
+  strukturdarstellung, onStruktur, optionen, onOption, regelnAn, onRegeln,
+  regeln = null, onRegelnChange, vorlagen = [], onVorlageSpeichern, t,
+}) {
   return (
     <div className="px-3 py-1 border-t text-[11px] text-muted-foreground" data-testid="ansicht-optionen">
       <label className="flex items-center justify-between gap-2" title={t("Schichten nach ihrer Funktion ausblenden — die Referenzlinie bleibt, IFC und Mengen bleiben vollständig")}>
@@ -58,6 +67,11 @@ export default function AnsichtOptionen({ strukturdarstellung, onStruktur, optio
           <input type="checkbox" checked={regelnAn} data-testid="ansicht-regeln" aria-label={t("Grafische Regeln")} onChange={(e) => onRegeln(e.target.checked)} />
         </label>
       </div>
+      {regelnAn && onRegelnChange && (
+        <React.Suspense fallback={null}>
+          <RegelEditor t={t} regeln={regeln} onChange={onRegelnChange} vorlagen={vorlagen} onVorlageSpeichern={onVorlageSpeichern} />
+        </React.Suspense>
+      )}
     </div>
   );
 }

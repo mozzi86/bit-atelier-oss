@@ -85,7 +85,7 @@ const KIND_LABELS = {
 const KIND_BADGE = {
   hard: "bg-rose-100 text-rose-700 border-rose-200",
   clearance: "bg-amber-100 text-amber-700 border-amber-200",
-  duplicate: "bg-violet-100 text-violet-700 border-violet-200",
+  duplicate: "bg-warnung-flaeche text-warnung border-warnung-rand",
   enthalten: "bg-sky-100 text-sky-700 border-sky-200",
   gefuellt: "bg-sky-100 text-sky-700 border-sky-200",
   deckung: "bg-cyan-100 text-cyan-700 border-cyan-200",
@@ -1114,7 +1114,7 @@ export default function ModelCheck() {
           <div>
             {/* h1 = menu name (N-02 name table, navigation.js:91); what the suite
                 checks moves into the subtitle. */}
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold text-foreground">
               {t("Prüf-Suite")}
             </h1>
             <p className="text-slate-600 mt-1">
@@ -1125,7 +1125,7 @@ export default function ModelCheck() {
             <Button
               onClick={pruefungStarten}
               disabled={!modell || laufStatus === "laeuft"}
-              className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg"
+              className="bg-primary hover:bg-primary/90 shadow-sm"
             >
               {laufStatus === "laeuft"
                 ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1164,8 +1164,8 @@ export default function ModelCheck() {
         <Card className="border-0 shadow-sm rounded-xl">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-slate-800">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">1</span>
-              <FileUp className="w-5 h-5 text-emerald-600" />
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
+              <FileUp className="w-5 h-5 text-muted-foreground" />
               IFC-Modell laden
             </CardTitle>
           </CardHeader>
@@ -1188,7 +1188,7 @@ export default function ModelCheck() {
                   disabled={busy}
                   onClick={beispielLaden}
                   data-testid="beispiel-laden"
-                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                  className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                   <Play className="w-4 h-4" /> Musterprojekt laden
                 </Button>
@@ -1231,7 +1231,7 @@ export default function ModelCheck() {
             )}
 
             {modell && !busy && (
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground">
                 <span className="font-semibold flex items-center gap-1.5">
                   <Boxes className="w-4 h-4" /> {modell.fileName}
                 </span>
@@ -1249,7 +1249,7 @@ export default function ModelCheck() {
                   </span>
                 )}
                 {modell.geo.uebersprungen > 0 && (
-                  <span className="text-emerald-700/70">{nf.format(modell.geo.uebersprungen)} ohne Geometrie übersprungen</span>
+                  <span className="text-muted-foreground">{nf.format(modell.geo.uebersprungen)} ohne Geometrie übersprungen</span>
                 )}
               </div>
             )}
@@ -1323,8 +1323,8 @@ export default function ModelCheck() {
           <Card className="border-0 shadow-sm rounded-xl">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-slate-800">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">2</span>
-                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
+                <ShieldCheck className="w-5 h-5 text-muted-foreground" />
                 Kollisionsregeln
               </CardTitle>
             </CardHeader>
@@ -1338,7 +1338,7 @@ export default function ModelCheck() {
                       onChange={() =>
                         setRegelAktiv((prev) => prev.map((v, k) => (k === i ? !v : v)))
                       }
-                      className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
+                      className="h-4 w-4 rounded border-slate-300 accent-primary"
                     />
                     <span className="font-medium">{regel.name}</span>
                     <span className="text-xs text-slate-400">
@@ -1351,7 +1351,7 @@ export default function ModelCheck() {
                     type="checkbox"
                     checked={duplikate}
                     onChange={() => setDuplikate((v) => !v)}
-                    className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
+                    className="h-4 w-4 rounded border-slate-300 accent-primary"
                   />
                   <span className="font-medium">Duplikate erkennen</span>
                   <span className="text-xs text-slate-400">(nahezu deckungsgleiche Bauteile gleichen Typs)</span>
@@ -1388,8 +1388,8 @@ export default function ModelCheck() {
           <Card className="border-0 shadow-sm rounded-xl">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-slate-800">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">2</span>
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
+                <CheckCircle2 className="w-5 h-5 text-muted-foreground" />
                 IDS-Prüfung (optional)
               </CardTitle>
             </CardHeader>
@@ -1509,7 +1509,7 @@ export default function ModelCheck() {
             <CardContent className="p-4 space-y-2">
               <div className="flex items-center justify-between text-sm text-slate-600">
                 <span className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                   Kollisionsprüfung läuft…
                 </span>
                 <span>
@@ -1527,9 +1527,9 @@ export default function ModelCheck() {
             {/* KPI-Zeile */}
             <div className={`grid grid-cols-2 ${ergebnis.koordination ? "md:grid-cols-6" : "md:grid-cols-5"} gap-3`}>
               {[
-                { label: "Kollisionen (hard)", wert: kpi.hard, farbe: kpi.hard > 0 ? "text-rose-600" : "text-emerald-600" },
-                { label: "Abstands-Befunde", wert: kpi.clearance, farbe: kpi.clearance > 0 ? "text-amber-600" : "text-emerald-600" },
-                { label: "Duplikate", wert: kpi.duplicate, farbe: kpi.duplicate > 0 ? "text-violet-600" : "text-emerald-600" },
+                { label: "Kollisionen (hard)", wert: kpi.hard, farbe: kpi.hard > 0 ? "text-rose-600" : "text-erfolg" },
+                { label: "Abstands-Befunde", wert: kpi.clearance, farbe: kpi.clearance > 0 ? "text-amber-600" : "text-erfolg" },
+                { label: "Duplikate", wert: kpi.duplicate, farbe: kpi.duplicate > 0 ? "text-warnung" : "text-erfolg" },
                 ...(ergebnis.koordination ? [{
                   // BAP KOORD-01 (0 mm): der Lagebeweis über den Koordinationskörper.
                   label: ergebnis.koordination.bestanden === null ? "Lage: offen"
@@ -1538,10 +1538,10 @@ export default function ModelCheck() {
                   text: ergebnis.koordination.bestanden === null ? "?"
                     : (ergebnis.koordination.bestanden ? "0 mm ✓" : `${nf.format(Math.round(ergebnis.koordination.maxMm))} mm`),
                   farbe: ergebnis.koordination.bestanden === null ? "text-amber-600"
-                    : ergebnis.koordination.bestanden ? "text-emerald-600" : "text-rose-600",
+                    : ergebnis.koordination.bestanden ? "text-erfolg" : "text-rose-600",
                 }] : []),
-                { label: "IDS bestanden", wert: kpi.idsBestanden, farbe: "text-emerald-600" },
-                { label: "IDS verletzt", wert: kpi.idsVerletzt, farbe: kpi.idsVerletzt > 0 ? "text-rose-600" : "text-emerald-600" },
+                { label: "IDS bestanden", wert: kpi.idsBestanden, farbe: "text-erfolg" },
+                { label: "IDS verletzt", wert: kpi.idsVerletzt, farbe: kpi.idsVerletzt > 0 ? "text-rose-600" : "text-erfolg" },
               ].map((k) => (
                 <Card key={k.label} className="border-0 shadow-sm rounded-xl">
                   <CardContent className="p-4 text-center">
@@ -1597,7 +1597,7 @@ export default function ModelCheck() {
                 <Share2 className="w-4 h-4 mr-2" />
                 {t("Prüflauf teilen")}
               </button>
-              <Button onClick={exportBcf} variant="outline" className="border-emerald-300">
+              <Button onClick={exportBcf} variant="outline" className="border-border">
                 <Download className="w-4 h-4 mr-2" />
                 Als BCF exportieren
               </Button>
@@ -1650,7 +1650,7 @@ export default function ModelCheck() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-emerald-300 text-emerald-800"
+                  className="border-border text-foreground"
                   data-testid="befund-besprechen"
                   onClick={() => oeffneFeedback({
                     text: befundText({ ...(kennzahlenAktuell || {}), paketName: paketGeladen || "" }, t),
@@ -1661,7 +1661,7 @@ export default function ModelCheck() {
                 </Button>
               )}
               {exportiert && (
-                <span className="text-xs text-emerald-700 flex items-center gap-1">
+                <span className="text-xs text-erfolg flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" /> BCF heruntergeladen
                 </span>
               )}
@@ -1677,17 +1677,17 @@ export default function ModelCheck() {
                 und Manifest mit SHA-256 — benannt nach Projekt und Datum.
                 Das IFC selbst bleibt draußen (fremdes Modell, NDA). */}
             <div
-              className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3"
+              className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted px-4 py-3"
               data-testid="befund-paket-karte"
             >
-              <Package className="w-5 h-5 text-emerald-700 shrink-0" />
+              <Package className="w-5 h-5 text-muted-foreground shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-emerald-900">{t("Befund-Paket")}</p>
-                <p className="text-xs text-emerald-700">
+                <p className="text-sm font-medium text-foreground">{t("Befund-Paket")}</p>
+                <p className="text-xs text-muted-foreground">
                   {t("Prüfbericht (PDF) + Befunde (BCF) + HTML-Zusammenfassung + Manifest (SHA-256) als eine ZIP-Datei — das Modell selbst bleibt aus Datenschutzgründen draußen.")}
                 </p>
                 {paketGeladen && (
-                  <p className="mt-1 text-xs text-emerald-800 flex items-center gap-1" data-testid="paket-geladen">
+                  <p className="mt-1 text-xs text-erfolg flex items-center gap-1" data-testid="paket-geladen">
                     <CheckCircle2 className="w-3.5 h-3.5" /> {t("„{{datei}}“ liegt in Ihrem Download-Ordner.").replace("{{datei}}", paketGeladen)}
                   </p>
                 )}
@@ -1700,7 +1700,7 @@ export default function ModelCheck() {
                 onClick={exportPaket}
                 disabled={paketBusy}
                 data-testid="paket-download"
-                className="inline-flex items-center rounded-md px-4 py-2 text-sm font-medium text-white shadow bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50"
+                className="inline-flex items-center rounded-md px-4 py-2 text-sm font-medium text-primary-foreground shadow bg-primary hover:bg-primary/90 disabled:opacity-50"
               >
                 {paketBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Package className="w-4 h-4 mr-2" />}
                 {t("Paket herunterladen")}
@@ -1752,7 +1752,7 @@ export default function ModelCheck() {
                   <p className="text-sm text-slate-500" data-testid="befund-filter-leer">{t("Kein Befund passt zum Filter.")}</p>
                 ) : clashGruppen.length === 0 ? (
                   <p className="text-sm text-slate-500 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <CheckCircle2 className="w-4 h-4 text-erfolg" />
                     Keine Kollisionen, Abstands-Befunde oder Duplikate gefunden.
                   </p>
                 ) : (
@@ -1884,7 +1884,7 @@ export default function ModelCheck() {
               <Card className="border-0 shadow-sm rounded-xl">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-slate-800">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <CheckCircle2 className="w-5 h-5 text-muted-foreground" />
                     IDS-Ergebnis ({nf.format(ergebnis.ids.length)} Spezifikationen)
                   </CardTitle>
                 </CardHeader>
@@ -1898,12 +1898,12 @@ export default function ModelCheck() {
                     >
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         {r.bestanden
-                          ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          ? <CheckCircle2 className="w-4 h-4 text-erfolg shrink-0" />
                           : <XCircle className="w-4 h-4 text-rose-600 shrink-0" />}
                         <span className="font-medium text-slate-800">{r.spec.name}</span>
                         {/* 69-08: rules written in the IDS editor are marked */}
                         {r.eigen && (
-                          <Badge variant="secondary" className="font-normal bg-violet-100 text-violet-700 border-violet-200" data-testid="ids-eigen-marke">
+                          <Badge variant="secondary" className="font-normal bg-muted text-muted-foreground border-border" data-testid="ids-eigen-marke">
                             {t("eigene Regel")}
                           </Badge>
                         )}
@@ -1912,7 +1912,7 @@ export default function ModelCheck() {
                         </Badge>
                         <Badge
                           className={`font-normal border ${r.bestanden
-                            ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                            ? "bg-erfolg-flaeche text-erfolg border-erfolg-rand"
                             : "bg-rose-100 text-rose-700 border-rose-200"}`}
                         >
                           {r.bestanden ? "bestanden" : `${nf.format(r.verletzungen.length)} ${r.verletzungen.length === 1 ? "Verletzung" : "Verletzungen"}`}
@@ -1978,8 +1978,8 @@ export default function ModelCheck() {
             {/* Briefkopf */}
             <div className="flex items-center justify-between border-b-2 border-slate-800 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
-                  <ShieldCheck className="w-5 h-5 text-white" />
+                <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5 text-primary-foreground" />
                 </div>
                 <div>
                   <div className="font-bold text-slate-800 leading-tight max-w-[360px]">{briefkopf.office}</div>
@@ -2007,7 +2007,7 @@ export default function ModelCheck() {
 
             {/* Zusammenfassung */}
             <div className="mt-6">
-              <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-emerald-500 pb-1 mb-3">Zusammenfassung</h2>
+              <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-border pb-1 mb-3">Zusammenfassung</h2>
               <div className="grid grid-cols-5 gap-3">
                 {[
                   ["Kollisionen (hard)", kpi.hard],
@@ -2034,7 +2034,7 @@ export default function ModelCheck() {
                 section the findings block, earliest first. Report text stays German like the
                 rest of the printed report. */}
             <div className="mt-6" data-testid="bericht-abschnitte">
-              <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-emerald-500 pb-1 mb-3">Befunde je Bauabschnitt</h2>
+              <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-border pb-1 mb-3">Befunde je Bauabschnitt</h2>
               {abschnitte.length === 0 ? (
                 <p className="text-[11px] text-slate-600">
                   Kein Abschnittstermin im Modelllieferplan — Befunde nach Schwere:{" "}
@@ -2078,7 +2078,7 @@ export default function ModelCheck() {
             {/* Lieferung (71-03) */}
             {lieferInfo && (lieferInfo.lieferung || lieferInfo.dateiname) && (
               <div className="mt-6" data-testid="bericht-lieferung">
-                <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-emerald-500 pb-1 mb-3">Lieferung</h2>
+                <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-border pb-1 mb-3">Lieferung</h2>
                 <table className="w-full text-[11px]">
                   <tbody>
                     {[
@@ -2111,7 +2111,7 @@ export default function ModelCheck() {
             {/* Modelllage (71-03) */}
             {modelllage && (
               <div className="mt-6" data-testid="bericht-modelllage">
-                <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-emerald-500 pb-1 mb-3">Modelllage</h2>
+                <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-border pb-1 mb-3">Modelllage</h2>
                 <p className="text-[11px] text-slate-700">
                   Ausdehnung (Welt, {modelllage.zentriert ? "auf den Ursprung zentriert" : "unzentriert — Projektkoordinaten"}):{" "}
                   min ({nf2.format(modelllage.min[0])} / {nf2.format(modelllage.min[1])} / {nf2.format(modelllage.min[2])}) m ·{" "}
@@ -2131,7 +2131,7 @@ export default function ModelCheck() {
             {/* Bauteile je Klasse + Pset-Quote (71-03) */}
             {klassen.length > 0 && (
               <div className="mt-6" data-testid="bericht-klassen">
-                <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-emerald-500 pb-1 mb-3">
+                <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-border pb-1 mb-3">
                   Bauteile je Klasse ({nf.format(klassen.reduce((a, [, n]) => a + n, 0))})
                   {psetQuote.length > 0 && " · Quote Projekt-Pset"}
                 </h2>
@@ -2165,7 +2165,7 @@ export default function ModelCheck() {
 
             {/* Clash-Tabelle */}
             <div className="mt-6">
-              <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-emerald-500 pb-1 mb-3">
+              <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-border pb-1 mb-3">
                 Kollisions-Befunde ({nf.format(ergebnis.clash.clashes.length)})
               </h2>
               {ergebnis.clash.clashes.length === 0 ? (
@@ -2242,7 +2242,7 @@ export default function ModelCheck() {
 
             {/* IDS-Tabelle */}
             <div className="mt-6">
-              <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-emerald-500 pb-1 mb-3">
+              <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-border pb-1 mb-3">
                 IDS-Konformität ({nf.format(ergebnis.ids.length)} Spezifikationen)
               </h2>
               {ergebnis.ids.length === 0 ? (

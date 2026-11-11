@@ -240,7 +240,7 @@ export default function UmsatzsteuerReiter({ bh }) {
                               <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800 dark:bg-sky-950 dark:text-sky-200">{t("Prognose")}</span>
                             )}
                             {z.bezahlt && (
-                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{t("Bezahlt")}</span>
+                              <span className="rounded-full bg-erfolg-flaeche px-2 py-0.5 text-xs text-erfolg">{t("Bezahlt")}</span>
                             )}
                           </div>
                         </td>

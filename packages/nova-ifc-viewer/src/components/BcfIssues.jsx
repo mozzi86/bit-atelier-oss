@@ -80,7 +80,7 @@ function bauteilLink(globalId) {
 const STATUS_FARBE = {
   Open: "bg-rose-100 text-rose-700 border-rose-200",
   InProgress: "bg-amber-100 text-amber-700 border-amber-200",
-  Resolved: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  Resolved: "bg-erfolg-flaeche text-erfolg border-erfolg-rand",
   Closed: "bg-slate-200 text-slate-600 border-slate-300",
 };
 
@@ -526,7 +526,7 @@ export default function BcfIssues({ projectId, autor = "BIT-Atelier" }) {
                       >
                         {offenZeile ? <ChevronDown className="mr-1 inline h-3 w-3" /> : <ChevronRight className="mr-1 inline h-3 w-3" />}
                         {topic.titel || t("(ohne Titel)")}
-                        {antwort?.text ? <MessageSquare className="ml-1.5 inline h-3 w-3 text-emerald-600" /> : null}
+                        {antwort?.text ? <MessageSquare className="ml-1.5 inline h-3 w-3 text-erfolg" /> : null}
                       </button>
                     </td>
                     <td className="px-2 py-2">
@@ -550,7 +550,7 @@ export default function BcfIssues({ projectId, autor = "BIT-Atelier" }) {
                             <>
                               <Link
                                 to={ticketUrl(ticket.id)}
-                                className="inline-flex items-center gap-1.5 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+                                className="inline-flex items-center gap-1.5 rounded border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
                               >
                                 {t("Ticket öffnen")}
                               </Link>

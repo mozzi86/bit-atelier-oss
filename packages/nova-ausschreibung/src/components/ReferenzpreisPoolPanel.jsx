@@ -113,7 +113,7 @@ export default function ReferenzpreisPoolPanel({
         )}
 
         {position && (
-          <p className="text-xs text-emerald-800">
+          <p className="text-xs text-foreground">
             Zielposition: <strong>{position.oz}</strong> {position.title}
             {position.unit ? ` · ${position.unit}` : ""}
             {nurPassende && " · es werden nur Zeilen mit passender Einheit gezeigt"}
@@ -222,7 +222,7 @@ export default function ReferenzpreisPoolPanel({
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-1">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="font-semibold text-slate-700">STLB-Bau-Zuordnung:</span>
-              <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300">
+              <Badge className="text-[10px] bg-erfolg-flaeche text-erfolg border border-erfolg-rand">
                 {stlbBilanz.hoch} hoch
               </Badge>
               <Badge className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300">

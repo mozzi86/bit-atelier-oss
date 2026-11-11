@@ -77,7 +77,7 @@ export default function BeteiligtePanel({ contacts }) {
     <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" data-testid="bp-panel" data-anzahl={rows.length}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800"><Users className="h-5 w-5 text-emerald-600" /> {t("Projektbeteiligte")} — {project.name}</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800"><Users className="h-5 w-5 text-muted-foreground" /> {t("Projektbeteiligte")} — {project.name}</h2>
           <p className="text-xs text-slate-500">{t("Wer in welcher Rolle an diesem Projekt beteiligt ist — Kontakte aus dem Adressbuch.")}</p>
         </div>
         <Button variant="outline" onClick={pdf} data-testid="bp-pdf"><FileDown className="mr-2 h-4 w-4" /> {t("PDF A4 quer")}</Button>
@@ -132,8 +132,8 @@ export default function BeteiligtePanel({ contacts }) {
       </div>
 
       {vor.length > 0 && (
-        <div className="rounded border border-emerald-100 bg-emerald-50/50 p-2 text-xs">
-          <div className="mb-1 font-medium text-emerald-900">{t("Vorschläge")}</div>
+        <div className="rounded border border-border bg-muted/50 p-2 text-xs">
+          <div className="mb-1 font-medium text-foreground">{t("Vorschläge")}</div>
           {vor.map((v) => {
             const c = contacts.find((x) => x.id === v.contact_id);
             return (

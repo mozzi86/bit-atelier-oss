@@ -123,7 +123,7 @@ export default function ProjectPlanner({ selectedProject }) {
 
   const statusOf = (v) => {
     if (v == null) return ["nicht erfasst", "bg-slate-100 text-slate-500"];
-    if (v === 100) return ["Abgeschlossen", "bg-emerald-100 text-emerald-800"];
+    if (v === 100) return ["Abgeschlossen", "bg-erfolg-flaeche text-erfolg"];
     if (v > 0) return ["Laufend", "bg-blue-100 text-blue-800"];
     return ["Offen", "bg-slate-100 text-slate-600"];
   };
@@ -166,7 +166,7 @@ export default function ProjectPlanner({ selectedProject }) {
             {mittel == null ? (
               <Badge className="bg-slate-100 text-slate-600">Kein Fortschritt erfasst</Badge>
             ) : (
-              <Badge className="bg-emerald-100 text-emerald-800">
+              <Badge className="bg-muted text-foreground">
                 Ø {mittel}% · {erfasst.length} von 9 LP erfasst
               </Badge>
             )}
@@ -177,7 +177,7 @@ export default function ProjectPlanner({ selectedProject }) {
               size="sm"
               onClick={speichern}
               disabled={busy || laden || !projectId}
-              className="bg-gradient-to-r from-emerald-600 to-teal-600"
+              className="bg-primary hover:bg-primary/90"
             >
               <Save className="w-3.5 h-3.5 mr-1" /> Speichern
             </Button>

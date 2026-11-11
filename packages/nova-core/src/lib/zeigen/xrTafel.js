@@ -28,10 +28,10 @@ export const TAFEL_M = Object.freeze({ breite: 0.64, hoehe: 0.44 });
  */
 export const TAFEL_FARBEN = Object.freeze({
   flaeche: "#ffffff",
-  text: "#0a0a0a",
-  leise: "#737373",
-  primaer: "#171717",
-  primaerText: "#fafafa",
+  text: "#020617",
+  leise: "#475569",
+  primaer: "#0f172a",
+  primaerText: "#ffffff",
   fehler: ZEIGE_ZUSTAENDE.fehler.hex,
   warnung: ZEIGE_ZUSTAENDE.warnung.hex,
   fokus: ZEIGE_ZUSTAENDE.fokus.hex,

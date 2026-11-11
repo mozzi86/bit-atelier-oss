@@ -75,7 +75,7 @@ export default function KiAssistentVerbinden() {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 dark:border-slate-700 dark:bg-slate-900" data-testid="ki-mcp" aria-labelledby="ki-mcp-titel">
       <h3 id="ki-mcp-titel" className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-        <Bot className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("Mit einem KI-Assistenten verbinden")}
+        <Bot className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> {t("Mit einem KI-Assistenten verbinden")}
       </h3>
       <p className="text-sm text-slate-700 dark:text-slate-200">
         {t("BIT-Atelier ist ein MCP-Server: Claude Code, Claude Desktop und andere MCP-Clients können Ihre Projekte lesen – mit Schreibrecht auch Einträge anlegen und ändern, nie löschen. Die App muss dafür laufen.")}
@@ -113,7 +113,7 @@ export default function KiAssistentVerbinden() {
           </div>
         </>
       )}
-      <p role="status" className="text-xs text-emerald-700 dark:text-emerald-400" data-testid="ki-mcp-status">{status}</p>
+      <p role="status" className="text-xs text-erfolg" data-testid="ki-mcp-status">{status}</p>
     </section>
   );
 }

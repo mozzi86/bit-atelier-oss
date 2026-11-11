@@ -23,7 +23,7 @@ import { hatPruefpfad, pruefHinweise, betragOderNull, nachtragArtLabel } from '@
 
 const statusColors = {
   pending: "bg-orange-100 text-orange-800",
-  approved: "bg-emerald-100 text-emerald-800",
+  approved: "bg-erfolg-flaeche text-erfolg",
   rejected: "bg-red-100 text-red-800",
   in_progress: "bg-blue-100 text-blue-800",
   completed: "bg-slate-100 text-slate-800"
@@ -120,7 +120,7 @@ export default function ChangeOrderTable({ changeOrders, isLoading, zeigeProjekt
                       </td>
                       {zeigeProjekt && <td className={TD}>{order.project_name || "—"}</td>}
                       <td className={TD}>{datum(order.submission_date)}</td>
-                      <td className={`${TD} ${order.cost_impact == null ? "text-slate-500" : order.cost_impact > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                      <td className={`${TD} ${order.cost_impact == null ? "text-slate-500" : order.cost_impact > 0 ? "text-red-600" : "text-erfolg"}`}>
                         {/* null/undefined = amount deliberately not quantified — "—" instead of "NaN €" */}
                         {order.cost_impact == null ? "—" : eur.format(order.cost_impact)}
                         {hatPruefpfad(order) && (() => {

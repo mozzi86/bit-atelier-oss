@@ -257,8 +257,8 @@ export default function SiteControl() {
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap justify-between items-center gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent flex items-center gap-2">
-              <Radio className="w-6 h-6 text-emerald-600" /> Baustellen-Leitstand
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-2">
+              <Radio className="w-6 h-6 text-muted-foreground" /> Baustellen-Leitstand
             </h1>
             <p className="text-slate-600 mt-1 text-sm">Live-Digital-Twin · autonome Roboter, Drohnen, LKW & 3D-Drucker steuern</p>
           </div>
@@ -273,7 +273,7 @@ export default function SiteControl() {
               <span className="text-xs text-slate-500 px-2">Rolle</span>
               {Object.entries(ROLES).map(([id, r]) => (
                 <button key={id} onClick={() => switchRole(id)} title={`Rolle: ${r.label}`} aria-label={`Rolle: ${r.label}`}
-                  className={`px-2 py-1.5 rounded-md text-xs font-medium ${role === id ? "bg-emerald-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
+                  className={`px-2 py-1.5 rounded-md text-xs font-medium ${role === id ? "bg-primary text-primary-foreground" : "text-slate-500 hover:bg-slate-100"}`}>
                   {r.label}
                 </button>
               ))}
@@ -282,7 +282,7 @@ export default function SiteControl() {
             <div className="flex rounded-lg border bg-white p-0.5">
               {VIEW_MODES.map((m) => (
                 <button key={m.id} onClick={() => setViewMode(m.id)} title={m.label} aria-label={m.label}
-                  className={`p-2 rounded-md ${viewMode === m.id ? "bg-emerald-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
+                  className={`p-2 rounded-md ${viewMode === m.id ? "bg-primary text-primary-foreground" : "text-slate-500 hover:bg-slate-100"}`}>
                   <m.icon className="w-4 h-4" />
                 </button>
               ))}
@@ -350,12 +350,12 @@ export default function SiteControl() {
                 <Card className="border-0 shadow-sm">
                   <CardContent className="p-3 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium flex items-center gap-1.5"><Brain className="w-4 h-4 text-emerald-600" /> KI-Disposition</span>
+                      <span className="text-sm font-medium flex items-center gap-1.5"><Brain className="w-4 h-4 text-muted-foreground" /> KI-Disposition</span>
                       <Button size="sm" variant={autoDispatch ? "default" : "outline"} disabled={!can.command} title={!can.command ? "Rolle Beobachter: nur Lesezugriff" : undefined} onClick={() => setAutoDispatch(!autoDispatch)}>
                         Auto {autoDispatch ? "an" : "aus"}
                       </Button>
                     </div>
-                    <Button size="sm" className="w-full bg-gradient-to-r from-emerald-600 to-teal-600" disabled={!can.command} title={!can.command ? "Rolle Beobachter: nur Lesezugriff" : undefined} onClick={runDispatch}>
+                    <Button size="sm" className="w-full bg-primary hover:bg-primary/90" disabled={!can.command} title={!can.command ? "Rolle Beobachter: nur Lesezugriff" : undefined} onClick={runDispatch}>
                       <Brain className="w-4 h-4 mr-1" /> Freie Einheiten jetzt zuteilen
                     </Button>
                   </CardContent>

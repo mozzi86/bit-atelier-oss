@@ -32,9 +32,11 @@ import { pruefeAenderung } from "./pruefung.js";
 import { vorschlagAusfuehren, vorschlagVorbereiten, zielAusAuswahl } from "./vorschlag.js";
 import { vomAgentenKanal } from "./kanal.js";
 import { bibliothekAktuell } from "./befehlsBibliothek.js";
+import { neuerRaumname, punktePruefen, raumNachNummer, tuerLage, wandAmPunkt, wandZwischenRaeumen } from "./anlegen.js";
+import { bauteilGuid } from "../bauteil/steckbrief.js";
 
-/** Kinds of change a surface can support. */
-const ALLE_ARTEN = ["eigenschaft", "transformieren", "teilen"];
+/** Kinds of change a surface can support (261111-zs1: "anlegen" only where the surface hands in its drawing functions). */
+const ALLE_ARTEN = ["eigenschaft", "transformieren", "teilen", "anlegen"];
 
 /**
  * What a viewer hands in: its state and how it applies a result.
@@ -48,9 +50,11 @@ const ALLE_ARTEN = ["eigenschaft", "transformieren", "teilen"];
  *   Applies a confirmed step to the viewer (new model, journal entry).
  * @property {(eintrag: any, ergebnis: {modell: any, journal?: any}) => void} zuruecknehmen  Applies the reversal of ONE step.
  * @property {(guid: string) => any|null} [ifcBauteil]  IFC viewer only: the element `{quelle: "ifc", modell, guid, psets, project_id?, klasse?, name?}`.
- * @property {ReadonlyArray<"eigenschaft"|"transformieren"|"teilen">} [arten]  Kinds this surface can do (default all).
+ * @property {ReadonlyArray<"eigenschaft"|"transformieren"|"teilen"|"anlegen">} [arten]  Kinds this surface can do (default all).
  * @property {string} [nichtMoeglichText]  Refusal text for a kind the surface cannot do.
  * @property {(s: string) => string} [t]  Translator of the sentence templates (default: German as it stands).
+ * @property {() => Array<{x: number, z: number, level?: number}>} [punkte]  261111-zs1: the numbered pointing points of the plan (m, at most 4);
+ *   the creating commands read them when the call names none. `optionen().zeichnen` carries the studio's drawing functions for "anlegen".
  * @property {(vorschlag: any) => void} [vorschauZeigen]  Draws the ghost / mark of a new proposal in the model view.
  * @property {(id: string) => void} [vorschauEntfernen]  Removes the ghost of a proposal again.
  * @property {() => boolean} [darfAendern]  106-07: may the person at this device change the model (role with "Modell & Prüfung:
@@ -171,7 +175,7 @@ export function aenderungsBefehleRegistrieren(reg, a) {
 
   /**
    * Makes, stores and shows one proposal.
-   * @param {"eigenschaft"|"transformieren"|"teilen"} art @param {any} p Command parameters @param {any} ctx
+   * @param {"eigenschaft"|"transformieren"|"teilen"|"anlegen"} art @param {any} p Command parameters @param {any} ctx
    * @param {(z: {guid: string}) => any} paramsAus  Builds the change parameters once the target is known.
    */
   const vorschlagMachen = (art, p, ctx, paramsAus) => {
@@ -219,7 +223,97 @@ export function aenderungsBefehleRegistrieren(reg, a) {
     return neu;
   };
 
+  /**
+   * 261111-zs1: the points a creating command works with - given in the call (agent, script, test) or the surface's numbered points.
+   * @param {any} p @returns {Array<{x: number, z: number, level?: number}>}
+   */
+  const punkteAus = (p) => {
+    if (Array.isArray(p?.punkte)) return p.punkte.map((/** @type {any} */ q) => ({ ...planPunkt(q, "punkte"), level: Math.round(Number(q?.level) || 0) }));
+    return a().punkte?.() ?? [];
+  };
+
+  /**
+   * 261111-zs1: makes, stores and shows one CREATING proposal (wall, door, note). The place comes from the points (and, for a door, the
+   * selected wall), kind and size from the parameters; everything else is the chain of the other kinds (check, preview, confirmation, origin).
+   * @param {any} p  Command parameters {objekt, wandart?, dicke_m?, breite_m?, feuerwiderstand?, din_anschlag?, text?, punkte?}.
+   * @param {any} ctx @returns {Record<string, any>}  vorschlagKurz of the new proposal.
+   */
+  const anlegenMachen = (p, ctx) => {
+    const f = a();
+    if (!(f.arten || ALLE_ARTEN).includes("anlegen")) throw new Error(f.nichtMoeglichText || "Anlegen gibt es hier nicht");
+    const objekt = String(p?.objekt ?? "").trim().toLowerCase().replace("ü", "ue");
+    const o = f.optionen() || {};
+    const modell = f.modell() ?? {};
+    const punkte = punkteAus(p);
+    /** @type {Record<string, any>} */
+    let params;
+    if (objekt === "wand") {
+      const dicke = Number(p?.dicke_m);
+      if (!(dicke > 0)) throw new Error("Die Wanddicke fehlt — dicke_m in Metern (z. B. 0,125)");
+      const r = punktePruefen(punkte, 2, "eine Wand");
+      if (!r.ok) throw new Error(/** @type {any} */ (r).grund);
+      params = { objekt, wandart: String(p?.wandart || "wand"), dicke_m: dicke, a: { x: r.punkte[0].x, z: r.punkte[0].z }, b: { x: r.punkte[1].x, z: r.punkte[1].z }, level: r.level };
+    } else if (objekt === "tuer") {
+      const breite = Number(p?.breite_m);
+      if (!(breite > 0)) throw new Error("Die Türbreite fehlt — breite_m in Metern (z. B. 1,01)");
+      const r = punktePruefen(punkte, 1, "eine Tür");
+      if (!r.ok) throw new Error(/** @type {any} */ (r).grund);
+      // a selected drawn wall names the wall, the point only the place along it; any other selection is ignored for the door
+      const k = f.kontext?.();
+      const gewaehlt = k?.anzahl === 1 ? k.bauteile?.[0] : null;
+      const wandFund = gewaehlt?.guid ? bauteilImModell(modell, gewaehlt.guid, { projektId: o.projektId ?? null }) : null;
+      const fang = wandAmPunkt(modell, r.punkte[0], { wandIdx: wandFund?.art === "wand" ? wandFund.element._idx : null });
+      if (!fang.ok) throw new Error(/** @type {any} */ (fang).grund);
+      const lage = tuerLage(modell, fang.wand, fang.u_m, breite);
+      if (!lage.ok) throw new Error(/** @type {any} */ (lage).grund);
+      params = { objekt, wandIdx: fang.wand._idx, u_m: lage.u_m, breite_m: breite, level: r.level, wand_geometrie: { a: { ...fang.wand.a }, b: { ...fang.wand.b } },
+        ...(p?.feuerwiderstand ? { feuerwiderstand: String(p.feuerwiderstand) } : {}), ...(p?.din_anschlag ? { din_anschlag: String(p.din_anschlag) } : {}) };
+    } else if (objekt === "notiz") {
+      const text = String(p?.text ?? "").trim();
+      if (!text) throw new Error("Der Text der Notiz fehlt");
+      const r = punktePruefen(punkte, 1, "eine Notiz");
+      if (!r.ok) throw new Error(/** @type {any} */ (r).grund);
+      params = { objekt, punkt: { x: r.punkte[0].x, z: r.punkte[0].z }, level: r.level, text };
+    } else throw new Error(`Anlegen: objekt fehlt oder unbekannt (möglich: wand, tuer, notiz)`);
+    const v = vorschlagVorbereiten(modell, { art: "anlegen", params, herkunft: herkunftAus(p, ctx) }, opt());
+    f.speicher.hinzu(v);
+    f.vorschauZeigen?.(v);
+    return vorschlagKurz(v);
+  };
+
   const entfernen = [
+    reg.registrieren({ id: "anlegen", label: "Bauteil anlegen (Vorschlag)", menue: "Ändern",
+      parameter: { objekt: "wand|tuer|notiz", wandart: "trockenbau|mauerwerk|wand", dicke_m: "zahl", breite_m: "zahl", feuerwiderstand: "text", din_anschlag: "links|rechts", text: "text", punkte: "text", satz_marke: "text" },
+      ausfuehren: (p, ctx) => anlegenMachen(p, ctx) }),
+    // 261111-zs1: "Raum 1.05 heißt jetzt Lager" (by number) / "dieser Raum heißt Lager" (the selected room) - a property proposal on the zone's name
+    reg.registrieren({ id: "raum-umbenennen", label: "Raum umbenennen (Vorschlag)", menue: "Ändern", parameter: { nummer: "text", name: "text", guid: "text", satz_marke: "text" },
+      ausfuehren: (p, ctx) => {
+        const name = String(p?.name ?? "").trim();
+        if (!name) throw new Error("Der neue Name fehlt");
+        const modell = a().modell() ?? {};
+        const pid = a().optionen()?.projektId ?? null;
+        /** @type {any} */ let zone;
+        if (p?.nummer != null && String(p.nummer).trim()) {
+          const r = raumNachNummer(modell, String(p.nummer));
+          if (!r.ok) throw new Error(/** @type {any} */ (r).grund);
+          zone = r.zone;
+        } else {
+          const z = ziel(p);
+          const fund = bauteilImModell(modell, z.guid, { projektId: pid });
+          if (fund?.art !== "zone") throw new Error("Ausgewählt ist kein Raum — erst den Raum wählen, dann „dieser Raum heißt …“");
+          zone = fund.element;
+        }
+        const guid = bauteilGuid(pid, "customZones", zone);
+        return vorschlagMachen("eigenschaft", { ...p, guid }, ctx, () => ({ name: "name", wert: neuerRaumname(zone, name) }));
+      } }),
+    // 261111-zs1: "Wand zwischen Raum 1.05 und 1.06 abbrechen" - the one wall crossed by the line between the two room stamps gets status Abbruch
+    reg.registrieren({ id: "wand-zwischen-raeumen", label: "Wand zwischen zwei Räumen abbrechen (Vorschlag)", menue: "Ändern", parameter: { raum_a: "text", raum_b: "text", satz_marke: "text" },
+      ausfuehren: (p, ctx) => {
+        const r = wandZwischenRaeumen(a().modell() ?? {}, String(p?.raum_a ?? ""), String(p?.raum_b ?? ""));
+        if (!r.ok) throw new Error(/** @type {any} */ (r).grund);
+        const guid = bauteilGuid(a().optionen()?.projektId ?? null, "customWalls", r.wand);
+        return vorschlagMachen("eigenschaft", { ...p, guid }, ctx, () => ({ name: "status", wert: "abbruch" }));
+      } }),
     reg.registrieren({ id: "eigenschaft-setzen", label: "Eigenschaft setzen (Vorschlag)", menue: "Ändern", parameter: { guid: "text", pset: "text", name: "text", wert: "text", satz_marke: "text" },
       ausfuehren: (p, ctx) => vorschlagMachen("eigenschaft", p, ctx, () => {
         if (!String(p?.name ?? "").trim()) throw new Error("name fehlt (welche Eigenschaft?)");

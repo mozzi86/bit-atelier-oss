@@ -26,10 +26,10 @@ import { ampelChipZustand, ladeAmpelChipDaten } from "@/lib/controlling/ampelChi
 const FARBE = {
   rot: "bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-900/40 dark:text-rose-200 dark:border-rose-800",
   gelb: "bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-900/40 dark:text-amber-100 dark:border-amber-800",
-  gruen: "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-800",
+  gruen: "bg-erfolg-flaeche text-erfolg border-erfolg-rand",
   grau: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700",
 };
-const PUNKT = { rot: "bg-rose-600", gelb: "bg-amber-500", gruen: "bg-emerald-600", grau: "bg-slate-400" };
+const PUNKT = { rot: "bg-rose-600", gelb: "bg-amber-500", gruen: "bg-erfolg", grau: "bg-slate-400" };
 
 /**
  * Short text of a light (LPH rows) — literal t() calls so the EN guard sees them.

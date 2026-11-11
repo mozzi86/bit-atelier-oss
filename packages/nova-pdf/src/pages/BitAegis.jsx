@@ -96,10 +96,10 @@ export default function BitAegis() {
           className="text-center space-y-4"
         >
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="p-4 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-2xl shadow-xl">
-              <Cloud className="w-8 h-8 text-white" />
+            <div className="p-4 bg-primary rounded-2xl shadow-sm">
+              <Cloud className="w-8 h-8 text-primary-foreground" />
             </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold text-foreground">
               {t("PDF & Ablage")}
             </h1>
           </div>
@@ -113,8 +113,8 @@ export default function BitAegis() {
         <div className="grid md:grid-cols-4 gap-6 mb-8">
           <Card className="border-0 shadow-sm rounded-xl bg-white hover:shadow-md transition-shadow">
             <CardContent className="p-6 text-center">
-              <div className="inline-flex p-2.5 rounded-xl bg-emerald-50 mb-3">
-                <Database className="w-8 h-8 text-emerald-600" />
+              <div className="inline-flex p-2.5 rounded-xl bg-muted mb-3">
+                <Database className="w-8 h-8 text-muted-foreground" />
               </div>
               <h3 className="font-semibold text-lg mb-1 text-slate-800">Datenspeicher</h3>
               <p className="text-slate-600 text-sm">Sichere Ablage für alle Projektdateien</p>
@@ -123,8 +123,8 @@ export default function BitAegis() {
 
           <Card className="border-0 shadow-sm rounded-xl bg-white hover:shadow-md transition-shadow">
             <CardContent className="p-6 text-center">
-              <div className="inline-flex p-2.5 rounded-xl bg-teal-50 mb-3">
-                <RefreshCw className="w-8 h-8 text-teal-600" /> {/* Changed from Sync to RefreshCw */}
+              <div className="inline-flex p-2.5 rounded-xl bg-muted mb-3">
+                <RefreshCw className="w-8 h-8 text-muted-foreground" /> {/* Changed from Sync to RefreshCw */}
               </div>
               <h3 className="font-semibold text-lg mb-1 text-slate-800">Sync & Backup</h3>
               <p className="text-slate-600 text-sm">Synchronisation in Echtzeit im ganzen Team</p>
@@ -143,8 +143,8 @@ export default function BitAegis() {
 
           <Card className="border-0 shadow-sm rounded-xl bg-white hover:shadow-md transition-shadow">
             <CardContent className="p-6 text-center">
-              <div className="inline-flex p-2.5 rounded-xl bg-violet-50 mb-3">
-                <Users className="w-8 h-8 text-violet-600" />
+              <div className="inline-flex p-2.5 rounded-xl bg-muted mb-3">
+                <Users className="w-8 h-8 text-muted-foreground" />
               </div>
               <h3 className="font-semibold text-lg mb-1 text-slate-800">Zusammenarbeit</h3>
               <p className="text-slate-600 text-sm">Team-Arbeitsbereich und Dateifreigabe</p>
@@ -156,7 +156,7 @@ export default function BitAegis() {
         <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-emerald-600" />
+              <MapPin className="w-5 h-5 text-muted-foreground" />
               Projektauswahl
             </CardTitle>
           </CardHeader>
@@ -169,8 +169,8 @@ export default function BitAegis() {
                   onClick={() => setSelectedProject(project)}
                   className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
                     selectedProject?.id === project.id
-                      ? 'border-emerald-500 bg-emerald-50'
-                      : 'border-slate-200 hover:border-emerald-300 bg-white'
+                      ? 'border-primary bg-muted'
+                      : 'border-slate-200 hover:bg-muted bg-white'
                   }`}
                 >
                   <h3 className="font-semibold text-slate-800">{project.name}</h3>

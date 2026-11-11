@@ -91,7 +91,7 @@ export default function VorschlagKarte({ vorschlag, footprintM, sortKey, gewaehl
   const typ = String(vorschlag.typologie?.erschliessung ?? "");
   return (
     <div
-      className={`flex flex-col gap-2 rounded-xl border bg-white p-3 shadow-sm ${gewaehlt ? "border-emerald-400 ring-1 ring-emerald-200" : ausgewaehlt ? "border-sky-400 ring-1 ring-sky-200" : "border-slate-200"}`}
+      className={`flex flex-col gap-2 rounded-xl border bg-white p-3 shadow-sm ${gewaehlt ? "border-primary ring-1 ring-primary/20" : ausgewaehlt ? "border-sky-400 ring-1 ring-sky-200" : "border-slate-200"}`}
       data-testid="vs-karte" data-vorschlag={vorschlag.id} data-typ={typ} data-riegel={vorschlag.riegel}
       data-we={kz.we?.wert ?? ""} data-fails={kz.fails?.wert ?? ""} data-erschliessung={kz.erschliessung_m?.wert ?? ""}
       data-gewaehlt={gewaehlt ? "1" : "0"} data-veraltet={veraltet ? "1" : "0"} data-ausgewaehlt={ausgewaehlt ? "1" : "0"} data-ursprung={vorschlag.ursprung ?? ""}
@@ -108,7 +108,7 @@ export default function VorschlagKarte({ vorschlag, footprintM, sortKey, gewaehl
           {bewertung && (bewertung.ko?.length ? (
             <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700" title={bewertung.ko.join(" · ")} data-testid="vs-ko">{t("K.-o.")}</span>
           ) : bewertung.rang ? (
-            <span className="rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-800" data-testid="vs-rang" data-rang={bewertung.rang} data-score={bewertung.score ?? ""}>
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-foreground" data-testid="vs-rang" data-rang={bewertung.rang} data-score={bewertung.score ?? ""}>
               {t("Rang")} {bewertung.rang} · {(Number(bewertung.score) || 0).toLocaleString("de-DE", { maximumFractionDigits: 2 })}
             </span>
           ) : null)}
@@ -130,7 +130,7 @@ export default function VorschlagKarte({ vorschlag, footprintM, sortKey, gewaehl
             </span>
           )}
           {gewaehlt && (
-            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${veraltet ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
+            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${veraltet ? "border-amber-200 bg-amber-50 text-amber-800" : "border-erfolg-rand bg-erfolg-flaeche text-erfolg"}`}>
               {veraltet ? t("Vorschlag veraltet") : t("gewählt")}
             </span>
           )}

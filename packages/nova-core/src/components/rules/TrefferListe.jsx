@@ -90,7 +90,7 @@ export default function TrefferListe({
             <AlertTriangle className="w-3 h-3 mr-1" /> 0 Treffer — der Selektor greift nicht
           </Badge>
         ) : (
-          <Badge className="text-xs bg-emerald-100 text-emerald-800 border border-emerald-300">
+          <Badge className="text-xs bg-erfolg-flaeche text-erfolg border border-erfolg-rand">
             <CheckCircle2 className="w-3 h-3 mr-1" /> {ergebnis.treffer} Treffer
           </Badge>
         )}

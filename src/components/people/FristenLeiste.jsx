@@ -73,7 +73,7 @@ export default function FristenLeiste({ faellig, onQuittiert }) {
           const schluessel = `${eintrag.art}:${eintrag.bezug.id}:${eintrag.faellig_am}`;
           return (
             <li key={schluessel} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <Link to={`/People${link(eintrag)}`} className="min-w-0 flex-1 text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400">
+              <Link to={`/People${link(eintrag)}`} className="min-w-0 flex-1 text-link underline-offset-4 hover:underline">
                 {eintrag.ueberfaellig && (
                   <span className="mr-1.5 inline-flex items-center rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-xs text-rose-800 dark:border-rose-700 dark:bg-rose-950/50 dark:text-rose-100">
                     {t("überfällig")}
@@ -90,7 +90,7 @@ export default function FristenLeiste({ faellig, onQuittiert }) {
         })}
       </ul>
       {faellig.length > 5 && !alleZeigen && (
-        <button type="button" onClick={() => setAlleZeigen(true)} className="mt-2 text-xs text-emerald-700 hover:underline dark:text-emerald-400">
+        <button type="button" onClick={() => setAlleZeigen(true)} className="mt-2 text-xs text-link hover:underline">
           {t("alle anzeigen")}
         </button>
       )}

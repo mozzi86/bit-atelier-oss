@@ -628,8 +628,8 @@ export default function ComplexDesigner() {
                       aria-current={bereich === b.id ? "true" : undefined}
                       className={
                         bereich === b.id
-                          ? "px-2.5 py-1 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 bg-emerald-600 text-white"
-                          : "px-2.5 py-1 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 text-muted-foreground hover:bg-muted"
+                          ? "px-2.5 py-1 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 bg-primary text-primary-foreground"
+                          : "px-2.5 py-1 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 text-muted-foreground hover:bg-muted"
                       }
                     >
                       {b.titel}

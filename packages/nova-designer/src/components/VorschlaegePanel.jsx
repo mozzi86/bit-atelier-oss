@@ -122,7 +122,7 @@ export default function VorschlaegePanel({ footprintM, cfg, storeys, storeyHeigh
               <label key={d.key} className="flex items-center gap-2 text-slate-600" title={d.quelle}>
                 <span className="w-44 shrink-0">{t(d.label)}{d.annahme ? " [ASSUMED]" : ""}</span>
                 <input type="range" min={0} max={3} step={1} value={gewichte[d.key]} disabled={typeof onGewichteChange !== "function"}
-                  onChange={(e) => setzeGewicht(d.key, e.target.value)} className="flex-1 accent-teal-700" data-testid="vs-gewicht" data-key={d.key} />
+                  onChange={(e) => setzeGewicht(d.key, e.target.value)} className="flex-1 accent-primary" data-testid="vs-gewicht" data-key={d.key} />
                 <span className="w-6 text-right tabular-nums">{gewichte[d.key]}</span>
               </label>
             ))}
@@ -134,7 +134,7 @@ export default function VorschlaegePanel({ footprintM, cfg, storeys, storeyHeigh
             <span>{t("Nur harte Regeln schließen aus (Planungsfehler, Rettungsweg > 35 m); keine weichen Kriterien.")}</span>
           </div>
           {ersterKarte && erster && (
-            <div className="mt-2 rounded border border-teal-200 bg-white px-2 py-1.5" data-testid="vs-warum" data-vorschlag={erster.id} data-score={erster.score ?? ""}>
+            <div className="mt-2 rounded border border-border bg-white px-2 py-1.5" data-testid="vs-warum" data-vorschlag={erster.id} data-score={erster.score ?? ""}>
               <div className="font-semibold text-slate-700">{t("Warum Rang 1")}: {typologieLabel(ersterKarte.typologie)} · {de(erster.score, 3)}</div>
               <ul className="mt-1 space-y-0.5 text-[11px] text-slate-600">
                 {DIMENSIONEN.filter((d) => gewichte[d.key] > 0).sort((a, b) => (erster.beitraege[b.key] || 0) - (erster.beitraege[a.key] || 0)).map((d) => (
@@ -162,7 +162,7 @@ export default function VorschlaegePanel({ footprintM, cfg, storeys, storeyHeigh
         </div>
       )}
       {hinweis && (
-        <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900" role="status" data-testid="vs-hinweis">{hinweis}</div>
+        <div className="rounded border border-erfolg-rand bg-erfolg-flaeche px-3 py-2 text-xs text-erfolg" role="status" data-testid="vs-hinweis">{hinweis}</div>
       )}
       {!laedt && !fehler && liste.length === 0 && (
         <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">{t("Keine Vorschläge für diese Grundfläche")}</div>

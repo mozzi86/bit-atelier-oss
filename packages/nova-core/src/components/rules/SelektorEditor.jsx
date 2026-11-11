@@ -39,7 +39,7 @@ function Chip({ active, onClick, children, title }) {
       onClick={onClick}
       className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
         active
-          ? "bg-emerald-600 border-emerald-600 text-white"
+          ? "bg-primary border-primary text-primary-foreground"
           : "border-slate-200 text-slate-600 hover:bg-slate-50"
       }`}
     >
@@ -61,7 +61,7 @@ function Achse({ titel, hinweis, werte = [], gewaehlt = [], onToggle, label }) {
           </Badge>
         )}
         {!leer && (
-          <span className="text-[10px] text-emerald-700">{gewaehlt.length} gewählt (ODER)</span>
+          <span className="text-[10px] text-foreground">{gewaehlt.length} gewählt (ODER)</span>
         )}
       </div>
       {hinweis && <p className="text-[10px] text-slate-400">{hinweis}</p>}

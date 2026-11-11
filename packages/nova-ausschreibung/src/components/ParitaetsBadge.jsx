@@ -50,7 +50,7 @@ export default function ParitaetsBadge({ laeufe = [], welle = null }) {
     ? "bg-red-100 text-red-700 border-red-300"
     : skipped > 0
       ? "bg-amber-100 text-amber-800 border-amber-300"
-      : "bg-emerald-100 text-emerald-800 border-emerald-300";
+      : "bg-erfolg-flaeche text-erfolg border-erfolg-rand";
 
   const Ikone = rot > 0 ? XCircle : skipped > 0 ? AlertTriangle : CheckCircle2;
 

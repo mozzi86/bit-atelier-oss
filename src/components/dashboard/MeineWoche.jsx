@@ -83,7 +83,7 @@ export default function MeineWoche() {
   const block = "rounded-lg border border-slate-200 p-3 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/60";
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900" data-testid="meine-woche" aria-labelledby="meine-woche-titel">
-      <h2 id="meine-woche-titel" className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100"><CalendarClock className="h-5 w-5 text-emerald-600" aria-hidden="true" /> {t("Meine Woche")}</h2>
+      <h2 id="meine-woche-titel" className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100"><CalendarClock className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> {t("Meine Woche")}</h2>
       {fehler && <p role="alert" className="mt-2 text-sm text-rose-700 dark:text-rose-300">{t("Meine Woche konnte nicht geladen werden")}: {fehler}</p>}
       {!karte && !fehler && <p role="status" className="mt-2 text-sm text-slate-500">{t("Wird geladen …")}</p>}
       {karte && (

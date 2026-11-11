@@ -2,7 +2,7 @@
 // status are never hidden; the input lens changes nothing.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BRILLEN, brilleVon, brilleSicht, zeigtStatus, sichtbarUnter, STANDARD_BRILLE } from "@core/lib/plan/brillen.js";
+import { BRILLEN, brilleVon, brilleSicht, zeigtStatus, sichtbarUnter, STANDARD_BRILLE, dreiDDarstellung, BLASS_DECKKRAFT } from "@core/lib/plan/brillen.js";
 
 test("sieben Brillen aus dem Konzept, eindeutige ids, Maßstab gesetzt", () => {
   assert.deepEqual(BRILLEN.map((b) => b.id), ["eingabe", "bestand", "abbruch", "bauantrag", "ausfuehrung", "ausschreibung", "bauleitung"]);
@@ -70,4 +70,32 @@ test("97-04b Schraffur 45°: Linien im Rechteck, Abstand stimmt, Endpunkte auf d
   const c = l.map(([p]) => p.x - p.z).sort((a, b) => a - b);
   assert.ok(Math.abs((c[1] - c[0]) / Math.SQRT2 - 0.2) < 1e-9);
   assert.deepEqual(schraffur45(q, 0), []);
+});
+
+// 261110-vf2: the same lens on a 3D mesh
+test("3D: Eingabe-Brille ändert kein Bauteil", () => {
+  for (const st of ["bestand", "abbruch", "neubau", "temporaer", null]) {
+    assert.deepEqual(dreiDDarstellung(brilleVon("eingabe"), st), { sichtbar: true, deckkraft: 1, farbe: null, sicht: "normal" });
+  }
+});
+
+test("3D: Abbruchplan — Abbruch kräftig gelb, Bestand blass grau, Neubau aus", () => {
+  const b = brilleVon("abbruch");
+  assert.deepEqual(dreiDDarstellung(b, "abbruch"), { sichtbar: true, deckkraft: 1, farbe: "#f2c230", sicht: "hervor" });
+  assert.deepEqual(dreiDDarstellung(b, "bestand"), { sichtbar: true, deckkraft: BLASS_DECKKRAFT, farbe: "#9aa3ad", sicht: "blass" });
+  assert.equal(dreiDDarstellung(b, "neubau").sichtbar, false);
+  assert.equal(BLASS_DECKKRAFT, 0.35); // same value as the plan
+});
+
+test("3D: ohne Status nie ausgeblendet und nie umgefärbt, unter keiner Brille (D-BW-03)", () => {
+  for (const b of BRILLEN) for (const st of [null, undefined, "", "quatsch"]) {
+    assert.deepEqual(dreiDDarstellung(b, st), { sichtbar: true, deckkraft: 1, farbe: null, sicht: "normal" }, `${b.id}/${st}`);
+  }
+  assert.equal(dreiDDarstellung(null, "abbruch").sichtbar, true); // no lens = nothing changes
+});
+
+test("3D: jede Brille blendet genau die Status aus, die sie auch im Plan ausblendet", () => {
+  for (const b of BRILLEN) for (const st of ["bestand", "abbruch", "neubau", "temporaer"]) {
+    assert.equal(dreiDDarstellung(b, st).sichtbar, zeigtStatus(b, st), `${b.id}/${st}`);
+  }
 });

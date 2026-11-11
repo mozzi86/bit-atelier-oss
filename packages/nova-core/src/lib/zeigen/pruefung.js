@@ -264,7 +264,9 @@ export function pruefeAenderung(modell, vorschlag, opt = {}) {
   // --- apply on a copy; impossible = fehler ------------------------------------------------------------------
   let ergebnis;
   try {
-    ergebnis = modellMitAenderung(modell, vorschlag, { projektId: pid, geschosshoehe_m: opt.geschosshoehe_m });
+    // 261111-zs1: a creation needs the studio's drawing functions and its counter - the check builds the element as the execution will
+    ergebnis = modellMitAenderung(modell, vorschlag, { projektId: pid, geschosshoehe_m: opt.geschosshoehe_m,
+      ...(vorschlag.art === "anlegen" ? { zeichnen: /** @type {any} */ (opt).zeichnen ?? null, naechsteIdx: /** @type {any} */ (opt).naechsteIdx } : {}) });
   } catch (e) {
     befunde.push({ stufe: "fehler", quelle: "geometrie", code: "nicht_moeglich", satz: e instanceof Error ? e.message : String(e) });
     return fertig();

@@ -142,12 +142,12 @@ export default function AgentChat({ agents }) {
                 >
                   <div className={`flex gap-3 max-w-[80%] ${message.sender === 'user' ? 'flex-row-reverse' : ''}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      message.sender === 'user' ? 'bg-blue-500' : 'bg-purple-500'
+                      message.sender === 'user' ? 'bg-blue-500' : 'border border-dashed border-input text-muted-foreground'
                     }`}>
                       {message.sender === 'user' ? (
                         <User className="w-4 h-4 text-white" />
                       ) : (
-                        <Bot className="w-4 h-4 text-white" />
+                        <Bot className="w-4 h-4 text-muted-foreground" />
                       )}
                     </div>
                     <div className={`rounded-2xl p-4 ${
@@ -169,8 +169,8 @@ export default function AgentChat({ agents }) {
               {isLoading && (
                 <div className="flex gap-3 justify-start">
                   <div className="flex gap-3 max-w-[80%]">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center bg-purple-500">
-                      <Bot className="w-4 h-4 text-white" />
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center border border-dashed border-input text-muted-foreground">
+                      <Bot className="w-4 h-4 text-muted-foreground" />
                     </div>
                     <div className="rounded-2xl p-4 bg-slate-100 text-slate-800">
                       <div className="flex items-center gap-2">

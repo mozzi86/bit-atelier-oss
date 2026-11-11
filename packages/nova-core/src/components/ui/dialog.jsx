@@ -83,7 +83,7 @@ const DialogContent = React.forwardRef(
           {showCloseButton && (
             <DialogPrimitive.Close
               aria-label={t("Dialog schließen")}
-              className="absolute right-4 top-4 rounded-md p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+              className="absolute right-4 top-4 rounded-md p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-slate-800 dark:hover:text-slate-100"
             >
               <X className="h-5 w-5" aria-hidden="true" />
             </DialogPrimitive.Close>

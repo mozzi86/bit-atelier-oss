@@ -36,7 +36,7 @@ function Chip({ active, onClick, children }) {
       onClick={onClick}
       className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
         active
-          ? "bg-emerald-600 border-emerald-600 text-white"
+          ? "bg-primary border-primary text-primary-foreground"
           : "border-slate-200 text-slate-600 hover:bg-slate-50"
       }`}
     >
@@ -177,7 +177,7 @@ export default function FilterEditor({ elements = [], initial, onSave, onCancel 
               </SelectContent>
             </Select>
           </div>
-          <Badge className="bg-emerald-100 text-emerald-800 mt-5">
+          <Badge className="bg-muted text-foreground mt-5">
             {vorschau.treffer} Bauteile · {num(vorschau.menge)} {einheit}
           </Badge>
         </div>
@@ -198,7 +198,7 @@ export default function FilterEditor({ elements = [], initial, onSave, onCancel 
           <Button
             onClick={save}
             disabled={!entwurf.name.trim() || busy}
-            className="bg-gradient-to-r from-emerald-600 to-teal-600"
+            className="bg-primary hover:bg-primary/90"
           >
             <Save className="w-4 h-4 mr-2" /> {busy ? "Speichern…" : entwurf.id ? "Filter aktualisieren" : "Filter speichern"}
           </Button>

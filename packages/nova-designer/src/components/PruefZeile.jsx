@@ -33,7 +33,7 @@ export default function PruefZeile({ it, styles, bauart, onVermerk }) {
           <div className="text-sm font-medium text-slate-800">{it.label}</div>
           <div className="text-[11px] text-slate-500">{it.detail}</div>
           {it.vermerk && (
-            <div className="mt-1 text-[11px] text-violet-800">
+            <div className="mt-1 text-[11px] text-muted-foreground">
               {t(ABWEICHUNG_SCHEMA.arten[it.vermerk.art])} · {t("Antrag")}: {t(ABWEICHUNG_SCHEMA.antragStatus[it.vermerk.antrag_status])} — {it.vermerk.begruendung}
               {it.vermerk.kompensation ? ` · ${t("Kompensation")}: ${it.vermerk.kompensation}` : ""}
               {it.statusVorher ? ` (${t("Regel")}: ${t(styles[it.statusVorher]?.label || it.statusVorher)})` : ""}

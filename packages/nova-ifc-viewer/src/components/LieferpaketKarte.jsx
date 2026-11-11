@@ -44,7 +44,7 @@ import {
 import { baueLieferpaket, paketNamen } from "@ifc/lib/lieferpaket";
 
 const AMPEL = {
-  gruen: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  gruen: "bg-erfolg-flaeche text-erfolg border-erfolg-rand",
   gelb: "bg-amber-100 text-amber-700 border-amber-200",
   rot: "bg-rose-100 text-rose-700 border-rose-200",
   grau: "bg-slate-100 text-slate-500 border-slate-200",
@@ -299,7 +299,7 @@ export default function LieferpaketKarte({
     <Card className="border-0 shadow-sm rounded-xl" data-testid="lieferpaket-karte">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <Package className="w-4 h-4 text-emerald-600" /> {t("Lieferung & Modelllieferplan")}
+          <Package className="w-4 h-4 text-muted-foreground" /> {t("Lieferung & Modelllieferplan")}
         </CardTitle>
         <p className="text-xs text-slate-500">
           {t("Aus dem Prüflauf entsteht das Lieferpaket: IFC unter Richtlinien-Namen, Prüfbericht, BCF, Übergabeprotokoll, Manifest mit SHA-256.")}
@@ -364,7 +364,7 @@ export default function LieferpaketKarte({
                 </thead>
                 <tbody>
                   {zeilen.map((l) => (
-                    <tr key={l.id} className={`border-b border-slate-100 ${gewaehlt?.id === l.id ? "bg-emerald-50/60" : ""}`} data-testid={`lieferung-${l.nr}`}>
+                    <tr key={l.id} className={`border-b border-slate-100 ${gewaehlt?.id === l.id ? "bg-muted" : ""}`} data-testid={`lieferung-${l.nr}`}>
                       <td className="py-1 pr-2">
                         <input type="radio" name="lieferung" checked={gewaehlt?.id === l.id} onChange={() => setGewaehltId(l.id)} aria-label={`Lieferung ${l.nr} wählen`} />
                       </td>
@@ -428,7 +428,7 @@ export default function LieferpaketKarte({
         <div className="space-y-2">
           <div className="text-sm font-medium text-slate-700">{t("Dateiname nach Namenskonvention")}</div>
           {originalPruefung && (
-            <div className={`rounded-lg border p-2 text-xs ${originalPruefung.gueltig && !originalPruefung.warnungen.length ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`} data-testid="original-pruefung">
+            <div className={`rounded-lg border p-2 text-xs ${originalPruefung.gueltig && !originalPruefung.warnungen.length ? "border-erfolg-rand bg-erfolg-flaeche text-erfolg" : "border-amber-200 bg-amber-50 text-amber-800"}`} data-testid="original-pruefung">
               <span className="font-medium">{t("Geladene Datei")}: </span><span className="font-mono">{modell.fileName}</span>
               {originalPruefung.fehler.map((f) => <div key={f}>✗ {f}</div>)}
               {originalPruefung.warnungen.map((w) => <div key={w}>⚠ {w}</div>)}
@@ -469,7 +469,7 @@ export default function LieferpaketKarte({
           <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="dateiname-vorschau">
             {dateiname.name ? (
               <>
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <CheckCircle2 className="w-4 h-4 text-erfolg" />
                 <span className="font-mono text-xs">{dateiname.name}</span>
               </>
             ) : (
@@ -484,7 +484,7 @@ export default function LieferpaketKarte({
 
         {/* Paket */}
         <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">
-          <Button type="button" onClick={paketErzeugen} disabled={!paketMoeglich || busy} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" data-testid="lieferpaket-erzeugen">
+          <Button type="button" onClick={paketErzeugen} disabled={!paketMoeglich || busy} className="gap-1.5 bg-primary hover:bg-primary/90" data-testid="lieferpaket-erzeugen">
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
             {t("Lieferpaket erzeugen")}
           </Button>
@@ -494,7 +494,7 @@ export default function LieferpaketKarte({
                 : `${t("Lieferung")} ${gewaehlt.nr} · LoG ${gewaehlt.log} · ${t("Termin")} ${datumText(gewaehlt.termin)} · ${t("Herkunft")}: ${t("geladene Datei, kein Neu-Export (Stufe A)")}`}
           </span>
           {letztesPaket && (
-            <span className="text-xs text-emerald-700" data-testid="lieferpaket-ergebnis">
+            <span className="text-xs text-erfolg" data-testid="lieferpaket-ergebnis">
               ✓ {letztesPaket.zip} · {letztesPaket.dateien} {t("Dateien")}
               {letztesPaket.hinweise.length ? ` · ${letztesPaket.hinweise.join(" ")}` : ""}
             </span>

@@ -173,7 +173,7 @@ export default function PriceComparison({
           <Button variant="outline" onClick={() => setShowVhb(true)} disabled={!onUpdateTender} data-testid="pv-vhb">
             <FileText className="w-4 h-4 mr-2" /> {t("VHB-Formular")}
           </Button>
-          <Button onClick={openBid} className="bg-gradient-to-r from-emerald-600 to-teal-600">
+          <Button onClick={openBid} className="bg-primary hover:bg-primary/90">
             <Plus className="w-4 h-4 mr-2" /> Angebot erfassen
           </Button>
         </div>
@@ -188,7 +188,7 @@ export default function PriceComparison({
             Stand {deDate(bm.cell.fetched_at)} — kein Einheitspreis
             {inKorridor !== null && (
               inKorridor ? (
-                <Badge className="bg-emerald-100 text-emerald-800 ml-2 not-italic">im Korridor</Badge>
+                <Badge className="bg-erfolg-flaeche text-erfolg ml-2 not-italic">im Korridor</Badge>
               ) : (
                 <Badge
                   className="bg-slate-100 text-slate-600 ml-2 not-italic"
@@ -240,7 +240,7 @@ export default function PriceComparison({
                     const auffaellig = codes.some((c) => c !== "ohne_preis");
                     return (
                       <td key={b.id} title={codes.length ? codes.join(", ") : undefined}
-                        className={`py-2 px-3 text-right tabular-nums ${isMin ? "bg-emerald-50 font-semibold text-emerald-700" : ""} ${auffaellig ? "ring-1 ring-inset ring-amber-300" : ""}`}>
+                        className={`py-2 px-3 text-right tabular-nums ${isMin ? "bg-muted font-semibold text-foreground" : ""} ${auffaellig ? "ring-1 ring-inset ring-amber-300" : ""}`}>
                         {up != null ? eur(up) : <span className="text-rose-600">—</span>}
                       </td>
                     );
@@ -255,7 +255,7 @@ export default function PriceComparison({
                 {totals.map(({ bid, total }) => {
                   const isMin = total === minTotal && totals.length > 1 && !!pruefung[bid.id]?.erg.vollstaendig;
                   return (
-                    <td key={bid.id} className={`py-2 px-3 text-right tabular-nums ${isMin ? "text-emerald-700" : ""}`}>
+                    <td key={bid.id} className={`py-2 px-3 text-right tabular-nums ${isMin ? "text-foreground" : ""}`}>
                       {isMin && <TrendingDown className="inline w-3.5 h-3.5 mr-1" />}{eur0(total)}
                       {!pruefung[bid.id]?.erg.vollstaendig && (
                         <div className="text-[10px] font-normal text-rose-600" data-testid="pv-unvollstaendig">
@@ -271,7 +271,7 @@ export default function PriceComparison({
                 {tenderBids.map((b) => (
                   <td key={b.id} className="py-2 px-3 text-right">
                     {b.status === "awarded" ? (
-                      <Badge className="bg-emerald-100 text-emerald-800"><Award className="w-3 h-3 mr-1" /> Zuschlag</Badge>
+                      <Badge className="bg-erfolg-flaeche text-erfolg"><Award className="w-3 h-3 mr-1" /> Zuschlag</Badge>
                     ) : tender.status !== "awarded" ? (
                       <Button size="sm" variant="outline" onClick={() => onAward(tender, b)}>
                         <Gavel className="w-3.5 h-3.5 mr-1" /> Zuschlag
@@ -345,7 +345,7 @@ export default function PriceComparison({
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setShowBid(false)}>Abbrechen</Button>
-              <Button type="submit" disabled={!contactId || busy} className="bg-gradient-to-r from-emerald-600 to-teal-600">{busy ? "Speichern…" : "Angebot speichern"}</Button>
+              <Button type="submit" disabled={!contactId || busy} className="bg-primary hover:bg-primary/90">{busy ? "Speichern…" : "Angebot speichern"}</Button>
             </div>
           </form>
         </FormModal>
@@ -362,7 +362,7 @@ export default function PriceComparison({
 function PruefKnopf({ pr, t, onClick }) {
   if (!pr) return null;
   const { erg, status } = pr;
-  const farbe = status === "aktuell" ? (erg.befunde ? "text-rose-700" : "text-emerald-700") : status === "veraltet" ? "text-amber-700" : "text-slate-500";
+  const farbe = status === "aktuell" ? (erg.befunde ? "text-rose-700" : "text-erfolg") : status === "veraltet" ? "text-amber-700" : "text-slate-500";
   const text = status === "aktuell" ? t("geprüft") : status === "veraltet" ? t("Prüfung veraltet") : t("prüfen");
   return (
     <button type="button" onClick={onClick} className={`mt-1 flex w-full items-center justify-end gap-1 text-[10px] hover:underline ${farbe}`}

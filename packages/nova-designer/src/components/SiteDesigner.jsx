@@ -1422,7 +1422,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
                   <Button size="sm" variant="ghost" onClick={undoDraftPoint} disabled={!draftLen} aria-label="Letzten Punkt entfernen">
                     <Undo2 className="w-4 h-4" />
                   </Button>
-                  <Button size="sm" variant="ghost" className="text-emerald-700" onClick={doCloseDraft} disabled={draftLen < 3} aria-label="Polygon schließen">
+                  <Button size="sm" variant="ghost" className="text-foreground" onClick={doCloseDraft} disabled={draftLen < 3} aria-label="Polygon schließen">
                     <Check className="w-4 h-4 mr-1" /> Schließen
                   </Button>
                 </>
@@ -1641,7 +1641,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
       <div className="space-y-3 text-sm ws:min-h-0 ws:overflow-y-auto ws:pr-1">
         <Card className="shadow-none">
           <CardContent className="p-4 space-y-2">
-            <Badge className="bg-emerald-100 text-emerald-800">
+            <Badge className="bg-muted text-foreground">
               {parcelIstGezeichnet
                 ? `Grundstück ~${bboxWm.toLocaleString("de-DE")} × ${bboxHm.toLocaleString("de-DE")} m (gezeichnet)`
                 : `Grundstück ~${bboxWm.toLocaleString("de-DE")} × ${bboxHm.toLocaleString("de-DE")} m (geschätzt)`}
@@ -1746,7 +1746,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
             accept=".geojson,.json,.dxf"
             data-testid="sd-geojson"
             onChange={onGeojsonDatei}
-            className="block w-full text-xs text-slate-600 file:mr-2 file:rounded file:border-0 file:bg-emerald-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-emerald-700 hover:file:bg-emerald-100"
+            className="block w-full text-xs text-slate-600 file:mr-2 file:rounded file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-foreground hover:file:bg-muted/80"
           />
           {geoWarnungen.length > 0 && (
             <div data-testid="sd-geojson-warnung" className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800 space-y-1">

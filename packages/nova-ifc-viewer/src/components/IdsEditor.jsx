@@ -56,9 +56,9 @@ const LAYER_FELD = "pruefung_layer";
 const SPEICHER_VERZUG_MS = 1200;
 
 /** Keyboard focus ring for every native control (A11Y-I18N-04: ring-2). */
-const FOKUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1";
+const FOKUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
 const KNOPF_RAHMEN = `inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 ${FOKUS}`;
-const KNOPF_VOLL = `inline-flex h-8 items-center gap-1.5 rounded-md bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50 ${FOKUS}`;
+const KNOPF_VOLL = `inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 ${FOKUS}`;
 
 /**
  * Class of a text field / select, red border when invalid.
@@ -407,12 +407,12 @@ export default function IdsEditor({
     <section
       aria-labelledby={`${id}-titel`}
       aria-busy={layerLaedt || undefined}
-      className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/50 p-4"
+      className="space-y-3 rounded-xl border border-border bg-muted/50 p-4"
       data-testid="ids-editor"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <h3 id={`${id}-titel`} className="text-sm font-semibold text-violet-900">{t("Eigene IDS-Regeln")}</h3>
-        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800" data-testid="ids-eigen-anzahl">
+        <h3 id={`${id}-titel`} className="text-sm font-semibold text-foreground">{t("Eigene IDS-Regeln")}</h3>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground" data-testid="ids-eigen-anzahl">
           <span className="sr-only">{t("Anzahl")}: </span>{specs.length}
         </span>
         <div className="ml-auto flex flex-wrap gap-2">
@@ -646,10 +646,10 @@ export default function IdsEditor({
             return (
               <li
                 key={`${s.name}-${i}`}
-                className="flex items-center gap-2 rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs"
+                className="flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-1.5 text-xs"
                 data-testid={`ids-regel-${i}`}
               >
-                <span className="shrink-0 rounded bg-violet-100 px-1.5 py-0.5 text-violet-800">{t("eigene Regel")}</span>
+                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-muted-foreground">{t("eigene Regel")}</span>
                 <span className="shrink-0 font-medium text-slate-800">{s.name}</span>
                 <span className="min-w-0 flex-1 truncate text-slate-600" title={regelText(s)}>{regelText(s)}</span>
                 {kard !== "required" && (

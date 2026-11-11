@@ -70,18 +70,18 @@ export default function MassingGenerator({ data, siteData, onChange }) {
   return (
     <div className="space-y-6">
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: BGF {Math.round(pm.bgf).toLocaleString("de-DE")} m² · {pm.storeys} Geschosse · Höhe {Math.round(pm.height).toLocaleString("de-DE")} m
         </div>
       )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Gesamt-BGF" value={`${(data.total_gfa || 0).toLocaleString("de-DE")} m²`} accent="text-blue-600" />
+        <Stat label="Gesamt-BGF" value={`${(data.total_gfa || 0).toLocaleString("de-DE")} m²`} accent="text-foreground" />
         <Stat label="Überbauung" value={`${Math.round((data.site_coverage || 0) * 100)} %`} />
-        <Stat label="Erreichte GFZ" value={far} accent={compliant ? "text-emerald-600" : "text-red-600"} />
+        <Stat label="Erreichte GFZ" value={far} accent={compliant ? "text-erfolg" : "text-red-600"} />
         <Stat
           label="GFZ-Konformität"
           value={
-            <Badge className={compliant ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}>
+            <Badge className={compliant ? "bg-erfolg-flaeche text-erfolg" : "bg-red-100 text-red-800"}>
               {compliant ? `OK (≤ ${farMax})` : `> ${farMax}`}
             </Badge>
           }

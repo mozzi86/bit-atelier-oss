@@ -31,6 +31,8 @@ import { siteAusParzelle, pxZuSite, siteZuPx, baukoerperLageSite, startLageSite,
 import { snapKette, grenzSnap, abstandSnap, rasterSnap } from "@core/lib/snapKette";
 import LehrlingPalette from "@designer/components/LehrlingPalette";
 import { leererStack, merke, zurueck, vor } from "@core/lib/undoStack";
+import { editorKuerzel } from "@designer/lib/zeichnenModell.js";
+import { EN as EN_ZEICHNEN } from "@core/lib/i18nTeile/zeichnen-agent.js";
 import { useNavigate } from "react-router-dom";
 import { ScaleBar } from "@designer/components/BimPlan2D";
 import { MASSING_MASSSTAEBE, autoMassstab, detailgradFuer, roemisch, weGruppen, labelKollision, weLabelText, weLabelZeilen } from "@core/lib/plan/massstab.js";
@@ -47,6 +49,8 @@ import ZonenTueren from "./ZonenTueren";
 import { nordwinkelFuer } from "@designer/lib/nordwinkel";
 import { useI18n, englischErgaenzen } from "@core/lib/i18n";
 import { EN as EN_EFH_108 } from "@core/lib/i18nTeile/efh-108.js"; // 108-08: lazy part of phase 108 (key figure "außerhalb")
+
+englischErgaenzen(EN_ZEICHNEN);
 // 75-08 Task 5 (MSB-1): the app's ONE solar formula — the local copy lived
 // here since Phase 3 and was removed. Additive exports: presets, plan azimuth
 // conversion (geographic = plan + north angle) for shadow and north arrow.
@@ -629,9 +633,11 @@ export default function MassingStudio({
     const onKey = (e) => {
       // Ctrl+Z / Ctrl+Y (also Ctrl+Shift+Z): not while typing in a field, not during a drag.
       const inFeld = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName || "");
-      if ((e.ctrlKey || e.metaKey) && !inFeld && !isDragging()) {
-        if (e.key.toLowerCase() === "z" && !e.shiftKey) { e.preventDefault(); undo(); return; }
-        if (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey)) { e.preventDefault(); redo(); return; }
+      if (!inFeld && !isDragging()) {
+        const kuerzel = editorKuerzel(e);
+        // An empty polygon history must not swallow the key: the modeller's own undo listens too.
+        if (kuerzel === "undo" && undoRef.current.past.length) { e.preventDefault(); undo(); return; }
+        if (kuerzel === "redo" && undoRef.current.future.length) { e.preventDefault(); redo(); return; }
       }
       if (!isDragging()) return;
       if (e.key === "Alt") { e.preventDefault(); return; }
@@ -806,6 +812,12 @@ export default function MassingStudio({
     e.preventDefault();
     e.stopPropagation();
     deleteVert(i);
+  };
+  // Exact corner coordinates in site metres (1 cm). One undo step for the whole polygon.
+  const eckenUebernehmen = (/** @type {Array<{x: number, y: number}>} */ naechste) => {
+    if (ebene !== "baukoerper" || naechste.length !== poly.length) return;
+    merkePoly(polyNow.current);
+    setPoly(naechste.map((p) => ({ x: +Number(p.x).toFixed(2), y: +Number(p.y).toFixed(2) })));
   };
   // 75-01: keyboard on a focused corner — arrows 0.10 m, Shift 1.00 m, Delete removes.
   // 75-06 Task 3: moves the ACTIVE level's corner.
@@ -1355,6 +1367,27 @@ export default function MassingStudio({
             <div className={viewMode === "split" ? "grid grid-cols-2 gap-2 items-start" : undefined}>
             {/* 98-02: modelling toolbar with typed input above the plan */}
             <div className={viewMode === "split" ? "col-span-2 space-y-2" : "mb-2 space-y-2"}><ModellWerkzeugleiste m={modell} t={t} /><ErsteSchritte m={modell} t={t} /></div>
+            {ebene === "baukoerper" && viewMode !== "3d" && (
+              <form data-testid="ms-ecken" className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-foreground"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const daten = new FormData(e.currentTarget);
+                  eckenUebernehmen(poly.map((p, i) => ({
+                    x: Number(String(daten.get(`x${i}`) ?? p.x).replace(",", ".")),
+                    y: Number(String(daten.get(`y${i}`) ?? p.y).replace(",", ".")),
+                  })));
+                }}>
+                <span className="font-medium text-foreground">{t("Ecken (m)")}</span>
+                {poly.map((p, i) => (
+                  <span key={`${i}-${p.x}-${p.y}`} className="flex items-center gap-1">
+                    <span className="text-muted-foreground">{i + 1}</span>
+                    <input name={`x${i}`} type="number" step="0.01" defaultValue={+p.x.toFixed(2)} data-testid={`ms-ecke-x-${i}`} aria-label={`${t("Ecke x (m)")} ${i + 1}`} className="w-16 rounded border border-border bg-card px-1 py-0.5 text-right" />
+                    <input name={`y${i}`} type="number" step="0.01" defaultValue={+p.y.toFixed(2)} data-testid={`ms-ecke-y-${i}`} aria-label={`${t("Ecke y (m)")} ${i + 1}`} className="w-16 rounded border border-border bg-card px-1 py-0.5 text-right" />
+                  </span>
+                ))}
+                <button type="submit" data-testid="ms-ecken-uebernehmen" className="rounded border border-border bg-card px-2 py-0.5 text-foreground hover:bg-muted">{t("Ecken übernehmen")}</button>
+              </form>
+            )}
             <div className="relative" ref={containerRef} onPointerMove={onContainerMove} onPointerLeave={() => setHover(null)}>
             {lod.zonen && zones.length === 0 && wtLayer?.angewendet !== true && (
               <div className="absolute top-2 left-2 z-10 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50/95 px-2 py-1 text-[11px] text-amber-800" role="status" data-msb9-hinweis>
@@ -1777,8 +1810,8 @@ export default function MassingStudio({
               <button onClick={() => vp.zoomBy(1.2)} className="w-6 h-6 rounded border border-slate-300 bg-white/90 text-slate-600 hover:bg-slate-100" aria-label="Vergrößern" title="Vergrößern">+</button>
               <button onClick={vp.resetView} className="h-6 px-1.5 rounded border border-slate-300 bg-white/90 text-slate-600 hover:bg-slate-100" aria-label="Ansicht zurücksetzen" title="Zoom/Verschiebung zurücksetzen">⌖</button>
               <span className="w-2" />
-              <button type="button" onClick={undo} disabled={!undoStand.p} data-undo className="w-6 h-6 rounded border border-slate-300 bg-white/90 text-slate-600 hover:bg-slate-100 disabled:opacity-40" aria-label={t("Rueckgaengig")} title={t("Rueckgaengig (Strg+Z)")}>↶</button>
-              <button type="button" onClick={redo} disabled={!undoStand.f} data-redo className="w-6 h-6 rounded border border-slate-300 bg-white/90 text-slate-600 hover:bg-slate-100 disabled:opacity-40" aria-label={t("Wiederholen")} title={t("Wiederholen (Strg+Y)")}>↷</button>
+              <button type="button" onClick={undo} disabled={!undoStand.p} data-undo data-testid="ms-undo" className="w-6 h-6 rounded border border-slate-300 bg-white/90 text-slate-600 hover:bg-slate-100 disabled:opacity-40" aria-label={t("Rueckgaengig")} title={t("Rueckgaengig (Strg+Z)")}>↶</button>
+              <button type="button" onClick={redo} disabled={!undoStand.f} data-redo data-testid="ms-redo" className="w-6 h-6 rounded border border-slate-300 bg-white/90 text-slate-600 hover:bg-slate-100 disabled:opacity-40" aria-label={t("Wiederholen")} title={t("Wiederholen (Strg+Y)")}>↷</button>
             </div>
             </div>
             {/* 75-08 Task 5 G: split shows the iso RIGHT NEXT to the plan on
@@ -1891,7 +1924,7 @@ export default function MassingStudio({
                 })()}
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                    <input type="checkbox" checked={showAbstand} onChange={(e) => setShowAbstand(e.target.checked)} className="accent-emerald-600" />
+                    <input type="checkbox" checked={showAbstand} onChange={(e) => setShowAbstand(e.target.checked)} className="accent-primary" />
                     Abstandsflächen (Studie)
                   </label>
                   <span
@@ -1900,7 +1933,7 @@ export default function MassingStudio({
                         ? "text-amber-700 border-amber-200 bg-amber-50"
                         : conflictCount
                         ? "text-rose-600 border-rose-200 bg-rose-50"
-                        : "text-emerald-600 border-emerald-200 bg-emerald-50"
+                        : "text-erfolg border-erfolg-rand bg-erfolg-flaeche"
                     }`}
                   >
                     {!boundaryKnown
@@ -2026,11 +2059,11 @@ export default function MassingStudio({
           <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Building2 className="w-4 h-4" /> Kennzahlen <span className="text-xs font-normal text-slate-400 ml-auto">[{store.unit}]</span></CardTitle></CardHeader>
           <CardContent className="grid grid-cols-2 gap-1.5">
             <KPI icon={Maximize2} label="Grundstück" value={`${Math.round(siteArea).toLocaleString("de-DE")} m²`} sub={flaechenQuelleText} tint="text-slate-500" testid="ms-kpi-grundstueck" />
-            <KPI icon={Building2} label="Bebaut (BF)" value={`${Math.round(footArea).toLocaleString("de-DE")} m²`} tint="text-blue-500" />
-            <KPI icon={Layers} label="GRZ" value={grz.toFixed(2)} sub={`${grz > 0.4 ? "über Regelwert 0,4" : "≤ 0,4 ok"} · auf ${flaechenQuelleText}`} tint="text-violet-500" />
+            <KPI icon={Building2} label="Bebaut (BF)" value={`${Math.round(footArea).toLocaleString("de-DE")} m²`} tint="text-muted-foreground" />
+            <KPI icon={Layers} label="GRZ" value={grz.toFixed(2)} sub={`${grz > 0.4 ? "über Regelwert 0,4" : "≤ 0,4 ok"} · auf ${flaechenQuelleText}`} tint="text-muted-foreground" />
             {/* 108-12 (finding 15c): the GFZ counts the full storeys only (BauNVO § 20 Abs. 3) - with a basement its area is named, it differs from the BGF */}
             <KPI icon={Layers} label="GFZ" value={gfz.toFixed(2)} testid="ms-kpi-gfz"
-              sub={`${gfz > 1.2 ? "hoch" : "moderat"} · auf ${flaechenQuelleText}${gfUntertitel ? ` · ${gfUntertitel}` : ""}`} tint="text-violet-500" />
+              sub={`${gfz > 1.2 ? "hoch" : "moderat"} · auf ${flaechenQuelleText}${gfUntertitel ? ` · ${gfUntertitel}` : ""}`} tint="text-muted-foreground" />
             {/* 75-06 Task 5 (MS-06): envelope violation as a number — only when
                 an envelope exists; concave envelopes honestly without m². */}
             {baufeldBekannt && (
@@ -2042,7 +2075,7 @@ export default function MassingStudio({
                 sub={ausserhalb?.m2 == null
                   ? t("Baufeld nicht konvex — Fläche nicht berechenbar [ASSUMED]")
                   : ausserhalb?.hatAnteilAusserhalb ? t("Baukörper ragt über das Baufeld") : t("innerhalb des Baufelds")}
-                tint={ausserhalb?.hatAnteilAusserhalb ? "text-rose-500" : "text-emerald-500"}
+                tint={ausserhalb?.hatAnteilAusserhalb ? "text-rose-500" : "text-erfolg"}
               />
             )}
             {/* 108-08: no envelope drawn → the same figure against the parcel */}
@@ -2064,10 +2097,10 @@ export default function MassingStudio({
               label={t("Proportion")}
               value={proportion.status === "offen" ? "—" : proportion.status === "gruen" ? `${proportion.text} ✓` : `1 : ${proportion.verhaeltnis.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               sub={`${proportion.status === "gelb" ? proportion.text : t("Bürostandard φ [ASSUMED]")}${proportion.naeherung ? ` · ${t("Bbox-Näherung")}` : ""}`}
-              tint={proportion.status === "gruen" ? "text-emerald-500" : "text-amber-500"}
+              tint={proportion.status === "gruen" ? "text-erfolg" : "text-amber-500"}
             />
             {/* 108-12 (finding 15c): BGF after DIN 277 over ALL storeys, basements included; without a basement the old value and no subtitle */}
-            <KPI icon={Building2} label="BGF" value={`${Math.round(bgfDin277).toLocaleString("de-DE")} m²`} tint="text-emerald-500" testid="ms-kpi-bgf"
+            <KPI icon={Building2} label="BGF" value={`${Math.round(bgfDin277).toLocaleString("de-DE")} m²`} tint="text-muted-foreground" testid="ms-kpi-bgf"
               sub={flaechen.untergeschosse > 0
                 ? t("DIN 277, alle Geschosse · davon Untergeschoss {{ug}} m²").replace("{{ug}}", Math.round(flaechen.untergeschossFlaeche_m2).toLocaleString("de-DE"))
                 : undefined} />
@@ -2108,7 +2141,7 @@ export default function MassingStudio({
                 tint={kpi.icon === "car" ? "text-slate-500" : "text-amber-500"}
               />
             ))}
-            <KPI icon={Home} label="Räume" value={zones.length} sub={`Σ ${Math.round(zonesArea).toLocaleString("de-DE")} m²`} tint="text-sky-500" />
+            <KPI icon={Home} label="Räume" value={zones.length} sub={`Σ ${Math.round(zonesArea).toLocaleString("de-DE")} m²`} tint="text-muted-foreground" />
             <KPI
               icon={Maximize2}
               label="Abstandsflächen (Studie)"
@@ -2126,7 +2159,7 @@ export default function MassingStudio({
                   : `Tiefe ${Math.max(abstandMin, abstandFaktor * height).toFixed(1)} m (${abstandFaktor.toFixed(2)} H)`
               }
               testid="ms-kpi-abstand"
-              tint={!boundaryKnown ? "text-amber-500" : conflictCount ? "text-rose-500" : "text-emerald-500"}
+              tint={!boundaryKnown ? "text-amber-500" : conflictCount ? "text-rose-500" : "text-erfolg"}
             />
           </CardContent>
         </Card>

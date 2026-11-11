@@ -24,7 +24,7 @@ export default function HarnessStatus({ status, projekte = [], verbindung, onPro
   if (!status) return null;
   const tokens = status.tokens || { input: 0, output: 0, total: 0 };
   const kosten = status.kosten_eur == null ? '—' : eur.format(status.kosten_eur);
-  const dot = verbindung === 'open' ? 'bg-emerald-500' : verbindung === 'offline' ? 'bg-rose-500' : 'bg-amber-400 animate-pulse';
+  const dot = verbindung === 'open' ? 'bg-erfolg' : verbindung === 'offline' ? 'bg-rose-500' : 'bg-amber-400 animate-pulse';
   const fenster = status.context_window
     ? `${nf.format(status.context_used || 0)} / ${nf.format(status.context_window)}${status.context_window_assumed ? ' [ASSUMED]' : ''}`
     : '—';
@@ -33,14 +33,14 @@ export default function HarnessStatus({ status, projekte = [], verbindung, onPro
     <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="harness-status">
       <span className={`inline-block w-2.5 h-2.5 rounded-full ${dot}`} title={verbindung} data-testid="harness-dot" />
       <span className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-1.5" data-testid="harness-display-name">
-        <Bot className="w-4 h-4 text-emerald-600" /> {status.display_name}
+        <Bot className="w-4 h-4 text-muted-foreground" /> {status.display_name}
       </span>
       <Badge variant="outline" className="gap-1 text-slate-700 dark:text-slate-200">
         <Cpu className="w-3.5 h-3.5" /> {status.provider}/{status.model}
       </Badge>
       {/* 93-12: the service itself reports "Nur lokale KI" (BIT_NUR_LOKAL from the app). */}
       {status.nur_lokal && (
-        <Badge variant="outline" className="gap-1 border-emerald-300 text-emerald-800 dark:text-emerald-200" data-testid="harness-nur-lokal">
+        <Badge variant="outline" className="gap-1 border-erfolg-rand text-erfolg" data-testid="harness-nur-lokal">
           <ShieldCheck className="w-3.5 h-3.5" /> {t('Nur lokale KI')}
         </Badge>
       )}

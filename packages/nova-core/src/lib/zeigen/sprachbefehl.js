@@ -30,10 +30,14 @@
 import { eigenschaftFeld, gleich, zahlText } from "./aenderungen.js";
 import { KEINE_AUSWAHL_TEXT } from "./auswahlKontext.js";
 import { erlaubteWerte } from "./befehlsBibliothek.js";
+import { punktePruefen } from "./anlegen.js";
 
 /** @typedef {{auswahl?: {anzahl?: number, bauteile?: Array<{guid?: string|null, klasse?: string|null}>}|null,
  *   ansicht?: {rechts: {x: number, z: number}, vorn: {x: number, z: number}}|null, zeigepunkt?: {x: number, z: number}|null,
- *   gesprochen?: boolean, bibliothek?: ReadonlyArray<{satz: string, eigenschaft: string, label: string, werte: any[]}>}} SprachKontext
+ *   gesprochen?: boolean, bibliothek?: ReadonlyArray<{satz: string, eigenschaft: string, label: string, werte: any[]}>,
+ *   punkte?: ReadonlyArray<{x: number, z: number, level?: number}>|null}} SprachKontext
+ *   punkte (261111-zs1): the numbered pointing points of the plan (m). Given as a list, a creating sentence with the wrong number of points is
+ *   refused here; not given (undefined), the command checks them.
  *   gesprochen: the sentence is a transcript of the speech recognition - a confirmation then needs an unambiguous word (JA_GESPROCHEN).
  *   bibliothek (106-10): the office's templates (befehlsBibliothek.js bibliothekNormen) - a fitting sentence becomes the property command,
  *   and a property they restrict takes only their values (also in the free "setze ... auf ..." form). */
@@ -482,6 +486,183 @@ function faktorLesen(norm) {
   return ablehnen("Der Faktor fehlt — z. B. „skaliere dieses um Faktor 2“ oder „auf 120 Prozent“");
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// 261111-zs1: creating elements, renaming rooms, demolishing
+
+/** Words in front of the kind of a new element ("neue Wand", "eine Tür"). */
+const NEU_WORTE = new Set(["neue", "neuer", "neues", "neu", "eine", "einen", "ein"]);
+/** Verbs (at the end) that make a demolition: the element gets the status "abbruch" through the existing property change. */
+const ABBRUCH_VERB = /^(abbrechen|abreissen|ausbauen|rueckbauen|zurueckbauen)$/;
+/** Words that may stand in front of the demolition verb ("diese Wand abbrechen", "die Tür ausbauen"). */
+const ABBRUCH_ERLAUBT = new Set(["dies", "diese", "dieses", "dieser", "diesen", "das", "die", "der", "den", "hier", "dort", "wand", "mauer", "tuer", "fenster", "stuetze", "bauteil", "element", "objekt"]);
+/** Spoken wall word(s) -> kind of wall (anlegen.js WANDARTEN). */
+const WAND_WORT = { wand: "wand", trockenbauwand: "trockenbau", mauerwerkswand: "mauerwerk", mauerwand: "mauerwerk" };
+/** Words a new-wall sentence may carry beside kind and thickness ("neue Wand 24 cm dick"). */
+const WAND_FUELL = new Set(["dick", "stark", "dicke", "staerke", "mit", "von"]);
+/** Words a door sentence may carry beside width, fire rating and hinge side ("Tür 1,01 breit mit Anschlag DIN links"). */
+const TUER_FUELL = new Set(["breit", "mit", "anschlag", "von", "und"]);
+/** Plausible ranges [ASSUMED]: wall thickness 1-100 cm (a membrane is not a wall, more than 1 m is a block), door width 0.5-3.0 m. */
+const WAND_DICKE_M = { min: 0.01, max: 1 };
+const TUER_BREITE_M = { min: 0.5, max: 3 };
+
+/** @param {string} s @returns {string} the text without quotes around it */
+const ohneAnfuehrung = (s) => String(s ?? "").trim().replace(/^[„“"'‚‘»«]+|[„“"'‚‘»«]+$/g, "").trim();
+
+/**
+ * Number of points a creating sentence needs - refused here only when the viewer handed the points in.
+ * @param {SprachKontext} kontext @param {number} anzahl @param {string} wofuer @returns {{art: "abgelehnt", grund: string}|null}
+ */
+function punkteFehlen(kontext, anzahl, wofuer) {
+  if (!Array.isArray(kontext.punkte)) return null;
+  const r = punktePruefen(kontext.punkte, anzahl, wofuer);
+  return r.ok ? null : ablehnen(/** @type {any} */ (r).grund);
+}
+
+/**
+ * Reads a number with an optional unit at token `i`.
+ * @param {string[]} norm @param {number} i
+ * @returns {{wert: number, faktor: number|null, laenge: number}|null}  faktor: metres per unit, null without a unit.
+ */
+function zahlEinheit(norm, i) {
+  const z = zahlLesen(norm, i);
+  if (!z) return null;
+  const e = norm[i + z.laenge];
+  if (e && hatKey(EINHEIT_M, e)) return { wert: z.wert, faktor: EINHEIT_M[/** @type {keyof typeof EINHEIT_M} */ (e)], laenge: z.laenge + 1 };
+  return { wert: z.wert, faktor: null, laenge: z.laenge };
+}
+
+/**
+ * The sentences of 261111-zs1: "neue Trockenbauwand 12,5", "Tür 1,01 T30-RS DIN links", "Notiz: Brüstung prüfen", "Raum 1.05 heißt jetzt Lager",
+ * "dieser Raum heißt Lager", "Wand abbrechen", "Wand zwischen Raum 1.05 und 1.06 abbrechen". Never a guess: an unknown word in a creating
+ * sentence, a missing size, a missing name is refused with what is missing. This function reads the note.
+ * @param {string} text  The sentence as given (the note keeps its spelling). @param {SprachKontext} kontext
+ * @returns {({art: "befehl", befehl: string, params: Record<string, any>, verstanden: string}|{art: "abgelehnt", grund: string})|null}
+ */
+function notizLesen(text, kontext) {
+  const satz = String(text ?? "").trim();
+  // "Notiz: Brüstung prüfen", "Text Brüstung prüfen": read on the RAW sentence before any word is moved (the note's last word may be a verb
+  // such as "prüfen"), the text keeps its spelling
+  const notiz = /^(?:neue\s+)?(notiz|text)(?![A-Za-zÄÖÜäöüß])\s*[:,–-]?\s*([\s\S]*)$/i.exec(satz);
+  if (!notiz) return null;
+  const inhalt = ohneAnfuehrung(notiz[2].replace(/[.!]+$/, ""));
+  if (!inhalt) return ablehnen("Der Text der Notiz fehlt — z. B. „Notiz: Brüstung prüfen“");
+  const fehlt = punkteFehlen(kontext, 1, "eine Notiz");
+  if (fehlt) return fehlt;
+  return { art: "befehl", befehl: "anlegen", params: { objekt: "notiz", text: inhalt }, verstanden: `Notiz anlegen: „${inhalt}“` };
+}
+
+/**
+ * The other sentences of 261111-zs1 (see notizLesen for the note).
+ * @param {string} text  The sentence as given (names keep their spelling). @param {string[]} norm  Comparison tokens (fillers gone).
+ * @param {string[]} roh  Raw tokens (same length). @param {SprachKontext} kontext
+ * @param {() => ({art: "abgelehnt", grund: string}|null)} aendert  The selection check of the grammar (selection present, noun fits).
+ * @returns {({art: "befehl", befehl: string, params: Record<string, any>, verstanden: string}|{art: "abgelehnt", grund: string})|null}
+ */
+function anlegenLesen(text, norm, roh, kontext, aendert) {
+  const satz = String(text ?? "").trim();
+
+  // --- rename a room by number: "Raum 1.05 heißt jetzt Lager" ---
+  const nachNummer = /^(?:der\s+)?raum\s+(.+?)\s+hei(?:ß|ss)t\b\s*(?:(?:jetzt|nun|ab\s+jetzt|ab\s+sofort)\s+)?([\s\S]*)$/i.exec(satz);
+  const nachAuswahl = /^(?:dieser|der)\s+raum\s+hei(?:ß|ss)t\b\s*(?:(?:jetzt|nun|ab\s+jetzt|ab\s+sofort)\s+)?([\s\S]*)$/i.exec(satz);
+  if (nachAuswahl) {
+    const name = ohneAnfuehrung(nachAuswahl[1].replace(/[.!]+$/, ""));
+    if (!name || /^(jetzt|nun)$/i.test(name)) return ablehnen("Der neue Name fehlt — z. B. „dieser Raum heißt Lager“");
+    const verweigert = aendert();
+    if (verweigert) return verweigert;
+    return { art: "befehl", befehl: "raum-umbenennen", params: { name }, verstanden: `Raum umbenennen: ${name}` };
+  }
+  if (nachNummer) {
+    const nr = nachNummer[1].trim().replace(",", ".");
+    if (!/^\d+(\.\d+)*[a-z]?$/i.test(nr)) return ablehnen(`„${nachNummer[1].trim()}“ ist keine Raumnummer — die Nummer als Zahl sagen oder tippen (z. B. „Raum 1.05 heißt Lager“)`);
+    const name = ohneAnfuehrung(nachNummer[2].replace(/[.!]+$/, ""));
+    if (!name || /^(jetzt|nun)$/i.test(name)) return ablehnen(`Der neue Name fehlt — z. B. „Raum ${nr} heißt Lager“`);
+    return { art: "befehl", befehl: "raum-umbenennen", params: { nummer: nr, name }, verstanden: `Raum ${nr} umbenennen: ${name}` };
+  }
+
+  const letztes = norm[norm.length - 1] ?? "";
+
+  // --- the wall between two rooms: "Wand zwischen Raum 1.05 und 1.06 abbrechen" ---
+  if (norm.includes("zwischen") && hat(norm, ["wand", "mauer"]) && ABBRUCH_VERB.test(letztes)) {
+    const s = norm.join(" ");
+    const m = /^(?:die )?(?:wand|mauer) zwischen (?:den )?(?:raum |raeumen )?(\S+) und (?:raum )?(\S+) (?:abbrechen|abreissen|ausbauen|rueckbauen|zurueckbauen)$/.exec(s);
+    if (!m || !/^\d+(\.\d+)*[a-z]?$/.test(m[1]) || !/^\d+(\.\d+)*[a-z]?$/.test(m[2])) {
+      return ablehnen("Zwischen welchen Räumen? — z. B. „Wand zwischen Raum 1.05 und 1.06 abbrechen“ (Raumnummern als Zahl)");
+    }
+    return { art: "befehl", befehl: "wand-zwischen-raeumen", params: { raum_a: m[1], raum_b: m[2] }, verstanden: `Wand zwischen Raum ${m[1]} und Raum ${m[2]} abbrechen` };
+  }
+
+  // --- demolish the selection: "Wand abbrechen", "diese Tür ausbauen" -> the existing property change status = abbruch ---
+  if (norm.length >= 2 && ABBRUCH_VERB.test(letztes) && norm.slice(0, -1).every((w) => ABBRUCH_ERLAUBT.has(w))) {
+    const verweigert = aendert();
+    if (verweigert) return verweigert;
+    return { art: "befehl", befehl: "eigenschaft-setzen", params: { name: "status", wert: "abbruch" }, verstanden: "Eigenschaft setzen — Status: Abbruch" };
+  }
+
+  let k = 0;
+  while (k < norm.length && NEU_WORTE.has(norm[k])) k++;
+  const neu = k > 0;
+
+  // --- new wall: "neue Trockenbauwand 12,5", "neue Wand 24", "neue Mauerwerkswand 17,5 cm" ---
+  let wandart = /** @type {string|null} */ (null);
+  if (hatKey(WAND_WORT, norm[k])) { wandart = WAND_WORT[/** @type {keyof typeof WAND_WORT} */ (norm[k])]; k += 1; }
+  else if ((norm[k] === "trockenbau" || norm[k] === "mauerwerk") && norm[k + 1] === "wand") { wandart = norm[k] === "trockenbau" ? "trockenbau" : "mauerwerk"; k += 2; }
+  if (wandart && neu) {
+    const z = zahlEinheit(norm, k);
+    if (!z) return ablehnen("Die Wanddicke fehlt — z. B. „neue Wand 24“ (Zentimeter) oder „neue Trockenbauwand 12,5“");
+    // a thickness without unit is centimetres (decision D8: "24" for a wall means 24 cm, the way it is written on a plan)
+    const dicke = rund(z.faktor == null ? z.wert / 100 : z.wert * z.faktor);
+    if (!(dicke >= WAND_DICKE_M.min && dicke <= WAND_DICKE_M.max)) return ablehnen(`Eine Wanddicke von ${zahlText(dicke * 100)} cm ist nicht plausibel — 1 bis 100 Zentimeter`);
+    const rest = norm.slice(k + z.laenge).filter((w) => !WAND_FUELL.has(w));
+    if (rest.length) return ablehnen(`„${roh[norm.indexOf(rest[0], k + z.laenge)] ?? rest[0]}“ verstehe ich bei einer neuen Wand nicht — Art und Dicke sagen, z. B. „neue Trockenbauwand 12,5“`);
+    const fehlt = punkteFehlen(kontext, 2, "eine Wand");
+    if (fehlt) return fehlt;
+    const label = { wand: "Wand", trockenbau: "Trockenbauwand", mauerwerk: "Mauerwerkswand" }[wandart];
+    return { art: "befehl", befehl: "anlegen", params: { objekt: "wand", wandart, dicke_m: dicke }, verstanden: `Neue ${label} ${zahlText(dicke * 100)} cm anlegen` };
+  }
+
+  // --- new door: "Tür 1,01", "Tür 1,01 T30-RS DIN links", "neue Tür 0,885 rechts" ---
+  if (norm[k] === "tuer" || norm[k] === "tuere") {
+    k += 1;
+    const z = zahlEinheit(norm, k);
+    if (!z) return ablehnen("Die Türbreite fehlt — z. B. „Tür 1,01“ (Meter)");
+    // a width without unit is metres (decision D8: door widths are said as "1,01"); a bare 101 is refused instead of read as cm
+    if (z.faktor == null && z.wert > TUER_BREITE_M.max) return ablehnen("Die Türbreite in Metern sagen (z. B. „Tür 1,01“) oder die Einheit nennen („101 Zentimeter“)");
+    const breite = rund(z.faktor == null ? z.wert : z.wert * z.faktor);
+    if (!(breite >= TUER_BREITE_M.min && breite <= TUER_BREITE_M.max)) return ablehnen(`Eine Türbreite von ${zahlText(breite)} m ist nicht plausibel — 0,5 bis 3 Meter`);
+    /** @type {string|null} */ let feuer = null;
+    /** @type {string|null} */ let din = null;
+    const feuerDef = eigenschaftFeld("feuerwiderstand");
+    for (let i = k + z.laenge; i < norm.length; i++) {
+      const w = norm[i];
+      if (TUER_FUELL.has(w)) continue;
+      if (/^(t|f|ei|rei|e|r)\d{2,3}(-[a-z]{1,3})?$/.test(w)) {
+        if (feuer) return ablehnen("Zwei Feuerwiderstände in einem Satz — einen sagen (z. B. T30-RS)");
+        // "T30 RS" typed with a blank: the suffix joins the class
+        const mitZusatz = !w.includes("-") && /^(rs|cs)$/.test(norm[i + 1] ?? "") ? `${roh[i]}-${roh[i + 1]}` : roh[i];
+        if (mitZusatz !== roh[i]) i += 1;
+        try { feuer = /** @type {any} */ (feuerDef).parse(mitZusatz); } catch (e) { return ablehnen(e instanceof Error ? e.message : String(e)); }
+        continue;
+      }
+      const seite = w === "din" ? norm[i + 1] : /^din-(links|rechts)$/.test(w) ? w.slice(4) : w;
+      if (seite === "links" || seite === "rechts") {
+        if (din && din !== seite) return ablehnen("DIN links und DIN rechts zugleich — eine Seite sagen");
+        din = seite;
+        if (w === "din") i += 1;
+        continue;
+      }
+      if (w === "din") return ablehnen("Nach „DIN“ fehlt die Seite — DIN links oder DIN rechts");
+      return ablehnen(`„${roh[i]}“ verstehe ich bei einer Tür nicht — möglich: Breite in Metern, Feuerwiderstand (T30, T30-RS), DIN links oder rechts`);
+    }
+    const fehlt = punkteFehlen(kontext, 1, "eine Tür");
+    if (fehlt) return fehlt;
+    const zusatz = [feuer, din ? `DIN ${din}` : null].filter(Boolean).join(", ");
+    return { art: "befehl", befehl: "anlegen", params: { objekt: "tuer", breite_m: breite, ...(feuer ? { feuerwiderstand: feuer } : {}), ...(din ? { din_anschlag: din } : {}) },
+      verstanden: `Neue Tür ${zahlText(breite)} m anlegen${zusatz ? ` (${zusatz})` : ""}` };
+  }
+  // "Wand 24" without "neue" is not a creating sentence (a bare noun means the selection) - left to the other rules
+  return null;
+}
+
 /**
  * Turns one sentence into a command of the viewer's register - or nothing.
  * @param {string} text  The sentence (transcript or typed).
@@ -496,6 +677,9 @@ export function sprachbefehl(text, kontext = {}) {
   // the end of the GUID is "no further GUID character", not \b: a GUID may end in "$", and after "$" there is no word boundary
   const guid = /\bw(?:ä|ae)hle\s+(?:das\s+)?(?:bauteil\s+)?(?:mit\s+(?:der\s+)?guid\s+)?([0-9A-Za-z_$]{22})(?![0-9A-Za-z_$])/i.exec(String(text ?? ""));
   if (guid) return { art: "befehl", befehl: "auswahl-guid", params: { guid: guid[1] }, verstanden: `Bauteil ${guid[1]} wählen` };
+  // 261111-zs1: a note is free text - read before fillers go and before a verb at the end is moved to the front
+  const notiz = notizLesen(text, kontext);
+  if (notiz) return notiz;
 
   // filler words go; leading "kannst du" / "ich möchte" go as well
   let norm = z.norm.filter((w) => !FUELLWORTE.has(w));
@@ -551,6 +735,10 @@ export function sprachbefehl(text, kontext = {}) {
     if ("art" in vorlage) return vorlage;
     return { art: "befehl", befehl: "eigenschaft-setzen", params: { name: vorlage.name, wert: vorlage.wert }, verstanden: `Eigenschaft setzen — ${vorlage.text} (Büro-Vorlage)` };
   }
+
+  // --- 261111-zs1: creating, renaming, demolishing (every one only makes a proposal) ---
+  const anlegen = anlegenLesen(text, norm, roh, kontext, aendert);
+  if (anlegen) return anlegen;
 
   if (/^(verschieb|schieb|versetz|beweg|verrueck|zieh)/.test(verb) || /^rueck(e|en|t)?$/.test(verb)) {
     const verweigert = aendert();
@@ -634,6 +822,13 @@ export const SATZ_HILFE = Object.freeze([
   { satz: "Markiere dieses als Abbruch", befehl: "eigenschaft-setzen", wirkung: "Vorschlag: Status Bestand, Neubau oder Abbruch" },
   { satz: "Teile hier", befehl: "teilen", wirkung: "Vorschlag: Bauteil an der zuletzt gezeigten Stelle teilen" },
   { satz: "Teile in der Mitte", befehl: "teilen", wirkung: "Vorschlag: Wand in der Mitte teilen (auch: teile bei 30 Prozent)" },
+  // 261111-zs1: creating by pointing and speaking (the points come from the plan tool „Punkte“)
+  { satz: "Neue Trockenbauwand 12,5", befehl: "anlegen", wirkung: "Vorschlag: neue Wand zwischen den Punkten 1 und 2 (Dicke in cm; auch „neue Wand 24“, „neue Mauerwerkswand 17,5“)" },
+  { satz: "Tür 1,01 T30-RS DIN links", befehl: "anlegen", wirkung: "Vorschlag: neue Tür am Punkt auf der Wand (Breite in m; Feuerwiderstand und DIN links/rechts nach Wunsch)" },
+  { satz: "Notiz: Brüstung prüfen", befehl: "anlegen", wirkung: "Vorschlag: Textnotiz am Punkt im Grundriss" },
+  { satz: "Raum 1.05 heißt jetzt Lager", befehl: "raum-umbenennen", wirkung: "Vorschlag: Raum umbenennen (auch „dieser Raum heißt Lager“ mit gewähltem Raum)" },
+  { satz: "Wand abbrechen", befehl: "eigenschaft-setzen", wirkung: "Vorschlag: Status Abbruch für die gewählte Wand (auch „Tür ausbauen“)" },
+  { satz: "Wand zwischen Raum 1.05 und 1.06 abbrechen", befehl: "wand-zwischen-raeumen", wirkung: "Vorschlag: die Wand zwischen den beiden Raumstempeln bekommt Status Abbruch" },
   { satz: "Ja", befehl: "bestaetigen", wirkung: "Übernimmt den offenen Vorschlag (nur ein einzelnes „ja“, „nein“ verwirft)" },
   { satz: "Nein", befehl: "verwerfen", wirkung: "Verwirft den offenen Vorschlag" },
   { satz: "Mach das rückgängig", befehl: "zurueck", wirkung: "Fragt, welchen Schritt es zurücknimmt; erst „ja“ führt es aus" },

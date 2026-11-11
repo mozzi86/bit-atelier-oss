@@ -76,7 +76,7 @@ export function steckbriefFelder(s, patch, { field, selCls, t, schichtStatus = n
   const hatAnnahme = Object.values(s.quelle).includes("abgeleitet");
   const txtCls = "w-24 rounded border border-border px-1 py-0.5 bg-card";
   const rows = [
-    <div key="sb-kopf" className="px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground" data-testid="steckbrief">{t("Steckbrief")}</div>,
+    <div key="sb-kopf" className="px-3 pt-2 pb-0.5 text-[10px] font-semibold text-muted-foreground" data-testid="steckbrief">{t("Steckbrief")}</div>,
     field(t("Bauteiltyp"), patch && WAND_TYPEN.includes(s.typ)
       ? <span className="flex items-center"><select className={selCls} value={s.typ} data-testid="sb-typ" onChange={(e) => patch({ bauteil_typ: e.target.value })}>
           {WAND_TYPEN.map((k) => <option key={k} value={k}>{t(BAUTEIL_TYPEN[k].label)}</option>)}

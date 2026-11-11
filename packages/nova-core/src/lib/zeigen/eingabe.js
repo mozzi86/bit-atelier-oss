@@ -18,7 +18,7 @@ import { vomAgentenKanal } from "./kanal.js";
 export { vomAgentenKanal };
 
 /** Commands that make a proposal: they record which sentence led to it (`befehl_text`, shown in the history). */
-const VORSCHLAG_BEFEHLE = ["eigenschaft-setzen", "transformieren", "teilen"];
+const VORSCHLAG_BEFEHLE = ["eigenschaft-setzen", "transformieren", "teilen", "anlegen", "raum-umbenennen", "wand-zwischen-raeumen"];
 
 /**
  * Result of one sentence. `befehl`: it ran a command (`verstanden` in words, `ergebnis` its answer); `rueckfrage`: a question that waits for "ja"
@@ -92,7 +92,8 @@ export function eingabeAusfuehren(reg, text, ctx = {}, kontext = {}) {
 /**
  * Registers the command "eingabe {text, herkunft?}": a sentence as a command, for agents, scripts and typed input.
  * @param {ReturnType<typeof import("../befehlsregister.js").befehlsRegister>} reg
- * @param {() => {kontext: () => any, ansicht?: () => any, zeigepunkt?: () => any}} a  Accessor of the viewer's surface (called at every command).
+ * @param {() => {kontext: () => any, ansicht?: () => any, zeigepunkt?: () => any, punkte?: () => any[]}} a  Accessor of the viewer's surface (called at
+ *   every command); punkte (261111-zs1): the numbered pointing points {x, z, level} in m.
  * @param {{bibliothekVorladen?: () => unknown}} [o]  bibliothekVorladen: loads the office's command library into the cache (befehlsBibliothekLaden.js
  *   bibliothekLaden) - called once here, so a typed or agent sentence knows the library without the speech field having been opened (review 106-10).
  * @returns {() => void} Remover.
@@ -112,7 +113,9 @@ export function eingabeBefehlRegistrieren(reg, a, o = {}) {
       const frei = ["text", "sprache"].includes(String(p?.herkunft)) ? String(p.herkunft) : null;
       const innen = { ...(ctx || {}), ...(frei && ctx?.herkunft == null && !vomAgentenKanal(ctx) ? { herkunft: frei } : {}) };
       // 106-10: the office's command library as the viewer (at registration) or the speech field has loaded it (befehlsBibliothekLaden.js)
-      const r = eingabeAusfuehren(reg, text, innen, { auswahl: f.kontext(), ansicht: f.ansicht?.() ?? null, zeigepunkt: f.zeigepunkt?.() ?? null, bibliothek: bibliothekAktuell() });
+      // 261111-zs1: the numbered pointing points of the plan go along, so a sentence that needs points is refused before it reaches the command
+      const r = eingabeAusfuehren(reg, text, innen, { auswahl: f.kontext(), ansicht: f.ansicht?.() ?? null, zeigepunkt: f.zeigepunkt?.() ?? null, bibliothek: bibliothekAktuell(),
+        ...(typeof f.punkte === "function" ? { punkte: f.punkte() } : {}) });
       if (!r.ok) throw new Error(r.text);
       return r.art === "rueckfrage" ? { rueckfrage: r.frage, beiJa: r.beiJa } : { befehl: r.befehl, verstanden: r.verstanden, ergebnis: r.ergebnis };
     },

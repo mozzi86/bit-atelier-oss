@@ -34,7 +34,7 @@ import { alsDataUrl, sha256Hex } from "@/lib/honorar/angebotPdf.js";
 import { VERTRAG_STATUS } from "@/lib/honorar/vertragsdaten.js";
 import BetragFeld from "@/components/accounting/gemeinsam/BetragFeld.jsx";
 
-const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";
+const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900";
 const LABEL = "text-sm font-medium text-slate-700 dark:text-slate-200";
 
 /**
@@ -151,7 +151,7 @@ export default function VertragZusatz({ zh, wert, vertrag, versicherungen = [], 
                   </label>
                 ))}
                 {s.beauftragt_am
-                  ? <span className="ml-auto text-xs text-emerald-800 dark:text-emerald-200">{t("beauftragt am")} {datumText(s.beauftragt_am, lang)}</span>
+                  ? <span className="ml-auto text-xs text-erfolg">{t("beauftragt am")} {datumText(s.beauftragt_am, lang)}</span>
                   : <button type="button" className={`${buttonVariants({ variant: "outline", size: "sm" })} ml-auto`} onClick={() => beauftragen(s.nr)} disabled={!(s.lph || []).length}>{t("Stufe beauftragen")}</button>}
               </div>
             </div>

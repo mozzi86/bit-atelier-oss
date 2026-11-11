@@ -18,7 +18,7 @@ import { ticketUrl, prioritaetLabel, istOffen } from "@ifc/lib/ticketLink";
 import { Bot, AlertTriangle, FilePlus2 } from "lucide-react";
 
 const prio = {
-  low: "bg-emerald-100 text-emerald-800",
+  low: "bg-erfolg-flaeche text-erfolg",
   medium: "bg-amber-100 text-amber-800",
   high: "bg-red-100 text-red-800",
   critical: "bg-red-200 text-red-900",

@@ -214,10 +214,15 @@ test.describe("106-07 Tablet: Stift-Zeiger, Antippen, Sprech-Overlay (Touch- und
       expect((await zeigen(page, "bim", "auswahl")).aura.length).toBeGreaterThan(0);
 
       // --- Finger tap on the empty corner deselects, a finger tap on the wall selects again ---
+      // The canvas may have moved since it was measured (the head row above it changed height, seen 25 px): measure it
+      // again and carry the wall point along (same size, same camera), otherwise the "corner" tap lands on a head-row button.
+      const jetzt = /** @type {{x: number, y: number, width: number, height: number}} */ (await canvas.boundingBox());
+      const wand = { x: x + jetzt.x - box.x, y: y + jetzt.y - box.y };
+      box = jetzt;
       await page.touchscreen.tap(box.x + 4, box.y + 4);
       await expect.poll(() => auswahlGuid(page)).toBeNull();
       expect((await zeigen(page, "bim", "zeiger")).art).toBe("touch");
-      await page.touchscreen.tap(x, y);
+      await page.touchscreen.tap(wand.x, wand.y);
       await expect.poll(() => auswahlGuid(page)).toBe(hover.guid);
 
       // --- A proposal, confirmed by a finger tap on "Übernehmen" (finger-size button) ---
@@ -345,6 +350,10 @@ test.describe("106-07 Tablet: Stift-Zeiger, Antippen, Sprech-Overlay (Touch- und
       const warnungen = wache(page);
       // harness stand-in: ready, recognition on; POST /stt counts the uploads and answers a harmless known sentence
       const uploads = [];
+      await page.route("**/api/ki/harness/dienst", (route) => route.fulfill({
+        status: 200, headers: CORS,
+        body: JSON.stringify({ provider: "lokal", provider_lokal: true, nur_lokal: false, stt: { verfuegbar: true, bereit: true }, mcp: { aktiv: true, verbunden: false, werkzeuge: [], hinweis: "" } }),
+      }));
       await page.route("http://127.0.0.1:8765/**", async (route) => {
         const url = new URL(route.request().url());
         if (url.pathname === "/status") {

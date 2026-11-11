@@ -80,7 +80,7 @@ export default function ScenarioComparison({ baselineData }) {
                 <TableCell>{eur(r.cost)}</TableCell>
                 <TableCell>{eur(r.noi)}</TableCell>
                 <TableCell>
-                  <span className={r.roi === bestRoi ? "font-bold text-emerald-600" : ""}>
+                  <span className={r.roi === bestRoi ? "font-bold text-foreground" : ""}>
                     {(r.roi * 100).toFixed(1)} %
                   </span>
                 </TableCell>

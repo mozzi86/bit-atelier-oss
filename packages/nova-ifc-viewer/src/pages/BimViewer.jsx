@@ -359,7 +359,7 @@ export default function BimViewer() {
         >
           <div>
             {/* Page name from the N-02 name table. */}
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold text-foreground">
               {t("BIM-Viewer & Tickets")}
             </h1>
             <p className="text-slate-600 mt-1">
@@ -367,7 +367,7 @@ export default function BimViewer() {
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <PresenceBar />
-              <Link to="/IfcViewer" className="text-sm font-medium text-emerald-700 underline-offset-4 hover:underline">
+              <Link to="/IfcViewer" className="text-sm font-medium text-link underline-offset-4 hover:underline">
                 {t("Im IFC-Viewer ansehen")}
               </Link>
             </div>
@@ -399,7 +399,7 @@ export default function BimViewer() {
                 onClick={() => { setAddMode((m) => !m); setCommentMode(false); }}
                 disabled={!selectedProject || !modellDa}
                 aria-describedby={modellFehlt ? "bim-modell-fehlt-grund" : undefined}
-                className={addMode ? "bg-red-600 hover:bg-red-700 shadow-lg" : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg"}
+                className={addMode ? "bg-red-600 hover:bg-red-700 shadow-lg" : "bg-primary hover:bg-primary/90 shadow-sm"}
               >
                 <MapPin className="w-4 h-4 mr-2" />
                 {addMode ? t("Platzierung abbrechen") : t("Ticket im Modell setzen")}
@@ -419,7 +419,7 @@ export default function BimViewer() {
         <Card className="border-0 shadow-sm rounded-xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-slate-800">
-              <Layers className="w-5 h-5 text-emerald-600" />
+              <Layers className="w-5 h-5 text-muted-foreground" />
               Modellauswahl
             </CardTitle>
           </CardHeader>
@@ -478,7 +478,7 @@ export default function BimViewer() {
                 </div>
               </CardHeader>
               {ifcInfo && (
-                <div className="mx-4 mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                <div className="mx-4 mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border bg-muted px-3 py-2 text-xs text-foreground">
                   <span className="font-semibold">{ifcInfo.filename}</span>
                   {ifcInfo.schema && <span>{ifcInfo.schema}</span>}
                   <span>Geschosse: <b>{ifcInfo.storeys.length}</b></span>
@@ -583,7 +583,7 @@ export default function BimViewer() {
             <Card className="border-0 shadow-sm rounded-xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-sm text-slate-800">
-                  <Layers className="w-4 h-4 text-emerald-600" />
+                  <Layers className="w-4 h-4 text-muted-foreground" />
                   Modell-Layer
                 </CardTitle>
               </CardHeader>
@@ -596,7 +596,7 @@ export default function BimViewer() {
                       size="icon"
                       onClick={() => toggleLayer(layer)}
                       aria-label={`Layer ${labelFor(LAYER_LABELS, layer)} ${visible ? "ausblenden" : "einblenden"}`}
-                      className={visible ? "text-emerald-600" : "text-slate-400"}
+                      className={visible ? "text-foreground" : "text-slate-400"}
                     >
                       {visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                     </Button>

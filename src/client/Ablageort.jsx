@@ -118,7 +118,7 @@ export default function Ablageort() {
   return (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 text-sm dark:border-slate-700 dark:bg-slate-900" data-testid="ablageort-karte">
       <div className="space-y-1">
-        <p className="flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100"><HardDrive className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t('Ablageort')}</p>
+        <p className="flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100"><HardDrive className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> {t('Ablageort')}</p>
         <code className="block break-all rounded bg-slate-100 px-1.5 py-1 text-xs dark:bg-slate-800" data-testid="ablageort-pfad">{profil?.ablageort ?? '…'}</code>
         <p className="text-xs text-slate-600 dark:text-slate-300">
           {t('Belegt')}: <span data-testid="ablageort-belegt">{belegt == null ? '…' : groesseText(belegt)}</span>
@@ -138,14 +138,14 @@ export default function Ablageort() {
       </div>
 
       <div className="space-y-1 border-t border-slate-200 pt-3 dark:border-slate-700">
-        <p className="flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100"><UserRound className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t('Profil')}</p>
+        <p className="flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100"><UserRound className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> {t('Profil')}</p>
         <p className="text-xs text-slate-600 dark:text-slate-300" data-testid="ablageort-profil">
           {profil ? [profil.name, profil.buero].filter(Boolean).join(' · ') : '…'}
         </p>
         <button type="button" className={KNOPF} onClick={() => setBearbeiten(true)} disabled={!profil}>{t('Profil bearbeiten')}</button>
       </div>
 
-      <p role="status" className="text-xs text-emerald-700 dark:text-emerald-400">{status}</p>
+      <p role="status" className="text-xs text-erfolg">{status}</p>
       {fehler && <p role="alert" className="text-xs text-rose-700 dark:text-rose-300" data-testid="ablageort-fehler">{fehler}</p>}
 
       <ProfilDialog

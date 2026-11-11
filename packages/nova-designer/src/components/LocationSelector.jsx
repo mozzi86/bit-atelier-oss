@@ -379,7 +379,7 @@ export default function LocationSelector({ complexData, onLocationChange, onName
                 type="checkbox"
                 checked={show3d}
                 onChange={(e) => setShow3d(e.target.checked)}
-                className="accent-emerald-600"
+                className="accent-primary"
               />
               Nachbargebäude 3D
               {offline && (
@@ -394,7 +394,7 @@ export default function LocationSelector({ complexData, onLocationChange, onName
                 checked={terrainOn}
                 disabled={terrainBroken}
                 onChange={(e) => setTerrainOn(e.target.checked)}
-                className="accent-emerald-600"
+                className="accent-primary"
               />
               Gelände (3D)
               {terrainBroken && (
@@ -411,7 +411,7 @@ export default function LocationSelector({ complexData, onLocationChange, onName
               </Button>
             ))}
           </div>
-          <Button onClick={apply} className="w-full bg-gradient-to-r from-emerald-600 to-teal-600">
+          <Button onClick={apply} className="w-full bg-primary hover:bg-primary/90">
             Standort übernehmen & Gelände generieren <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
           <p className="text-xs text-slate-400">
@@ -469,7 +469,7 @@ export default function LocationSelector({ complexData, onLocationChange, onName
                 </Button>
                 <Button
                   size="sm"
-                  className="shadow bg-emerald-600 hover:bg-emerald-700"
+                  className="shadow bg-primary hover:bg-primary/90"
                   onClick={() => setDrawing(false)}
                   disabled={parcelRing.length < 3}
                 >

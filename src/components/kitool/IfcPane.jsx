@@ -55,7 +55,7 @@ export default function IfcPane({ pfad, onClose }) {
     <Card className="h-[calc(100vh-290px)] min-h-[480px] flex flex-col" data-testid="ifc-pane">
       <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base flex items-center gap-2 text-slate-800 dark:text-slate-100">
-          <Box className="w-5 h-5 text-emerald-600" /> {t('IFC-Modell')}
+          <Box className="w-5 h-5 text-muted-foreground" /> {t('IFC-Modell')}
         </CardTitle>
         <Button size="icon" variant="ghost" onClick={onClose} aria-label={t('Schließen')}><X className="w-4 h-4" /></Button>
       </CardHeader>
@@ -67,7 +67,7 @@ export default function IfcPane({ pfad, onClose }) {
           <>
             <p>{t('Größe')}: {fmtBytes(info.bytes)}. {t('Der Viewer der App lädt die Datei direkt vom lokalen Dienst; Auswahl und Kamera lassen sich dort als Link teilen.')}</p>
             <div className="flex flex-wrap gap-2">
-              <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+              <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
                 <Link to={viewerZiel} data-testid="ifc-viewer-link"><ExternalLink className="w-4 h-4" /> {t('Im IFC-Viewer öffnen')}</Link>
               </Button>
               <Button variant="outline" onClick={kopieren} className="gap-2" data-testid="ifc-link-kopieren">

@@ -157,8 +157,8 @@ export default function SigeKarte({ projekt }) {
           </table>
           {gewerke.length === 0 && <p className="text-xs text-slate-500 mt-1">{t("Keine Gewerke im Bauzeitenplan — die Spalte „typisch“ bleibt leer.")}</p>}
         </div>
-        {gespeichert && <p className="text-sm text-emerald-700" data-testid="sg-gespeichert">{t("Gespeichert")}</p>}
-        {meldung && <p className="text-sm text-emerald-700" data-testid="sg-meldung">{meldung}</p>}
+        {gespeichert && <p className="text-sm text-erfolg" data-testid="sg-gespeichert">{t("Gespeichert")}</p>}
+        {meldung && <p className="text-sm text-erfolg" data-testid="sg-meldung">{meldung}</p>}
         {fehler && <p className="text-sm text-rose-700" role="alert" data-testid="sg-fehler">{fehler}</p>}
       </CardContent>
     </Card>

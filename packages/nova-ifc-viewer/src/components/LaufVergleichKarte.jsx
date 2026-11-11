@@ -80,13 +80,13 @@ export default function LaufVergleichKarte({ ergebnis, kennzahlen, modell = null
             <input type="file" accept=".json,application/json" className="hidden" data-testid="lv-datei" onChange={(e) => dateiLesen(e.target.files?.[0])} />
           </label>
         </div>
-        {meldung.text && <p className={meldung.fehler ? "text-rose-600" : "text-emerald-700"}>{meldung.text}</p>}
+        {meldung.text && <p className={meldung.fehler ? "text-rose-600" : "text-erfolg"}>{meldung.text}</p>}
         {vergleich && (
           <div data-testid="lv-ergebnis" data-neu={vergleich.neu.length} data-behoben={vergleich.behoben.length} data-gleich={vergleich.unveraendert.length} data-hart={vergleich.hartZunahme}>
             <p className="mb-1 text-slate-600">{t("Basis")}: {datumText(basis.datum)} · {basis.modell || "—"}{vergleich.gleicherRegelsatz ? "" : ` · ${t("anderer Regelsatz — Unterschiede können aus den Regeln kommen")}`}</p>
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded border border-rose-200 bg-rose-50 p-2"><div className="text-[11px] text-slate-500">{t("neu")}</div><div className="text-base font-semibold">{vergleich.neu.length}</div></div>
-              <div className="rounded border border-emerald-200 bg-emerald-50 p-2"><div className="text-[11px] text-slate-500">{t("behoben")}</div><div className="text-base font-semibold">{vergleich.behoben.length}</div></div>
+              <div className="rounded border border-erfolg-rand bg-erfolg-flaeche p-2"><div className="text-[11px] text-slate-500">{t("behoben")}</div><div className="text-base font-semibold">{vergleich.behoben.length}</div></div>
               <div className="rounded border border-slate-200 bg-slate-50 p-2"><div className="text-[11px] text-slate-500">{t("unverändert")}</div><div className="text-base font-semibold">{vergleich.unveraendert.length}</div></div>
             </div>
             {vergleich.hartZunahme > 0 && <p className="mt-1 text-rose-700">{t("Harte Kollisionen haben zugenommen")}: +{vergleich.hartZunahme}</p>}

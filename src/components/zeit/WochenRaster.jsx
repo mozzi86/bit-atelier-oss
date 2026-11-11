@@ -28,7 +28,7 @@ import { sollIst, uebernimmVorwoche, wochenMatrix, wochenStatus, zeilenSchluesse
 import { FEHLER, KARTE, LEERES_ZIEL, stundenText, ZielFelder, zielText } from "./zeitGemeinsam.jsx";
 
 const WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const ZELLE = "h-8 w-16 rounded border px-1 text-right text-sm tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-slate-900";
+const ZELLE = "h-8 w-16 rounded border px-1 text-right text-sm tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-slate-900";
 
 /**
  * Week grid with footer and actions.
@@ -259,7 +259,7 @@ export default function WochenRaster({ zh, zz }) {
                   const key = zellKey(zeile.schluessel, c);
                   const grund = sperrGrund(zeile, c);
                   const st = zeile.buchungen[c][0]?.status;
-                  const farbe = st === "freigegeben" ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950" : st === "eingereicht" ? "bg-sky-50 border-sky-200 dark:bg-sky-950" : st === "abgelehnt" ? "border-red-400" : "bg-white border-slate-300";
+                  const farbe = st === "freigegeben" ? "bg-erfolg-flaeche border-erfolg-rand" : st === "eingereicht" ? "bg-sky-50 border-sky-200 dark:bg-sky-950" : st === "abgelehnt" ? "border-red-400" : "bg-white border-slate-300";
                   const tagName = `${t(WOCHENTAGE[c])} ${datumText(d, lang)}`;
                   return (
                     <td key={d} className="px-1 py-1 text-right align-top">

@@ -75,7 +75,7 @@ export default function VorgangsListe({ vorgaenge, mitarbeiterListe, vertraege, 
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-label={fuellen(t("Vorgang {name}: {prozent} % erledigt"), { name, prozent })}
-                className="mt-2 h-1.5 w-full accent-emerald-600"
+                className="mt-2 h-1.5 w-full accent-primary"
               >
                 {prozent}%
               </progress>

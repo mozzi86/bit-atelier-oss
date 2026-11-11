@@ -94,7 +94,7 @@ export default function IfcImportPanel({ onUse, active = false, count = 0, onRes
         <CardTitle className="flex flex-wrap items-center gap-2 text-base">
           <FileUp className="w-4 h-4" /> IFC-Import (web-ifc)
           {active && (
-            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border border-emerald-200">
+            <Badge className="bg-erfolg-flaeche text-erfolg hover:bg-erfolg-flaeche border border-erfolg-rand">
               <CheckCircle2 className="w-3 h-3 mr-1" />
               IFC-Modell aktiv ({nf.format(count)} {count === 1 ? "Bauteil" : "Bauteile"})
             </Badge>
@@ -221,7 +221,7 @@ export default function IfcImportPanel({ onUse, active = false, count = 0, onRes
               </div>
             )}
 
-            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={useAsSource}>
+            <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={useAsSource}>
               <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Als Mengenquelle verwenden
             </Button>
             <Button size="sm" variant="outline" onClick={alsModellstand} disabled={Boolean(speicherGrund) || speichern.laeuft}
@@ -230,7 +230,7 @@ export default function IfcImportPanel({ onUse, active = false, count = 0, onRes
               {t("Als Modellstand speichern")}
             </Button>
             {speicherGrund && <span className="text-xs text-slate-500" data-testid="ifc-modellstand-grund">{speicherGrund}</span>}
-            {speichern.text && <span className={`text-xs ${speichern.fehler ? "text-rose-600" : "text-emerald-700"}`} data-testid="ifc-modellstand-status">{speichern.text}</span>}
+            {speichern.text && <span className={`text-xs ${speichern.fehler ? "text-rose-600" : "text-erfolg"}`} data-testid="ifc-modellstand-status">{speichern.text}</span>}
           </div>
         )}
       </CardContent>

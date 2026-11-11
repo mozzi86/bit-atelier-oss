@@ -35,8 +35,8 @@ import EntnahmeFormular from "./EntnahmeFormular.jsx";
 import GesellschafterFormular from "./GesellschafterFormular.jsx";
 import ExportKnopf from "./gemeinsam/ExportKnopf.jsx";
 
-const FELD = "h-9 rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";
-const PROZENT_FELD = "h-8 w-20 rounded-md border border-slate-300 bg-white px-2 text-right text-sm tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";
+const FELD = "h-9 rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900";
+const PROZENT_FELD = "h-8 w-20 rounded-md border border-slate-300 bg-white px-2 text-right text-sm tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900";
 
 /**
  * Warning text of personenPruefen() keys (literal t() calls for the i18n guard).
@@ -187,7 +187,7 @@ export default function EntnahmenReiter({ bh, gewinnCent }) {
             </ul>
           )}
           <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{t("Summe")}: {formatEuro(info.summeMonatCent)} {t("je Monat")}</p>
-          <a href="?tab=expenses" className="text-sm text-emerald-700 underline hover:no-underline dark:text-emerald-400">{t("Zu den wiederkehrenden Ausgaben")}</a>
+          <a href="?tab=expenses" className="text-sm text-link underline hover:no-underline">{t("Zu den wiederkehrenden Ausgaben")}</a>
         </section>
 
         {frueher.length > 0 && (

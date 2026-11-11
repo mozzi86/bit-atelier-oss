@@ -36,7 +36,7 @@ export default function RegenwasserKarte({ rw, onNutzung }) {
       <CardHeader className="pb-2">
         <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
           <CloudRain className="w-4 h-4" /> {t("Regenwassernutzung")}
-          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800">{t("Projektvorgabe · Nachhaltigkeitskonzept")}</span>
+          <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{t("Projektvorgabe · Nachhaltigkeitskonzept")}</span>
           <label className="ml-auto inline-flex items-center gap-1.5 text-xs font-normal text-slate-600">
             <input type="checkbox" checked={n.aktiv} onChange={(e) => onNutzung({ aktiv: e.target.checked })} data-testid="rw-aktiv" />
             {t("Regenwasser für WC und Garten nutzen")}

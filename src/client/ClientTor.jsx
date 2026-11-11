@@ -70,7 +70,7 @@ function Karte({ children }) {
 }
 
 const KNOPF = 'inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800';
-const KNOPF_HAUPT = 'inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60';
+const KNOPF_HAUPT = 'inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60';
 
 /**
  * The gate itself (inside the I18nProvider of ClientTor).
@@ -276,7 +276,7 @@ function Tor({ children }) {
   if (schritt === 'uebernahme') {
     return (
       <Karte>
-        <h1 className="flex items-center gap-2 text-lg font-semibold"><Download className="h-5 w-5 text-emerald-600" aria-hidden="true" /> {t('Bisherige Daten übernehmen?')}</h1>
+        <h1 className="flex items-center gap-2 text-lg font-semibold"><Download className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> {t('Bisherige Daten übernehmen?')}</h1>
         {angebot ? (
           <>
             <p data-testid="uebernahme-text">

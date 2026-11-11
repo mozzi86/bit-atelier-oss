@@ -38,7 +38,7 @@ export const LAYER_VERSION = {
   aufbauten_layer: 1, // 107-03: { aufbauten: { "<id>": { name, skins[] } } } project build-ups (bauteil/aufbauten.js, D-BK-22)
   solidrelationen_layer: 1, // 107-10: { relationen: [{ id, ziel_guid, operator_guid, operation, aktiv }] } stored solid element operations (bauteil/seo.js); the target stays unchanged, the result is derived
   csg_cache_layer: 1, // 107-14: { eintraege: { "<guid>|<art>": { pruefsumme, ort, objekt_id, inhalt, groesse_bytes, dreiecke, volumen_m3, quelle, warnung, erzeugt } } } — mesh CACHE of the CSG core, never a source (csg/cache.js, D-BK-08a)
-  ansicht_layer: 1, // 107-12: { ausschnitte: [{ id, name, type, level, scale, combo, ebenen_sichtbar?, cutHeight, brille, sw, strukturdarstellung, optionen, regeln, ki_vermerk }], ebenen: [{ id, visible, locked, farbe?, linientyp?, drucken? }], kombinationen: { name: [ids] } } saved views of the BIM studio (plan/ansichtszustand.js) - parameters only, never geometry (D-BK-08a)
+  ansicht_layer: 1, // 107-12 / 55-01: { ausschnitte: [...], ebenen: [...], kombinationen: { name: [ids] }, regel_vorlagen?: [{ id, name, regeln }] } saved views + optional graphic-rule presets (UEB-04); parameters only, never geometry (D-BK-08a). regel_vorlagen is additive on v1 (absent → []).
 };
 
 /**

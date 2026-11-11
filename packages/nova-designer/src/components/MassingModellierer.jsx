@@ -52,6 +52,7 @@ import { leeresGelaende, formen, glaetten, stempeln } from "@core/lib/massing/ge
 import { riegelLayout, WOHNUNGSTYPEN, MIX_VORLAGEN, RIEGEL_STANDARD } from "@core/lib/massing/riegel.js";
 import { koordinateLesen, zielPunkt } from "@core/lib/massing/koordinaten.js";
 import { befehlsRegister } from "@core/lib/befehlsregister.js";
+import { editorKuerzel } from "@designer/lib/zeichnenModell.js";
 import { starteSteuerungsBruecke } from "@core/lib/steuerungsBruecke.js";
 import Befehlszeile from "@core/components/Befehlszeile";
 import FangGlyphe, { strahlEnden } from "@core/components/FangGlyphe";
@@ -881,6 +882,11 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   useEffect(() => {
     const onKey = (e) => {
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName || "") || e.altKey) return;
+      if (!e.defaultPrevented) {
+        const kuerzel = editorKuerzel(e);
+        if (kuerzel === "undo") { e.preventDefault(); undo(); return; }
+        if (kuerzel === "redo") { e.preventDefault(); redo(); return; }
+      }
       if ((e.ctrlKey || e.metaKey) && e.key !== "Enter") return;
       const w = WERKZEUGE.find((x) => x.taste === e.key.toLowerCase());
       // 104-02: idle — letters go to the command line, Enter runs it or repeats the last command
@@ -1150,7 +1156,7 @@ export function ModellWerkzeugleiste({ m, t }) {
         </button>
       ))}
       <button type="button" className={`${knopf} border-border text-foreground hover:bg-muted`} onClick={m.undo} disabled={!m.kannUndo} aria-label={t("Rückgängig")} data-testid="mm-undo">↶</button>
-      <button type="button" className={`${knopf} border-border text-foreground hover:bg-muted`} onClick={m.redo} disabled={!m.kannRedo} aria-label={t("Wiederholen")}>↷</button>
+      <button type="button" className={`${knopf} border-border text-foreground hover:bg-muted`} onClick={m.redo} disabled={!m.kannRedo} aria-label={t("Wiederholen")} data-testid="mm-redo">↷</button>
       {/* Always rendered (disabled without selection) so the bar keeps its height — no plan jump. */}
       {(
         <span className="flex items-center gap-1 border-l border-border pl-1.5" aria-disabled={!m.auswahl.length}>

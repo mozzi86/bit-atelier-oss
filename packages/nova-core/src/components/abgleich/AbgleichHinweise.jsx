@@ -76,7 +76,7 @@ export default function AbgleichHinweise({ t = (s) => s, darfAendern = true, gro
           </div>
           <table className="mt-1 w-full border-collapse">
             <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+              <tr className="text-left text-[10px] text-muted-foreground">
                 <th className="pr-1 font-semibold">{t("Bauteil")}</th>
                 <th className="pr-1 font-semibold">{t("Hier")}</th>
                 <th className="font-semibold">{t("Anderes Gerät")}</th>

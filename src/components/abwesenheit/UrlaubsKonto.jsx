@@ -29,7 +29,7 @@ export default function UrlaubsKonto({ konten, jahr, onJahr }) {
             {[jahr - 1, jahr, jahr + 1].map((j) => <option key={j} value={j}>{j}</option>)}
           </select>
         </label>
-        <Link className="text-xs underline text-emerald-800 dark:text-emerald-300" to="/People?tab=contracts">{t("Resturlaub-Hinweis quittieren")}</Link>
+        <Link className="text-xs underline text-link" to="/People?tab=contracts">{t("Resturlaub-Hinweis quittieren")}</Link>
       </div>
       {konten.length === 0 ? <p className="text-sm text-slate-600 dark:text-slate-300">{t("Keine Einträge.")}</p> : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">

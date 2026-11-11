@@ -74,7 +74,7 @@ export default function AutoSicherung() {
   return (
     <div className="space-y-1" data-testid="auto-sicherung">
       <p className="flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-100">
-        <Archive className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("Automatische Sicherung")}
+        <Archive className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> {t("Automatische Sicherung")}
       </p>
       {status ? (
         <>
@@ -104,7 +104,7 @@ export default function AutoSicherung() {
       <p className="text-xs text-slate-600 dark:text-slate-300">
         {t("Die Sicherungen liegen auf diesem Rechner. Gegen Diebstahl, Brand oder einen defekten Datenträger hilft nur eine Kopie woanders: den Ordner in Ihre Büro-Sicherung aufnehmen oder regelmäßig auf ein anderes Laufwerk kopieren.")}
       </p>
-      <p role="status" className="text-xs text-emerald-700 dark:text-emerald-400" data-testid="auto-sicherung-status">{meldung}</p>
+      <p role="status" className="text-xs text-erfolg" data-testid="auto-sicherung-status">{meldung}</p>
       {fehler && <p role="alert" className="text-xs text-rose-700 dark:text-rose-300" data-testid="auto-sicherung-fehler">{t("Sicherung nicht abrufbar:")} {fehler}</p>}
     </div>
   );

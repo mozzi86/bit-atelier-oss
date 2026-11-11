@@ -77,11 +77,11 @@ export default function DateiQuelleKarte({ huelle = false }) {
         {!quelle.vorhanden && <> · <span className="text-amber-700 dark:text-amber-300">{t("Datei fehlt")}</span></>}
       </p>
       <button type="button" onClick={() => speichern()} disabled={laeuft} data-testid="datei-zurueckschreiben"
-        className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-40 dark:text-emerald-300 dark:hover:bg-emerald-950">
+        className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-40">
         <FileUp className="h-4 w-4" aria-hidden="true" /> {t("Zurück in die Datei speichern")}
       </button>
       <p className="text-xs text-slate-500 dark:text-slate-400">{t("Der Pfad bleibt auf diesem Rechner und geht nie in eine Projektdatei.")}</p>
-      <p role="status" className="text-xs text-emerald-700 dark:text-emerald-400 break-all" data-testid="datei-quelle-status">{status}</p>
+      <p role="status" className="text-xs text-erfolg break-all" data-testid="datei-quelle-status">{status}</p>
       {fehler && <p role="alert" className="text-xs text-rose-700 dark:text-rose-300" data-testid="datei-quelle-fehler">{fehler}</p>}
 
       <Dialog open={!!konflikt} onOpenChange={(o) => { if (!o) setKonflikt(null); }}>
@@ -96,7 +96,7 @@ export default function DateiQuelleKarte({ huelle = false }) {
               {t("Abbrechen")}
             </button>
             <button type="button" onClick={() => speichern("kopie")} data-testid="datei-konflikt-kopie"
-              className="px-3 py-2 rounded-lg border border-emerald-600 text-emerald-700 dark:text-emerald-300 text-sm font-medium hover:bg-emerald-50 dark:hover:bg-emerald-950">
+              className="px-3 py-2 rounded-lg border border-border text-foreground text-sm font-medium hover:bg-muted">
               {t("Als Kopie speichern")}
             </button>
             <button type="button" onClick={() => speichern("ueberschreiben")} data-testid="datei-konflikt-ueberschreiben"

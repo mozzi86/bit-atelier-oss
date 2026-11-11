@@ -217,7 +217,7 @@ export default function LlmConnections() {
     }
   };
 
-  const inputCls = "mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
+  const inputCls = "mt-1 w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40";
 
   return (
     <div className="grid lg:grid-cols-2 gap-6">
@@ -225,13 +225,13 @@ export default function LlmConnections() {
       <Card className="border border-slate-100 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Plug className="w-4 h-4 text-emerald-600" />
+            <Plug className="w-4 h-4 text-muted-foreground" />
             {form.id ? t("Verbindung bearbeiten") : t("Eigenes KI-Modell / API verbinden")}
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-2 space-y-3">
-          <div className="flex flex-wrap items-center gap-2 rounded-md bg-emerald-50/70 px-2.5 py-2 text-xs text-slate-700 dark:bg-emerald-950/20 dark:text-slate-200">
-            <Cpu className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
+          <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-2.5 py-2 text-xs text-slate-700 dark:text-slate-200">
+            <Cpu className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
             <span>{t("Lokal auf diesem Rechner:")}</span>
             <Button variant="outline" size="sm" className="h-7 px-2 text-xs" data-testid="ki-lokal-lmstudio" onClick={() => lokalWaehlen("lmstudio")}>LM Studio</Button>
             <Button variant="outline" size="sm" className="h-7 px-2 text-xs" data-testid="ki-lokal-ollama" onClick={() => lokalWaehlen("ollama")}>Ollama</Button>
@@ -297,12 +297,12 @@ export default function LlmConnections() {
           )}
 
           <label className="flex items-center gap-2 text-sm text-slate-700 pt-1 cursor-pointer">
-            <input type="checkbox" className="accent-emerald-600 w-4 h-4" checked={form.active} onChange={(e) => set({ active: e.target.checked })} />
+            <input type="checkbox" className="accent-primary w-4 h-4" checked={form.active} onChange={(e) => set({ active: e.target.checked })} />
             {t("Aktiv — dieses Modell für alle KI-Funktionen verwenden")}
           </label>
 
           <p className="text-[11px] text-slate-400 flex items-start gap-1.5 pt-1">
-            <ShieldCheck className="w-3.5 h-3.5 shrink-0 mt-px text-emerald-600" />
+            <ShieldCheck className="w-3.5 h-3.5 shrink-0 mt-px text-muted-foreground" />
             {t("Der Schlüssel wird lokal in Ihrer BIT-Atelier-Datenbank gespeichert und nie an Dritte übertragen.")}
           </p>
 
@@ -327,7 +327,7 @@ export default function LlmConnections() {
             <p className="text-[11px] text-slate-500" data-testid="ki-test-geduld">{t("Lokale Modelle brauchen beim ersten Aufruf oft Minuten, weil das Modell erst in den Speicher geladen wird.")}</p>
           )}
           {testResult && (
-            <div data-testid="ki-test-ergebnis" className={`rounded-lg border px-3 py-2 text-sm ${testResult.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`}>
+            <div data-testid="ki-test-ergebnis" className={`rounded-lg border px-3 py-2 text-sm ${testResult.ok ? "border-erfolg-rand bg-erfolg-flaeche text-erfolg" : "border-rose-200 bg-rose-50 text-rose-800"}`}>
               <div className="flex items-center gap-2 font-medium">
                 {testResult.ok ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                 {testResult.ok ? t("Verbindung erfolgreich") : t("Verbindung fehlgeschlagen")}
@@ -351,14 +351,14 @@ export default function LlmConnections() {
             <p className="text-sm text-slate-400">{t("Noch keine Verbindung — links ein eigenes Modell verbinden. Ohne aktive Verbindung nutzt BIT-Atelier das eingebaute Standardverhalten.")}</p>
           )}
           {connections.map((c) => (
-            <Card key={c.id} className={`border shadow-sm ${c.active ? "border-emerald-300 bg-emerald-50/40" : "border-slate-100"}`}>
+            <Card key={c.id} className={`border shadow-sm ${c.active ? "border-primary bg-muted" : "border-slate-100"}`}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-slate-800 text-sm">{c.name || c.model || providerLabel(c.provider)}</span>
                       <Badge variant="outline" className="text-[10px]">{providerLabel(c.provider)}</Badge>
-                      {c.active && <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px]">{t("Aktiv")}</Badge>}
+                      {c.active && <Badge className="bg-erfolg-flaeche text-erfolg border-0 text-[10px]">{t("Aktiv")}</Badge>}
                     </div>
                     <p className="text-xs text-slate-500 mt-1 truncate">
                       {c.model || t("(kein Modell)")} · {c.base_url || t("Standard-URL")}

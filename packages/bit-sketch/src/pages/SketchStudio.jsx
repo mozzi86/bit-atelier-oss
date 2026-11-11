@@ -311,7 +311,7 @@ export default function SketchStudio({ initialJson, onPersist }) {
   const statusFarbe =
     lastSolve == null || istLeer ? "bg-slate-100 text-slate-600"
     : lastSolve.conflicting.length || !lastSolve.applied ? "bg-rose-100 text-rose-700"
-    : lastSolve.dof === 0 ? "bg-emerald-100 text-emerald-700"
+    : lastSolve.dof === 0 ? "bg-erfolg-flaeche text-erfolg"
     : "bg-amber-100 text-amber-700";
 
   const werkzeuge = modus === "freihand"
@@ -426,7 +426,7 @@ export default function SketchStudio({ initialJson, onPersist }) {
           {modus === "freihand" && (
             <Card data-testid="stift-karte">
               <CardContent className="p-4 space-y-3">
-                <p className="text-xs uppercase tracking-wider text-slate-400">{t("Stift")}</p>
+                <p className="text-xs text-slate-400">{t("Stift")}</p>
                 <div className="grid grid-cols-3 gap-1.5" role="group" aria-label={t("Strichstärke")}>
                   {[["fein", t("fein")], ["mittel", t("mittel")], ["breit", t("breit")]].map(([k, l]) => (
                     <Button key={k} type="button" size="sm" variant={stift.breite === k ? "default" : "outline"} aria-pressed={stift.breite === k}
@@ -441,7 +441,7 @@ export default function SketchStudio({ initialJson, onPersist }) {
                   {STIFTFARBEN.map((f) => (
                     <button key={f} type="button" aria-label={`${t("Farbe")} ${f}`} aria-pressed={stift.farbe === f} data-testid={`stift-farbe-${f.slice(1)}`}
                       onClick={() => { setStift((s) => ({ ...s, farbe: f })); setTool("freihand"); }}
-                      className={`h-7 w-7 rounded-full border-2 ${stift.farbe === f ? "border-teal-500 ring-2 ring-teal-200" : "border-white shadow"}`}
+                      className={`h-7 w-7 rounded-full border-2 ${stift.farbe === f ? "border-primary ring-2 ring-ring" : "border-white shadow"}`}
                       style={{ background: f }} />
                   ))}
                 </div>
@@ -466,7 +466,7 @@ export default function SketchStudio({ initialJson, onPersist }) {
           )}
           <Card>
             <CardContent className="p-4">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-2">Constraint setzen</p>
+              <p className="text-xs text-slate-400 mb-2">Constraint setzen</p>
               <div className="grid grid-cols-2 gap-1.5">
                 {constraintButtons.map((b) => (
                   <Button key={b.label} variant="outline" size="sm" disabled={!b.aktiv} onClick={b.tu} className="justify-start gap-1.5 text-xs">
@@ -483,7 +483,7 @@ export default function SketchStudio({ initialJson, onPersist }) {
 
           <Card>
             <CardContent className="p-4">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-2">
+              <p className="text-xs text-slate-400 mb-2">
                 Constraints ({sketch.constraints.size})
                 {lastSolve?.redundant.length ? <span className="ml-2 text-amber-600 normal-case">redundant: {lastSolve.redundant.join(", ")}</span> : null}
               </p>
@@ -493,7 +493,7 @@ export default function SketchStudio({ initialJson, onPersist }) {
                     key={c.id}
                     className={`flex items-center justify-between text-xs rounded px-2 py-1 cursor-pointer ${
                       lastSolve?.conflicting.includes(c.id) ? "bg-rose-50 text-rose-700"
-                      : selection.has(c.id) ? "bg-teal-50 text-teal-800"
+                      : selection.has(c.id) ? "bg-muted text-foreground"
                       : "hover:bg-slate-50"
                     }`}
                     onClick={(e) => onSelect(c.id, e.shiftKey)}
@@ -530,7 +530,7 @@ export default function SketchStudio({ initialJson, onPersist }) {
 
           <Card>
             <CardContent className="p-4">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-2">Parameter</p>
+              <p className="text-xs text-slate-400 mb-2">Parameter</p>
               <ParameterPanel sketch={sketch} onChanged={() => resolve() ?? bump()} />
             </CardContent>
           </Card>
@@ -583,9 +583,9 @@ function MassDialog({ dialog, sketch, onSchliessen }) {
   };
 
   return (
-    <Card className="border-teal-300">
+    <Card className="border-border">
       <CardContent className="p-4 space-y-2">
-        <p className="text-xs uppercase tracking-wider text-teal-700">
+        <p className="text-xs text-foreground">
           {dialog.titel} setzen ({dialog.einheit})
         </p>
         <div className="flex items-center gap-2">

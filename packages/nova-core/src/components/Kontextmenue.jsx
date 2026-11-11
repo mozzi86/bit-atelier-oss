@@ -6,7 +6,7 @@
 // Out: <KontextmenueAnzeige menue={…} schliessen={…} /> renders the open menu (fixed position, portal-free).
 // 104-05: an entry with `an` (boolean) is a switch — role "menuitemcheckbox" with aria-checked and a tick; `gruppe`
 // puts a small heading above the entry (e.g. "Fang").
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
 
 /**
  * @typedef {{label: string, taste?: string, onClick: () => void, disabled?: boolean, gefahr?: boolean, trenner?: boolean, an?: boolean, gruppe?: string}} Eintrag
@@ -34,7 +34,9 @@ export function useKontextmenue() {
 export function KontextmenueAnzeige({ menue, schliessen, testid = "kontextmenue" }) {
   const ref = useRef(/** @type {HTMLDivElement|null} */ (null));
   const [pos, setPos] = useState({ x: 0, y: 0 });
-  useEffect(() => {
+  // Layout effect, not effect: the menu is measured and moved to the pointer before the browser paints. With a plain effect it
+  // stood at (0, 0) for a moment — over the top left of the window, where it caught the click that was meant to close it.
+  useLayoutEffect(() => {
     if (!menue) return undefined;
     const el = ref.current;
     const w = el?.offsetWidth || 220, h = el?.offsetHeight || 200;
@@ -66,7 +68,7 @@ export function KontextmenueAnzeige({ menue, schliessen, testid = "kontextmenue"
       {menue.eintraege.map((e, i) => (
         <React.Fragment key={`${e.label}-${i}`}>
           {e.trenner && i > 0 && <div className="my-1 h-px bg-border" role="separator" />}
-          {e.gruppe && <div role="presentation" className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{e.gruppe}</div>}
+          {e.gruppe && <div role="presentation" className="px-2 pb-0.5 pt-1 text-[10px] font-semibold text-muted-foreground">{e.gruppe}</div>}
           <button
             type="button"
             role={typeof e.an === "boolean" ? "menuitemcheckbox" : "menuitem"}

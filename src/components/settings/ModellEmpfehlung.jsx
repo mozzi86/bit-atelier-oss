@@ -155,10 +155,10 @@ export default function ModellEmpfehlung({ ollamaLaeuft, benchmark }) {
   /** One recommendation card. @param {any} v Vorschlag @param {boolean} top */
   const karte = (v, top) => (
     <div key={v.eintrag.tag} data-testid={top ? "ki-empfehlung-top" : "ki-empfehlung-alt"}
-      className={`rounded-lg border p-3 text-sm ${top ? "border-emerald-300 bg-emerald-50/60 dark:border-emerald-700 dark:bg-emerald-950/30" : "border-slate-200 dark:border-slate-700"}`}>
+      className={`rounded-lg border p-3 text-sm ${top ? "border-primary bg-muted" : "border-slate-200 dark:border-slate-700"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-semibold text-slate-800 dark:text-slate-100">
-          {top && <Sparkles className="mr-1 inline h-4 w-4 text-emerald-600" aria-hidden="true" />}
+          {top && <Sparkles className="mr-1 inline h-4 w-4 text-muted-foreground" aria-hidden="true" />}
           {v.eintrag.tag}
           <span className="ml-2 text-xs font-normal text-slate-500">
             ≈ {gb(v.eintrag.groesseInstalliertGb ?? v.eintrag.groesseQ4Gb)} GB{v.eintrag.groesseGeschaetzt && !v.eintrag.groesseInstalliertGb ? ` (${t("geschätzt")})` : ""}
@@ -207,11 +207,11 @@ export default function ModellEmpfehlung({ ollamaLaeuft, benchmark }) {
             {pullLaeuft && <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" onClick={ladenAbbrechen} data-testid="ki-pull-abbrechen"><Square className="h-3 w-3" />{t("Abbrechen")}</Button>}
           </div>
           <div className="mt-2 h-2 overflow-hidden rounded bg-slate-200 dark:bg-slate-700" role="progressbar" aria-valuenow={pull.prozent} aria-valuemin={0} aria-valuemax={100}>
-            <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pull.prozent}%` }} />
+            <div className="h-full bg-primary transition-all" style={{ width: `${pull.prozent}%` }} />
           </div>
           <p className="mt-1 text-slate-500">{pull.abgebrochen ? t("Abgebrochen — erneutes Laden setzt fort.") : pull.status}</p>
           {pull.fehler && <p className="mt-1 text-rose-700 dark:text-rose-300" data-testid="ki-pull-fehler">{pull.fehler}</p>}
-          {pull.fertig && <p className="mt-1 flex items-center gap-1 text-emerald-700 dark:text-emerald-300" data-testid="ki-pull-fertig"><CheckCircle2 className="h-3.5 w-3.5" />{t("Fertig geladen.")}</p>}
+          {pull.fertig && <p className="mt-1 flex items-center gap-1 text-erfolg" data-testid="ki-pull-fertig"><CheckCircle2 className="h-3.5 w-3.5" />{t("Fertig geladen.")}</p>}
         </div>
       )}
 
@@ -235,7 +235,7 @@ export default function ModellEmpfehlung({ ollamaLaeuft, benchmark }) {
         </div>
       )}
 
-      {meldung && <p className="text-xs text-emerald-700 dark:text-emerald-300">{meldung}</p>}
+      {meldung && <p className="text-xs text-erfolg">{meldung}</p>}
       {fehler && <p className="text-xs text-rose-700 dark:text-rose-300">{fehler}</p>}
 
       {katalog && (

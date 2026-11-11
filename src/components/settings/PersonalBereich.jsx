@@ -82,7 +82,7 @@ function VorlagenEditor({ titel, standard, anpassung, onAendern }) {
           return (
             <li key={p.schluessel} className="flex items-start gap-2 rounded-md border border-slate-200 p-2 text-sm dark:border-slate-700">
               <input id={inputId} type="checkbox" checked={aktiv} onChange={() => schalten(p.schluessel)}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600" />
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600" />
               <label htmlFor={inputId} className="min-w-0 flex-1">
                 <span className={aktiv ? "text-slate-800 dark:text-slate-100" : "text-slate-400 line-through dark:text-slate-500"}>{t(p.titel)}</span>
                 {p.rechtsgrund && <span className="block text-xs text-slate-400 dark:text-slate-500">{p.rechtsgrund}</span>}
@@ -93,7 +93,7 @@ function VorlagenEditor({ titel, standard, anpassung, onAendern }) {
       </ul>
 
       <div>
-        <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("Eigene Punkte")}</h4>
+        <h4 className="mb-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">{t("Eigene Punkte")}</h4>
         <ul className="space-y-1.5" data-testid="vorlagen-eigene-liste">
           {a.eigene.map((e, i) => (
             <li key={e.schluessel} className="flex flex-wrap items-center gap-1.5 rounded-md border border-slate-200 p-1.5 dark:border-slate-700">
@@ -104,7 +104,7 @@ function VorlagenEditor({ titel, standard, anpassung, onAendern }) {
                 onChange={(ev) => eigenenAendern(i, { faellig: { tage: Number(ev.target.value) || 0 } })} />
               <label className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300">
                 <input type="checkbox" checked={e.pflicht !== false} onChange={(ev) => eigenenAendern(i, { pflicht: ev.target.checked })}
-                  className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 dark:border-slate-600" />
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-primary dark:border-slate-600" />
                 {t("Pflicht")}
               </label>
               <div className="ml-auto flex items-center gap-1">
@@ -118,7 +118,7 @@ function VorlagenEditor({ titel, standard, anpassung, onAendern }) {
             </li>
           ))}
         </ul>
-        <button type="button" onClick={eigenenHinzufuegen} className="mt-1.5 text-xs text-emerald-700 hover:underline dark:text-emerald-400">
+        <button type="button" onClick={eigenenHinzufuegen} className="mt-1.5 text-xs text-link hover:underline">
           {t("+ Eigenen Punkt hinzufügen")}
         </button>
       </div>

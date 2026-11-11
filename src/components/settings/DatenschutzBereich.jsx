@@ -70,7 +70,7 @@ export default function DatenschutzBereich() {
   return (
     <section aria-labelledby="bereich-datenschutz" data-testid="bereich-privacy" className="space-y-5">
       <h2 id="bereich-datenschutz" className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
-        <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("Datenschutz & Browserdaten")}
+        <ShieldCheck className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> {t("Datenschutz & Browserdaten")}
       </h2>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
@@ -109,9 +109,9 @@ export default function DatenschutzBereich() {
       </div>
 
       <p className="text-xs text-slate-500 dark:text-slate-400">
-        <Link to="/datenschutz" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">{t("Datenschutzerklärung")}</Link>
+        <Link to="/datenschutz" className="font-medium text-link hover:underline">{t("Datenschutzerklärung")}</Link>
         {" · "}
-        <Link to="/cookies" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">{t("Cookies")}</Link>
+        <Link to="/cookies" className="font-medium text-link hover:underline">{t("Cookies")}</Link>
       </p>
     </section>
   );

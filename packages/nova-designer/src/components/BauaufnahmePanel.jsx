@@ -68,7 +68,7 @@ export default function BauaufnahmePanel() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle className="flex items-center gap-2 text-base"><ScanLine className="h-4 w-4 text-violet-600" /> {t("Lieferungen der Bauaufnahme")}</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base"><ScanLine className="h-4 w-4 text-muted-foreground" /> {t("Lieferungen der Bauaufnahme")}</CardTitle>
             <Button size="sm" variant="outline" data-testid="ba-neu" onClick={() => setRoh(lieferungHinzu(layer))}><Plus className="mr-1 h-4 w-4" />{t("Lieferung")}</Button>
           </div>
           <p className="text-xs text-slate-500">{t("Was geliefert wurde und wie genau — die Punktwolke selbst bleibt beim Dienstleister bzw. im Harness, der Browser zeigt sie nicht.")}</p>

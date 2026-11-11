@@ -51,7 +51,7 @@ export default function ClimaAnalysis({ complexData }) {
             <WifiOff className="w-3 h-3" /> Offline — synthetische Klimakurve
           </Badge>
         ) : (
-          <Badge variant="outline" className="text-emerald-600 border-emerald-300">
+          <Badge variant="outline" className="text-erfolg border-erfolg-rand">
             Open-Meteo Klimadaten {loc?.address ? `· ${loc.address}` : ""}
           </Badge>
         )}
@@ -59,8 +59,8 @@ export default function ClimaAnalysis({ complexData }) {
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Klimazone" value={<Badge className="bg-blue-100 text-blue-800">{zone}</Badge>} />
-        <Stat label="Ø Temperatur" value={`${avgTemp} °C`} accent="text-amber-600" />
-        <Stat label="Niederschlag/Jahr" value={`${annualPrecip} mm`} accent="text-blue-600" />
+        <Stat label="Ø Temperatur" value={`${avgTemp} °C`} accent="text-foreground" />
+        <Stat label="Niederschlag/Jahr" value={`${annualPrecip} mm`} accent="text-foreground" />
         <Stat label="Heizgradtage" value={hdd.toLocaleString("de-DE")} />
       </div>
 

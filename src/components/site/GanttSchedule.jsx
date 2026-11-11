@@ -13,7 +13,7 @@ const DAY = 24 * 3600 * 1000;
 
 const phaseBar = {
   active: "bg-blue-500",
-  done: "bg-emerald-500",
+  done: "bg-erfolg",
   upcoming: "bg-slate-400",
 };
 function barColor(timing) {
@@ -153,7 +153,7 @@ export default function GanttSchedule({ tasks = [], onAddTask, onEditTask = null
                       <Badge className="bg-amber-100 text-amber-800 text-[10px]">{timing.due.label} ⏰</Badge>
                     )}
                     {timing.phase === "active" && <Badge className="bg-blue-100 text-blue-800 text-[10px]">läuft</Badge>}
-                    {timing.phase === "done" && <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">fertig</Badge>}
+                    {timing.phase === "done" && <Badge className="bg-erfolg-flaeche text-erfolg text-[10px]">fertig</Badge>}
                     {(kettenBefunde.get(String(task.id)) || []).some((h) => h.stufe === "warn") && (
                       <Badge className="bg-amber-100 text-amber-800 text-[10px] ml-1" title={(kettenBefunde.get(String(task.id)) || []).map((h) => h.text).join(" · ")}>⚠</Badge>
                     )}

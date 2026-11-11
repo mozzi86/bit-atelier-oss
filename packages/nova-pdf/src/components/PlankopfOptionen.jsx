@@ -40,7 +40,7 @@ export function plankopfZeilenFuer(project, briefkopf, wert) {
   return plankopfZeilen({ projekt: project, buero: wert.neutral ? null : briefkopf, eingaben: wert.eingaben, neutral: wert.neutral });
 }
 
-const EINGABE = "h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500";
+const EINGABE = "h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /**
  * @param {{project: any, wert: PlankopfWert, onChange: (w: PlankopfWert) => void}} props

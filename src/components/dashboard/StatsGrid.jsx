@@ -15,7 +15,7 @@ const StatCard = ({ title, value, subtitle, icon: Icon, gradient, delay = 0 }) =
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">
+            <p className="text-sm font-medium text-slate-500">
               {title}
             </p>
             <div className="space-y-1">
@@ -64,7 +64,7 @@ export default function StatsGrid({ stats, isLoading }) {
         value={stats.total}
         subtitle={`${stats.active} active`}
         icon={Building2}
-        gradient="bg-emerald-500"
+        gradient="bg-slate-500"
         delay={0.1}
       />
       
@@ -73,7 +73,7 @@ export default function StatsGrid({ stats, isLoading }) {
         value={`${Math.round(stats.avgSustainability)}%`}
         subtitle="Climate optimized"
         icon={Leaf}
-        gradient="bg-green-500"
+        gradient="bg-slate-500"
         delay={0.2}
       />
       
@@ -82,7 +82,7 @@ export default function StatsGrid({ stats, isLoading }) {
         value={`${(stats.totalArea / 1000).toFixed(1)}k`}
         subtitle="m² under design"
         icon={Target}
-        gradient="bg-blue-500"
+        gradient="bg-slate-500"
         delay={0.3}
       />
       
@@ -91,7 +91,7 @@ export default function StatsGrid({ stats, isLoading }) {
         value="87%"
         subtitle="vs conventional"
         icon={TrendingUp}
-        gradient="bg-purple-500"
+        gradient="bg-slate-500"
         delay={0.4}
       />
     </div>

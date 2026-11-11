@@ -25,7 +25,7 @@ export default function ApprovalDialog({ approval, onReply }) {
         <pre className="mt-2 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs p-3 whitespace-pre-wrap break-all" data-testid="approval-befehl">{approval.befehl}</pre>
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="outline" onClick={() => onReply(approval.id, false)} data-testid="approval-nein">{t('Nein')}</Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => onReply(approval.id, true)} data-testid="approval-ja">
+          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => onReply(approval.id, true)} data-testid="approval-ja">
             {t('Ja, ausführen')}
           </Button>
         </div>

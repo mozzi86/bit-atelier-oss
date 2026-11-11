@@ -14,7 +14,7 @@ import { useI18n } from "@core/lib/i18n";
 import { snapshotElemente } from "@core/lib/snapshotElemente";
 import { bestandsToepfe } from "@ava/lib/bestandsMengen";
 
-const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";
+const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900";
 
 /**
  * @param {{projekt: Record<string, any>|null|undefined, onChange: (patch: Record<string, any>) => void, idPraefix: string}} props

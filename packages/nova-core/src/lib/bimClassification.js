@@ -29,6 +29,7 @@ import { treppeBerechnen, mitTreppenLoechern } from "./bauteil/treppe.js"; // 10
 import { gaubeBerechnen } from "./bauteil/gauben.js"; // 108-13: dormer quantities
 import { globalesDach } from "./bauteil/dachGeometrie.js";
 import { huellProfile, giebelZuschlag_m2 } from "./bauteil/giebel.js"; // 108-03: gable area above the knee wall
+import { deckenUmriss } from "./bauteil/deckenRand.js"; // 108-03 follow-up: slab outline inset by the envelope insulation
 import { attributeVon, istAbgeleitet } from "./bauteil/attribute.js";
 import { wandHoehe, stuetzenHoehe, geschosshoehe, gesamtHoehe, geschosseAus, oberkanteFolgtGeschoss, raumHoehe, elevationOf } from "./bauteil/hoehen.js";
 import { untergeschosseAnzahl } from "./bauteil/ebenen.js";
@@ -354,10 +355,12 @@ export function synthHull(bimModel) {
   const nW = n + U; // storeys with a hull wall and a slab above (basements included)
   const area = num(polygonArea(fp));
   const per = num(polygonPerimeter(fp));
+  // 108-03 follow-up: the hull slabs end at the insulation of the envelope (deckenRand.js, same polygon as createBuildingModel); the base slab keeps the footprint
+  const deckenFlaeche = num(polygonArea(deckenUmriss(fp, aufbauById(m.envComposite)).polygon));
   // 108-02 (D-EFH-01): with a knee wall (pitched global roof + `kniestock_m` on the top storey row) the hull walls of the top storey are
   // only as high as the knee wall (plus the slab offset, buildingModel.kniestockGeometrie — the same numbers as the 3D model and the IFC),
   // and the slab above the top storey is the collar-beam floor clipped to the roof (or dropped above the ridge). null = the old figures.
-  const knie = kniestockGeometrie({ footprintM: fp, storeys: n, storeyHeight: sh, geschosse: m.geschosse, deckenDicke: m.huelle_decke_dicke_m, deckenBezug: m.huelle_decke_bezug, dachform: m.dachform, dachneigung: m.dachneigung });
+  const knie = kniestockGeometrie({ footprintM: fp, storeys: n, storeyHeight: sh, geschosse: m.geschosse, deckenDicke: m.huelle_decke_dicke_m, deckenBezug: m.huelle_decke_bezug, dachform: m.dachform, dachneigung: m.dachneigung, wallComposite: m.envComposite });
   const wandH = knie ? (hSumme != null ? hSumme : sh * n) - geschosshoehe(n - 1, gq) + knie.wandHoehe_m : null;
   // 108-03: the gable walls reach the roof — their area above the knee wall is added (same model and roof as 3D and IFC); 0 without a pitched roof
   const giebelPlus = knie ? (() => {
@@ -369,7 +372,7 @@ export function synthHull(bimModel) {
   const treppenLoecher = Array.isArray(m.customStairs) && m.customStairs.length
     ? mitTreppenLoechern(createBuildingModel({ footprintM: fp, storeys: n, storeyHeight: sh, geschosse: m.geschosse, deckenDicke: m.huelle_decke_dicke_m, deckenBezug: m.huelle_decke_bezug, untergeschosse: U, dachform: m.dachform, dachneigung: m.dachneigung }), m.customStairs, gq).loecher.reduce((s, l) => s + l.flaeche_m2, 0)
     : 0;
-  const deckenArea = knie ? area * (nW - 1) + kehlArea - treppenLoecher : treppenLoecher > 0 ? area * nW - treppenLoecher : null;
+  const deckenArea = knie ? deckenFlaeche * (nW - 1) + kehlArea - treppenLoecher : treppenLoecher > 0 || deckenFlaeche !== area ? deckenFlaeche * nW - treppenLoecher : null;
   const deckenZahl = knie ? nW - (knie.kehlbalken ? 0 : 1) : nW;
 
   const el = (id, kind, kg, gewerk, schicht, mengen) => ({

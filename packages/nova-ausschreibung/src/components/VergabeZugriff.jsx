@@ -199,7 +199,7 @@ function VergabeZugriffInhalt({ tender, contacts, rolle, onGeaendert }) {
       )}
 
       {meldung.text && (
-        <p role={meldung.art === "fehler" ? "alert" : "status"} className={meldung.art === "fehler" ? "text-rose-700" : "text-emerald-700"}>{meldung.text}</p>
+        <p role={meldung.art === "fehler" ? "alert" : "status"} className={meldung.art === "fehler" ? "text-rose-700" : "text-erfolg"}>{meldung.text}</p>
       )}
     </div>
   );

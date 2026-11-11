@@ -114,7 +114,7 @@ export default function FleetStatus({ units = [], tasks = [] }) {
                   {a.behind ? (
                     <Badge className="bg-red-100 text-red-800">hinter Plan</Badge>
                   ) : (
-                    <Badge className="bg-emerald-100 text-emerald-800">im Plan</Badge>
+                    <Badge className="bg-erfolg-flaeche text-erfolg">im Plan</Badge>
                   )}
                 </div>
                 <div className="relative">

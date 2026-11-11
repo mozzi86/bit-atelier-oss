@@ -57,25 +57,70 @@ export function huellProfile(model, dach) {
   if (!dach || !dach.ok || dach.form === "flach" || !Array.isArray(model?.walls)) return out;
   const oben = Math.max(-Infinity, ...model.walls.filter((w) => !w.unterirdisch && Number(w.level) >= 0).map((w) => Number(w.level)));
   if (!Number.isFinite(oben)) return out;
-  const first = dach.traufhoehe_m + dach.anstieg_m;
   for (const w of model.walls) {
     if (w.unterirdisch || Math.round(Number(w.level)) !== oben) continue;
-    const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z);
-    if (len < 0.05) continue;
-    const dx = (w.b.x - w.a.x) / len, dz = (w.b.z - w.a.z) / len;
-    const th = Number(w.thickness) || 0.3;
-    const { versatz_m } = wandGeometrie({ a: w.a, b: w.b, refLine: w.refLine }, { dicke_m: th });
-    // the wall thought of as high as the ridge; the roof clips it (same frame as ifcExport / seo.js wandUnterDach)
-    const H = Math.max(Number(w.height) || 0, first - Number(w.elevation || 0));
-    const rahmen = { ursprung: { x: w.a.x - dz * versatz_m, y: Number(w.elevation) || 0, z: w.a.z + dx * versatz_m }, drehung_y: -Math.atan2(dz, dx) };
-    const prof = wandProfilUnterDach({ laenge_m: len, hoehe_m: H, dicke_m: th }, dachImRahmen(dach, rahmen));
-    if (!prof || prof.punkte.length < 3) continue;
-    const obenPts = prof.punkte.slice(2).slice().reverse(); // punkte = [bottom-left, bottom-right, top edge from x = L back to 0]
-    const hoeheMax = Math.max(...obenPts.map((p) => p.y));
-    if (hoeheMax <= (Number(w.height) || 0) + GIEBEL_MIN_ANSTIEG_M) continue; // eaves wall: stays as stored
-    out.set(huellSchluessel(w), { punkte: prof.punkte, oben: obenPts.sort((p, q) => p.x - q.x), hoehe_max_m: hoeheMax, flaeche_m2: prof.flaeche_m2, laenge_m: len, quer_geneigt: prof.quer_geneigt });
+    const prof = wandProfilAmDach({ a: w.a, b: w.b, dicke_m: Number(w.thickness) || 0.3, hoehe_m: Number(w.height) || 0, elevation_m: Number(w.elevation) || 0, refLine: w.refLine }, dach, { bisFirst: true });
+    if (prof) out.set(huellSchluessel(w), prof);
   }
   return out;
+}
+
+/**
+ * Profile of ONE wall (hull or drawn) under the global roof, in the frame of the wall body (origin at the body start a + n·versatz, x along
+ * a→b, y up from the wall bottom) — the core of huellProfile, also used for drawn walls of the top storey (user finding 08.11.2026: an
+ * interior wall of the attic pierced the roof; before, drawn walls were cut only with the switch "Wände verschneiden").
+ *  - `bisFirst` (hull walls): the wall is first thought of as high as the ridge and the roof clips it; the result exists only where the
+ *    profile rises above the stored height (a gable), an eaves wall returns null.
+ *  - without `bisFirst` (drawn walls): the stored height stays the ceiling and the roof cuts whatever stands above it; the result exists
+ *    only where the roof really cuts (lowest profile point below the stored height by more than GIEBEL_MIN_ANSTIEG_M), else null.
+ * @param {{a: {x: number, z: number}, b: {x: number, z: number}, dicke_m: number, hoehe_m: number, elevation_m: number, refLine?: string}} w
+ * @param {import("./dachGeometrie.js").DachErgebnis|import("./dachGeometrie.js").DachFehler|null|undefined} dach
+ * @param {{bisFirst?: boolean}} [opt]
+ * @returns {HuellProfil|null}
+ */
+export function wandProfilAmDach(w, dach, opt = {}) {
+  if (!dach || !dach.ok || dach.form === "flach" || !w?.a || !w?.b) return null;
+  const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z);
+  if (len < 0.05) return null;
+  const dx = (w.b.x - w.a.x) / len, dz = (w.b.z - w.a.z) / len;
+  const th = Number(w.dicke_m) || 0.3;
+  const { versatz_m } = wandGeometrie({ a: w.a, b: w.b, refLine: w.refLine }, { dicke_m: th });
+  const first = dach.traufhoehe_m + dach.anstieg_m;
+  const gespeichert = Number(w.hoehe_m) || 0;
+  const H = opt.bisFirst ? Math.max(gespeichert, first - (Number(w.elevation_m) || 0)) : gespeichert;
+  if (!(H > 0)) return null;
+  const rahmen = { ursprung: { x: w.a.x - dz * versatz_m, y: Number(w.elevation_m) || 0, z: w.a.z + dx * versatz_m }, drehung_y: -Math.atan2(dz, dx) };
+  const prof = wandProfilUnterDach({ laenge_m: len, hoehe_m: H, dicke_m: th }, dachImRahmen(dach, rahmen));
+  if (!prof || prof.punkte.length < 3) return null;
+  const obenPts = prof.punkte.slice(2).slice().reverse(); // punkte = [bottom-left, bottom-right, top edge from x = L back to 0]
+  const hoeheMax = Math.max(...obenPts.map((p) => p.y));
+  const hoeheMin = Math.min(...obenPts.map((p) => p.y));
+  if (opt.bisFirst ? hoeheMax <= gespeichert + GIEBEL_MIN_ANSTIEG_M : hoeheMin >= gespeichert - GIEBEL_MIN_ANSTIEG_M) return null;
+  return { punkte: prof.punkte, oben: obenPts.sort((p, q) => p.x - q.x), hoehe_max_m: hoeheMax, flaeche_m2: prof.flaeche_m2, laenge_m: len, quer_geneigt: prof.quer_geneigt };
+}
+
+/**
+ * Drawn walls (`customWalls`) of the top storey with their roof profile attached (`profil`), for 3D and IFC; walls the roof does not cut
+ * and every other storey come back unchanged. Needs the storey functions of the caller (height, lower edge, thickness) to stay free of
+ * hoehen.js specifics here.
+ * @param {any[]} customWalls
+ * @param {import("./dachGeometrie.js").DachErgebnis|import("./dachGeometrie.js").DachFehler|null|undefined} dach
+ * @param {number} obenLevel level of the top storey above ground
+ * @param {(w: any) => {hoehe_m: number, elevation_m: number, dicke_m: number}} masse
+ * @returns {any[]} same array when nothing changed
+ */
+export function mitWandProfilen(customWalls, dach, obenLevel, masse) {
+  if (!dach || !dach.ok || dach.form === "flach" || !Array.isArray(customWalls) || !customWalls.length) return customWalls;
+  let geaendert = false;
+  const out = customWalls.map((w) => {
+    if (!w?.a || !w?.b || Math.round(Number(w.level) || 0) !== obenLevel) return w;
+    const m = masse(w);
+    const prof = wandProfilAmDach({ a: w.a, b: w.b, dicke_m: m.dicke_m, hoehe_m: m.hoehe_m, elevation_m: m.elevation_m, refLine: w.refLine }, dach);
+    if (!prof) return w;
+    geaendert = true;
+    return { ...w, profil: prof, hoehe_profil_m: prof.hoehe_max_m };
+  });
+  return geaendert ? out : customWalls;
 }
 
 /**

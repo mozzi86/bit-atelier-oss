@@ -244,12 +244,12 @@ export const TENDER_STATUS = {
   // "Submission" implied a sealed tender opening; the key stays `closed` so no
   // stored value moves, only the wording (57-06 Task 5b).
   closed: { label: "Angebotsfrist beendet", color: "bg-amber-100 text-amber-800" },
-  awarded: { label: "Vergeben", color: "bg-emerald-100 text-emerald-800" },
+  awarded: { label: "Vergeben", color: "bg-erfolg-flaeche text-erfolg" },
 };
 
 export const BID_STATUS = {
   submitted: { label: "Eingegangen", color: "bg-blue-100 text-blue-800" },
-  awarded: { label: "Zuschlag", color: "bg-emerald-100 text-emerald-800" },
+  awarded: { label: "Zuschlag", color: "bg-erfolg-flaeche text-erfolg" },
   rejected: { label: "Abgelehnt", color: "bg-rose-100 text-rose-800" },
 };
 

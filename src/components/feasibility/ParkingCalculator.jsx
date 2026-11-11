@@ -28,7 +28,7 @@ export default function ParkingCalculator({ data, unitData, zoningData, onChange
   return (
     <div className="space-y-4">
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: BGF {Math.round(pm.bgf).toLocaleString("de-DE")} m² · {pm.storeys} Geschosse · Höhe {Math.round(pm.height).toLocaleString("de-DE")} m
         </div>
       )}
@@ -61,12 +61,12 @@ export default function ParkingCalculator({ data, unitData, zoningData, onChange
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-3">
           <Stat label="Erforderlich" value={required} />
-          <Stat label="Bereitgestellt" value={provided} accent={compliant ? "text-emerald-600" : "text-red-600"} />
+          <Stat label="Bereitgestellt" value={provided} accent={compliant ? "text-erfolg" : "text-red-600"} />
           <Stat label="E-Quote" value={provided ? `${Math.round(((data.ev_stations || 0) / provided) * 100)} %` : "—"} />
           <Stat
             label="Konformität"
             value={
-              <Badge className={compliant ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}>
+              <Badge className={compliant ? "bg-erfolg-flaeche text-erfolg" : "bg-red-100 text-red-800"}>
                 {compliant ? `OK (+${provided - required})` : `${required - provided} fehlen`}
               </Badge>
             }

@@ -47,7 +47,7 @@ export default function SchreibenListe({ schreiben, projektNamen, aktivesProjekt
                 <tr key={s.id} data-testid="schreiben-zeile" data-schreiben={s.id}>
                   <td className="px-2 py-1">{t(/** @type {any} */ (SCHREIBEN_STATUS)[s.status]?.label || s.status)}</td>
                   <td className="px-2 py-1">
-                    <button type="button" className="text-left text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300" onClick={() => onOeffnen(s)}>{s.betreff || t("(ohne Betreff)")}</button>
+                    <button type="button" className="text-left text-link underline-offset-2 hover:underline" onClick={() => onOeffnen(s)}>{s.betreff || t("(ohne Betreff)")}</button>
                   </td>
                   <td className="px-2 py-1">{s.variante === "verteiler" ? t("Verteiler") : [s.empfaenger?.firma, s.empfaenger?.name].filter(Boolean).join(" · ") || "—"}</td>
                   <td className="px-2 py-1 tabular-nums">{s.datum || String(s.festgeschrieben_am || "").slice(0, 10) || "—"}</td>

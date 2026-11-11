@@ -45,7 +45,7 @@ export default function MitarbeiterWahl({ zh, zz }) {
         {zh.personal.fehler && <span className="ml-1 text-red-700 dark:text-red-300">{zh.personal.fehler}</span>}
       </p>
       {zugang === "erlaubt" && !eigene && (
-        <Link to="/People?tab=staff" className="text-xs underline text-emerald-800 dark:text-emerald-300 sm:ml-auto">{t("Mitarbeitende pflegen")}</Link>
+        <Link to="/People?tab=staff" className="text-xs underline text-link sm:ml-auto">{t("Mitarbeitende pflegen")}</Link>
       )}
     </div>
   );

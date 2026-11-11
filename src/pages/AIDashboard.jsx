@@ -29,19 +29,19 @@ import ProjectAudit from "../components/ai/ProjectAudit";
 
 // Capability tiles (descriptive — no fake numeric stats).
 const AI_AGENTS = [
-  { id: "architect_advisor", name: "Architektur-Berater", specialty: "Entwurf & Normen", description: "Prüft Entwürfe, Baurecht (GEG/DIN) und schlägt Verbesserungen vor.", icon: Building, color: "text-blue-600", bg: "bg-blue-100" },
-  { id: "cost_analyzer", name: "Kosten-Analyst", specialty: "Kostenmanagement", description: "Analysiert Projektkosten, findet Einsparungen und optimiert das Budget.", icon: Euro, color: "text-emerald-600", bg: "bg-emerald-100" },
-  { id: "energy_consultant", name: "Energie-Berater", specialty: "Energie & Nachhaltigkeit", description: "Energieeffizienz-Analyse und GEG-/Nachhaltigkeits-Empfehlungen.", icon: Zap, color: "text-amber-600", bg: "bg-amber-100" },
-  { id: "bim_validator", name: "BIM-Prüfer", specialty: "BIM-Qualität", description: "Validiert BIM-Modelle, erkennt Kollisionen und sichert Datenqualität.", icon: Eye, color: "text-violet-600", bg: "bg-violet-100" },
-  { id: "risk_assessor", name: "Risiko-Analyst", specialty: "Risikomanagement", description: "Identifiziert Projektrisiken und schlägt Gegenmaßnahmen vor.", icon: AlertTriangle, color: "text-rose-600", bg: "bg-rose-100" },
-  { id: "workflow_optimizer", name: "Prozess-Optimierer", specialty: "Automatisierung", description: "Automatisiert Abläufe und steigert die Team-Produktivität.", icon: Workflow, color: "text-teal-600", bg: "bg-teal-100" },
+  { id: "architect_advisor", name: "Architektur-Berater", specialty: "Entwurf & Normen", description: "Prüft Entwürfe, Baurecht (GEG/DIN) und schlägt Verbesserungen vor.", icon: Building, color: "text-foreground", bg: "bg-muted" },
+  { id: "cost_analyzer", name: "Kosten-Analyst", specialty: "Kostenmanagement", description: "Analysiert Projektkosten, findet Einsparungen und optimiert das Budget.", icon: Euro, color: "text-foreground", bg: "bg-muted" },
+  { id: "energy_consultant", name: "Energie-Berater", specialty: "Energie & Nachhaltigkeit", description: "Energieeffizienz-Analyse und GEG-/Nachhaltigkeits-Empfehlungen.", icon: Zap, color: "text-foreground", bg: "bg-muted" },
+  { id: "bim_validator", name: "BIM-Prüfer", specialty: "BIM-Qualität", description: "Validiert BIM-Modelle, erkennt Kollisionen und sichert Datenqualität.", icon: Eye, color: "text-foreground", bg: "bg-muted" },
+  { id: "risk_assessor", name: "Risiko-Analyst", specialty: "Risikomanagement", description: "Identifiziert Projektrisiken und schlägt Gegenmaßnahmen vor.", icon: AlertTriangle, color: "text-foreground", bg: "bg-muted" },
+  { id: "workflow_optimizer", name: "Prozess-Optimierer", specialty: "Automatisierung", description: "Automatisiert Abläufe und steigert die Team-Produktivität.", icon: Workflow, color: "text-foreground", bg: "bg-muted" },
 ];
 
 const PRIO = {
-  critical: "text-rose-600 bg-rose-100",
-  high: "text-orange-600 bg-orange-100",
-  medium: "text-amber-600 bg-amber-100",
-  low: "text-slate-600 bg-slate-100",
+  critical: "text-fehler bg-fehler-flaeche",
+  high: "text-warnung bg-warnung-flaeche",
+  medium: "text-hinweis bg-hinweis-flaeche",
+  low: "text-muted-foreground bg-muted",
 };
 
 // Tab keys that ?tab may name — the `v` values of TABS below.
@@ -192,23 +192,23 @@ export default function AIDashboard() {
   ];
 
   const MET = [
-    { icon: Building, label: "Projekte", value: metrics.projects, color: "text-blue-600", tint: "bg-blue-100" },
-    { icon: AlertTriangle, label: "Offene BIM-Tickets", value: metrics.openIssues, color: "text-rose-600", tint: "bg-rose-100" },
-    { icon: Bot, label: "KI-Module aktiv", value: metrics.modules, color: "text-emerald-600", tint: "bg-emerald-100" },
-    { icon: Gauge, label: "Ø Planungsfortschritt", value: `${metrics.avgProgress}%`, color: "text-teal-600", tint: "bg-teal-100" },
+    { icon: Building, label: "Projekte", value: metrics.projects, color: "text-foreground", tint: "bg-muted" },
+    { icon: AlertTriangle, label: "Offene BIM-Tickets", value: metrics.openIssues, color: "text-foreground", tint: "bg-muted" },
+    { icon: Bot, label: "KI-Module aktiv", value: metrics.modules, color: "text-foreground", tint: "bg-muted" },
+    { icon: Gauge, label: "Ø Planungsfortschritt", value: `${metrics.avgProgress}%`, color: "text-foreground", tint: "bg-muted" },
   ];
 
   return (
     <div className={seitenWurzel}>
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-2xl shadow-lg"><Brain className="w-7 h-7 text-white" /></div>
+        {/* Header — no opacity entrance: the preview froze the header at framer-motion's initial opacity 0. */}
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-primary rounded-2xl shadow-sm"><Brain className="w-7 h-7 text-primary-foreground" /></div>
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">KI-Zentrale</h1>
+            <h1 className="text-3xl font-bold text-foreground">KI-Zentrale</h1>
             <p className="text-slate-600 mt-1">Projekte ganzheitlich bewerten, Daten analysieren und Abläufe automatisieren</p>
           </div>
-        </motion.div>
+        </div>
 
         {/* Real metrics — only once they are loaded; a failed load says so. */}
         {laedt && (
@@ -218,7 +218,7 @@ export default function AIDashboard() {
           </div>
         )}
         {ladeFehler && (
-          <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 flex flex-wrap items-center justify-between gap-3">
+          <div role="alert" className="rounded-xl border border-fehler-rand bg-fehler-flaeche px-4 py-3 text-sm text-fehler flex flex-wrap items-center justify-between gap-3">
             <p className="min-w-0 break-words">
               <span className="font-semibold">{t("Die Kennzahlen konnten nicht geladen werden.")}</span>{" "}
               {t("Meldung:")} {ladeFehler}
@@ -226,7 +226,7 @@ export default function AIDashboard() {
             <button
               type="button"
               onClick={ladeKennzahlen}
-              className="shrink-0 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-sm font-medium text-rose-800 hover:bg-rose-100 transition-colors"
+              className="shrink-0 rounded-lg border border-fehler-rand bg-background px-3 py-1.5 text-sm font-medium text-fehler hover:bg-fehler-flaeche transition-colors"
             >
               {t("Erneut versuchen")}
             </button>
@@ -281,7 +281,7 @@ export default function AIDashboard() {
                   <Card className="border border-slate-100 shadow-sm">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
-                        <BarChart3 className="w-4 h-4 text-emerald-600" /> Projektvergleich
+                        <BarChart3 className="w-4 h-4 text-muted-foreground" /> Projektvergleich
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-0">
@@ -310,10 +310,10 @@ export default function AIDashboard() {
                                 const area = projectArea(p);
                                 const isCurrent = p.id === projectId;
                                 return (
-                                  <tr key={p.id} className={`border-b border-slate-100 last:border-0 ${isCurrent ? "bg-emerald-50" : ""}`}>
+                                  <tr key={p.id} className={`border-b border-slate-100 last:border-0 ${isCurrent ? "bg-muted" : ""}`}>
                                     <td className="py-2 pr-3 font-medium text-slate-800">
                                       {p.name}
-                                      {isCurrent && <Badge variant="outline" className="ml-2 text-[10px] border-emerald-300 text-emerald-700">Aktuell</Badge>}
+                                      {isCurrent && <Badge variant="outline" className="ml-2 text-[10px] border-primary text-foreground">Aktuell</Badge>}
                                     </td>
                                     <td className="py-2 pr-3"><Badge className={`${si.color} border-0 font-normal`}>{si.label}</Badge></td>
                                     <td className="py-2 pr-3 text-slate-600">{hoaiPhaseShort(p)} · {hoaiProgress(p)}%</td>
@@ -334,7 +334,7 @@ export default function AIDashboard() {
                   <Card className="border border-slate-100 shadow-sm">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
-                        <Lightbulb className="w-4 h-4 text-amber-500" /> Empfohlene Maßnahmen
+                        <Lightbulb className="w-4 h-4 text-muted-foreground" /> Empfohlene Maßnahmen
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-0 space-y-2">
@@ -368,7 +368,7 @@ export default function AIDashboard() {
                               {creatingTask === m.id ? (
                                 <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                               ) : done ? (
-                                <Check className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+                                <Check className="w-3.5 h-3.5 mr-1.5 text-erfolg" />
                               ) : null}
                               {done ? "Übernommen" : "Als Aufgabe übernehmen"}
                             </Button>
@@ -400,7 +400,7 @@ export default function AIDashboard() {
                         <motion.div key={a.id} whileHover={{ scale: 1.02 }}>
                           {/* 72-03: the card opens the agent dialog — reachable and operable by keyboard. */}
                           <Card role="button" tabIndex={0} aria-haspopup="dialog" data-testid={`agent-karte-${a.id}`}
-                            className="border-0 shadow-md hover:shadow-lg transition-all cursor-pointer h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                            className="border-0 shadow-md hover:shadow-lg transition-all cursor-pointer h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             onClick={(e) => { agentAusloeser.current = e.currentTarget; setSelectedAgent(a); }}
                             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); agentAusloeser.current = e.currentTarget; setSelectedAgent(a); } }}>
                             <CardContent className="p-4">
@@ -455,7 +455,7 @@ export default function AIDashboard() {
                 <div className="rounded-xl border-0 bg-white p-6 shadow-sm flex flex-col items-start gap-3">
                   <p className="text-sm text-slate-600">{t("KI-Verbindungen verwalten Sie jetzt in den Einstellungen.")}</p>
                   <Link to="/Settings?tab=ai"
-                    className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50">
+                    className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
                     <Plug className="w-4 h-4" aria-hidden="true" /> {t("Zu den KI-Verbindungen")}
                   </Link>
                 </div>

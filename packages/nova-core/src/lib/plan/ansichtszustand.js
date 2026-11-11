@@ -12,13 +12,14 @@
 // geometry keys (meshes, triangles, cut loops, polygons) — plan, section, PDF and DXF derive their geometry again on every export
 // (solid of the CSG core with fallback to the bands, 107-09/10). This module never reads or writes the csg_cache_layer.
 //
-// Graphic rules (D-BK-23): only the data form and the evaluation with two standard rules — no rule editor (phase 55 builds it on
-// this form). In renovation lenses the status wins against a rule (97-KONZEPT).
+// Graphic rules (D-BK-23 / Phase 55): data form, evaluation (elementDarstellung 2D, dreiDElementDarstellung 3D) and project
+// presets (`regel_vorlagen` on ansicht_layer). The RegelEditor (designer) writes this form — no second override core.
+// In renovation lenses the status wins against a rule (97-KONZEPT); the "Grafische Regeln" switch feeds the same list to plan and 3D.
 //
 // In:  raw view objects / layer blobs, lens, element values, layer bands. Out: normalised views and layer, structure filter,
-//      options, rule look (elementDarstellung), export helpers (time limit, fallback note). Pure, no I/O, node-testable.
+//      options, rule look (elementDarstellung / dreiDElementDarstellung), presets, export helpers. Pure, no I/O, node-testable.
 
-import { BRILLEN, STANDARD_BRILLE, planDarstellung, dunkler } from "./brillen.js";
+import { BRILLEN, STANDARD_BRILLE, planDarstellung, dreiDDarstellung, dunkler } from "./brillen.js";
 import { DETAILGRAD_STUFEN } from "./massstab.js";
 import { BAUTEIL_TYPEN, typFuerWand } from "../bauteil/steckbrief.js";
 import { aufbauById, aufbauVon } from "../bauteil/aufbauten.js";
@@ -57,8 +58,10 @@ export const DUNKLER_ANTEIL = 0.35;
 
 /**
  * @typedef {{feld: string, operator: string, wert?: string|number|boolean|null}} RegelWenn
- * @typedef {{fuellung?: string, kontur?: string, strich?: string, strichbreite_mm?: number}} RegelDann
+ * @typedef {{fuellung?: string, kontur?: string, strich?: string, strichbreite_mm?: number, deckkraft?: number}} RegelDann
+ *   deckkraft: opacity 0..1 (55-01, 3D and optional plan fade); strichbreite_mm: outline width on paper, mm
  * @typedef {{wenn: RegelWenn, dann: RegelDann}} Regel
+ * @typedef {{id: string, name: string, regeln: Regel[]}} RegelVorlage  project or built-in preset (UEB-04)
  */
 
 /**
@@ -71,6 +74,39 @@ export const STANDARD_REGELN = Object.freeze([
   Object.freeze({ wenn: Object.freeze({ feld: "feuerwiderstand", operator: "gesetzt" }), dann: Object.freeze({ kontur: "warnung", strich: "4 1 1 1", strichbreite_mm: 0.5 }) }),
   Object.freeze({ wenn: Object.freeze({ feld: "tragend", operator: "=", wert: true }), dann: Object.freeze({ fuellung: "dunkler" }) }),
 ]);
+
+/**
+ * Built-in graphic-rule presets (55-01 / UEB-04). Same schema as project `regel_vorlagen`; the editor offers them without storing
+ * a copy until the user saves one into ansicht_layer. Each preset carries FORM with colour (FARB-01).
+ * @type {ReadonlyArray<Readonly<RegelVorlage>>}
+ */
+export const STANDARD_VORLAGEN = Object.freeze(/** @type {RegelVorlage[]} */ ([
+  Object.freeze({
+    id: "brandschutz",
+    name: "Brandschutz-Prüfung",
+    regeln: Object.freeze([
+      Object.freeze({ wenn: Object.freeze({ feld: "feuerwiderstand", operator: "gesetzt" }), dann: Object.freeze({ kontur: "warnung", strich: "4 1 1 1", strichbreite_mm: 0.5 }) }),
+    ]),
+  }),
+  Object.freeze({
+    id: "tragend",
+    name: "Tragende Bauteile",
+    regeln: Object.freeze([
+      Object.freeze({ wenn: Object.freeze({ feld: "tragend", operator: "=", wert: true }), dann: Object.freeze({ fuellung: "dunkler" }) }),
+    ]),
+  }),
+  Object.freeze({
+    id: "steckbrief-offen",
+    name: "Unvollständiger Steckbrief",
+    regeln: Object.freeze([
+      // status === null → no renovation decision yet (D-BW-03 "ohne"); warn fill + dotted outline + slight fade (FARB-01)
+      Object.freeze({ wenn: Object.freeze({ feld: "status", operator: "=", wert: null }), dann: Object.freeze({ fuellung: "warnung", strich: "2 2", strichbreite_mm: 0.35, deckkraft: 0.85 }) }),
+    ]),
+  }),
+]));
+
+/** Most project rule presets stored on ansicht_layer [ASSUMED: enough for office packs, keeps the layer small]. */
+export const MAX_REGEL_VORLAGEN = 50;
 
 /**
  * Keys that hold geometry (meshes, triangles, cut loops, polygons). A view never stores them (D-BK-08a); normalising drops them and
@@ -100,8 +136,13 @@ export const EIGENE_KOMBINATION = "Eigene";
 /** Note on the sheet / in the DXF when walls of the export come from the bands instead of the solid (never silent). */
 export const RUECKFALL_VERMERK = "Wände aus Bändern abgeleitet, Solid nicht verfügbar";
 
-/** Empty `ansicht_layer` (default of useFachlayer): no views, the studio's DEFAULT_LAYERS and LAYER_COMBOS apply. */
-export const ANSICHT_LEER = Object.freeze({ ausschnitte: Object.freeze([]), ebenen: Object.freeze([]), kombinationen: Object.freeze({}) });
+/** Empty `ansicht_layer` (default of useFachlayer): no views, the studio's DEFAULT_LAYERS and LAYER_COMBOS apply; no project presets. */
+export const ANSICHT_LEER = Object.freeze({
+  ausschnitte: Object.freeze([]),
+  ebenen: Object.freeze([]),
+  kombinationen: Object.freeze({}),
+  regel_vorlagen: Object.freeze([]),
+});
 
 /**
  * @typedef {object} Ausschnitt
@@ -147,7 +188,60 @@ export function regelNormalisieren(r) {
   if (typeof d?.strich === "string" && /^\d+(\.\d+)?(\s+\d+(\.\d+)?)*$/.test(d.strich.trim())) dann.strich = d.strich.trim();
   const sb = Number(d?.strichbreite_mm);
   if (Number.isFinite(sb) && sb >= 0.05 && sb <= 2) dann.strichbreite_mm = sb;
+  // 55-01: opacity 0..1 (3D fade; plan may read it later). Reject 0 (= invisible via a rule) and values outside the unit interval.
+  const dk = Number(d?.deckkraft);
+  if (Number.isFinite(dk) && dk > 0 && dk <= 1) dann.deckkraft = Math.round(dk * 1000) / 1000;
   return Object.keys(dann).length ? { wenn, dann } : null;
+}
+
+/**
+ * One normalised project rule preset, or null when unusable. Unknown keys dropped; at most MAX_REGELN rules.
+ * @param {any} v raw preset
+ * @returns {RegelVorlage|null}
+ */
+export function regelVorlageNormalisieren(v) {
+  if (!v || !istText(v.id) || !istText(v.name)) return null;
+  const regeln = Array.isArray(v.regeln) ? v.regeln.map(regelNormalisieren).filter(Boolean).slice(0, MAX_REGELN) : [];
+  if (!regeln.length) return null;
+  return { id: String(v.id).slice(0, 64), name: String(v.name).trim().slice(0, 80), regeln: /** @type {Regel[]} */ (regeln) };
+}
+
+/**
+ * Deep-clone a rule list for editing (frozen STANDARD_REGELN / STANDARD_VORLAGEN stay untouched).
+ * @param {ReadonlyArray<Regel>|null|undefined} regeln
+ * @returns {Regel[]}
+ */
+export function regelnKlonen(regeln) {
+  return (Array.isArray(regeln) ? regeln : []).map((r) => {
+    const n = regelNormalisieren(r);
+    return n ? { wenn: { ...n.wenn }, dann: { ...n.dann } } : null;
+  }).filter(Boolean);
+}
+
+/**
+ * Reorder rules: move index `von` to `nach` (0-based). First match wins — order is the precedence.
+ * @param {ReadonlyArray<Regel>} regeln
+ * @param {number} von source index
+ * @param {number} nach destination index
+ * @returns {Regel[]}
+ */
+export function regelnUmordnen(regeln, von, nach) {
+  const list = regelnKlonen(regeln);
+  if (!Number.isInteger(von) || !Number.isInteger(nach) || von < 0 || nach < 0 || von >= list.length || nach >= list.length || von === nach) return list;
+  const [item] = list.splice(von, 1);
+  list.splice(nach, 0, item);
+  return list;
+}
+
+/**
+ * Next free preset id ("rv1", "rv2", …).
+ * @param {ReadonlyArray<{id?: string}>} liste
+ * @returns {string}
+ */
+export function naechsteVorlageId(liste) {
+  let max = 0;
+  for (const a of liste || []) { const m = /^rv(\d+)$/.exec(String(a?.id ?? "")); if (m) max = Math.max(max, Number(m[1])); }
+  return `rv${max + 1}`;
 }
 
 /**
@@ -284,10 +378,11 @@ export function ebeneNormalisieren(e) {
 }
 
 /**
- * The fachlayer `ansicht_layer` in normal form: {ausschnitte, ebenen, kombinationen}. A missing blob (old project) gives the empty
- * layer; duplicate view ids keep the first; at most MAX_AUSSCHNITTE views. `kombinationen` = own combinations {name: [layer ids]}.
+ * The fachlayer `ansicht_layer` in normal form: {ausschnitte, ebenen, kombinationen, regel_vorlagen}. A missing blob (old project)
+ * gives the empty layer; duplicate view / preset ids keep the first; at most MAX_AUSSCHNITTE views and MAX_REGEL_VORLAGEN presets.
+ * `regel_vorlagen` is additive (55-01 / UEB-04): absent on v1 blobs → []. `kombinationen` = own combinations {name: [layer ids]}.
  * @param {any} layer stored blob (may carry v / updatedAt; they are not returned)
- * @returns {{ausschnitte: Ausschnitt[], ebenen: Array<NonNullable<ReturnType<typeof ebeneNormalisieren>>>, kombinationen: Record<string, string[]>}}
+ * @returns {{ausschnitte: Ausschnitt[], ebenen: Array<NonNullable<ReturnType<typeof ebeneNormalisieren>>>, kombinationen: Record<string, string[]>, regel_vorlagen: RegelVorlage[]}}
  */
 export function ansichtLayerNormalisieren(layer) {
   const l = layer && typeof layer === "object" ? layer : {};
@@ -307,7 +402,17 @@ export function ansichtLayerNormalisieren(layer) {
   if (l.kombinationen && typeof l.kombinationen === "object" && !Array.isArray(l.kombinationen)) {
     for (const [name, ids] of Object.entries(l.kombinationen)) if (istText(name) && Array.isArray(ids)) kombinationen[name] = ids.filter(istText).map(String);
   }
-  return { ausschnitte, ebenen: /** @type {any} */ (ebenen), kombinationen };
+  const gesehenV = new Set();
+  /** @type {RegelVorlage[]} */
+  const regel_vorlagen = [];
+  for (const v of Array.isArray(l.regel_vorlagen) ? l.regel_vorlagen : []) {
+    const n = regelVorlageNormalisieren(v);
+    if (!n || gesehenV.has(n.id)) continue;
+    gesehenV.add(n.id);
+    regel_vorlagen.push(n);
+    if (regel_vorlagen.length >= MAX_REGEL_VORLAGEN) break;
+  }
+  return { ausschnitte, ebenen: /** @type {any} */ (ebenen), kombinationen, regel_vorlagen };
 }
 
 /**
@@ -587,7 +692,7 @@ export function istUmbauBrille(brille) {
  * look of the caller).
  * Rule effects: fuellung "dunkler" darkens the base fill (status fill or the caller's default) by DUNKLER_ANTEIL, a token name sets
  * the token colour; kontur sets the outline colour; strich the dash pattern; strichbreite_mm the outline width on paper (`breite_mm`,
- * the screen scales it ×1.2 to SVG units).
+ * the screen scales it ×1.2 to SVG units); deckkraft (55-01) sets opacity 0..1.
  * @param {any} brille lens object (plan/brillen.js) or null
  * @param {Record<string, any>} werte element values (darstellungsWerte)
  * @param {ReadonlyArray<Regel>|null|undefined} regeln
@@ -608,7 +713,48 @@ export function elementDarstellung(brille, werte, regeln, { sw = false, standard
   if (d.kontur && REGEL_FARBEN[d.kontur]) out.stroke = REGEL_FARBEN[d.kontur];
   if (d.strich) out.dash = d.strich;
   if (Number.isFinite(d.strichbreite_mm)) { out.breite_mm = /** @type {number} */ (d.strichbreite_mm); out.strokeWidth = Math.round(/** @type {number} */ (d.strichbreite_mm) * 1.2 * 100) / 100; }
+  if (Number.isFinite(d.deckkraft)) out.opacity = /** @type {number} */ (d.deckkraft);
   out.regel = i;
+  return out;
+}
+
+/** Fallback mesh colour when a 3D rule darkens without a status/material colour, hex [ASSUMED: slate, readable on the studio ground]. */
+export const DREID_REGEL_STANDARD_FARBE = "#94a3b8";
+
+/**
+ * 3D look of an element under lens and graphic rules (55-01) — the 3D counterpart of elementDarstellung (which extends
+ * planDarstellung). Basis = dreiDDarstellung(brille, status). Without rules → basis. In a renovation lens with a DECIDED
+ * status the LBauVorlV status wins (97-KONZEPT), same gate as elementDarstellung. Otherwise the FIRST matching rule paints:
+ * fuellung/kontur → farbe (token or dunkler of the material fallback), deckkraft → opacity, kontur/strich kept for form
+ * (EdgesGeometry in the studio; FARB-01).
+ * @param {any} brille lens object (plan/brillen.js) or null
+ * @param {Record<string, any>} werte element values (darstellungsWerte); status drives the lens
+ * @param {ReadonlyArray<Regel>|null|undefined} regeln
+ * @param {{standardFarbe?: string}} [opt] material fallback hex for "dunkler" when the basis has no farbe
+ * @returns {{sichtbar: boolean, deckkraft: number, farbe: string|null, sicht: string, regel?: number, kontur?: string, strich?: string, strichbreite_mm?: number}}
+ *   deckkraft: opacity 0..1; farbe: "#rrggbb" or null = leave material; kontur/strich: form hints for the mesh helper
+ */
+export function dreiDElementDarstellung(brille, werte, regeln, { standardFarbe = DREID_REGEL_STANDARD_FARBE } = {}) {
+  const status = werte?.status;
+  const basis = dreiDDarstellung(brille, status);
+  if (!basis.sichtbar) return basis;
+  if (!Array.isArray(regeln) || !regeln.length) return basis;
+  const entschieden = status === "bestand" || status === "abbruch" || status === "neubau" || status === "temporaer";
+  // renovation lens + decided status → status colour/visibility wins (mirror of elementDarstellung's `basis && istUmbauBrille`)
+  if (entschieden && istUmbauBrille(brille)) return basis;
+  const i = regeln.findIndex((r) => regelPasst(r?.wenn, werte));
+  if (i < 0) return basis;
+  const d = regeln[i].dann || {};
+  /** @type {{sichtbar: boolean, deckkraft: number, farbe: string|null, sicht: string, regel?: number, kontur?: string, strich?: string, strichbreite_mm?: number}} */
+  const out = { ...basis, regel: i };
+  const basisFarbe = basis.farbe || standardFarbe;
+  if (d.fuellung === "dunkler") out.farbe = dunkler(basisFarbe, DUNKLER_ANTEIL);
+  else if (d.fuellung && REGEL_FARBEN[d.fuellung]) out.farbe = REGEL_FARBEN[d.fuellung];
+  else if (d.kontur && REGEL_FARBEN[d.kontur] && !d.fuellung) out.farbe = basis.farbe; // outline-only rule: keep fill, form via kontur
+  if (d.kontur && REGEL_FARBEN[d.kontur]) out.kontur = REGEL_FARBEN[d.kontur];
+  if (d.strich) out.strich = d.strich;
+  if (Number.isFinite(d.strichbreite_mm)) out.strichbreite_mm = /** @type {number} */ (d.strichbreite_mm);
+  if (Number.isFinite(d.deckkraft)) out.deckkraft = /** @type {number} */ (d.deckkraft);
   return out;
 }
 

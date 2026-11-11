@@ -38,7 +38,7 @@ function abstand(a, b) {
 describe("Zustandsfarben gegen die Tokens aus index.css", () => {
   // Tolerance 1/255 per channel: rounding of the HSL conversion only; a real token change is larger.
   const TOLERANZ = 1;
-  for (const [zustand, tokenName] of [["fokus", "ring"], ["warnung", "warnung"], ["fehler", "fehler"]]) {
+  for (const [zustand, tokenName] of [["fokus", "zeige-fokus"], ["warnung", "warnung"], ["fehler", "fehler"]]) {
     it(`${zustand} entspricht --${tokenName} (hell)`, () => {
       const erwartet = hslHex(token(tokenName));
       assert.ok(abstand(ZEIGE_ZUSTAENDE[zustand].hex, erwartet) <= TOLERANZ, `${zustand}: Tabelle ${ZEIGE_ZUSTAENDE[zustand].hex}, Token ${erwartet}`);

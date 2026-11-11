@@ -54,8 +54,8 @@ export default function TimeTracking() {
     <div className={seitenWurzel}>
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="min-w-0">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent flex items-center gap-2">
-            <Timer className="w-7 h-7 text-emerald-600" aria-hidden="true" /> {t("Zeiterfassung")}
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
+            <Timer className="w-7 h-7 text-muted-foreground" aria-hidden="true" /> {t("Zeiterfassung")}
           </h1>
           <p className="text-slate-600 mt-1 dark:text-slate-300">{t("Projektzeiten und Tagesrahmen — Hinweise ersetzen keine Rechtsprüfung")}</p>
         </div>

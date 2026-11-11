@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { splitFences, findeIfcPfade, RECONNECT_DELAYS_MS } from '../../src/lib/harnessClient.js';
+import { splitFences, findeIfcPfade, RECONNECT_DELAYS_MS, statusAusDienst } from '../../src/lib/harnessClient.js';
 
 test('splitFences: prose and one code block', () => {
   const parts = splitFences('Hallo\n```python\nprint(1)\n```\nEnde');
@@ -31,4 +31,11 @@ test('findeIfcPfade: JSON result with Windows and posix paths, deduplicated', ()
 
 test('reconnect schedule: backoff 1–8 s, five attempts', () => {
   assert.deepEqual(RECONNECT_DELAYS_MS, [1000, 2000, 4000, 8000, 8000]);
+});
+
+test('statusAusDienst: a missing optional harness is offline, a status body is the status', () => {
+  assert.deepEqual(statusAusDienst({ erreichbar: false }), { art: 'aus' });
+  const status = { provider: 'lokal', stt: { verfuegbar: true } };
+  assert.deepEqual(statusAusDienst(status), { art: 'status', status });
+  assert.deepEqual(statusAusDienst(null), { art: 'direkt' });
 });

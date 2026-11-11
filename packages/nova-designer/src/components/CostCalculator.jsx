@@ -79,7 +79,7 @@ export default function CostCalculator({ complexData, onCostUpdate }) {
   return (
     <div className="space-y-4">
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: BGF {Math.round(pm.bgf).toLocaleString("de-DE")} m² · {pm.storeys} Geschosse · Höhe {Math.round(pm.height).toLocaleString("de-DE")} m
         </div>
       )}
@@ -112,10 +112,10 @@ export default function CostCalculator({ complexData, onCostUpdate }) {
             <Stat label="Energietechnik" value={eur(costs.energy_system_cost)} />
             <Stat label="Baufeld" value={eur(costs.site_preparation_cost)} />
           </div>
-          <div className="rounded-lg bg-emerald-50 p-4">
-            <div className="text-xs text-emerald-700">Gesamtkosten</div>
-            <div className="text-2xl font-bold text-emerald-700">{eur(costs.total_cost)}</div>
-            <div className="text-xs text-emerald-600 mt-1">{eur(costs.cost_per_m2)} / m² BGF</div>
+          <div className="rounded-lg bg-muted p-4">
+            <div className="text-xs text-muted-foreground">Gesamtkosten</div>
+            <div className="text-2xl font-bold text-foreground">{eur(costs.total_cost)}</div>
+            <div className="text-xs text-muted-foreground mt-1">{eur(costs.cost_per_m2)} / m² BGF</div>
           </div>
         </CardContent>
       </Card>

@@ -48,7 +48,7 @@ export default function ProgrammBeenden() {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm dark:border-slate-700 dark:bg-slate-900 space-y-2" data-testid="programm-karte">
       <h3 className="flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100">
-        <Power className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("Programm & Server")}
+        <Power className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> {t("Programm & Server")}
       </h3>
       <p className="text-xs text-slate-600 dark:text-slate-300">
         {t("BIT-Atelier läuft im Hintergrund weiter, wenn Sie das Fenster schließen – so öffnet ein Doppelklick auf eine Projektdatei sofort. Hier beenden Sie es ganz; Protokoll: daten/server.log.")}
@@ -57,7 +57,7 @@ export default function ProgrammBeenden() {
         className="inline-flex items-center gap-2 rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-40 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40">
         <Power className="h-4 w-4" aria-hidden="true" /> {t("Programm beenden")}
       </button>
-      <p role="status" className="text-xs text-emerald-700 dark:text-emerald-400" data-testid="programm-status">
+      <p role="status" className="text-xs text-erfolg" data-testid="programm-status">
         {beendet ? t("BIT-Atelier wurde beendet. Sie können dieses Fenster schließen.") : ""}
       </p>
       {fehler && <p role="alert" className="text-xs text-rose-700 dark:text-rose-300" data-testid="programm-fehler">{fehler}</p>}

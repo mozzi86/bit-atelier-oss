@@ -92,7 +92,7 @@ export default function DatenOrdner() {
           {t("Legen Sie die getrennt gesicherte Schlüsseldatei an den oben genannten Ort und starten Sie die App neu.")}
         </p>
       )}
-      <p role="status" className="text-xs text-erfolg dark:text-emerald-400" data-testid="daten-ordner-status">{status}</p>
+      <p role="status" className="text-xs text-erfolg" data-testid="daten-ordner-status">{status}</p>
       {fehler && <p role="alert" className="text-xs text-fehler dark:text-rose-300" data-testid="daten-ordner-fehler">{t("Datenordner nicht abrufbar:")} {fehler}</p>}
     </div>
   );

@@ -253,7 +253,7 @@ export default function Projects() {
           className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6"
         >
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold text-foreground">
               {t("Projekte")}
             </h1>
             <p className="text-slate-600 mt-1">
@@ -263,7 +263,7 @@ export default function Projects() {
 
           <Button
             onClick={() => setShowForm(!showForm)}
-            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg"
+            className="bg-primary hover:bg-primary/90 shadow-sm"
           >
             <Plus className="w-4 h-4 mr-2" />
             Neues Projekt
@@ -284,7 +284,7 @@ export default function Projects() {
               placeholder="Projekte nach Name, Auftraggeber oder Ort suchen..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 border-slate-200 focus:border-emerald-500 focus-visible:ring-emerald-500/40"
+              className="pl-10 border-slate-200 focus:border-ring focus-visible:ring-ring/40"
             />
           </div>
           

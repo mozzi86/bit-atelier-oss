@@ -28,7 +28,7 @@ const STRATEGIES = [
 ];
 
 // score kann null sein (keine einzige Regel prüfbar) — dann neutral darstellen.
-const scoreColor = (n) => (n === null || n === undefined ? "text-slate-400" : n >= 75 ? "text-emerald-600" : n >= 50 ? "text-amber-600" : "text-rose-600");
+const scoreColor = (n) => (n === null || n === undefined ? "text-slate-400" : n >= 75 ? "text-erfolg" : n >= 50 ? "text-amber-600" : "text-rose-600");
 const scoreLabel = (n) => (n === null || n === undefined ? "—" : `${n} %`);
 // Sortier-Schlüssel: ungeprüfte Varianten nicht vor geprüfte einsortieren.
 const scoreKey = (v) => (v.check.score === null ? -1 : v.check.score);
@@ -169,7 +169,7 @@ export default function GenerativeLayout({ siteArea: siteAreaProp = null }) {
       {/* Stand aus der gemeinsamen Quelle (Gebäudemodell/Massing) */}
       {metrics.footArea > 0 && (
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs border-emerald-300 bg-emerald-50 text-emerald-700">
+          <Badge variant="outline" className="text-xs border-border bg-muted text-muted-foreground">
             Aus Gebäudemodell: BGF {m2(metrics.bgf)} · {metrics.storeys} Geschosse
           </Badge>
         </div>
@@ -186,7 +186,7 @@ export default function GenerativeLayout({ siteArea: siteAreaProp = null }) {
           <div><label className="text-xs text-slate-500 block mb-1">GFZ-Grenze</label><Input aria-label={t("GFZ-Grenze")} className="w-24" type="number" step="0.1" value={gfzLimit} onChange={(e) => setGfzLimit(Number(e.target.value))} /></div>
           <div><label className="text-xs text-slate-500 block mb-1">GRZ-Grenze</label><Input aria-label={t("GRZ-Grenze")} className="w-24" type="number" step="0.05" placeholder="—" value={grzLimit ?? ""} onChange={(e) => setGrzLimit(e.target.value === "" ? null : Number(e.target.value))} /></div>
           <div><label className="text-xs text-slate-500 block mb-1">Max. Gesch.</label><Input aria-label={t("Max. Gesch.")} className="w-24" type="number" value={maxFloors} onChange={(e) => setMaxFloors(Number(e.target.value))} /></div>
-          <Button onClick={generate} disabled={loading || !projectId} className="bg-gradient-to-r from-emerald-600 to-teal-600 ml-auto">
+          <Button onClick={generate} disabled={loading || !projectId} className="bg-primary hover:bg-primary/90 ml-auto">
             {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wand2 className="w-4 h-4 mr-2" />}
             {loading ? "KI bewertet…" : "Varianten generieren & bewerten"}
           </Button>
@@ -194,9 +194,9 @@ export default function GenerativeLayout({ siteArea: siteAreaProp = null }) {
       </Card>
 
       {ai?.recommendation && (
-        <Card className="border-0 bg-gradient-to-br from-purple-50 to-indigo-50">
+        <Card className="border-0 bg-muted">
           <CardContent className="p-4 flex gap-3">
-            <Sparkles className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            <Sparkles className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
             <div>
               <div className="text-sm font-semibold text-slate-800">KI-Empfehlung{ai.fallback ? " (offline)" : ""}</div>
               <p className="text-sm text-slate-600">{ai.recommendation}</p>
@@ -211,8 +211,8 @@ export default function GenerativeLayout({ siteArea: siteAreaProp = null }) {
           const isBest = v.key === bestKey;
           const isAdopted = v.key === adopted;
           return (
-            <Card key={v.key} className={`relative ${isBest ? "ring-2 ring-emerald-400" : ""}`}>
-              {isBest && <Badge className="absolute -top-2 left-3 bg-emerald-500 text-white"><Trophy className="w-3 h-3 mr-1" /> Top</Badge>}
+            <Card key={v.key} className={`relative ${isBest ? "ring-2 ring-primary" : ""}`}>
+              {isBest && <Badge className="absolute -top-2 left-3 bg-primary text-primary-foreground"><Trophy className="w-3 h-3 mr-1" /> Top</Badge>}
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">{v.name}</CardTitle>
                 <p className="text-[11px] text-slate-500">{v.desc}</p>
@@ -236,7 +236,7 @@ export default function GenerativeLayout({ siteArea: siteAreaProp = null }) {
                   <span className={`font-semibold flex items-center gap-1 ${scoreColor(v.check.score)}`}><Gauge className="w-3 h-3" />{scoreLabel(v.check.score)}</span>
                 </div>
                 {ai?.byKey?.[v.key] && <p className="text-[11px] text-slate-500 border-t pt-2">{ai.byKey[v.key]}</p>}
-                <Button size="sm" variant={isAdopted ? "default" : "outline"} className={`w-full ${isAdopted ? "bg-emerald-600" : ""}`} onClick={() => adopt(v)}>
+                <Button size="sm" variant={isAdopted ? "default" : "outline"} className="w-full" onClick={() => adopt(v)}>
                   <Check className="w-3.5 h-3.5 mr-1" /> {isAdopted ? "Übernommen" : "Übernehmen"}
                 </Button>
               </CardContent>

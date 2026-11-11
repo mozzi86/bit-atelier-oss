@@ -108,7 +108,7 @@ export default function PersonalUebersicht() {
           {regelwerkeBereit && (
             <>
               {" · "}
-              <Link to="/Settings?tab=rules&einstellung=buchhaltung.rechtsform" className="text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400">
+              <Link to="/Settings?tab=rules&einstellung=buchhaltung.rechtsform" className="text-link underline-offset-4 hover:underline">
                 {t("Rechtsform ändern")}
               </Link>
             </>
@@ -126,7 +126,7 @@ export default function PersonalUebersicht() {
           </ul>
         )}
         {staffBereit && (
-          <Link to={`/People${bauePersonalLink({ tab: "staff" })}`} className="mt-3 inline-flex items-center gap-1 text-sm text-emerald-700 hover:underline dark:text-emerald-400">
+          <Link to={`/People${bauePersonalLink({ tab: "staff" })}`} className="mt-3 inline-flex items-center gap-1 text-sm text-link hover:underline">
             <Users className="h-3.5 w-3.5" aria-hidden="true" /> {t("Mitarbeitende ansehen")}
           </Link>
         )}
@@ -146,7 +146,7 @@ export default function PersonalUebersicht() {
           </p>
         )}
         {recruitingBereit && (
-          <Link to={`/People${bauePersonalLink({ tab: "recruiting" })}`} className="mt-3 inline-flex items-center gap-1 text-sm text-emerald-700 hover:underline dark:text-emerald-400">
+          <Link to={`/People${bauePersonalLink({ tab: "recruiting" })}`} className="mt-3 inline-flex items-center gap-1 text-sm text-link hover:underline">
             <Search className="h-3.5 w-3.5" aria-hidden="true" /> {t("Mitarbeitersuche ansehen")}
           </Link>
         )}
@@ -176,7 +176,7 @@ export default function PersonalUebersicht() {
                     aria-valuemin={0}
                     aria-valuemax={100}
                     aria-label={fuellen(t("Eintritt {name}: {erledigt} von {gesamt} erledigt"), { name: anzeigeName(m), erledigt: v.erledigt, gesamt: v.gesamt })}
-                    className="mt-1 h-1.5 w-full accent-emerald-600"
+                    className="mt-1 h-1.5 w-full accent-primary"
                   >
                     {prozent}%
                   </progress>

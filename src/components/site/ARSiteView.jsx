@@ -477,7 +477,7 @@ function Slider({ label, value, min, max, step, onChange, suffix }) {
       </div>
       <input type="range" min={min} max={max} step={step} value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full accent-emerald-500" aria-label={label} />
+        className="w-full accent-primary" aria-label={label} />
     </div>
   );
 }

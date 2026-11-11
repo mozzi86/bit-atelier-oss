@@ -29,7 +29,7 @@ export default function DarstellungBereich() {
     <section aria-labelledby="bereich-darstellung" data-testid="bereich-display"
       className="rounded-xl border border-slate-200 bg-white p-6 space-y-5 dark:border-slate-700 dark:bg-slate-900">
       <h2 id="bereich-darstellung" className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
-        <Palette className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("Darstellung & Sprache")}
+        <Palette className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> {t("Darstellung & Sprache")}
       </h2>
 
       <fieldset>
@@ -39,7 +39,7 @@ export default function DarstellungBereich() {
             <label key={wert} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
               <input
                 type="radio" name="theme" value={wert} checked={theme === wert} onChange={() => setTheme(wert)}
-                className="accent-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                className="accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
               {t(THEME_LABEL[wert])}
             </label>
@@ -54,7 +54,7 @@ export default function DarstellungBereich() {
             <label key={code} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
               <input
                 type="radio" name="sprache" value={code} checked={lang === code} onChange={() => setLang(code)}
-                className="accent-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                className="accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
               {/* Language names of a language switch stay untranslated (the header's
                   DE|EN buttons already do this) — only English gets the extra

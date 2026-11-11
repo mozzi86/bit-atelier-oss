@@ -21,7 +21,6 @@ import { createPageUrl } from "@core/utils";
 import {
   Search,
   Building2,
-  Zap,
   Settings,
   LogOut,
   PanelLeftClose,
@@ -51,7 +50,7 @@ import ButtonHelp from "@core/components/common/ButtonHelp";
 import ThemeToggle from "@core/components/theme/ThemeToggle";
 import { I18nProvider, useI18n, LANGS } from "@core/lib/i18n";
 import { useBriefkopf } from "@core/lib/useBriefkopf";
-import AlhambraAssistantButton from "./components/AlhambraAssistantButton";
+import AssistentButton from "./components/AssistentButton";
 import { navGroups } from "./navigation";
 import Befehlspalette from "./components/Befehlspalette";
 import KeinZugriff from "./components/KeinZugriff";
@@ -109,7 +108,7 @@ function NutzerKopf() {
         onClick={() => logout()}
         title={t("Abmelden")}
         aria-label={t("Abmelden")}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-md border border-input px-2 py-1 text-xs text-muted-foreground hover:bg-muted transition-colors"
       >
         <LogOut className="w-3 h-3" />
         <span className="hidden md:inline">{t("Abmelden")}</span>
@@ -146,7 +145,7 @@ function HuelleLaedt() {
   const { t } = useI18n();
   return (
     <div role="status" className="h-full min-h-[40vh] flex items-center justify-center">
-      <div aria-hidden="true" className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
+      <div aria-hidden="true" className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" />
       <span className="sr-only">{t("Projekte werden geladen …")}</span>
     </div>
   );
@@ -162,27 +161,27 @@ function VerbindungsFehler({ fehler, onErneut }) {
   const { t } = useI18n();
   return (
     <div className="h-full flex items-center justify-center p-6">
-      <div role="alert" className="max-w-md w-full rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-slate-900 p-6 text-center shadow-sm">
+      <div role="alert" className="max-w-md w-full rounded-lg border border-fehler-rand bg-card p-6 text-center shadow-sm">
         <AlertTriangle aria-hidden="true" className="mx-auto mb-3 w-8 h-8 text-rose-600 dark:text-rose-400" />
-        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">
+        <h2 className="text-xl font-semibold text-foreground mb-2">
           {t("Keine Verbindung zum Datenspeicher")}
         </h2>
-        <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+        <p className="text-sm text-muted-foreground mb-3">
           {t("Die Projektliste konnte nicht geladen werden.")}
         </p>
-        <p className="mb-3 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-2 text-left font-mono text-xs text-slate-700 dark:text-slate-200 break-words">
+        <p className="mb-3 rounded-md bg-muted px-3 py-2 text-left font-mono text-xs text-foreground break-words">
           {t("Meldung:")} {fehler}
         </p>
         {/* Only the local Express setup has a server the user can start. */}
         {DATENQUELLE === "express" && (
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+          <p className="text-xs text-muted-foreground mb-4">
             {t("Hinweis: „npm run dev“ startet App und Server gemeinsam.")}
           </p>
         )}
         <button
           type="button"
           onClick={onErneut}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm font-medium shadow-lg hover:opacity-90 transition-opacity"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium transition-colors"
         >
           {t("Erneut versuchen")}
         </button>
@@ -202,26 +201,26 @@ function KeinProjekt() {
   return (
     <div className="h-full flex items-center justify-center p-6">
       <div className="text-center max-w-md">
-        <div className="mx-auto mb-5 w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/15 to-teal-500/15 border border-emerald-500/20 flex items-center justify-center">
-          <Building2 aria-hidden="true" className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+        <div className="mx-auto mb-5 w-16 h-16 rounded-lg bg-muted border border-border flex items-center justify-center">
+          <Building2 aria-hidden="true" className="w-8 h-8 text-muted-foreground" />
         </div>
-        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">
+        <h2 className="text-xl font-semibold text-foreground mb-2">
           {t("Noch kein Projekt vorhanden")}
         </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+        <p className="text-sm text-muted-foreground mb-6">
           {t("Legen Sie Ihr erstes Projekt an – alle Module arbeiten auf dem gewählten Projekt.")}
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <Link
             to={`${createPageUrl("Projects")}?neu=1`}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm font-medium shadow-lg hover:opacity-90 transition-opacity"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium transition-colors"
           >
             <Building2 aria-hidden="true" className="w-4 h-4" />
             {t("Neues Projekt anlegen")}
           </Link>
           <Link
             to={`${createPageUrl("ModelCheck")}?beispiel=1`}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md border border-input text-foreground text-sm font-medium hover:bg-muted transition-colors"
           >
             <ShieldCheck aria-hidden="true" className="w-4 h-4" />
             {t("Musterprojekt prüfen")}
@@ -381,27 +380,36 @@ function LayoutInner({ children }) {
     return () => window.removeEventListener("keydown", beiTaste);
   }, [location.pathname]);
 
+  // Breadcrumb of the top bar: group label and page title of the current route (navigation.js).
+  const brotkrume = React.useMemo(() => {
+    for (const grp of navGroups) {
+      const treffer = grp.items.find((i) => i.url === location.pathname);
+      if (treffer) return { gruppe: grp.label, seite: treffer.title };
+    }
+    return null;
+  }, [location.pathname]);
+
   // One sidebar entry (72-20: shared by the focus list and the groups).
   const navEintrag = (/** @type {any} */ item) => (
                   <SidebarMenuItem key={item.title} className="group/menu-item relative">
                       <SidebarMenuButton
                       asChild
-                      className={`group hover:bg-slate-700/50 transition-all duration-300 rounded-xl ${
-                      location.pathname === item.url ?
-                      'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30' :
-                      ''}`
+                      className={`group h-9 hover:bg-sidebar-accent transition-colors duration-200 rounded-md ${
+                      location.pathname === item.url ? 'bg-sidebar-accent' : ''}`
                       }>
 
                         <Link to={item.url} title={collapsed ? t(item.title) : undefined}
                           aria-current={location.pathname === item.url ? "page" : undefined}
                           aria-label={collapsed ? t(item.title) : undefined}
-                          className={`flex items-center ${collapsed ? 'justify-center px-0 py-3' : 'gap-3 px-4 py-2.5'}`}>
+                          className={`relative flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'}`}>
+                          {/* Redesign 09.11.: the active entry carries a 3 px stripe in logo green at the left edge. */}
+                          {location.pathname === item.url && <span aria-hidden="true" data-testid="nav-aktiv-streifen" className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r bg-brand" />}
                           <item.icon className={`w-5 h-5 shrink-0 transition-colors ${
-                        location.pathname === item.url ? 'text-emerald-300' : 'text-slate-400 group-hover:text-white'}`
+                        location.pathname === item.url ? 'text-white' : 'text-sidebar-foreground/70 group-hover:text-white'}`
                         } />
                           {!collapsed && (
-                          <span className={`font-medium text-sm transition-colors ${
-                        location.pathname === item.url ? 'text-white' : 'text-slate-300 group-hover:text-white'}`
+                          <span className={`text-sm transition-colors ${
+                        location.pathname === item.url ? 'font-medium text-white' : 'text-sidebar-foreground group-hover:text-white'}`
                         }>
                             {t(item.title)}
                           </span>
@@ -427,37 +435,34 @@ function LayoutInner({ children }) {
       <a href="#hauptinhalt" className="skip-link">{t("Zum Inhalt springen")}</a>
       <Befehlspalette offen={paletteOffen} onSchliessen={() => setPaletteOffen(false)} />
       <KuerzelHilfe offen={hilfeOffen} onSchliessen={() => setHilfeOffen(false)} />
-      <style>{`
-        :root {
-          --sidebar-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-          --primary-green: #10b981;
-          --accent-blue: #3b82f6;
-          --warm-earth: #d97706;
-        }
-      `}</style>
-
-      <div className="app-huelle h-dvh overflow-hidden flex w-full bg-gradient-to-br from-slate-50 via-green-50/30 to-blue-50/20">
+      <div className="app-huelle h-dvh overflow-hidden flex w-full bg-background">
         {/* 72-10 (N-06): "dark" because the sidebar is dark in both themes. The
             light-mode contrast fix in index.css turns text-slate-400 into
-            #64748b, only 3.1–3.8:1 on this #0f172a→#1e293b gradient; inside
-            .dark the existing override keeps #94a3b8 (5.7–7.0:1). */}
-        <Sidebar className="dark border-r-0 shadow-2xl" style={{ background: 'var(--sidebar-bg)' }}>
-          <SidebarHeader className={`border-b border-slate-700/50 ${collapsed ? 'p-3' : 'p-6'}`}>
+            #64748b, only 3.8:1 on the flat #0f172a; inside
+            .dark the existing override keeps #94a3b8 (7.0:1).
+            Redesign 09.11.: flat navy, no gradient, no shadow. */}
+        <Sidebar className="dark border-r-0 bg-sidebar">
+          <SidebarHeader className={`border-b border-sidebar-border ${collapsed ? 'p-3' : 'px-4 py-3.5'}`}>
             <div className={`flex items-center ${collapsed ? 'flex-col gap-2' : 'justify-between'}`}>
               {/* 72-10 (N-06): logo and name lead to the overview, the usual way home. */}
-              <Link to="/Dashboard" aria-label={t("Zur Projektübersicht")} className="flex items-center gap-3 min-w-0 rounded-xl">
-                <div className="relative shrink-0">
-                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center shadow-lg">
-                    <Building2 className="w-6 h-6 text-white" />
-                  </div>
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
-                    <Zap className="w-2.5 h-2.5 text-white" />
-                  </div>
-                </div>
+              <Link to="/Dashboard" aria-label={t("Zur Projektübersicht")} className="flex items-center gap-3 min-w-0 rounded-md">
+                {/* Quick 261109-l09: the real BIT-Atelier logo ("BIT" in a green frame on
+                    #0f172a), the same image as the PWA icon and the Tauri app icon
+                    (client/src-tauri/icons/icon.png, pixel-identical). Used as is — never
+                    redrawn or recoloured (owner's instruction 2026-11-09). BASE_URL resolves
+                    the public path for all three builds (office "/", PWA "/app/", Tauri "/").
+                    alt="" because the surrounding link already carries the aria-label. */}
+                <img
+                  src={`${import.meta.env.BASE_URL}icons/icon-192.png`}
+                  alt=""
+                  width={36}
+                  height={36}
+                  className="w-9 h-9 shrink-0 rounded-md"
+                />
                 {!collapsed && (
                   <div className="min-w-0">
-                    <h2 className="text-white text-lg font-bold truncate">BIT-Atelier</h2>
-                    <p className="text-xs text-slate-300 truncate">{t("Bauprojekt-Plattform")}</p>
+                    <h2 className="text-white text-[15px] leading-5 font-semibold truncate">BIT-Atelier</h2>
+                    <p className="text-xs text-sidebar-foreground/70 truncate">{t("Bauprojekt-Plattform")}</p>
                   </div>
                 )}
               </Link>
@@ -466,7 +471,7 @@ function LayoutInner({ children }) {
                 onClick={toggle}
                 title={collapsed ? t("Sidebar ausklappen") : t("Sidebar einklappen")}
                 aria-label={collapsed ? t("Sidebar ausklappen") : t("Sidebar einklappen")}
-                className="hidden md:inline-flex shrink-0 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/50 transition-colors"
+                className="hidden md:inline-flex shrink-0 p-2 rounded-md text-sidebar-foreground/70 hover:text-white hover:bg-sidebar-accent transition-colors"
               >
                 {collapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
               </button>
@@ -478,9 +483,9 @@ function LayoutInner({ children }) {
             {/* 72-20: work focus — a display choice, not a permission. */}
             {!collapsed && (
               <div className="px-3 pb-2">
-                <label htmlFor="fokus-wahl" className="block px-1 pb-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">{t("Wofür sind Sie hier?")}</label>
+                <label htmlFor="fokus-wahl" className="block px-1 pb-1 text-xs font-medium text-sidebar-foreground/70">{t("Wofür sind Sie hier?")}</label>
                 <select id="fokus-wahl" data-testid="fokus-wahl" value={fokus} onChange={(e) => fokusWaehlen(e.target.value)}
-                  className="h-8 w-full rounded-lg border border-slate-600 bg-slate-800 px-2 text-sm text-slate-100">
+                  className="h-9 w-full rounded-md border border-sidebar-border bg-sidebar-accent px-2 text-sm text-white">
                   {FOKUS.map((f) => <option key={f.key} value={f.key}>{t(f.label)}</option>)}
                 </select>
               </div>
@@ -507,11 +512,11 @@ function LayoutInner({ children }) {
                   <SidebarMenu className="space-y-1">
                     {grp.items.map((item) => (
                       <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild className="group hover:bg-slate-700/50 transition-all duration-300 rounded-xl">
+                        <SidebarMenuButton asChild className={`group h-9 hover:bg-sidebar-accent transition-colors duration-200 rounded-md ${location.pathname === item.url ? 'bg-sidebar-accent' : ''}`}>
                           <Link to={item.url} title={t(item.title)} aria-label={t(item.title)}
                             aria-current={location.pathname === item.url ? "page" : undefined}
-                            className="flex items-center justify-center px-0 py-3">
-                            <item.icon className={`w-5 h-5 shrink-0 transition-colors ${location.pathname === item.url ? 'text-emerald-300' : 'text-slate-400 group-hover:text-white'}`} />
+                            className="flex items-center justify-center px-0">
+                            <item.icon className={`w-5 h-5 shrink-0 transition-colors ${location.pathname === item.url ? 'text-white' : 'text-sidebar-foreground/70 group-hover:text-white'}`} />
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -522,7 +527,7 @@ function LayoutInner({ children }) {
             ) : (
             <SidebarGroup key={grp.label}>
               {!collapsed && (
-                <SidebarGroupLabel className="text-xs font-medium text-slate-400 uppercase tracking-wider px-3 py-2">
+                <SidebarGroupLabel className="text-xs font-medium text-sidebar-foreground/70 px-3 py-2">
                   {t(grp.label)}
                 </SidebarGroupLabel>
               )}
@@ -537,9 +542,9 @@ function LayoutInner({ children }) {
             // 72-20: with a focus the usual groups move into the drawer "Alle Module" (closed by default).
             return fokusListe ? (
               <details ref={alleModuleKlappe} data-testid="alle-module" className="py-1">
-                <summary className="cursor-pointer select-none text-xs font-medium text-slate-400 uppercase tracking-wider px-6 py-2 hover:text-slate-200 list-none flex items-center justify-between">
+                <summary className="cursor-pointer select-none text-xs font-medium text-sidebar-foreground/70 px-6 py-2 hover:text-white list-none flex items-center justify-between">
                   {t("Alle Module")}
-                  <span className="text-slate-500 text-[10px]" aria-hidden="true">▸</span>
+                  <span className="text-sidebar-foreground/70 text-[10px]" aria-hidden="true">▸</span>
                 </summary>
                 {gruppen}
               </details>
@@ -554,23 +559,24 @@ function LayoutInner({ children }) {
               if (!labor) return null;
               return (
                 <details ref={laborKlappe} className="px-3 py-1">
-                  <summary className="cursor-pointer select-none text-xs font-medium text-slate-400 uppercase tracking-wider px-3 py-2 hover:text-slate-200 list-none flex items-center justify-between">
+                  <summary className="cursor-pointer select-none text-xs font-medium text-sidebar-foreground/70 px-3 py-2 hover:text-white list-none flex items-center justify-between">
                     {t(labor.label)}
-                    <span className="text-slate-500 text-[10px]" aria-hidden="true">▸</span>
+                    <span className="text-sidebar-foreground/70 text-[10px]" aria-hidden="true">▸</span>
                   </summary>
                   <SidebarMenu className="space-y-1 mt-1">
                     {labor.items.map((item) => (
                       <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild className={`group hover:bg-slate-700/50 transition-all duration-300 rounded-xl ${location.pathname === item.url ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30' : ''}`}>
-                          <Link to={item.url} aria-current={location.pathname === item.url ? "page" : undefined} className="flex items-center gap-3 px-4 py-2.5">
-                            <item.icon className={`w-5 h-5 shrink-0 transition-colors ${location.pathname === item.url ? 'text-emerald-300' : 'text-slate-400 group-hover:text-white'}`} />
-                            <span className={`font-medium text-sm transition-colors ${location.pathname === item.url ? 'text-white' : 'text-slate-300 group-hover:text-white'}`}>{t(item.title)}</span>
+                        <SidebarMenuButton asChild className={`group h-9 hover:bg-sidebar-accent transition-colors duration-200 rounded-md ${location.pathname === item.url ? 'bg-sidebar-accent' : ''}`}>
+                          <Link to={item.url} aria-current={location.pathname === item.url ? "page" : undefined} className="relative flex items-center gap-3 px-3">
+                            {location.pathname === item.url && <span aria-hidden="true" className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r bg-brand" />}
+                            <item.icon className={`w-5 h-5 shrink-0 transition-colors ${location.pathname === item.url ? 'text-white' : 'text-sidebar-foreground/70 group-hover:text-white'}`} />
+                            <span className={`text-sm transition-colors ${location.pathname === item.url ? 'font-medium text-white' : 'text-sidebar-foreground group-hover:text-white'}`}>{t(item.title)}</span>
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     ))}
                   </SidebarMenu>
-                  <p className="px-4 pt-2 pb-1 text-[10px] leading-snug text-slate-500">
+                  <p className="px-4 pt-2 pb-1 text-[11px] leading-snug text-sidebar-foreground/70">
                     {t("Experimentelle Module — zeigen Visionen oder brauchen Zusatzdienste. Nicht Teil des Kernprodukts.")}
                   </p>
                 </details>
@@ -584,28 +590,28 @@ function LayoutInner({ children }) {
               placeholders "NC" / "BIT-Atelier User" / "Project Manager"; the dead
               language button is gone (DE | EN sits in the header). The settings
               gear stays reachable in the collapsed sidebar as well. */}
-          <SidebarFooter className="border-t border-slate-700/50 p-4">
+          <SidebarFooter className="border-t border-sidebar-border p-4">
             {collapsed ? (
               <div className="flex flex-col items-center gap-2">
-                <div role="img" aria-label={buero.name} title={buero.name} data-testid="buero-initialen" className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                <div role="img" aria-label={buero.name} title={buero.name} data-testid="buero-initialen" className="w-9 h-9 bg-sidebar-accent border border-sidebar-border rounded-full flex items-center justify-center text-white font-medium text-sm">
                   <span aria-hidden="true">{buero.initialen}</span>
                 </div>
-                <Link to="/Settings?tab=office" aria-label={t("Einstellungen")} title={t("Einstellungen")} className="p-2 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors">
+                <Link to="/Settings?tab=office" aria-label={t("Einstellungen")} title={t("Einstellungen")} className="p-2 rounded-md hover:bg-sidebar-accent text-sidebar-foreground/70 hover:text-white transition-colors">
                   <Settings className="w-5 h-5" />
                 </Link>
               </div>
             ) : (
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-3 min-w-0">
-                <div aria-hidden="true" data-testid="buero-initialen" className="w-10 h-10 shrink-0 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                <div aria-hidden="true" data-testid="buero-initialen" className="w-9 h-9 shrink-0 bg-sidebar-accent border border-sidebar-border rounded-full flex items-center justify-center text-white font-medium text-sm">
                   {buero.initialen}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-white text-sm truncate" data-testid="buero-name" title={buero.name}>{buero.name}</p>
-                  <p className="text-xs text-slate-400 truncate" title={nutzerZeile}>{nutzerZeile}</p>
+                  <p className="text-xs text-sidebar-foreground/70 truncate" title={nutzerZeile}>{nutzerZeile}</p>
                 </div>
               </div>
-              <Link to="/Settings?tab=office" aria-label={t("Einstellungen")} title={t("Einstellungen")} className="shrink-0 p-2 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition-colors">
+              <Link to="/Settings?tab=office" aria-label={t("Einstellungen")} title={t("Einstellungen")} className="shrink-0 p-2 rounded-md hover:bg-sidebar-accent text-sidebar-foreground/70 hover:text-white transition-colors">
                 <Settings className="w-5 h-5" />
               </Link>
             </div>
@@ -615,7 +621,7 @@ function LayoutInner({ children }) {
 
         <div className="flex-1 flex flex-col relative min-w-0 min-h-0">
           {/* Global, always-visible current-project bar */}
-          <header className="relative z-30 bg-white/85 dark:bg-slate-900/85 backdrop-blur-sm border-b border-slate-200/60 dark:border-slate-800 px-4 md:px-6 py-2.5 shadow-sm flex items-center gap-3">
+          <header className="relative z-30 min-h-14 bg-card border-b border-border px-4 md:px-6 py-2 flex items-center gap-3">
             <SidebarTrigger aria-label={t("Navigation umschalten")} className="md:hidden hover:bg-slate-100 h-11 w-11 shrink-0 rounded-lg transition-colors" />
             {/* Header room (HUELLE-05, re-measured after the merge added the snapshot
                 button to the storage group): the visible label only from 2xl — the
@@ -624,7 +630,15 @@ function LayoutInner({ children }) {
                 and Strg-K hint never wrap into two lines. Between md and lg the
                 expanded sidebar leaves the header ~510 px: status badge and the
                 Strg-K hint step aside there (Ctrl+K itself keeps working). */}
-            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400 hidden 2xl:inline whitespace-nowrap shrink-0">{t("Aktuelles Projekt")}</span>
+            {/* Redesign 09.11.: breadcrumb "group / page" from navigation.js; from xl only, the header has no
+                room below that (see the width notes here). The page h1 says the same at every width. */}
+            {brotkrume && (
+              <nav aria-label={t("Standort")} data-testid="brotkrume" className="hidden xl:flex min-w-0 shrink items-center gap-1.5 text-sm whitespace-nowrap">
+                <span className="text-muted-foreground truncate">{t(brotkrume.gruppe)}</span>
+                <span className="text-muted-foreground" aria-hidden="true">/</span>
+                <span className="font-medium text-foreground truncate" aria-current="page">{t(brotkrume.seite)}</span>
+              </nav>
+            )}
             <Select value={projectId} onValueChange={setProjectId}>
               <SelectTrigger aria-label={t("Aktuelles Projekt")} aria-describedby={projektHinweise} className="h-9 w-[190px] md:w-[180px] lg:w-[240px] xl:w-[260px] 2xl:w-[300px] font-medium">
                 <SelectValue placeholder={t("Projekt wählen…")} />
@@ -665,7 +679,7 @@ function LayoutInner({ children }) {
               </span>
             )}
             {/* Sprachumschalter DE | EN */}
-            <div role="group" aria-label={t("Sprache")} className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden shrink-0">
+            <div role="group" aria-label={t("Sprache")} className="flex items-center rounded-md border border-input overflow-hidden shrink-0">
               {Object.keys(LANGS).map((code) => (
                 <button
                   key={code}
@@ -673,10 +687,10 @@ function LayoutInner({ children }) {
                   onClick={() => setLang(code)}
                   aria-label={LANGS[code]}
                   aria-pressed={lang === code}
-                  className={`px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                  className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
                     lang === code
-                      ? 'bg-teal-600 text-white'
-                      : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted'
                   }`}
                 >
                   {code.toUpperCase()}
@@ -699,7 +713,7 @@ function LayoutInner({ children }) {
                 onClick={() => { setHilfeOffen(false); setPaletteOffen(true); }}
                 title={t("Suche und Befehle")}
                 aria-label={t("Suche und Befehle")}
-                className="hidden lg:inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="hidden lg:inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-md border border-input px-2 py-1 text-xs text-muted-foreground hover:bg-muted transition-colors"
               >
                 <Search className="w-3 h-3" />
                 <kbd className="font-sans">Strg K</kbd>
@@ -732,7 +746,7 @@ function LayoutInner({ children }) {
 
           {/* tabIndex -1: focus target of the skip link and of every route
               change (Seitenwechsel), not a tab stop of its own. */}
-          <main id="hauptinhalt" role="main" tabIndex={-1} data-breite={seitenBreite(location.pathname)} className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-950 focus:outline-none">
+          <main id="hauptinhalt" role="main" tabIndex={-1} data-breite={seitenBreite(location.pathname)} className="flex-1 min-w-0 overflow-auto bg-background focus:outline-none">
             {/* 72-10 (N-06): tab title, focus and announcement on route changes,
                 skip-link handling — for every route and every shell state.
                 First in <main>: the "Weiter mit" bar stays directly before the
@@ -796,7 +810,7 @@ function LayoutInner({ children }) {
               itself, where it would only point at the page already open. */}
           {location.pathname !== "/AIDashboard" && (
             <div className="absolute bottom-6 right-6">
-              <AlhambraAssistantButton label={t("KI-Assistent")} onClick={() => navigate("/AIDashboard?tab=chat")} />
+              <AssistentButton label={t("KI-Assistent")} onClick={() => navigate("/AIDashboard?tab=chat")} />
             </div>
           )}
         </div>

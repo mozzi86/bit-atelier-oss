@@ -24,7 +24,7 @@ export default function BueroBereich() {
   return (
     <section aria-labelledby="bereich-buero" data-testid="bereich-office" className="space-y-4">
       <h2 id="bereich-buero" className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
-        <FileSignature className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("Büro & Briefkopf")}
+        <FileSignature className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> {t("Büro & Briefkopf")}
       </h2>
       <p className="text-sm text-slate-600 dark:text-slate-300">
         {t("Büroname, Adresse und Kontakt im Kopf aller Berichte")}

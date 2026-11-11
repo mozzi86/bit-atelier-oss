@@ -68,7 +68,7 @@ export default function ClassificationEditor({ elements = [], onSaveClassificati
             <Tag className="w-4 h-4" /> Bauteil-Klassifizierung
             <span className="text-sm font-normal text-slate-500">— KG · Gewerk · Schicht · Status</span>
           </CardTitle>
-          <Button size="sm" onClick={save} disabled={changedCount === 0} className="bg-gradient-to-r from-emerald-600 to-teal-600">
+          <Button size="sm" onClick={save} disabled={changedCount === 0} className="bg-primary hover:bg-primary/90">
             <Save className="w-4 h-4 mr-2" />
             {changedCount > 0 ? `Speichern (${changedCount})` : "Speichern"}
           </Button>
@@ -129,7 +129,7 @@ export default function ClassificationEditor({ elements = [], onSaveClassificati
                               onClick={() => toggleSchicht(el, s)}
                               className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
                                 active
-                                  ? "bg-emerald-600 border-emerald-600 text-white"
+                                  ? "bg-primary border-primary text-primary-foreground"
                                   : "border-slate-200 text-slate-500 hover:bg-slate-50"
                               }`}
                             >

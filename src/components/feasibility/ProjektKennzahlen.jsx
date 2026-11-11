@@ -93,7 +93,7 @@ export default function ProjektKennzahlen() {
   };
 
   return (
-    <Card data-testid="mk-karte" className="border-emerald-200">
+    <Card data-testid="mk-karte" className="border-border">
       <CardHeader className="pb-2">
         <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
           <span>{t("Projektkennzahlen (gespeichert)")}: {project.name}</span>
@@ -206,7 +206,7 @@ export default function ProjektKennzahlen() {
             </p>
           </div>
         </div>
-        {gespeichert && <p className="text-sm text-emerald-700" data-testid="mk-gespeichert">{t("Gespeichert")}</p>}
+        {gespeichert && <p className="text-sm text-erfolg" data-testid="mk-gespeichert">{t("Gespeichert")}</p>}
         {fehler && <p className="text-sm text-rose-700" role="alert" data-testid="mk-fehler">{fehler}</p>}
       </CardContent>
     </Card>

@@ -21,7 +21,7 @@ export default function KatalogPanel({ titel, katalog, onAdd, chipTitle, renderC
       {titel && <div className="text-xs font-semibold text-slate-600">{titel}</div>}
       {(katalog || []).map((g) => (
         <div key={g.gruppe} className="space-y-1">
-          <div className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">{g.gruppe}</div>
+          <div className="text-[10px] font-semibold text-slate-500">{g.gruppe}</div>
           <div className="flex flex-wrap gap-1">
             {(g.typen || []).map((t) => (
               <button

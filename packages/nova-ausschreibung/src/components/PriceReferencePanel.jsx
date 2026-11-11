@@ -93,7 +93,7 @@ export default function PriceReferencePanel({ priceRefs = [], onSyncTed, onImpor
           </div>
 
           <div className="border rounded-lg p-3 space-y-2">
-            <div className="font-medium text-sm flex items-center gap-1.5"><FileUp className="w-4 h-4 text-emerald-600" /> DÖE-Monatspaket (CSV)</div>
+            <div className="font-medium text-sm flex items-center gap-1.5"><FileUp className="w-4 h-4 text-muted-foreground" /> DÖE-Monatspaket (CSV)</div>
             <div>
               <Label className="text-xs">Jahr</Label>
               <Input aria-label={t("Jahr")} type="number" min={DOEE_ERSTES_JAHR} max={currentYear} value={doeeYear} aria-invalid={doeeJahrWert == null}

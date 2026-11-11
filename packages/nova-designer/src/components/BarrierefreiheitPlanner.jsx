@@ -112,8 +112,8 @@ export default function BarrierefreiheitPlanner() {
   return (
     <div className="space-y-4">
       {/* Persistenter Haftungs-Disclaimer — NICHT konditional ausblenden. */}
-      <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+      <div className="flex items-start gap-2 rounded-lg border border-warnung-rand bg-warnung-flaeche px-3 py-2 text-sm text-warnung">
+        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-warnung" />
         <span>
           <strong>Barrierefreiheit — Konzept-Richtwerte nach DIN 18040, kein Nachweis nach Landesbauordnung.</strong>{" "}
           Aufzugspflicht, Wohnungsquoten (barrierefrei/rollstuhlgerecht), Bewegungsflächen und Türbreiten
@@ -123,7 +123,7 @@ export default function BarrierefreiheitPlanner() {
       </div>
 
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: {pm.storeys} Geschosse · NGF {de(pm.ngf)} m² · OKF ≈ {de1(pm.okf_m)} m · ≈ {de(weAusNgf(pm.ngf))} WE (Näherungen, überschreibbar)
         </div>
       )}
@@ -241,14 +241,14 @@ export default function BarrierefreiheitPlanner() {
         {/* Richtwert-KPIs + Zusammenfassung */}
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Stat label="Aufzugspflicht (Richtwert)" value={kpi.pflicht ? "ja" : "nein"} accent="text-rose-600" />
-            <Stat label="Aufzugskabine (Richtwert)" value={kpi.kab ? "ausreichend" : "unter 1,10 × 1,40 m"} accent="text-orange-600" />
+            <Stat label="Aufzugspflicht (Richtwert)" value={kpi.pflicht ? "ja" : "nein"} accent="text-foreground" />
+            <Stat label="Aufzugskabine (Richtwert)" value={kpi.kab ? "ausreichend" : "unter 1,10 × 1,40 m"} accent="text-foreground" />
             <Stat label="Wohnungen gesamt (Konzept)" value={`${de(we)} WE`} accent="text-slate-700" />
-            <Stat label="Erf. barrierefrei erreichbar (Richtwert)" value={`${de(kpi.erfErr)} WE`} accent="text-sky-600" />
-            <Stat label="Erf. rollstuhlgerecht (Richtwert)" value={`${de(kpi.erfR)} WE`} accent="text-violet-600" />
-            <Stat label="Erf. Bewegungsfläche (Richtwert)" value={`${de1(bewegungsflaeche(stufe))} m`} accent="text-amber-600" />
-            <Stat label="Türbreite (Richtwert)" value={tuerBreiteOk(tuerBreite, stufe) ? "ausreichend" : "zu gering"} accent="text-cyan-700" />
-            <Stat label="Sanitär (Richtwert)" value={sanitaerOk({ stufe: saniStufe, bewegung: saniBewegung, dusche, wcSeitlich, waschtisch }) ? "plausibel" : "Hinweis"} accent="text-emerald-700" />
+            <Stat label="Erf. barrierefrei erreichbar (Richtwert)" value={`${de(kpi.erfErr)} WE`} accent="text-foreground" />
+            <Stat label="Erf. rollstuhlgerecht (Richtwert)" value={`${de(kpi.erfR)} WE`} accent="text-foreground" />
+            <Stat label="Erf. Bewegungsfläche (Richtwert)" value={`${de1(bewegungsflaeche(stufe))} m`} accent="text-foreground" />
+            <Stat label="Türbreite (Richtwert)" value={tuerBreiteOk(tuerBreite, stufe) ? "ausreichend" : "zu gering"} accent="text-foreground" />
+            <Stat label="Sanitär (Richtwert)" value={sanitaerOk({ stufe: saniStufe, bewegung: saniBewegung, dusche, wcSeitlich, waschtisch }) ? "plausibel" : "Hinweis"} accent="text-foreground" />
           </div>
 
           <Card>

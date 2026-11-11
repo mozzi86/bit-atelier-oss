@@ -84,7 +84,7 @@ export default function MusterBibliothek({
         </p>
 
         {ziel ? (
-          <p className="text-xs text-emerald-800">
+          <p className="text-xs text-foreground">
             Ziel: <strong>{ziel.oz}</strong> {ziel.title}
           </p>
         ) : (
@@ -129,7 +129,7 @@ export default function MusterBibliothek({
                   <td className="px-2 py-1">{z.m.einheit ?? "—"}</td>
                   <td className="px-2 py-1">
                     {z.vollstaendig ? (
-                      <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      <Badge className="text-[10px] bg-erfolg-flaeche text-erfolg border border-erfolg-rand">
                         <Layers className="w-2.5 h-2.5 mr-0.5" /> voller Selektor
                       </Badge>
                     ) : (

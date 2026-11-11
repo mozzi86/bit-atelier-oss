@@ -87,8 +87,9 @@ describe("107-12 Task 1 — Zustandsobjekt und Layer", () => {
     assert.equal(MIGRATIONEN.ansicht_layer.length, 1);
     assert.equal(istFachlayer("ansicht_layer"), true);
     assert.equal(migrateLayer("ansicht_layer", undefined).wert ?? null, null);
-    assert.deepEqual(ansichtLayerNormalisieren(undefined), { ausschnitte: [], ebenen: [], kombinationen: {} });
-    assert.deepEqual(ansichtLayerNormalisieren(ANSICHT_LEER), { ausschnitte: [], ebenen: [], kombinationen: {} });
+    // 55-01: additive `regel_vorlagen` (absent on old blobs → [])
+    assert.deepEqual(ansichtLayerNormalisieren(undefined), { ausschnitte: [], ebenen: [], kombinationen: {}, regel_vorlagen: [] });
+    assert.deepEqual(ansichtLayerNormalisieren(ANSICHT_LEER), { ausschnitte: [], ebenen: [], kombinationen: {}, regel_vorlagen: [] });
     const layer = { ausschnitte: [ausschnittNormalisieren({ id: "a1", name: "Schalplan", level: -1, strukturdarstellung: "nur-kern-tragend", regeln: STANDARD_REGELN })],
       ebenen: [{ id: "walls", visible: false, locked: true, farbe: "#112233", drucken: false }], kombinationen: { Mein: ["walls"] } };
     const gespeichert = stempelFuerSave("ansicht_layer", layer, new Date("2026-10-25T10:00:00.000Z"));

@@ -23,7 +23,7 @@ import { PERSONAL_ENTITAETEN } from "@core/api/personalEntitaeten.js";
 import { PERSONAL_EXPORT_BEREICH } from "@/lib/people/exportBereich.js";
 import { usePersonalDaten } from "./usePersonalDaten.js";
 
-const EINGABE = "flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
+const EINGABE = "flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
 const MINDESTLAENGE = 12;
 
 /**
@@ -65,7 +65,7 @@ function PassphraseDialog({ titel, bestaetigen, onAbbrechen, onWeiter, zweimal =
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onAbbrechen} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-600">{t("Abbrechen")}</button>
           <button type="button" disabled={gesperrt} onClick={() => onWeiter(a)} data-testid="personal-passphrase-weiter"
-            className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-50">
+            className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
             {bestaetigen}
           </button>
         </div>
@@ -162,7 +162,7 @@ export default function PersonalSicherung() {
         <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
         {t("Gerät sperren schützt zusätzlich (Art. 32 DSGVO)")}
       </span>
-      {meldung && <span role="status" className="text-xs text-emerald-700 dark:text-emerald-400">{meldung}</span>}
+      {meldung && <span role="status" className="text-xs text-erfolg">{meldung}</span>}
       {fehler && !modus && <span role="alert" className="text-xs text-rose-600">{fehler}</span>}
 
       {modus === "sichern" && (

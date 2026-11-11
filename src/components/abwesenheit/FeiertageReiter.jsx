@@ -34,7 +34,7 @@ export default function FeiertageReiter({ jahr, einst, kalkulationTage, onJahr }
             {[jahr - 1, jahr, jahr + 1].map((j) => <option key={j} value={j}>{j}</option>)}
           </select>
         </label>
-        <Link className="text-xs underline text-emerald-800 dark:text-emerald-300" to="/Settings?tab=rules">{t("Feiertage einstellen")}</Link>
+        <Link className="text-xs underline text-link" to="/Settings?tab=rules">{t("Feiertage einstellen")}</Link>
       </div>
       <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 text-sm dark:divide-slate-800 dark:border-slate-700" data-anzahl={liste.length}>
         {liste.map((f) => (

@@ -31,7 +31,7 @@ const Row = ({ k, v }) => (
 
 const Section_ = ({ title, children }) => (
   <div className="mt-6">
-    <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-emerald-500 pb-1 mb-3">{title}</h2>
+    <h2 className="text-[15px] font-bold text-slate-800 border-b-2 border-border pb-1 mb-3">{title}</h2>
     {children}
   </div>
 );
@@ -90,8 +90,8 @@ export default function ReportDocument({ docRef, project, data, type, options = 
       {/* Header */}
       <div className="flex items-center justify-between border-b-2 border-slate-800 pb-3">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
-            <Building2 className="w-5 h-5 text-white" />
+          <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
+            <Building2 className="w-5 h-5 text-primary-foreground" />
           </div>
           <div>
             <div className="font-bold text-slate-800 leading-tight max-w-[360px]">{office}</div>
@@ -260,7 +260,7 @@ export default function ReportDocument({ docRef, project, data, type, options = 
           <div className="grid grid-cols-3 gap-3 mb-2">
             <div className="rounded bg-slate-50 p-2 text-center"><div className="font-bold text-slate-800">{eur0(estimate)}</div><div className="text-[10px] text-slate-500">Kostenanschlag (LV)</div></div>
             <div className="rounded bg-slate-50 p-2 text-center"><div className="font-bold text-blue-700">{eur0(awardSum)}</div><div className="text-[10px] text-slate-500">Vergabesumme</div></div>
-            <div className="rounded bg-slate-50 p-2 text-center"><div className={`font-bold ${deltaVergabe > 0 ? "text-amber-700" : "text-emerald-700"}`}>{awardSum > 0 ? eur0(deltaVergabe) : "—"}</div><div className="text-[10px] text-slate-500">{t("Δ Vergabe ggü. Anschlag der vergebenen Positionen")}</div></div>
+            <div className="rounded bg-slate-50 p-2 text-center"><div className={`font-bold ${deltaVergabe > 0 ? "text-amber-700" : "text-erfolg"}`}>{awardSum > 0 ? eur0(deltaVergabe) : "—"}</div><div className="text-[10px] text-slate-500">{t("Δ Vergabe ggü. Anschlag der vergebenen Positionen")}</div></div>
             <div className="rounded bg-slate-50 p-2 text-center" data-kennzahl="nachtraege-genehmigt"><div className="font-bold text-slate-800">{eur0(kosten.nachtraegeGenehmigt.summe)}</div><div className="text-[10px] text-slate-500">{t("Nachträge genehmigt ({n})").replace("{n}", String(kosten.nachtraegeGenehmigt.anzahl))}</div></div>
             <div className="rounded bg-slate-50 p-2 text-center" data-kennzahl="nachtraege-offen"><div className="font-bold text-amber-700">{eur0(kosten.nachtraegeOffen.summe)}</div><div className="text-[10px] text-slate-500">{t("Nachträge offen ({n})").replace("{n}", String(kosten.nachtraegeOffen.anzahl))}</div></div>
             <div className="rounded bg-slate-50 p-2 text-center" data-kennzahl="auftragssumme"><div className="font-bold text-blue-800">{kosten.auftragssummeInklNachtraege != null ? eur0(kosten.auftragssummeInklNachtraege) : "—"}</div><div className="text-[10px] text-slate-500">{t("Auftragssumme inkl. Nachträge")}</div></div>

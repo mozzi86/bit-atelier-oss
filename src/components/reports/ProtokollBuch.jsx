@@ -79,7 +79,7 @@ export default function ProtokollBuch() {
               </button>
               <span className="flex items-center gap-3">
                 <span className={spaet ? "text-rose-700" : "text-slate-500"}>{offen.length} {t("offen")}{spaet ? ` · ${spaet} ${t("überfällig")}` : ""}</span>
-                <button aria-label={t("Protokoll als PDF")} type="button" className="text-slate-500 hover:text-emerald-700" onClick={() => pdf(p)} title="PDF"><FileDown className="h-4 w-4" /></button>
+                <button aria-label={t("Protokoll als PDF")} type="button" className="text-slate-500 hover:text-foreground" onClick={() => pdf(p)} title="PDF"><FileDown className="h-4 w-4" /></button>
               </span>
             </div>
           );
@@ -88,7 +88,7 @@ export default function ProtokollBuch() {
       </div>
 
       {entwurf && (
-        <div className="space-y-3 rounded-xl border border-emerald-200 bg-white p-4" data-testid="pb-editor" data-nummer={entwurf.nummer}>
+        <div className="space-y-3 rounded-xl border border-border bg-white p-4" data-testid="pb-editor" data-nummer={entwurf.nummer}>
           <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
             <label className="flex flex-col"><span className="text-slate-500">{t("Titel")}</span><input className={feld} value={entwurf.titel} onChange={(e) => set({ titel: e.target.value })} data-testid="pb-titel" /></label>
             <label className="flex flex-col"><span className="text-slate-500">{t("Nr.")}</span><input className={feld} type="number" value={entwurf.nummer} onChange={(e) => set({ nummer: Number(e.target.value) || 1 })} /></label>
@@ -144,7 +144,7 @@ export default function ProtokollBuch() {
             <Button size="sm" variant="outline" onClick={() => csv(entwurf)} data-testid="pb-csv">CSV</Button>
             <Button size="sm" variant="outline" onClick={() => pdf(entwurf)} data-testid="pb-pdf"><FileDown className="mr-1.5 h-4 w-4" /> PDF</Button>
             <Button size="sm" variant="outline" onClick={() => setEntwurf(null)}>{t("Schließen")}</Button>
-            <Button size="sm" onClick={speichern} disabled={busy || !entwurf.titel?.trim()} data-testid="pb-speichern" className="bg-gradient-to-r from-emerald-600 to-teal-600"><Save className="mr-1.5 h-4 w-4" /> {busy ? t("Speichern…") : t("Speichern")}</Button>
+            <Button size="sm" onClick={speichern} disabled={busy || !entwurf.titel?.trim()} data-testid="pb-speichern" className="bg-primary hover:bg-primary/90"><Save className="mr-1.5 h-4 w-4" /> {busy ? t("Speichern…") : t("Speichern")}</Button>
           </div>
         </div>
       )}

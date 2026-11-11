@@ -128,7 +128,7 @@ export default function RaumklimaPlanner() {
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <ThermometerSun className="w-5 h-5 text-teal-600" />
+          <ThermometerSun className="w-5 h-5 text-muted-foreground" />
           <h2 className="text-lg font-bold text-slate-800">Raumklima — kritischster Raum je Geschoss</h2>
         </div>
         <Badge className={ampelStyle.color}>{ampelStyle.label}</Badge>
@@ -232,7 +232,7 @@ export default function RaumklimaPlanner() {
             </CardHeader>
             <CardContent className="space-y-2">
               {raeume.map((r, idx) => (
-                <div key={r.key} className={`rounded-lg border p-2 ${r.key === info?.kritisch?.key ? "border-teal-300 bg-teal-50/50" : ""}`}>
+                <div key={r.key} className={`rounded-lg border p-2 ${r.key === info?.kritisch?.key ? "border-primary bg-muted/50" : ""}`}>
                   <div className="flex items-center gap-3 flex-wrap">
                     <span className="w-6 text-xs text-slate-400 text-right shrink-0">{idx + 1}.</span>
                     <div className="flex-1 min-w-0">
@@ -257,7 +257,7 @@ export default function RaumklimaPlanner() {
                     </div>
                   )}
                   {r.key === info?.kritisch?.key && !info?.din && r.nachweisFrei && r.fenster.length > 0 && (
-                    <div className="mt-2 pt-2 border-t text-xs text-emerald-700">
+                    <div className="mt-2 pt-2 border-t text-xs text-erfolg">
                       f_WG unter der Freistellungsgrenze — kein Kennwert-Nachweis erforderlich (Richtwert).
                     </div>
                   )}

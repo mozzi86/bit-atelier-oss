@@ -61,7 +61,7 @@ export default function FinanceSummary({ changeOrders, isLoading }) {
         title={t("Kostenwirkung gesamt")}
         value={formatter.format(totalImpact)}
         icon={totalImpact >= 0 ? ArrowUpRight : ArrowDownRight}
-        color={totalImpact >= 0 ? "text-red-500" : "text-emerald-500"}
+        color={totalImpact >= 0 ? "text-red-500" : "text-erfolg"}
       />
       <StatCard
         title={t("Genehmigte Kostenwirkung")}

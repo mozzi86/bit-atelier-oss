@@ -128,8 +128,8 @@ export default function People() {
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="min-w-0 flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent flex items-center gap-2">
-                <IdCard className="w-7 h-7 text-emerald-600" aria-hidden="true" /> {t("Personal")}
+              <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
+                <IdCard className="w-7 h-7 text-muted-foreground" aria-hidden="true" /> {t("Personal")}
               </h1>
               <p className="text-slate-600 mt-1 dark:text-slate-300">{t("Mitarbeitende, Mitarbeitersuche, Einstellung und Verträge")}</p>
             </div>
@@ -139,7 +139,7 @@ export default function People() {
                 <button
                   type="button"
                   onClick={neuePersonOeffnen}
-                  className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-sm font-medium text-white shadow-lg hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary hover:bg-primary/90 px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <UserPlus className="h-4 w-4" aria-hidden="true" /> {t("Neue Person")}
                 </button>

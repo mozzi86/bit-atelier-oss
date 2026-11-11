@@ -18,10 +18,10 @@ import { DATENQUELLE } from '@core/lib/umgebung';
  * @returns {string} class list
  */
 const feldKlasse = (extra = '') =>
-  `w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60 ${extra}`;
+  `w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 ${extra}`;
 
 const knopfKlasse =
-  'w-full rounded-md bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-sm font-medium text-white shadow hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60';
+  'w-full rounded-md bg-primary hover:bg-primary/90 px-4 py-2 text-sm font-medium text-primary-foreground shadow disabled:cursor-not-allowed disabled:opacity-60';
 
 /**
  * Returns the Supabase client — ONLY behind a DATENQUELLE === 'supabase'
@@ -157,7 +157,7 @@ export function PasswortZuruecksetzen() {
   };
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-slate-50 via-green-50/30 to-blue-50/20 p-4">
+    <div className="min-h-dvh flex items-center justify-center bg-background p-4">
       <main className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-xl" aria-labelledby="reset-titel">
         <h1 id="reset-titel" className="mb-1 text-lg font-bold text-slate-800">
           {hatRecovery ? 'Neues Passwort setzen' : 'Passwort zurücksetzen'}
@@ -191,7 +191,7 @@ export function PasswortZuruecksetzen() {
               />
             </div>
             {fehler && <p role="alert" className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{fehler}</p>}
-            {hinweis && <p role="status" className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{hinweis}</p>}
+            {hinweis && <p role="status" className="rounded-md border border-erfolg-rand bg-erfolg-flaeche px-3 py-2 text-sm text-erfolg">{hinweis}</p>}
             <button type="submit" className={knopfKlasse} disabled={fehlkonfiguriert || busy}>
               {busy ? 'Wird gesendet …' : 'Reset-Link senden'}
             </button>
@@ -237,7 +237,7 @@ export function PasswortZuruecksetzen() {
         )}
 
         <p className="mt-4 text-center text-xs">
-          <a href="/anmeldung" className="font-medium text-emerald-700 underline hover:text-emerald-900">
+          <a href="/anmeldung" className="font-medium text-link underline">
             Zurück zur Anmeldung
           </a>
         </p>

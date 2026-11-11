@@ -890,8 +890,8 @@ export default function AVA() {
       <div className="max-w-7xl mx-auto space-y-6">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent flex items-center gap-2">
-              <FileSpreadsheet className="w-7 h-7 text-emerald-600" /> {t("AVA (Ausschreibung)")}
+            <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
+              <FileSpreadsheet className="w-7 h-7 text-muted-foreground" /> {t("AVA (Ausschreibung)")}
             </h1>
             {/* Menu name as h1, the three phases as subtitle (naming table N-02). */}
             <p className="text-slate-600 mt-1">
@@ -938,7 +938,7 @@ export default function AVA() {
                 72-15: folded below the LV — the LV is what the tab is for, the
                 import is a one-off at project start. */}
             <details>
-              <summary className="w-fit cursor-pointer select-none rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
+              <summary className="w-fit cursor-pointer select-none rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 {t("Projekt-Bundle importieren …")}
               </summary>
               <div className="mt-3">

@@ -146,7 +146,7 @@ export default function MitarbeiterTabelle({ mitarbeiterListe, vertraege, gehalt
         <div className="flex flex-wrap gap-1" role="group" aria-label={t("Filter")}>
           {FILTER.map((f) => (
             <button key={f.key} type="button" onClick={() => setFilterKey(f.key)} aria-pressed={filterKey === f.key}
-              className={`rounded-md px-3 py-1.5 text-sm ${filterKey === f.key ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"}`}>
+              className={`rounded-md px-3 py-1.5 text-sm ${filterKey === f.key ? "bg-primary text-primary-foreground" : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"}`}>
               {t(f.label)}
             </button>
           ))}
@@ -180,7 +180,7 @@ export default function MitarbeiterTabelle({ mitarbeiterListe, vertraege, gehalt
                   <td className={TD}>{m.personalnummer}</td>
                   <td className={TD}>
                     <Link to={`/People${bauePersonalLink({ tab: "staff", mitarbeiter: m.id })}`} data-aktion="oeffnen"
-                      className="font-medium text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400">
+                      className="font-medium text-link underline-offset-4 hover:underline">
                       {anzeigeName(m)}
                     </Link>
                   </td>

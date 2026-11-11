@@ -46,6 +46,36 @@ export function umrissVon(el) {
   return [];
 }
 
+/** Half the side of the frame a new note shows in the plan preview, in m [ASSUMED: 0.25 m, a visible mark at 1:50-1:100]. */
+const NOTIZ_RAHMEN_M = 0.25;
+
+/**
+ * 261111-zs1: the ghost of a CREATING proposal - drawn from the element the drawing function built for the proposal (nachher.element):
+ * a new wall as its body outline, a new door as the piece of its wall's body it cuts (width x wall thickness), a note as a small frame.
+ * @param {any} modell  Current model record (the door's wall). @param {any} vorschlag  Open "anlegen" proposal.
+ * @returns {Array<{typ: "flaeche"|"linie", punkte: Array<{x: number, z: number}>, level: number}>}
+ */
+function anlegenFormen(modell, vorschlag) {
+  const el = vorschlag.nachher?.element;
+  if (!el) return [];
+  const level = Number(el.level ?? vorschlag.params?.level) || 0;
+  const art = vorschlag.params?.objekt;
+  if (art === "wand") return [{ typ: /** @type {"flaeche"} */ ("flaeche"), punkte: umrissVon(el), level }].filter((f) => f.punkte.length);
+  if (art === "notiz") {
+    const h = NOTIZ_RAHMEN_M;
+    return [{ typ: /** @type {"flaeche"} */ ("flaeche"), punkte: [{ x: el.x - h, z: el.z - h }, { x: el.x + h, z: el.z - h }, { x: el.x + h, z: el.z + h }, { x: el.x - h, z: el.z + h }], level }];
+  }
+  if (art === "tuer") {
+    const w = (modell.customWalls || []).find((/** @type {any} */ x) => x._idx === el.wallIdx);
+    if (!w) return [];
+    const g = wandGeometrie(w);
+    const half = (Number(el.width) || 0) / 2, u = Number(el.u) || 0, o = g.versatz_m, h = g.dicke_m / 2;
+    const bei = (/** @type {number} */ s, /** @type {number} */ q) => ({ x: w.a.x + g.richtung.x * s + g.normale.x * q, z: w.a.z + g.richtung.z * s + g.normale.z * q });
+    return [{ typ: /** @type {"flaeche"} */ ("flaeche"), punkte: [bei(u - half, o + h), bei(u + half, o + h), bei(u + half, o - h), bei(u - half, o - h)], level: Number(w.level) || 0 }];
+  }
+  return [];
+}
+
 /**
  * The shapes the plan draws for one open proposal.
  * @param {any} modell  Current model record (customWalls ...).
@@ -56,6 +86,7 @@ export function umrissVon(el) {
  */
 export function planFormen(modell, vorschlag, opt = {}) {
   if (!modell || !vorschlag || vorschlag.ziel?.quelle === "ifc") return [];
+  if (vorschlag.art === "anlegen") return anlegenFormen(modell, vorschlag);
   const fund = bauteilImModell(modell, vorschlag.ziel.guid, { projektId: opt.projektId ?? null });
   if (!fund) return [];
   const el = fund.element;

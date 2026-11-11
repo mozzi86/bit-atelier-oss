@@ -68,7 +68,7 @@ export default function TenderPanel({
           <h3 className="text-lg font-semibold text-slate-800">Ausschreibungen</h3>
           <p className="text-sm text-slate-500">{tenders.length} Lose · Bieter aus dem Adressbuch einladen</p>
         </div>
-        <Button onClick={openNew} disabled={!groups.length} className="bg-gradient-to-r from-emerald-600 to-teal-600">
+        <Button onClick={openNew} disabled={!groups.length} className="bg-primary hover:bg-primary/90">
           <Plus className="w-4 h-4 mr-2" /> Ausschreibung
         </Button>
       </div>
@@ -168,7 +168,7 @@ export default function TenderPanel({
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Abbrechen</Button>
-              <Button type="submit" disabled={!form.trade} className="bg-gradient-to-r from-emerald-600 to-teal-600">Erstellen</Button>
+              <Button type="submit" disabled={!form.trade} className="bg-primary hover:bg-primary/90">Erstellen</Button>
             </div>
           </form>
         </FormModal>

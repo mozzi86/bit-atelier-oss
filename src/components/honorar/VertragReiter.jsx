@@ -80,7 +80,7 @@ export default function VertragReiter({ zh, wert, alleProjekte }) {
               const k = vertragskonto(v, kontoDaten(v));
               const info = leistungsbildInfo(v.leistungsbild);
               return (
-                <tr key={v.id} className={v.id === vertrag?.id ? "bg-emerald-50/60 dark:bg-emerald-950/40" : ""} data-testid="vertrag-zeile" data-nummer={v.nummer || ""}>
+                <tr key={v.id} className={v.id === vertrag?.id ? "bg-muted" : ""} data-testid="vertrag-zeile" data-nummer={v.nummer || ""}>
                   <td className="px-3 py-2">
                     <button type="button" className="font-medium underline-offset-2 hover:underline" onClick={() => setGewaehlt(v.id)} aria-pressed={v.id === vertrag?.id}>
                       {v.nummer || t("ohne Nummer")}

@@ -161,7 +161,7 @@ export default function Finance() {
       <div className="max-w-7xl mx-auto space-y-8">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold text-foreground">
               {t("Finanzen & Nachträge")}
             </h1>
             <p className="text-slate-600 mt-1">{untertitel}</p>
@@ -184,7 +184,7 @@ export default function Finance() {
             )}
             <Button
               onClick={neu}
-              className="bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg hover:from-emerald-700 hover:to-teal-700"
+              className="bg-primary hover:bg-primary/90 shadow-sm"
             >
               <Plus className="w-4 h-4 mr-2" />
               {t("Neuer Nachtrag")}

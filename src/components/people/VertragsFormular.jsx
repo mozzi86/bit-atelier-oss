@@ -26,7 +26,7 @@ import { VERTRAGSARTEN, pruefeVertrag, probezeitEnde } from "@/lib/people/vertra
 import { kuendigungsfristGesetzlich } from "@/lib/people/kuendigung.js";
 import PersonalDokumente from "./PersonalDokumente.jsx";
 
-const EINGABE = "flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
+const EINGABE = "flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
 const BESCHRIFTUNG = "text-sm font-medium leading-none text-slate-700 dark:text-slate-200";
 
 /** @param {string} text @param {Record<string, string|number>} werte @returns {string} */
@@ -220,7 +220,7 @@ export default function VertragsFormular({ vertrag, mitarbeiterListe, vertraege,
           </div>
           <div className="flex items-center gap-2 sm:col-span-2">
             <input id="vf-schriftform" type="checkbox" checked={Boolean(entwurf.schriftform_vor_beginn)} onChange={(e) => setzen("schriftform_vor_beginn", e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-ring" />
             <label htmlFor="vf-schriftform" className={BESCHRIFTUNG}>{t("Schriftform vor Beginn nachgewiesen")}</label>
           </div>
           <div>
@@ -274,7 +274,7 @@ export default function VertragsFormular({ vertrag, mitarbeiterListe, vertraege,
           <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
             {t("Abbrechen")}
           </button>
-          <button type="submit" disabled={speichern || !entwurf.mitarbeiter_id} className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60">
+          <button type="submit" disabled={speichern || !entwurf.mitarbeiter_id} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
             {t("Speichern")}
           </button>
         </div>

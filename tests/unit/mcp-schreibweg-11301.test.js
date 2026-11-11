@@ -113,7 +113,7 @@ describe('113-01 — MCP server against the real server/index.js', () => {
     assert.ok(notizen.some((x) => x.text === 'Schreibweg 113-01'), JSON.stringify(notizen).slice(0, 300));
 
     const d = await rpc('tools/call', { name: 'zeichenflaeche_befehle', arguments: {} });
-    assert.doesNotMatch(text(d), /401|Sitzung|Steuerungs-Token/, text(d));
+    assert.doesNotMatch(text(d), /\b401\b|Sitzung|Steuerungs-Token/, text(d));
     assert.match(text(d), /not-run/, text(d));
   });
 });

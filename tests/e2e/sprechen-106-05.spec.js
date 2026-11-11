@@ -88,6 +88,10 @@ async function harnessFake(page) {
     /** @type {null | ((text: string, ws: any, msg: any) => Promise<void>)} */ agent: null,
     /** @type {any[]} */ ziele: [],
   };
+  await page.route("**/api/ki/harness/dienst", (route) => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: JSON.stringify(h.da ? h.status : { erreichbar: false }),
+  }));
   await page.route(`${HARNESS}/**`, async (route) => {
     if (!h.da) return route.abort("connectionrefused");
     const url = new URL(route.request().url());

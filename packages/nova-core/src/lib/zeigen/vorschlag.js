@@ -16,6 +16,7 @@ import {
   naechsteFreieIdx, transformieren, vorschlagErzeugen,
 } from "./aenderungen.js";
 import { wandTeilen, deckeTeilen } from "./teilen.js";
+import { ANLEGEN_OBJEKTE } from "./anlegen.js";
 
 /** Refusal text of an IFC change without a project: the journal entry would belong to no project and never be loaded again. */
 export const KEIN_PROJEKT_TEXT = "Kein Projekt gewählt — ohne Projekt kann die Änderung nicht im Journal gespeichert werden";
@@ -51,7 +52,7 @@ function abgeleitetVonWand(wand, pid) {
  * Prepares ONE change as a proposal: finds the target by GUID, computes before/after, composes the sentence, runs the
  * check. Nothing is changed, nothing is stored - the proposal waits for a human's confirmation.
  * @param {any} modell  Model record of the studio (customWalls ... , see bauteilImModell), may be a stand-in for an IFC model.
- * @param {{art: "eigenschaft"|"transformieren"|"teilen", ziel?: {guid: string, klasse?: string, name?: string}, kontext?: any,
+ * @param {{art: "eigenschaft"|"transformieren"|"teilen"|"anlegen", ziel?: {guid: string, klasse?: string, name?: string}, kontext?: any,
  *   params: any, herkunft: {quelle: string, befehl_text?: string|null}, ifcBauteil?: any}} eingabe
  *   ziel: explicit GUID; kontext: selection record for "dieses" (used when `ziel` is missing; refused when empty);
  *   params: see vorschlagErzeugen (teilen: wall {punkt_m} or slab {linie}); ifcBauteil: `{quelle: "ifc", modell, guid, psets,
@@ -65,9 +66,21 @@ function abgeleitetVonWand(wand, pid) {
  */
 export function vorschlagVorbereiten(modell, eingabe, opt = {}) {
   const pid = opt.projektId ?? null;
-  const ziel0 = eingabe.ziel?.guid ? eingabe.ziel : zielAusAuswahl(eingabe.kontext ?? null);
   const params = eingabe.params ?? {};
   const optErz = { t: opt.t, id: opt.id, zeit: opt.zeit };
+
+  // --- 261111-zs1: a NEW element - no target to find, the drawing function builds it on a copy for the sentence and the preview -----
+  if (eingabe.art === "anlegen") {
+    const r = modellMitAenderung(modell ?? {}, { art: "anlegen", ziel: { guid: "" }, params }, { projektId: pid, zeichnen: /** @type {any} */ (opt).zeichnen ?? null,
+      naechsteIdx: opt.naechsteIdx, geschosshoehe_m: opt.geschosshoehe_m });
+    const def = ANLEGEN_OBJEKTE[/** @type {"wand"|"tuer"|"notiz"} */ (params.objekt)];
+    const kuerzel = params.objekt === "wand" ? `W-${r.element._idx}` : `${r.element._idx}`;
+    const ziel = { guid: /** @type {string} */ (r.neu[0]), klasse: def.klasse, name: `${def.wort} ${kuerzel} (neu)`, quelle: /** @type {"bim"} */ ("bim") };
+    const roh = { art: eingabe.art, ziel, params, vorher: { element: null }, nachher: { element: r.element, arrayName: r.arrayName } };
+    const pruefung = pruefeAenderung(modell ?? {}, roh, opt);
+    return vorschlagErzeugen({ ...roh, herkunft: /** @type {any} */ (eingabe.herkunft), pruefung }, optErz);
+  }
+  const ziel0 = eingabe.ziel?.guid ? eingabe.ziel : zielAusAuswahl(eingabe.kontext ?? null);
 
   // --- IFC element: only a property, only as journal entry -----------------------------------------------------
   if (eingabe.ifcBauteil?.quelle === "ifc") {
@@ -176,17 +189,24 @@ export function vorschlagAusfuehren(modell, vorschlag, opt = {}) {
     bestaetigt_durch: von, satz: vorschlag.satz ?? null };
   // the mark the element carried before (a step reverses it only while it is still its own)
   const markeVorher = ifc ? null : (bauteilImModell(modell ?? {}, vorschlag.ziel.guid, { projektId: opt.projektId ?? null })?.element?.[MARKE_FELD] ?? null);
-  const r = modellMitAenderung(modell ?? {}, vorschlag, { projektId: opt.projektId, geschosshoehe_m: opt.geschosshoehe_m, naechsteIdx: opt.naechsteIdx, zeit, bestaetigt_durch: von, marke });
+  const r = modellMitAenderung(modell ?? {}, vorschlag, { projektId: opt.projektId, geschosshoehe_m: opt.geschosshoehe_m, naechsteIdx: opt.naechsteIdx, zeit, bestaetigt_durch: von, marke,
+    zeichnen: /** @type {any} */ (opt).zeichnen ?? null });
   // what the step REALLY made: the studio's counter may have given the second part of a split another number than the preview
   let nachher = vorschlag.nachher;
+  let ziel = vorschlag.ziel;
+  // 261111-zs1: a creation records the element as stored (with its mark) and its real GUID - the undo removes exactly that one
+  if (vorschlag.art === "anlegen" && r.element) {
+    nachher = { ...vorschlag.nachher, element: r.element, arrayName: r.arrayName };
+    ziel = { ...vorschlag.ziel, guid: r.neu[0] };
+  }
   if (vorschlag.art === "transformieren" && r.element) nachher = { geometrie: geometrieVon(r.element) };
   if (vorschlag.art === "teilen" && r.teile) {
     nachher = { ...vorschlag.nachher, teile: r.teile.map((w, i) => ({ ...(vorschlag.nachher?.teile?.[i] || {}), _idx: w._idx, guid: w.guid, element: w })), oeffnungenNach: r.oeffnungenNach };
   }
-  const eintrag = herkunftEintrag({ ...vorschlag, nachher }, {
+  const eintrag = herkunftEintrag({ ...vorschlag, ziel, nachher }, {
     zeit, bestaetigt_durch: von,
     ...(r.journal ? { journal_zeit: r.journal.zeit } : {}),
-    ...(ifc || vorschlag.art === "teilen" ? {} : { marke_vorher: markeVorher }),
+    ...(ifc || vorschlag.art === "teilen" || vorschlag.art === "anlegen" ? {} : { marke_vorher: markeVorher }),
   });
   return { modell: r.modell, eintrag, ...(r.journal ? { journal: r.journal } : {}), warnungen: r.warnungen };
 }

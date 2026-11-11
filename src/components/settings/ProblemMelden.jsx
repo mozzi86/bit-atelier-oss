@@ -68,7 +68,7 @@ export default function ProblemMelden() {
           </label>
           {fehler && <p role="alert" className="text-xs text-fehler dark:text-rose-300">{t("Protokoll nicht lesbar:")} {fehler}</p>}
           <details>
-            <summary className="cursor-pointer text-sm text-erfolg dark:text-emerald-400">{t("Diese Meldung geht an GitHub")}</summary>
+            <summary className="cursor-pointer text-sm text-erfolg">{t("Diese Meldung geht an GitHub")}</summary>
             <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs dark:bg-slate-800" data-testid="problem-vorschau">{issueText(daten)}</pre>
           </details>
           <div className="flex flex-wrap gap-2">

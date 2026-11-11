@@ -21,7 +21,7 @@ import ExportKnopf from "./gemeinsam/ExportKnopf.jsx";
 import RichtwertHinweis from "./gemeinsam/RichtwertHinweis.jsx";
 import DatevExportAbschnitt from "./DatevExportAbschnitt.jsx";
 
-const FELD = "h-9 rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";
+const FELD = "h-9 rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900";
 
 /**
  * Years worth offering in the selector: every year with a Steuerzahlung,
@@ -170,7 +170,7 @@ export default function JahresuebersichtReiter({ bh }) {
               <p className="text-sm text-slate-700 dark:text-slate-200">
                 {formatEuro(vorjahrCent)}
                 {delta && (
-                  <span className={delta.deltaCent < 0 ? "ml-2 text-red-700 dark:text-red-300" : "ml-2 text-emerald-700 dark:text-emerald-400"}>
+                  <span className={delta.deltaCent < 0 ? "ml-2 text-red-700 dark:text-red-300" : "ml-2 text-erfolg"}>
                     Δ {delta.deltaCent >= 0 ? "+" : ""}{formatEuro(delta.deltaCent)}
                     {delta.prozent !== null && ` (${delta.prozent >= 0 ? "+" : ""}${delta.prozent.toLocaleString("de-DE")} %)`}
                   </span>

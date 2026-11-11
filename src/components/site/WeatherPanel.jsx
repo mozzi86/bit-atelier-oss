@@ -31,10 +31,10 @@ export default function WeatherPanel({ weather, restrictions, loading, refresh, 
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Badge className={restrictions.droneGround ? "bg-red-100 text-red-800" : "bg-emerald-100 text-emerald-800"}>
+          <Badge className={restrictions.droneGround ? "bg-red-100 text-red-800" : "bg-erfolg-flaeche text-erfolg"}>
             <Plane className="w-3 h-3 mr-1" /> Drohnen {restrictions.droneGround ? "gesperrt" : "frei"}
           </Badge>
-          <Badge className={restrictions.craneStop ? "bg-red-100 text-red-800" : "bg-emerald-100 text-emerald-800"}>
+          <Badge className={restrictions.craneStop ? "bg-red-100 text-red-800" : "bg-erfolg-flaeche text-erfolg"}>
             🏗️ Kran {restrictions.craneStop ? "Stopp" : "frei"}
           </Badge>
           {restrictions.outdoorWarn && <Badge className="bg-amber-100 text-amber-800">Außenarbeiten: Vorsicht</Badge>}

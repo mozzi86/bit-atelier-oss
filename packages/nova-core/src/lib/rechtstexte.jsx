@@ -258,7 +258,7 @@ export function DatenschutzText() {
           nicht auf das Übliche gekürzt.
         </p>
 
-        <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <p className="pt-2 text-xs font-semibold text-slate-500">
           Gilt für jeden Besucher
         </p>
 
@@ -368,7 +368,7 @@ export function DatenschutzText() {
           <p>Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO, sonst lit. f.</p>
         </Verarbeitung>
 
-        <p className="pt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <p className="pt-3 text-xs font-semibold text-slate-500">
           Gilt zusätzlich im angemeldeten Betrieb
         </p>
 
@@ -517,7 +517,7 @@ export function DatenschutzText() {
       </Abschnitt>
 
       <div className="mt-6 rounded-md border-2 border-slate-300 bg-white p-4">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-800">
+        <h2 className="text-sm font-bold text-slate-800">
           Widerspruchsrecht nach Art. 21 DSGVO
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-700">

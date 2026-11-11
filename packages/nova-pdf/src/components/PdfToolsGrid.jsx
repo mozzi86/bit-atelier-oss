@@ -161,6 +161,23 @@ function Modal({ onClose, title, icon: Icon, color, children }) {
 // Werkzeug-Dialog
 // ---------------------------------------------------------------------------
 
+/**
+ * File button of the tool dialogs. Module level on purpose: defined inside ToolDialog it was a new component type on every
+ * render, so each re-render of the dialog replaced the <input> — a file chosen in that moment landed on
+ * a detached input and was lost.
+ * @param {{accept?: string, multiple?: boolean, onChange?: (e: any) => void, label: string}} props
+ */
+function UploadButton({ accept, multiple, onChange, label }) {
+  return (
+    <label className="inline-flex">
+      <input type="file" accept={accept} multiple={multiple} className="hidden" onChange={onChange} />
+      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-200 text-sm text-slate-700 cursor-pointer hover:bg-slate-50 transition-colors">
+        <Upload className="w-3.5 h-3.5" /> {label}
+      </span>
+    </label>
+  );
+}
+
 function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) {
   const { t } = useI18n();
   // Quellen
@@ -431,16 +448,6 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
 
   const resultSize = (r) => (r.bytes ? r.bytes.length : Math.round((r.dataUrl.length * 3) / 4));
 
-  /** @param {{accept?: string, multiple?: boolean, onChange?: (e: any) => void, label: string}} props */
-  const UploadButton = ({ accept, multiple, onChange, label }) => (
-    <label className="inline-flex">
-      <input type="file" accept={accept} multiple={multiple} className="hidden" onChange={onChange} />
-      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-200 text-sm text-slate-700 cursor-pointer hover:bg-slate-50 transition-colors">
-        <Upload className="w-3.5 h-3.5" /> {label}
-      </span>
-    </label>
-  );
-
   const singleSourcePicker = (
     <div className="space-y-2">
       <Label className="text-xs text-slate-500">PDF-Quelle</Label>
@@ -490,7 +497,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
         max={max}
         value={value}
         onChange={(e) => { setValue(parseInt(e.target.value, 10)); resetOutput(); }}
-        className="w-full accent-emerald-600"
+        className="w-full accent-primary"
       />
     </div>
   );
@@ -764,7 +771,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
             )}
           </div>
           <Button
-            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 shadow-md"
+            className="w-full bg-primary hover:bg-primary/90 shadow-sm"
             disabled={!chosen || !onAnnotate}
             onClick={() => { if (chosen && onAnnotate) { onAnnotate(chosen); onClose(); } }}
           >
@@ -786,7 +793,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
       {body}
 
       {showRunButton && (
-        <Button onClick={run} disabled={runDisabled} className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 shadow-md">
+        <Button onClick={run} disabled={runDisabled} className="w-full bg-primary hover:bg-primary/90 shadow-sm">
           {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
           {tool.action}
         </Button>
@@ -807,9 +814,9 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
       )}
 
       {results && (
-        <div className="space-y-2.5 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-emerald-800">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+        <div className="space-y-2.5 rounded-xl border border-erfolg-rand bg-erfolg-flaeche p-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-erfolg">
+            <CheckCircle2 className="w-4 h-4 text-erfolg" />
             Fertig — {results.length === 1 ? "1 Datei" : `${results.length} Dateien`} erzeugt
           </div>
           <ul className="space-y-1">
@@ -822,7 +829,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
             ))}
           </ul>
           <div className="flex items-center gap-2 flex-wrap pt-1">
-            <Button size="sm" onClick={downloadAll} className="bg-gradient-to-r from-emerald-600 to-teal-600 shadow-sm">
+            <Button size="sm" onClick={downloadAll} className="bg-primary hover:bg-primary/90 shadow-sm">
               <Download className="w-3.5 h-3.5 mr-1.5" /> Herunterladen
             </Button>
             <Button size="sm" variant="outline" onClick={saveAll} disabled={!project || saving}>
@@ -849,7 +856,7 @@ export default function PdfToolsGrid({ project, documents = [], onRefresh, onAnn
 
   return (
     <div>
-      <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+      <div className="text-xs font-semibold text-slate-400">
         Was moechtest du tun?
       </div>
 
@@ -858,7 +865,7 @@ export default function PdfToolsGrid({ project, documents = [], onRefresh, onAnn
           const c = COLORS[tool.color];
           const Icon = tool.icon;
           return (
-            <button key={tool.key} type="button" onClick={() => setActiveTool(tool)} className="text-left group focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-xl">
+            <button key={tool.key} type="button" onClick={() => setActiveTool(tool)} className="text-left group focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl">
               <Card className="border-0 shadow-sm rounded-xl bg-white hover:shadow-md transition-shadow h-full">
                 <CardContent className="p-4">
                   <div className={`inline-flex p-2.5 rounded-xl ${c.chip} mb-2.5`}>

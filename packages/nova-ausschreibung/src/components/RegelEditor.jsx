@@ -223,7 +223,7 @@ export default function RegelEditor({
                       {r.op === "sub" ? (
                         <Minus className="w-3 h-3 text-red-500" />
                       ) : (
-                        <Plus className="w-3 h-3 text-emerald-600" />
+                        <Plus className="w-3 h-3 text-erfolg" />
                       )}
                     </td>
                     <td className="px-2 py-1">{r.art}</td>
@@ -242,7 +242,7 @@ export default function RegelEditor({
                       {(res.warnungen || []).length > 0 ? `${res.warnungen.length} Warnung(en)` : "—"}
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">
-                      <button type="button" className="text-emerald-700 hover:underline" onClick={() => { setFehler([]); setEntwurf(leereRegel(r)); }}>
+                      <button type="button" className="text-link hover:underline" onClick={() => { setFehler([]); setEntwurf(leereRegel(r)); }}>
                         ändern
                       </button>
                       {onLoeschen && (
@@ -260,7 +260,7 @@ export default function RegelEditor({
 
         {/* --- Formular ---------------------------------------------------- */}
         {entwurf && (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-4">
+          <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-1">
                 <Label className="text-xs text-slate-500">Wirkung</Label>

@@ -20,7 +20,7 @@ const SEVERITY = {
   niedrig: { label: "Niedrig", color: "bg-slate-100 text-slate-600 border-slate-200", dot: "bg-slate-400" },
 };
 const sev = (s) => SEVERITY[String(s).toLowerCase()] || SEVERITY.niedrig;
-const scoreColor = (n) => (n >= 75 ? "text-emerald-600" : n >= 50 ? "text-amber-600" : "text-rose-600");
+const scoreColor = (n) => (n >= 75 ? "text-erfolg" : n >= 50 ? "text-amber-600" : "text-rose-600");
 const scoreRing = (n) => (n >= 75 ? "#10b981" : n >= 50 ? "#f59e0b" : "#ef4444");
 
 const AUDIT_SCHEMA = {
@@ -143,7 +143,7 @@ export default function ProjectAudit() {
             <div className="text-xs text-slate-500">Projekt für die KI-Analyse</div>
             <div className="text-lg font-semibold text-slate-800">{project?.name || "— oben Projekt wählen —"}</div>
           </div>
-          <Button onClick={run} disabled={loading || !projectId} className="bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg">
+          <Button onClick={run} disabled={loading || !projectId} className="bg-primary hover:bg-primary/90 shadow-sm">
             {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
             {loading ? "KI analysiert…" : "Projekt analysieren"}
           </Button>
@@ -155,12 +155,12 @@ export default function ProjectAudit() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {[
             { icon: Euro, label: "Kostenanschlag", value: eur0(facts.estimate), tint: "bg-blue-100 text-blue-700" },
-            { icon: Boxes, label: "LV-Positionen", value: facts.lv.length, tint: "bg-violet-100 text-violet-700" },
+            { icon: Boxes, label: "LV-Positionen", value: facts.lv.length, tint: "bg-muted text-muted-foreground" },
             { icon: AlertTriangle, label: "Offene Tickets", value: facts.openIssues.length, tint: "bg-amber-100 text-amber-700" },
             { icon: AlertTriangle, label: "Kritisch/Hoch", value: facts.critical.length, tint: "bg-rose-100 text-rose-700" },
             { icon: CalendarClock, label: "Überfällig", value: facts.overdue.length, tint: "bg-rose-100 text-rose-700" },
             // Liability: a screening against a guide value, never a GEG proof (energieScreening.js).
-            { icon: Zap, label: t(SCREENING_TITEL), titel: t(screeningAussage(facts.energy?.geg_compliance).text), value: { eingehalten: "✓", ueberschritten: "✗", offen: "—" }[screeningAussage(facts.energy?.geg_compliance).stand], tint: "bg-emerald-100 text-emerald-700" },
+            { icon: Zap, label: t(SCREENING_TITEL), titel: t(screeningAussage(facts.energy?.geg_compliance).text), value: { eingehalten: "✓", ueberschritten: "✗", offen: "—" }[screeningAussage(facts.energy?.geg_compliance).stand], tint: "bg-muted text-muted-foreground" },
           ].map((k, i) => (
             <Card key={i} className="border-0 shadow-sm"><CardContent className="p-3 flex items-center gap-2">
               <div className={`p-2 rounded-lg ${k.tint}`}><k.icon className="w-4 h-4" /></div>
@@ -201,7 +201,7 @@ export default function ProjectAudit() {
             </Card>
 
             <Card className="lg:col-span-2">
-              <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Brain className="w-4 h-4 text-emerald-600" /> Zusammenfassung</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Brain className="w-4 h-4 text-muted-foreground" /> Zusammenfassung</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-slate-600">{result.summary}</p>
                 <div className="space-y-2">
@@ -226,7 +226,7 @@ export default function ProjectAudit() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2"><Lightbulb className="w-4 h-4 text-amber-500" /> Optimierungspotenziale ({findings.length})</CardTitle>
                 {result.total_saving_potential_eur > 0 && (
-                  <Badge className="bg-emerald-100 text-emerald-800">Einsparpotenzial ges. {eur0(result.total_saving_potential_eur)}</Badge>
+                  <Badge className="bg-erfolg-flaeche text-erfolg">Einsparpotenzial ges. {eur0(result.total_saving_potential_eur)}</Badge>
                 )}
               </div>
             </CardHeader>
@@ -242,7 +242,7 @@ export default function ProjectAudit() {
                         <span className="font-semibold text-slate-800">{f.title}</span>
                         {f.dimension && <Badge variant="outline" className="text-[10px]">{f.dimension}</Badge>}
                       </div>
-                      {f.saving_eur > 0 && <span className="text-sm font-semibold text-emerald-700 whitespace-nowrap">{eur0(f.saving_eur)}</span>}
+                      {f.saving_eur > 0 && <span className="text-sm font-semibold text-erfolg whitespace-nowrap">{eur0(f.saving_eur)}</span>}
                     </div>
                     {f.detail && <p className="text-sm text-slate-600 mt-1">{f.detail}</p>}
                     {f.recommendation && (

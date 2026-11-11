@@ -50,7 +50,7 @@ export default function AIAssistant({ suggestions = [], feasibilityData }) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="w-4 h-4 text-indigo-500" /> Optimierungsvorschläge
+            <Sparkles className="w-4 h-4 text-muted-foreground" /> Optimierungsvorschläge
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -61,7 +61,7 @@ export default function AIAssistant({ suggestions = [], feasibilityData }) {
                 <Badge className={impactColors[s.impact] || ""}>{labelFor(IMPACT_LABELS, s.impact)}</Badge>
               </div>
               {s.action && (
-                <Button variant="ghost" size="sm" className="mt-2 text-indigo-600 px-0 h-auto">
+                <Button variant="ghost" size="sm" className="mt-2 text-link px-0 h-auto">
                   {s.action} <ArrowRight className="w-3 h-3 ml-1" />
                 </Button>
               )}

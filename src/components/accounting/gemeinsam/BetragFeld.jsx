@@ -69,7 +69,7 @@ export default function BetragFeld({ id, wert, onChange, label, "aria-label": ar
           aria-invalid={ungueltig || undefined}
           onChange={(e) => setText(e.target.value)}
           onBlur={uebernehmen}
-          className={`h-9 w-36 rounded-md border border-slate-300 bg-white px-3 pr-7 text-right text-sm tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50 aria-[invalid=true]:border-red-500 dark:border-slate-600 dark:bg-slate-900 ${className}`}
+          className={`h-9 w-36 rounded-md border border-slate-300 bg-white px-3 pr-7 text-right text-sm tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 aria-[invalid=true]:border-red-500 dark:border-slate-600 dark:bg-slate-900 ${className}`}
         />
         <span aria-hidden="true" className="pointer-events-none absolute right-2 text-sm text-slate-500">€</span>
       </span>

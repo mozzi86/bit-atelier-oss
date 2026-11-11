@@ -136,7 +136,7 @@ export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
   return (
     <div className="space-y-4">
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: BGF {Math.round(pm.bgf).toLocaleString("de-DE")} m² · {pm.storeys} Geschosse · Höhe {Math.round(pm.height).toLocaleString("de-DE")} m · Grundfläche {Math.round(pm.footArea).toLocaleString("de-DE")} m²/Geschoss
         </div>
       )}
@@ -147,7 +147,7 @@ export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between text-base">
               <span className="flex items-center gap-2"><Building2 className="w-4 h-4" /> Raumprogramm</span>
-              <Button size="sm" data-testid="sp-speichern" onClick={save} className="bg-gradient-to-r from-emerald-600 to-teal-600"><Save className="w-3.5 h-3.5 mr-1" /> Speichern</Button>
+              <Button size="sm" data-testid="sp-speichern" onClick={save} className="bg-primary hover:bg-primary/90"><Save className="w-3.5 h-3.5 mr-1" /> Speichern</Button>
             </CardTitle>
             {project && <p className="text-xs text-slate-400">{project.name}</p>}
           </CardHeader>
@@ -155,28 +155,28 @@ export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
             {/* Angebot aus dem IFC-Bestand — mit Zahlen und Herkunft, damit die
                 Übernahme eine Entscheidung ist und keine stille Datenänderung. */}
             {bestand && (
-              <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 space-y-2">
+              <div className="rounded-lg border border-border bg-muted p-3 space-y-2">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="text-xs text-emerald-900">
+                  <div className="text-xs text-foreground">
                     <div className="font-semibold flex items-center gap-1.5">
                       <Boxes className="w-3.5 h-3.5" /> Bestand im IFC-Modell erfasst
                     </div>
-                    <div className="mt-0.5 text-emerald-800">
+                    <div className="mt-0.5 text-foreground">
                       {bestand.kennzahlen.raeume} Räume ·{" "}
                       {Math.round(bestand.kennzahlen.flaeche).toLocaleString("de-DE")} m² NUF ·{" "}
                       {bestand.kennzahlen.geschosse.join(", ")}
                     </div>
-                    <div className="mt-1 space-y-0.5 text-[11px] text-emerald-700">
+                    <div className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
                       {bestand.gruppen.map((g) => (
                         <div key={g.gruppe}>
                           {g.label}: {g.anzahl} Räume, {Math.round(g.flaeche).toLocaleString("de-DE")} m²
                           {g.beispiele.length > 0 && (
-                            <span className="text-emerald-600/70"> — z. B. {g.beispiele.slice(0, 3).join(", ")}</span>
+                            <span className="text-muted-foreground/70"> — z. B. {g.beispiele.slice(0, 3).join(", ")}</span>
                           )}
                         </div>
                       ))}
                       {bestand.unklassifiziert.anzahl > 0 && (
-                        <div className="text-amber-700">
+                        <div className="text-warnung">
                           {bestand.unklassifiziert.anzahl} Räume ohne DIN-277-Gruppe
                           ({Math.round(bestand.unklassifiziert.flaeche).toLocaleString("de-DE")} m²) —
                           nicht zugeordnet, im Modell nachklassifizieren
@@ -184,12 +184,12 @@ export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
                       )}
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" className="shrink-0 border-emerald-400 text-emerald-800"
+                  <Button size="sm" variant="outline" className="shrink-0 border-border text-foreground"
                     onClick={bestandUebernehmen}>
                     übernehmen
                   </Button>
                 </div>
-                <p className="text-[10px] text-emerald-600/80">{bestand.herkunft}</p>
+                <p className="text-[10px] text-muted-foreground">{bestand.herkunft}</p>
               </div>
             )}
             <div className="grid grid-cols-[1fr_70px_60px_90px_28px] gap-2 text-[11px] text-slate-400 px-1">
@@ -206,7 +206,7 @@ export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
                 <Input className="h-9 text-right" type="number" value={it.area} onChange={(e) => setItem(i, { area: Number(e.target.value) })} />
                 <Input className="h-9 text-right" type="number" value={it.count} onChange={(e) => setItem(i, { count: Number(e.target.value) })} />
                 <div className="text-right text-sm tabular-nums text-slate-600">{m2(itemArea(it))}</div>
-                <Button aria-label={t("Nutzung entfernen")} size="icon" variant="ghost" className="h-8 w-8 text-rose-500" onClick={() => delItem(i)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                <Button aria-label={t("Nutzung entfernen")} size="icon" variant="ghost" className="h-8 w-8 text-fehler" onClick={() => delItem(i)}><Trash2 className="w-3.5 h-3.5" /></Button>
               </div>
             ))}
             <Button variant="outline" size="sm" onClick={addItem} className="w-full mt-1"><Plus className="w-3.5 h-3.5 mr-1" /> Nutzung hinzufügen</Button>
@@ -218,7 +218,7 @@ export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
           <CardContent className="grid grid-cols-3 gap-3">
             <div><label className="text-xs text-slate-500">Geschossfläche m²</label><Input aria-label={t("Geschossfläche m²")} type="number" value={footprint} onChange={(e) => setFootprint(Number(e.target.value))} /></div>
             <div>
-              <label className="text-xs text-slate-500">Grundstück m²{siteAreaAssumed && <span className="text-amber-600"> (Annahme)</span>}</label>
+              <label className="text-xs text-slate-500">Grundstück m²{siteAreaAssumed && <span className="text-warnung"> (Annahme)</span>}</label>
               <Input aria-label={t("Grundstück m²")} type="number" value={siteArea} onChange={(e) => { setSiteArea(Number(e.target.value)); setSiteAreaAssumed(false); }} />
             </div>
             <div><label className="text-xs text-slate-500">Effizienz (NUF/BGF)</label><Input aria-label={t("Effizienz (NUF/BGF)")} type="number" step="0.05" value={efficiency} onChange={(e) => setEfficiency(Number(e.target.value))} /></div>
@@ -229,10 +229,10 @@ export default function SpaceProgram({ siteArea: siteAreaProp = null }) {
       {/* Result: KPIs + stacking */}
       <div className="space-y-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Stat icon={Maximize2} label="NUF gesamt" value={m2(totalNUF)} tint="text-blue-500" />
-          <Stat icon={Building2} label="BGF gesamt" value={m2(stack.totalBGF)} tint="text-emerald-500" />
-          <Stat icon={Layers} label="Geschosse nötig" value={stack.floorsNeeded} sub={`${m2(footprint)}/Geschoss`} tint="text-violet-500" />
-          <Stat icon={Layers} label="GFZ / GRZ" value={`${gfz.toFixed(2)} / ${grz.toFixed(2)}`} tint="text-amber-500" />
+          <Stat icon={Maximize2} label="NUF gesamt" value={m2(totalNUF)} tint="text-muted-foreground" />
+          <Stat icon={Building2} label="BGF gesamt" value={m2(stack.totalBGF)} tint="text-muted-foreground" />
+          <Stat icon={Layers} label="Geschosse nötig" value={stack.floorsNeeded} sub={`${m2(footprint)}/Geschoss`} tint="text-muted-foreground" />
+          <Stat icon={Layers} label="GFZ / GRZ" value={`${gfz.toFixed(2)} / ${grz.toFixed(2)}`} tint="text-muted-foreground" />
         </div>
 
         <Card>

@@ -21,7 +21,7 @@ export default function FleetEmptyState({ canSeed, busy, onSeed }) {
         </p>
         {canSeed && (
           <Button
-            className="mt-2 bg-gradient-to-r from-emerald-600 to-teal-600"
+            className="mt-2 bg-primary hover:bg-primary/90"
             disabled={busy}
             onClick={onSeed}
           >

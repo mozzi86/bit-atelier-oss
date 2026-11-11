@@ -76,7 +76,7 @@ export default function Startpfad({ project }) {
           const Icon = s.icon;
           return (
             <Link key={s.id} to={s.ziel} className="group">
-              <Card className="h-full border-slate-200 hover:border-emerald-400 hover:shadow-md transition-all">
+              <Card className="h-full border-slate-200 hover:border-primary hover:shadow-md transition-all">
                 <CardContent className="p-4 flex flex-col gap-2">
                   <span className={`w-9 h-9 rounded-lg flex items-center justify-center ${s.farbe}`}>
                     <Icon className="w-5 h-5" />

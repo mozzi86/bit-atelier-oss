@@ -124,8 +124,8 @@ export default function LandscapePlanner({ complexData } = {}) {
   return (
     <div className="space-y-4">
       {/* Persistenter Haftungs-Disclaimer — NICHT konditional ausblenden. */}
-      <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+      <div className="flex items-start gap-2 rounded-lg border border-warnung-rand bg-warnung-flaeche px-3 py-2 text-sm text-warnung">
+        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-warnung" />
         <span>
           <strong>Konzept-Richtwerte für die Außenanlagenplanung — kein Genehmigungsnachweis.</strong>{" "}
           Stellplatz-, Begrünungs- und Entwässerungsanforderungen sind kommunal unterschiedlich
@@ -143,7 +143,7 @@ export default function LandscapePlanner({ complexData } = {}) {
         </TabsContent>
         <TabsContent value="kennzahlen" className="pt-3 space-y-4">
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: {pm.storeys} Geschosse · BGF {de(pm.bgf)} m² · Grundfläche {de(pm.footArea)} m² ≈ {Math.max(1, Math.round(pm.ngf / 75))} WE à 75 m²
         </div>
       )}
@@ -203,7 +203,7 @@ export default function LandscapePlanner({ complexData } = {}) {
               <NumberField label="Regendauer" value={regendauer} step={5} suffix="min" min={0} onChange={setRegendauer} />
               <div className="space-y-1">
                 <NumberField label="Begrünte/unversiegelte Fläche" value={gruenflaeche} suffix="m²" min={0} onChange={(v) => { setGruenflaeche(v); setGruenDirty(true); }} />
-                {gruenAusPlan && <Badge className="bg-emerald-100 text-emerald-800" data-testid="ls-gruen-aus-plan">{t("aus Lageplan")}: {planGruen.toLocaleString("de-DE")} m²</Badge>}
+                {gruenAusPlan && <Badge className="bg-muted text-foreground" data-testid="ls-gruen-aus-plan">{t("aus Lageplan")}: {planGruen.toLocaleString("de-DE")} m²</Badge>}
                 {gruenDirty && planGruen > 0 && (
                   <Button size="sm" variant="outline" className="h-6 text-[11px]" onClick={() => setGruenDirty(false)} data-testid="ls-gruen-uebernehmen">{t("aus Lageplan übernehmen")} ({planGruen.toLocaleString("de-DE")} m²)</Button>
                 )}
@@ -234,14 +234,14 @@ export default function LandscapePlanner({ complexData } = {}) {
         {/* KPIs + Plausibilitäts-Checks */}
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Stat label="Erf. KFZ-Stellplätze (Richtwert)" value={`${de(kpi.erfKfz)} Stpl.`} accent="text-blue-600" />
-            <Stat label="Erf. Fahrradstellplätze (Richtwert)" value={`${de(kpi.erfBike)} Stpl.`} accent="text-blue-600" />
+            <Stat label="Erf. KFZ-Stellplätze (Richtwert)" value={`${de(kpi.erfKfz)} Stpl.`} accent="text-foreground" />
+            <Stat label="Erf. Fahrradstellplätze (Richtwert)" value={`${de(kpi.erfBike)} Stpl.`} accent="text-foreground" />
             <Stat label="Erf. barrierefreie Stpl. (Richtwert)" value={`${de(kpi.erfBf)} Stpl.`} accent="text-slate-800" />
             <Stat label="Gesamt Stellplatzfläche (Richtwert)" value={`${de(kpi.flGes)} m²`} accent="text-slate-800" />
-            <Stat label="Versiegelungsgrad (Richtwert)" value={`${Math.round(kpi.vgrad * 100)} %`} accent="text-violet-600" />
-            <Stat label="Begrünungsgrad (Richtwert)" value={`${Math.round(kpi.ggrad * 100)} %`} accent="text-emerald-600" />
-            <Stat label="Spitzenabfluss Q (Richtwert)" value={`${de(kpi.Q)} l/s`} accent="text-cyan-600" />
-            <Stat label="Regenrückhaltevolumen (Richtwert)" value={`${de(kpi.V)} m³`} accent="text-amber-600" />
+            <Stat label="Versiegelungsgrad (Richtwert)" value={`${Math.round(kpi.vgrad * 100)} %`} accent="text-foreground" />
+            <Stat label="Begrünungsgrad (Richtwert)" value={`${Math.round(kpi.ggrad * 100)} %`} accent="text-foreground" />
+            <Stat label="Spitzenabfluss Q (Richtwert)" value={`${de(kpi.Q)} l/s`} accent="text-foreground" />
+            <Stat label="Regenrückhaltevolumen (Richtwert)" value={`${de(kpi.V)} m³`} accent="text-foreground" />
           </div>
 
           <Card>

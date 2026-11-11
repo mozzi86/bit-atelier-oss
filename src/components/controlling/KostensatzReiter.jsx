@@ -93,7 +93,7 @@ export default function KostensatzReiter({ zh, wert }) {
       <p className="text-sm text-slate-700 dark:text-slate-200">{t("Aus Gehältern abgeleitet — nur mit Personal-Zugang sichtbar.")}</p>
       <p className="text-xs text-slate-600 dark:text-slate-300" data-testid="kostensatz-feiertage">
         {fuellen(t("Kalender-Vorschlag {jahr}: {n} Feiertage an Wochentagen (Bayern); die Kalkulation rechnet mit {regel} Tagen."), { jahr, n: feiertageAnWochentagen(jahr, wert), regel: werte.feiertage })}{" "}
-        <Link to="/Settings?tab=rules" className="text-emerald-700 underline dark:text-emerald-300" data-testid="kostensatz-regelwerke">{t("In den Regelwerken ändern")}</Link>
+        <Link to="/Settings?tab=rules" className="text-link underline" data-testid="kostensatz-regelwerke">{t("In den Regelwerken ändern")}</Link>
       </p>
       <ul className="space-y-3">
         {personen.map((p) => {

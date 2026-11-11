@@ -24,6 +24,12 @@
 // plus IfcRelVoidsElement as before, never the CSG solid. A wall without a build-up keeps rectSolid. What only the solid can do (the slab
 // shortened by the wall cores) is not in the IFC: a slab with a build-up gets an onWarn of kind WARNART_VERSCHNEIDUNG. Without the option
 // the text is byte-identical (goldens); the new output has its own golden ifc-golden-107-verschneidung.ifc.
+// 114-02 (D-MH-03): a drawn wall or slab with `katalog_typ` (114-01) that resolves to a catalogue type with layers is typed: per used
+// type exactly ONE IfcWallType / IfcSlabType / IfcCoveringType with the type GUID of katalog.json (= the harness type library, so app
+// export and harness IFC parts are the same type), the type's IfcMaterialLayerSet (all catalogue layers, incl. 0 m membranes), its
+// Pset_*Common and Pset_BIT_Katalog {Schluessel, Version, …}, one IfcRelDefinesByType per type, and each instance an
+// IfcMaterialLayerSetUsage of that layer set. Elements without the field (or whose reference does not resolve: reported as
+// WARNART_KATALOG) are written exactly as before — the goldens stay byte-identical. The catalogue must be loaded: exportIFCMitKatalog().
 // Öffnungen werden als echte Voids exportiert (IfcOpeningElement +
 // IfcRelVoidsElement je Fenster/Tür, IfcRelFillsElement zum Bauteil), damit die
 // Wandmengen um die Öffnungen reduziert sind (Mengengrundlage/AVA-Kopplung).
@@ -40,6 +46,8 @@ import { geometrie as massingGeometrie, profilGueltig, oeffnungenPruefen as mass
 import { attributeVon, mitAttributen, werkstattMitAttributen } from "@core/lib/bauteil/attribute.js";
 import { wandGeometrie, wandDicke_m, kernVon } from "@core/lib/bauteil/referenz.js";
 import { materialById } from "@core/lib/bauteil/materialien.js";
+import { aufbauVon } from "@core/lib/bauteil/aufbauten.js";
+import { KATALOG_PRAEFIX, katalogTyp, katalogTypGuid, katalogBaustoff, ladeKatalog } from "@core/lib/bauteil/katalog/index.js"; // 114-02
 import { oeffnungsMasse, oeffnungPasst, oeffnungMitte_m, wirtVon, ankerFuerWand, istOeffnungOhneFuellung, durchbruchImWirt, durchbruchTiefe, schlitzImKoerper, DURCHBRUCH_TIEFE_OHNE_WIRT_M } from "@core/lib/bauteil/oeffnungen.js";
 import { durchbruchSteckbriefe } from "@core/lib/bauteil/durchbruchSteckbrief.js";
 import { istBodenplatte, huellPlattenId, huellwandDaten, untersterLevel, globaleTraufhoehe_m } from "@core/lib/bauteil/ebenen.js";
@@ -47,7 +55,7 @@ import { elevationOf, unterkante, wandHoehe, stuetzenHoehe, raumHoehe, geschossh
 import { dachBerechnen, dachVonDachelement, globalerDachAnstieg_m, globalesDach } from "@core/lib/bauteil/dachGeometrie.js";
 import { treppeBerechnen, treppeKoerper, mitTreppenLoechern } from "@core/lib/bauteil/treppe.js"; // 108-06: IfcStair/IfcStairFlight, derived slab openings
 import { gaubeBerechnen } from "@core/lib/bauteil/gauben.js"; // 108-13: dormers on the global roof
-import { mitGiebelProfilen } from "@core/lib/bauteil/giebel.js"; // 108-03: hull walls up to the roof contour (with dachGlobal)
+import { mitGiebelProfilen, mitWandProfilen } from "@core/lib/bauteil/giebel.js"; // 108-03: hull walls up to the roof contour, drawn attic walls cut at the roof (with dachGlobal)
 import { dachImRahmen, wandProfilUnterDach } from "@core/lib/bauteil/seoAnalytik.js";
 import { grenzWaende, nettoFlaeche_m2, raeumeMitNetto, polyAreaXZ } from "@core/lib/bauteil/raeume.js";
 
@@ -123,6 +131,20 @@ export const WARNART_SEO = "seo";
  * cleaned bands keep no area is written as its whole rectangle (an empty item list would be invalid STEP).
  */
 export const WARNART_VERSCHNEIDUNG = "verschneidung";
+
+/**
+ * Kind of an onWarn message of the catalogue types (114-02): an element names a catalogue type (`katalog_typ`) but is written WITHOUT a
+ * type — the reference does not resolve (unknown, or the catalogue is not loaded: grund "offen"), the type has no layers (door, window,
+ * blank: "ohne-schichten") or belongs to another IFC class than the element ("klasse"); or a typed slab whose body thickness differs from
+ * the type's layers ("dicke", the type is still written). Third argument of onWarn carries `{schluessel, ref, grund}` (schluessel = the
+ * element key `cw:<_idx>` / `cs:<_idx>`). A warning, not a stop: the element itself is complete, only the type link is missing.
+ */
+export const WARNART_KATALOG = "katalog";
+
+/** 114-02: IFC4 type entity per catalogue class (all three share the attribute list of IfcBuildingElementType + PredefinedType). */
+const KATALOG_TYP_ENTITAET = /** @type {Record<string, string>} */ ({ IfcWall: "IFCWALLTYPE", IfcSlab: "IFCSLABTYPE", IfcCovering: "IFCCOVERINGTYPE" });
+/** 114-02: standard common property set of a catalogue type by class (the values come from the type's `pset_common`). */
+const KATALOG_COMMON_PSET = /** @type {Record<string, string>} */ ({ IfcWall: "Pset_WallCommon", IfcSlab: "Pset_SlabCommon", IfcCovering: "Pset_CoveringCommon" });
 
 /**
  * 107-08: IFC4 classes a typed Massing body may be written as — the subtypes of IfcBuildingElement whose attribute list is exactly
@@ -315,17 +337,61 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
   };
   const contained = {}; // storeyRef -> [elementRefs]
   const contain = (lvl, ref) => { const st = storeyOf(lvl) || storeyRefs[0]?.ref; if (!st) return; (contained[st] = contained[st] || []).push(ref); };
+  // B-114-02-01: an IfcSpace is a spatial structure element — IFC4 wants it AGGREGATED under its storey (IfcRelAggregates;
+  // IfcSpatialStructureElement.WR41), not contained (IfcRelContainedInSpatialStructure.WR31 forbids spatial elements there).
+  const raeumeJeGeschoss = {}; // storeyRef -> [spaceRefs]
+  const raumAnGeschoss = (lvl, ref) => { const st = storeyOf(lvl) || storeyRefs[0]?.ref; if (!st) return; (raeumeJeGeschoss[st] = raeumeJeGeschoss[st] || []).push(ref); };
 
   // 89-03: property sets (IfcPropertySingleValue: text → IfcLabel, boolean → IfcBoolean, number →
   // IfcReal; null → "ohne Status"/"—" as text, D-BW-03 no default) attached via IfcRelDefinesByProperties.
   // 107-08: a value may also be {ifc, wert} = a typed IFC measure (e.g. IFCTHERMALTRANSMITTANCEMEASURE for a U-value)
+  // 114-02: {ifc: "IFCINTEGER", wert} is written as a whole number, a text `wert` (IFCIDENTIFIER …) as a STEP string
+  const nominalVon = (/** @type {any} */ v) => (v && typeof v === "object" && typeof v.ifc === "string"
+    ? `${v.ifc}(${v.ifc === "IFCINTEGER" ? String(Math.round(Number(v.wert) || 0)) : typeof v.wert === "string" ? S(v.wert) : f(v.wert)})`
+    : typeof v === "boolean" ? `IFCBOOLEAN(${v ? ".T." : ".F."})` : typeof v === "number" && Number.isFinite(v) ? `IFCREAL(${f(v)})` : `IFCLABEL(${S(v ?? "—")})`);
+  /** 114-02: the property set entity alone (a type object holds its sets in HasPropertySets, without IfcRelDefinesByProperties). */
+  const psetDef = (/** @type {string} */ name, /** @type {any[]} */ props) => {
+    const werte = props.map(([k, v]) => E("IFCPROPERTYSINGLEVALUE", `${S(k)},$,${nominalVon(v)},$`));
+    return E("IFCPROPERTYSET", `${G()},$,${S(name)},$,(${werte.join(",")})`);
+  };
   const pset = (ref, name, props) => {
-    const werte = props.map(([k, v]) => {
-      const nominal = v && typeof v === "object" && typeof v.ifc === "string" ? `${v.ifc}(${f(v.wert)})` : typeof v === "boolean" ? `IFCBOOLEAN(${v ? ".T." : ".F."})` : typeof v === "number" && Number.isFinite(v) ? `IFCREAL(${f(v)})` : `IFCLABEL(${S(v ?? "—")})`;
-      return E("IFCPROPERTYSINGLEVALUE", `${S(k)},$,${nominal},$`);
-    });
-    const ps = E("IFCPROPERTYSET", `${G()},$,${S(name)},$,(${werte.join(",")})`);
+    const ps = psetDef(name, props);
     E("IFCRELDEFINESBYPROPERTIES", `${G()},$,$,$,(${ref}),${ps}`);
+  };
+  // ---- 114-02: catalogue types (D-MH-03) ----
+  /**
+   * Used catalogue types by type GUID, in the order of their first instance; each with its instances and the layer-set usage they need.
+   * @type {Map<string, {typ: import("@core/lib/bauteil/katalog/index.js").KatalogTyp, instanzen: Array<{ref: string, achse: "AXIS2"|"AXIS3", versatz_m: number}>}>}
+   */
+  const katalogNachGuid = new Map();
+  /** element refs typed by a catalogue type: their material comes from the type's layer set, not from the data sheet's own layer set */
+  const katalogRefs = new Set();
+  /**
+   * The catalogue type an element may be typed by, or null (then it is written exactly as before). Same decision as aufbauVon: only a
+   * type that resolves AND has layers; plus the IFC class must be one of `klassen` (a wall cannot be typed by a slab type).
+   * @param {any} el element record with `katalog_typ`
+   * @param {string[]} klassen IFC classes allowed for this element
+   * @param {string} schluessel element key for the warning (`cw:<_idx>`, `cs:<_idx>`)
+   * @returns {import("@core/lib/bauteil/katalog/index.js").KatalogTyp|null}
+   */
+  const katalogFuer = (el, klassen, schluessel) => {
+    if (!el?.katalog_typ) return null;
+    const ref = String(el.katalog_typ);
+    const a = aufbauVon(el);
+    const nein = (/** @type {string} */ grund, /** @type {string} */ text) => { warn(`Bauteil ${schluessel}: Katalogtyp „${ref}“ ${text} — ohne Typ exportiert.`, WARNART_KATALOG, { schluessel, ref, grund }); return null; };
+    if (a.katalogOhneSchichten) return nein("ohne-schichten", "hat keine Schichten");
+    if (!a.katalog) return nein("offen", "nicht gefunden (Katalog nicht geladen oder Typ unbekannt)");
+    const t = katalogTyp(`${a.katalog.schluessel}@${a.katalog.version}`);
+    if (!t || !katalogTypGuid(t)) return nein("offen", "ohne gültige Typ-GUID");
+    if (!klassen.includes(t.klasse)) return nein("klasse", `gehört zu ${t.klasse}`);
+    return t;
+  };
+  /** remembers an instance of a catalogue type (the type entities are written after all elements, see "catalogue types" below) */
+  const katalogMerken = (/** @type {import("@core/lib/bauteil/katalog/index.js").KatalogTyp} */ t, /** @type {string} */ ref, /** @type {"AXIS2"|"AXIS3"} */ achse, /** @type {number} */ versatz_m) => {
+    const g = /** @type {string} */ (katalogTypGuid(t));
+    if (!katalogNachGuid.has(g)) katalogNachGuid.set(g, { typ: t, instanzen: [] });
+    /** @type {any} */ (katalogNachGuid.get(g)).instanzen.push({ ref, achse, versatz_m });
+    katalogRefs.add(ref);
   };
   /** 108-03: the gable wall says in its own Pset how high its profile reaches and how large it is (the Pset_WallCommon stays as it is). */
   const datenblattProfil = (/** @type {string} */ ref, /** @type {any} */ w) => pset(ref, "Pset_BIT_Giebel", [["Profil_Hoehe_max", w.profil.hoehe_max_m], ["Profil_Flaeche", w.profil.flaeche_m2], ["Kniestock_Hoehe", w.roh?.height ?? 0], ["Quer_geneigt", !!w.profil.quer_geneigt]]);
@@ -388,7 +454,8 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
     ]);
     if (COMMON_PSET[s.ifc.klasse]) pset(ref, COMMON_PSET[s.ifc.klasse], [["Status", statusEnum(s)], ...(s.tragend ? [["LoadBearing", true]] : []), ...kennwertRows(s)]);
     if (s.kg) { const l = nachKg.get(s.kg) || []; l.push(ref); nachKg.set(s.kg, l); }
-    if (s.aufbau?.schichten?.length || s.material) mitMaterial.push({ ref, s, wand });
+    // 114-02: a catalogue-typed element gets its material from the type's layer set (usage below), never a second own layer set
+    if ((s.aufbau?.schichten?.length || s.material) && !katalogRefs.has(ref)) mitMaterial.push({ ref, s, wand });
   };
   const sguid = (s) => `'${s.guid}'`;
 
@@ -399,7 +466,11 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
   const wallList = [];
   // 108-03: a hull wall with a roof profile is as high as the profile and carries it (body as IfcArbitraryClosedProfileDef below)
   (model.walls || []).forEach((w) => wallList.push({ key: `env:${w.level}:${w.edge}`, a: w.a, b: w.b, th: w.thickness, h: w.profil ? w.profil.hoehe_max_m : w.height, elev: w.elevation, level: w.level, refLine: w.refLine, roh: mitAttributen(huellwandDaten(w), attributeVon(bauteilAttribute, "hull-wall")), quelle: "huelle", profil: w.profil || null }));
-  customWalls.forEach((w) => wallList.push({ key: `cw:${w._idx}`, a: w.a, b: w.b, th: wandDicke_m(w), h: wandHoehe(w, gs), elev: unterkante(w, gs), level: w.level || 0, refLine: w.refLine, roh: w, quelle: "customWalls" }));
+  // 108-03 follow-up: with dachGlobal the drawn walls of the top storey carry their roof profile (body below like the gable walls)
+  const dachFuerWaende = dachGlobal && dachGlobal.form && dachGlobal.form !== "flach" ? globalesDach(modelRoh, dachGlobal.form, Number(dachGlobal.neigung_grad), geschosse) : null;
+  const obenLevel = Math.max(0, ...(model.storeys || []).map((st) => Number(st.level)).filter((l) => Number.isFinite(l) && l >= 0));
+  mitWandProfilen(customWalls, dachFuerWaende, obenLevel, (w) => ({ hoehe_m: wandHoehe(w, gs), elevation_m: unterkante(w, gs), dicke_m: wandDicke_m(w) }))
+    .forEach((w) => wallList.push({ key: `cw:${w._idx}`, a: w.a, b: w.b, th: wandDicke_m(w), h: wandHoehe(w, gs), elev: unterkante(w, gs), level: w.level || 0, refLine: w.refLine, roh: w, quelle: "customWalls", profil: w.profil || null }));
   // 89-03: workshop interior walls (stable GUID, name, property sets) — envelope pieces skipped.
   const wtWaende = (werkstatt?.waende || []).filter((w) => !w.huelle);
   wtWaende.forEach((w) => wallList.push({ key: `wt:${w.guid}`, a: w.a, b: w.b, th: w.dicke_m, h: w.hoehe_m || geschosshoehe(w.level || 0, gs), elev: elevationOf(w.level || 0, gs), level: w.level || 0, guid: w.guid, name: w.klasse === "tragend" ? "Trennwand" : "Innenwand", bauteil: w }));
@@ -453,10 +524,17 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
     const wSb = wTyp ? sb(w.roh, wTyp.typ, w.quelle, { typAbgeleitet: wTyp.abgeleitet }) : null;
     // the GUID text of the wall is kept in the registry: the data sheet of a penetration names its host by the GUID the file really holds (107-04 review)
     const wandGuid = wSb ? sguid(wSb) : w.guid ? `'${w.guid}'` : G();
+    // 114-02: only drawn walls carry `katalog_typ`; a typed wall takes the PredefinedType of its type (the catalogue decides, and
+    // occurrence and type then never contradict each other)
+    const wKat = w.quelle === "customWalls" ? katalogFuer(w.roh, ["IfcWall"], w.key) : null;
+    const wPre = wKat?.predefined_type || null;
     const wall = wSb
-      ? E("IFCWALL", `${wandGuid},$,${S(wSb.label)},$,$,${pl},${shape(solid)},$,.${wSb.ifc.typ}.`)
-      : E("IFCWALL", `${wandGuid},$,${w.name ? S(w.name) : "'Wand'"},$,$,${pl},${shape(solid)},$,.STANDARD.`);
+      ? E("IFCWALL", `${wandGuid},$,${S(wSb.label)},$,$,${pl},${shape(solid)},$,.${wPre || wSb.ifc.typ}.`)
+      : E("IFCWALL", `${wandGuid},$,${w.name ? S(w.name) : "'Wand'"},$,$,${pl},${shape(solid)},$,.${wPre || "STANDARD"}.`);
     contain(w.level, wall);
+    // Layer-set usage of a typed wall: AXIS2 (local Y of the wall placement = plan normal n), NEGATIVE, offset +th/2 — the same values as
+    // the usage of the data-sheet layer sets below (checked 114-02, see there); the placement sits on the body centre line.
+    if (wKat) katalogMerken(wKat, wall, "AXIS2", w.th / 2);
     if (wSb) {
       // 107-03: a wall with a REAL build-up (table or workshop class, not just a thickness) gets a LayerSetUsage in schichtdetails mode, and
       // its data sheet says where the reference line lies and where the function/priority of the layers come from (they may be proposals)
@@ -467,7 +545,10 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
         ["Schichtprioritaet_Herkunft", wSb.aufbau.prioritaetAbgeleitet ? "abgeleitet (Vorschlag)" : "gesetzt"],
       ] : [];
       datenblatt(wall, wSb, [["Dicke", w.th], ...detailPsets], echterAufbau ? {} : null);
-      pset(wall, "Pset_WallCommon", [["IsExternal", wTyp.typ === "wand-aussen"], ["LoadBearing", !!wSb.tragend], ["Status", statusEnum(wSb)], ...kennwertRows(wSb)]);
+      // 114-02: a catalogue-typed wall states IsExternal/LoadBearing as its type does (where the catalogue gives them) — the occurrence's
+      // set overrides the type's in IFC, so a derived "interior wall" of the data sheet would contradict an external catalogue type
+      const kpc = /** @type {Record<string, any>} */ (wKat?.pset_common || {});
+      pset(wall, "Pset_WallCommon", [["IsExternal", typeof kpc.IsExternal === "boolean" ? kpc.IsExternal : wTyp.typ === "wand-aussen"], ["LoadBearing", typeof kpc.LoadBearing === "boolean" ? kpc.LoadBearing : !!wSb.tragend], ["Status", statusEnum(wSb)], ...kennwertRows(wSb)]);
     }
     // Geometrie für die Öffnungs-Platzierung merken (lokales System der Wand:
     // X entlang a→b ab Wandmitte, Y quer, Z nach oben).
@@ -556,11 +637,27 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
       if (k?.kerne) warn(`Decke ${nr}: Kürzung an den Wandkernen nur im 3D und in den Mengen, im IFC ungekürzt (extrudierter Körper).`, WARNART_VERSCHNEIDUNG, { nr });
       if (k?.waende?.length) warn(`Decke ${nr}: kürzt Wände niedrigerer Priorität nur im 3D und in den Mengen, im IFC ungekürzt (extrudierte Körper).`, WARNART_VERSCHNEIDUNG, { nr, waende: k.waende });
     }
-    const dSb = sbOpt ? sb(s, "decke", "customSlabs") : null;
+    const dSbRoh = sbOpt ? sb(s, "decke", "customSlabs") : null;
+    // 114-02: a drawn slab may be typed by a slab type (IfcSlab) or by a floor/ceiling covering type — then it IS an IfcCovering (IFC4
+    // rule CorrectTypeAssigned: an IfcSlab may only be typed by an IfcSlabType); both share the nine-attribute list, so only the entity
+    // name, the PredefinedType and the common pset change. The body stays the drawn slab body.
+    const sKey = `cs:${s._idx ?? si + 1}`;
+    const sKat = katalogFuer(s, ["IfcSlab", "IfcCovering"], sKey);
+    const belag = sKat?.klasse === "IfcCovering";
+    const dSb = dSbRoh && belag ? { ...dSbRoh, ifc: { ...dSbRoh.ifc, klasse: "IfcCovering" } } : dSbRoh;
     /** @type {string} */
     let slabPl = "";
-    const slab = E("IFCSLAB", `${dSb ? sguid(dSb) : G()},$,'Decke',$,$,${(slabPl = placement(0, 0, lage.unterkante_m))},${shape(solid)},$,.FLOOR.`);
+    const slab = E(belag ? "IFCCOVERING" : "IFCSLAB", `${dSb ? sguid(dSb) : G()},$,${belag ? S(/** @type {any} */ (sKat).kurzname) : "'Decke'"},$,$,${(slabPl = placement(0, 0, lage.unterkante_m))},${shape(solid)},$,.${sKat?.predefined_type || "FLOOR"}.`);
     contain(s.level || 0, slab);
+    if (sKat) {
+      // the layers run top → bottom (catalogue order of slab and floor build-ups): AXIS3, NEGATIVE, base plane on the top face = +thickness
+      // above the placement (the body is extruded upwards from it). A body thickness that differs from the type's layers is reported —
+      // the type is still written (the drawn thickness is the user's, the catalogue knows the build-up).
+      if (Number.isFinite(sKat.dicke_m) && Math.abs(lage.dicke_m - /** @type {number} */ (sKat.dicke_m)) > 1e-3) {
+        warn(`Decke ${sKey}: Dicke ${f(lage.dicke_m)} m weicht vom Katalogtyp „${sKat.schluessel}“ (${f(/** @type {number} */ (sKat.dicke_m))} m) ab.`, WARNART_KATALOG, { schluessel: sKey, ref: String(s.katalog_typ), grund: "dicke" });
+      }
+      katalogMerken(sKat, slab, "AXIS3", lage.dicke_m);
+    }
     if (dSb) datenblatt(slab, dSb, [["Dicke", lage.dicke_m]]);
     // 107-04: holes of the slab (`oeffnungen: [{points}]`, plan polygon in m): an IfcOpeningElement through the full thickness (+2 cm each side) and
     // IfcRelVoidsElement to the slab, no filling, no CSG. Placed relative to the slab placement (plan coordinates are absolute there).
@@ -640,7 +737,7 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
   (model.spaces || []).forEach((s) => {
     const solid = polySolid(s.polygon, geschosshoehe(s.level, gs) * 0.98);
     const sp = E("IFCSPACE", `${G()},$,${S(s.name)},$,$,${placement(0, 0, s.elevation)},${shape(solid)},$,.ELEMENT.,.INTERNAL.,$`);
-    contain(s.level, sp);
+    raumAnGeschoss(s.level, sp);
     raumListe.push({ ref: sp, punkte: s.polygon, level: s.level || 0, netto: () => nettoFlaeche_m2({ points: s.polygon, level: s.level || 0, messregel: "referenzlinie" }, { stuetzen: customColumns, zonen: alleZonenNetto(), waende: alleWaendeNetto() }) });
   });
   (customZones || []).forEach((z) => {
@@ -648,7 +745,7 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
     const solid = polySolid(z.points, raumHoehe(z, gs));
     const zSb = sbOpt ? sb(z, "raum", "customZones") : null;
     const sp = E("IFCSPACE", `${zSb ? sguid(zSb) : G()},$,${S(z.name || "Raum")},$,$,${placement(0, 0, unterkante(z, gs))},${shape(solid)},$,.ELEMENT.,.INTERNAL.,$`);
-    contain(z.level || 0, sp);
+    raumAnGeschoss(z.level || 0, sp);
     if (zSb) datenblatt(sp, zSb);
     raumListe.push({ ref: sp, punkte: z.points, level: z.level || 0, netto: () => nettoFlaeche_m2(z, { stuetzen: customColumns, zonen: customZones, waende: [...(model.walls || []), ...customWalls] }) });
   });
@@ -824,7 +921,7 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
     (werkstatt.raeume || []).forEach((r, ri) => {
       if (!Array.isArray(r.points) || r.points.length < 3) return;
       const sp = E("IFCSPACE", `'${r.guid}',$,${S(r.name.replace(/ ·WT$/, ""))},$,$,${placement(0, 0, elevationOf(r.level || 0, gs))},${shape(polySolid(r.points, geschosshoehe(r.level || 0, gs) * 0.98))},$,.ELEMENT.,.INTERNAL.,$`);
-      contain(r.level || 0, sp);
+      raumAnGeschoss(r.level || 0, sp);
       pset(sp, "Pset_BIT_Bauteil", [["Status", r.status ?? "ohne Status"], ["WE", r.we ?? "—"], ["Raumart", r.raumart ?? "—"], ["FlaecheLicht", r.flaeche_m2], ["GUID_Quelle", "Wohnungs-Werkstatt (stabil über Re-Tesselierung)"]]);
       raumListe.push({ ref: sp, punkte: r.points, level: r.level || 0, netto: () => wtNetto[ri]?.flaeche_netto_m2 ?? r.flaeche_m2 });
     });
@@ -1021,21 +1118,69 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
     warn("Untergeschoss: der Geländeabzug (Baugrube, Gelände nach dem Aushub) steht nur in der 3D-Ansicht und in den Mengen, nicht im IFC.", WARNART_SEO, { art: "gelaende" });
   }
 
+  // ---- materials: one IfcMaterial per name, created lazily (defined here, used by the catalogue types and the data-sheet layer sets) ----
+  const materialRef = new Map();
+  /** 107-03: material property sets (IfcMaterialProperties: Name, Description, Properties, Material) — density and conductivity of the catalogue */
+  const materialPsets = (/** @type {string} */ ref, /** @type {string|null|undefined} */ katalogId) => {
+    const m = materialById(katalogId);
+    if (!m) return;
+    const prop = (/** @type {string} */ k, /** @type {string} */ typ, /** @type {number} */ v) => E("IFCPROPERTYSINGLEVALUE", `${S(k)},$,${typ}(${f(v)}),$`);
+    if (Number.isFinite(m.dichte)) E("IFCMATERIALPROPERTIES", `${S("Pset_MaterialCommon")},$,(${prop("MassDensity", "IFCMASSDENSITYMEASURE", /** @type {number} */ (m.dichte))}),${ref}`);
+    if (Number.isFinite(m.lambda)) E("IFCMATERIALPROPERTIES", `${S("Pset_MaterialThermal")},$,(${prop("ThermalConductivity", "IFCTHERMALCONDUCTIVITYMEASURE", /** @type {number} */ (m.lambda))}),${ref}`);
+  };
+  const mat = (/** @type {string} */ name, /** @type {string|null|undefined} */ katalogId = null) => {
+    if (!materialRef.has(name)) { const r = E("IFCMATERIAL", `${S(name)},$,$`); materialRef.set(name, r); if (schichtDetail) materialPsets(r, katalogId); }
+    return materialRef.get(name);
+  };
+
+  // ---- 114-02: catalogue types (only when an element is typed — otherwise nothing is written, goldens byte-identical) ----
+  // Per type, in the order of its first instance: the layer set of ALL catalogue layers (a 0 m membrane included — IFC4 LayerThickness is a
+  // non-negative length, and the harness type library holds it too; the app's own build-up drops it, 114-01, but the type must equal the
+  // harness type), material = the catalogue material by its name (as in the harness library), Category = the catalogue role
+  // (LoadBearing / Insulation / Outer finish / Inner finish, as the harness writes it; no role = $), Priority only in the layer-details mode
+  // (catalogue intersection priority 0-999 → /10, IFC4 range 0-100, same rule as the data-sheet layers). Instance overrides of the layer
+  // function/priority (`schicht_funktion`, indices of the app build-up) are NOT in the IFC layer set: the type is shared by all its
+  // instances; the data sheet keeps the origin text. Then the type entity with Pset_*Common + Pset_BIT_Katalog in HasPropertySets,
+  // IfcRelAssociatesMaterial type → layer set, ONE IfcRelDefinesByType per type, and one IfcMaterialLayerSetUsage per distinct
+  // (direction, offset) with one IfcRelAssociatesMaterial for its instances.
+  for (const [typGuid, { typ: t, instanzen }] of katalogNachGuid) {
+    const layers = t.schichten.map((sch) => {
+      const b = katalogBaustoff(sch.baustoff);
+      const name = b?.name || sch.baustoff;
+      const prio = schichtDetail && Number.isInteger(b?.verschneidungsprioritaet) ? String(Math.round(/** @type {number} */ (b?.verschneidungsprioritaet) / 10)) : "$";
+      // IfcMaterialLayer: Material, LayerThickness (m), IsVentilated ($ = unknown, as the harness), Name, Description, Category, Priority
+      return E("IFCMATERIALLAYER", `${mat(name, KATALOG_PRAEFIX + sch.baustoff)},${f(Number(sch.dicke_m))},$,${S(name)},$,${sch.rolle ? S(sch.rolle) : "$"},${prio}`);
+    });
+    const satz = E("IFCMATERIALLAYERSET", `(${layers.join(",")}),${S(t.kurzname)},${S(t.langname)}`);
+    const common = Object.entries(t.pset_common || {}).filter(([, v]) => typeof v === "boolean" || typeof v === "string" || (typeof v === "number" && Number.isFinite(v)));
+    const psets = [
+      psetDef(KATALOG_COMMON_PSET[t.klasse], [...common, ["Reference", { ifc: "IFCIDENTIFIER", wert: t.kurzname }]]),
+      // Pset_BIT_Katalog: the identity of the type in the catalogue (the harness writes the same set; Fingerabdruck/Ebene are not in
+      // katalog.json and therefore not here — the GlobalId already pins the type)
+      psetDef("Pset_BIT_Katalog", [["Schluessel", t.schluessel], ["Version", { ifc: "IFCINTEGER", wert: t.version }], ["Kurzname", t.kurzname], ["Langname", t.langname], ["Rohling", !!t.rohling]]),
+    ];
+    // IfcWallType / IfcSlabType / IfcCoveringType (IFC4): GlobalId, OwnerHistory, Name, Description, ApplicableOccurrence, HasPropertySets,
+    // RepresentationMaps, Tag, ElementType, PredefinedType
+    const typRef = E(KATALOG_TYP_ENTITAET[t.klasse], `'${typGuid}',$,${S(t.kurzname)},${S(t.langname)},$,(${psets.join(",")}),$,$,$,.${t.predefined_type || "NOTDEFINED"}.`);
+    E("IFCRELASSOCIATESMATERIAL", `${G()},$,$,$,(${typRef}),${satz}`);
+    E("IFCRELDEFINESBYTYPE", `${G()},$,$,$,(${instanzen.map((i) => i.ref).join(",")}),${typRef}`);
+    /** @type {Map<string, string[]>} usage key → instance refs */
+    const nachNutzung = new Map();
+    for (const i of instanzen) {
+      const k = `${i.achse}|${f(i.versatz_m)}`;
+      if (!nachNutzung.has(k)) nachNutzung.set(k, []);
+      /** @type {string[]} */ (nachNutzung.get(k)).push(i.ref);
+    }
+    for (const [k, refs] of nachNutzung) {
+      const [achse, versatz] = k.split("|");
+      E("IFCRELASSOCIATESMATERIAL", `${G()},$,$,$,(${refs.join(",")}),${E("IFCMATERIALLAYERSETUSAGE", `${satz},.${achse}.,.NEGATIVE.,${versatz},$`)}`);
+    }
+    // DIN 276 like the instances (only where the file has the classification at all, i.e. with the data-sheet option)
+    if (sbOpt && t.din276) { const l = nachKg.get(t.din276) || []; l.push(typRef); nachKg.set(t.din276, l); }
+  }
+
   // ---- 97-02a: materials (layer sets for walls) and DIN 276 classification ----
   if (sbOpt) {
-    const materialRef = new Map();
-    /** 107-03: material property sets (IfcMaterialProperties: Name, Description, Properties, Material) — density and conductivity of the catalogue */
-    const materialPsets = (/** @type {string} */ ref, /** @type {string|null|undefined} */ katalogId) => {
-      const m = materialById(katalogId);
-      if (!m) return;
-      const prop = (/** @type {string} */ k, /** @type {string} */ typ, /** @type {number} */ v) => E("IFCPROPERTYSINGLEVALUE", `${S(k)},$,${typ}(${f(v)}),$`);
-      if (Number.isFinite(m.dichte)) E("IFCMATERIALPROPERTIES", `${S("Pset_MaterialCommon")},$,(${prop("MassDensity", "IFCMASSDENSITYMEASURE", /** @type {number} */ (m.dichte))}),${ref}`);
-      if (Number.isFinite(m.lambda)) E("IFCMATERIALPROPERTIES", `${S("Pset_MaterialThermal")},$,(${prop("ThermalConductivity", "IFCTHERMALCONDUCTIVITYMEASURE", /** @type {number} */ (m.lambda))}),${ref}`);
-    };
-    const mat = (name, katalogId = null) => {
-      if (!materialRef.has(name)) { const r = E("IFCMATERIAL", `${S(name)},$,$`); materialRef.set(name, r); if (schichtDetail) materialPsets(r, katalogId); }
-      return materialRef.get(name);
-    };
     // IfcMaterialLayer.Category per layer function (free IfcLabel in IFC4). [ASSUMED] the English words Core / Finish / Other: IFC4 knows no
     // fixed list for this attribute (checked from memory of the schema, not against the buildingSMART page — not reachable here); a way to a
     // proven value: the IDS/MVD of the receiving party. Priority: IFC4 constrains it to 0-100 (same memory), the table runs 0-999, so /10.
@@ -1055,9 +1200,13 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
           // IfcMaterialLayerSetUsage: ForLayerSet, LayerSetDirection, DirectionSense, OffsetFromReferenceLine (m), ReferenceExtent.
           // The layers stack along the local Y axis of the wall placement (= the plan normal n, 107-01): outside → inside runs along −n, so
           // AXIS2 with DirectionSense NEGATIVE; the first layer starts at the +n face of the body, d/2 from the placement axis (the placement sits
-          // on the body centre line, not on the reference line — openings and voids hang on it). Offset = +d/2 [ASSUMED: sign measured along the
-          // axis, not along the sense; not verified against a viewer that evaluates the usage]. The reference line itself is in the data sheet
-          // (Pset_BIT_Bauteil Referenzlinie, Referenzlinie_Versatz).
+          // on the body centre line, not on the reference line — openings and voids hang on it). Offset = +d/2: the offset is measured along the
+          // POSITIVE local Y axis, not along the sense (IFC4 IfcMaterialLayerSetUsage: MlsBase = reference line + offset along the
+          // LayerSetDirection axis; layers then stack from MlsBase in DirectionSense). Checked 114-02 against IfcOpenShell 0.8.5, which evaluates
+          // the usage exactly so (api/geometry/regenerate_wall_representation.py get_axes: `point[1] += OffsetFromReferenceLine`, then each layer
+          // `thickness * (−1 for NEGATIVE)`), and by harness/tests/test_app_ifc_export.py: with refLine outside / inside / center the first
+          // (outer) layer of an external wall lies on the outer face of the exported body. refLine only moves the body (and the placement with
+          // it), never the usage. The reference line itself is in the data sheet (Pset_BIT_Bauteil Referenzlinie, Referenzlinie_Versatz).
           rel = E("IFCMATERIALLAYERSETUSAGE", `${rel},.AXIS2.,.NEGATIVE.,${f(s.aufbau.dicke_m / 2)},$`);
         }
       } else rel = mat(s.material);
@@ -1099,6 +1248,9 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
   }
 
   // ---- Containment-Relationen ----
+  Object.entries(raeumeJeGeschoss).forEach(([st, raeume]) => {
+    if (raeume.length) E("IFCRELAGGREGATES", `${G()},$,$,$,${st},(${raeume.join(",")})`);
+  });
   Object.entries(contained).forEach(([st, els]) => {
     if (els.length) E("IFCRELCONTAINEDINSPATIALSTRUCTURE", `${G()},$,$,$,(${els.join(",")}),${st}`);
   });
@@ -1115,4 +1267,20 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
     "DATA;",
   ].join("\n");
   return `${header}\n${rows.join("\n")}\nENDSEC;\nEND-ISO-10303-21;\n`;
+}
+
+/**
+ * 114-02: exportIFC with the component catalogue loaded first. exportIFC itself is synchronous and reads the catalogue only through the
+ * lookups (bauteil/katalog), which answer null until ladeKatalog() has finished — a wall with `katalog_typ` would then be written without
+ * its type (WARNART_KATALOG "offen"). This wrapper awaits the load when (and only when) a drawn wall or slab names a catalogue type, so an
+ * export without catalogue elements does not fetch the catalogue chunk. A failed load is not fatal: the export runs and reports the
+ * untyped elements.
+ * @param {object} modelRoh createBuildingModel result
+ * @param {Parameters<typeof exportIFC>[1]} [opts] the options of exportIFC
+ * @returns {Promise<string>} STEP text
+ */
+export async function exportIFCMitKatalog(modelRoh, opts = {}) {
+  const mitKatalog = [...(opts.customWalls || []), ...(opts.customSlabs || [])].some((e) => e && /** @type {any} */ (e).katalog_typ);
+  if (mitKatalog) await ladeKatalog();
+  return exportIFC(modelRoh, opts);
 }

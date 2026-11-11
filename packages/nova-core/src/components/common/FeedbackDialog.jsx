@@ -27,7 +27,7 @@ import { DATENQUELLE } from "@core/lib/umgebung";
 /** Build label appended to the version, so a report names the build it came from. */
 const FASSUNG = { serverlos: "lokal", supabase: "cloud", express: "server" }[DATENQUELLE] || DATENQUELLE;
 
-const KNOPF = "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500";
+const KNOPF = "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /**
  * Header button that opens the feedback dialog, plus the dialog itself.
@@ -94,7 +94,7 @@ export default function FeedbackDialog({ seite }) {
               value={text}
               onChange={(e) => setText(e.target.value)}
               data-testid="feedback-text"
-              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
             />
           </div>
 
@@ -105,7 +105,7 @@ export default function FeedbackDialog({ seite }) {
                 checked={technikAnhaengen}
                 onChange={(e) => setTechnikAnhaengen(e.target.checked)}
                 data-testid="feedback-technik"
-                className="mt-0.5 h-4 w-4 accent-emerald-600"
+                className="mt-0.5 h-4 w-4 accent-primary"
               />
               <span>{t("Technische Angaben anhängen: Version, Seite, Browser, Betriebssystem")}</span>
             </label>
@@ -117,7 +117,7 @@ export default function FeedbackDialog({ seite }) {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <a href={mailHref} data-testid="feedback-mail" className={`${KNOPF} bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:opacity-90`}>
+            <a href={mailHref} data-testid="feedback-mail" className={`${KNOPF} bg-primary hover:bg-primary/90 text-primary-foreground`}>
               <Mail className="h-4 w-4" aria-hidden="true" /> {t("Per E-Mail senden")}
             </a>
             <a

@@ -227,7 +227,7 @@ export default function LVPositionForm({ position, defaultTrade, onSubmit, onCan
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={onCancel}>Abbrechen</Button>
-          <Button type="submit" className="bg-gradient-to-r from-emerald-600 to-teal-600">Speichern</Button>
+          <Button type="submit" className="bg-primary hover:bg-primary/90">Speichern</Button>
         </div>
       </form>
     </FormModal>

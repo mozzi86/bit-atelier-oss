@@ -69,7 +69,7 @@ export default function PreisSchichtPanel({
     <Card className="border-slate-200">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
-          <Layers className="w-4 h-4 text-emerald-600" />
+          <Layers className="w-4 h-4 text-muted-foreground" />
           Preisschichten {position?.oz ? <span className="text-slate-400 font-normal">· OZ {position.oz}</span> : null}
         </CardTitle>
       </CardHeader>
@@ -100,7 +100,7 @@ export default function PreisSchichtPanel({
                 className={[
                   "rounded-md border px-2 py-1.5 text-xs",
                   eingefroren ? "bg-slate-100 border-slate-200 text-slate-500" : "bg-white border-slate-200",
-                  istAktiv ? "ring-2 ring-emerald-500/60" : "",
+                  istAktiv ? "ring-2 ring-primary/60" : "",
                 ].join(" ")}
               >
                 <div className="flex items-center gap-2 flex-wrap">
@@ -121,7 +121,7 @@ export default function PreisSchichtPanel({
                       review — sichtbar, nicht aktiv
                     </Badge>
                   )}
-                  {istAktiv && <Badge className="bg-emerald-600">aktiv</Badge>}
+                  {istAktiv && <Badge className="bg-primary text-primary-foreground">aktiv</Badge>}
                   <span className="ml-auto font-mono tabular-nums">
                     {s.ep_effektiv == null ? "—" : eur(s.ep_effektiv)}
                   </span>
@@ -152,7 +152,7 @@ export default function PreisSchichtPanel({
 
         {onAddSchicht && (
           neu ? (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50/50 p-2 space-y-2">
+            <div className="rounded-md border border-border bg-muted/50 p-2 space-y-2">
               <p className="text-[11px] text-slate-600">
                 Ein Handpreis entsteht als <strong>Marktpreis mit Beleg</strong>. Es gibt kein
                 editierbares EP-Feld mehr — ein Preis ohne Herkunft ist keine Aussage.

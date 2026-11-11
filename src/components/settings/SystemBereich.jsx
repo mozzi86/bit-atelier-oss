@@ -90,7 +90,7 @@ function AppInstallieren({ t }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2 dark:border-slate-700 dark:bg-slate-800/60" data-testid="app-installieren">
       <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-        <Download className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("Als App installieren")}
+        <Download className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> {t("Als App installieren")}
       </h3>
       {status === "installiert" ? (
         <p className="text-sm text-slate-700 dark:text-slate-200">{t("Die App ist installiert. Ihre Daten liegen in diesem Browserprofil; sichern Sie sie über Daten & Sicherung.")}</p>
@@ -101,7 +101,7 @@ function AppInstallieren({ t }) {
           </p>
           {status === "bereit" ? (
             <button type="button" onClick={installieren}
-              className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <Download className="h-4 w-4" aria-hidden="true" /> {t("App installieren")}
             </button>
           ) : (
@@ -150,7 +150,7 @@ export default function SystemBereich({ kontext }) {
     <section aria-labelledby="bereich-system" data-testid="bereich-system"
       className="rounded-xl border border-slate-200 bg-white p-6 space-y-4 dark:border-slate-700 dark:bg-slate-900">
       <h2 id="bereich-system" className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
-        <Info className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("System & Info")}
+        <Info className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> {t("System & Info")}
       </h2>
       <AppInstallieren t={t} />
       {/* 92-04: version, last update check, automatic check, "hold this version until" (local app only). */}

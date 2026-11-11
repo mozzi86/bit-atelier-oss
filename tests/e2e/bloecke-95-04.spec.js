@@ -86,10 +86,10 @@ test("95-04…06 Blöcke im SVG-Plan: Auswahl, Verschieben, Kopie, Undo, Drehen,
     await expect.poll(async () => (await block("b1"))?.x).toBe(560); // (400 + 8 + 40) px × 1.25
     expect((await block("b1")).y).toBe(380);
 
-    // Ctrl+drag = copy; undo / redo
-    await page.keyboard.down("Control"); await page.keyboard.down("Alt");
+    // Ctrl+drag = copy (Cmd on macOS: there Ctrl + mouse button is the secondary click and opens the context menu); undo / redo
+    await page.keyboard.down("ControlOrMeta"); await page.keyboard.down("Alt");
     await ziehen({ x: 448, y: 304 }, { x: 448, y: 354 });
-    await page.keyboard.up("Alt"); await page.keyboard.up("Control");
+    await page.keyboard.up("Alt"); await page.keyboard.up("ControlOrMeta");
     await expect.poll(async () => (await bloecke()).length).toBe(3);
     await page.keyboard.press("Control+z");
     await expect.poll(async () => (await bloecke()).length).toBe(2);

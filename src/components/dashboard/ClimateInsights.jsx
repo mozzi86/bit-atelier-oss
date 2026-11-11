@@ -66,7 +66,7 @@ export default function ClimateInsights({ projects }) {
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, delay: 0.2 }}
       >
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-emerald-50 to-teal-50">
+        <Card className="border-0 shadow-lg bg-muted">
           <CardHeader>
             <CardTitle className="text-lg text-slate-800">Climate Zones</CardTitle>
           </CardHeader>

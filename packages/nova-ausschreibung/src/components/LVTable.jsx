@@ -51,7 +51,7 @@ export default function LVTable({
   const loeschKnopfRef = useRef(null);
   // Native buttons with the shadcn classes: <Button> costs a tsc error per use.
   const iconKnopf = cn(buttonVariants({ variant: "ghost", size: "icon" }), "h-7 w-7");
-  const kleinerKnopf = "inline-flex h-7 items-center rounded-md border px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400";
+  const kleinerKnopf = "inline-flex h-7 items-center rounded-md border px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
   const frageAbbrechen = () => {
     setLoeschFrage(null);
@@ -177,7 +177,7 @@ export default function LVTable({
           <Button variant="outline" onClick={exportCsv} disabled={!positions.length}>
             <Download className="w-4 h-4 mr-2" /> CSV-Export
           </Button>
-          <Button onClick={() => openNew("")} className="bg-gradient-to-r from-emerald-600 to-teal-600">
+          <Button onClick={() => openNew("")} className="bg-primary hover:bg-primary/90">
             <Plus className="w-4 h-4 mr-2" /> {t("Position anlegen")}
           </Button>
         </div>
@@ -214,7 +214,7 @@ export default function LVTable({
             <button
               type="button"
               onClick={() => openNew("")}
-              className={cn(buttonVariants(), "bg-gradient-to-r from-emerald-600 to-teal-600")}
+              className={cn(buttonVariants(), "bg-primary hover:bg-primary/90")}
             >
               <Plus className="w-4 h-4" /> {t("Erste Position anlegen")}
             </button>
@@ -280,7 +280,7 @@ export default function LVTable({
                         className={[
                           "border-b last:border-0 hover:bg-slate-50",
                           onSelect ? "cursor-pointer" : "",
-                          p.id === selectedId ? "bg-emerald-50/70" : "",
+                          p.id === selectedId ? "bg-muted" : "",
                         ].join(" ")}
                       >
                         <td className="py-2 px-3 font-mono text-xs text-slate-500">{p.oz}</td>

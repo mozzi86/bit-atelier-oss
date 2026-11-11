@@ -57,22 +57,22 @@ const ANTWORT_FORM = {
 
 /**
  * @param {{register: ReturnType<typeof import("@core/lib/befehlsregister.js").befehlsRegister>, kontext: () => any,
- *   ansicht?: () => any, zeigepunkt?: () => any, nda?: boolean, projektId?: string|null, bild?: ((o: {kante: number, breite: number}) => {png_base64: string})|null,
+ *   ansicht?: () => any, zeigepunkt?: () => any, punkte?: (() => Array<{x: number, z: number, level?: number}>)|null, nda?: boolean, projektId?: string|null, bild?: ((o: {kante: number, breite: number}) => {png_base64: string})|null,
  *   t?: (s: string) => string, className?: string, grob?: boolean, fernRef?: {current: any}|null, bildSperre?: (() => boolean)|null}} props
  *   register: the viewer's command register; kontext: selection record (auswahlKontext); ansicht: {rechts, vorn} unit vectors of the view in the plan;
- *   zeigepunkt: {x, z} in m, the spot last pointed at; nda: the open project carries the NDA marker (Project.nda); projektId: the open project
+ *   zeigepunkt: {x, z} in m, the spot last pointed at; punkte (261111-zs1): the numbered pointing points of the plan in m; nda: the open project carries the NDA marker (Project.nda); projektId: the open project
  *   (106-06, consent and NDA are stored on it); bild: renders the current view as PNG (106-06; without it there is no "mit Bild" button);
  *   grob: tablet layout (106-07); fernRef: 106-08 handle for a VR session ({starten, stoppen, verwerfen, stand, aktion, bildSperren}),
  *   filled while the field is mounted; bildSperre: asked at every send, true = no image goes along (review 106-08: the viewer passes
  *   "a VR headset presents right now", read from its renderer, so the lock cannot get lost with a re-mounted handle).
  */
-export default function SprechFeld({ register, kontext, ansicht, zeigepunkt, nda = false, projektId = null, bild = null, t = (s) => s, className = "", grob = false, fernRef = null, bildSperre = null }) {
+export default function SprechFeld({ register, kontext, ansicht, zeigepunkt, punkte = null, nda = false, projektId = null, bild = null, t = (s) => s, className = "", grob = false, fernRef = null, bildSperre = null }) {
   const [mitBild, setMitBild] = useState(false);
   /** 106-08: a VR session holds the field: no image of the view goes with a sentence (text and GUIDs only). */
   const bildGesperrt = useRef(false);
   /** @type {React.MutableRefObject<any>} */
   const neu = useRef({});
-  neu.current = { kontext, ansicht, zeigepunkt, nda, projektId, bild: bild && mitBild && !nda ? bild : null, bildSperre };
+  neu.current = { kontext, ansicht, zeigepunkt, punkte, nda, projektId, bild: bild && mitBild && !nda ? bild : null, bildSperre };
   const [zustand, setZustand] = useState(/** @type {"bereit"|"aufnahme"|"erkennt"|"aus"} */ ("bereit"));
   const zustandRef = useRef(zustand);
   zustandRef.current = zustand;
@@ -97,7 +97,8 @@ export default function SprechFeld({ register, kontext, ansicht, zeigepunkt, nda
   const ablauf = useMemo(() => sprechAblauf({
     register,
     // 106-10: the office's command library (loaded below) feeds the grammar and the model's task text
-    kontext: () => ({ auswahl: neu.current.kontext(), ansicht: neu.current.ansicht?.() ?? null, zeigepunkt: neu.current.zeigepunkt?.() ?? null, bibliothek: bibliothekAktuell() }),
+    kontext: () => ({ auswahl: neu.current.kontext(), ansicht: neu.current.ansicht?.() ?? null, zeigepunkt: neu.current.zeigepunkt?.() ?? null, bibliothek: bibliothekAktuell(),
+      ...(neu.current.punkte ? { punkte: neu.current.punkte() } : {}) }), // 261111-zs1: numbered pointing points
     modellFrage: (text, k, o) => modellFragen(text, k.auswahl, {
       cloudOk: o.cloudOk, nda: !!neu.current.nda, bild: bildGesperrt.current || neu.current.bildSperre?.() ? null : neu.current.bild, projektId: neu.current.projektId, gesprochen: o.herkunft === "sprache",
       bibliothek: k.bibliothek,

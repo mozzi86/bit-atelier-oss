@@ -39,9 +39,9 @@ const fuellen = (text, werte) => text.replace(/\{(\w+)\}/g, (_, k) => String(wer
 
 /** The three core steps of a running project; titles verb-first, subtitle = menu name. */
 const WEITER = [
-  { ziel: createPageUrl("ComplexDesigner"), titel: "Entwurf", modul: "Komplex-Designer", icon: PencilRuler, farbe: "text-emerald-600 bg-emerald-50" },
-  { ziel: createPageUrl("ModelCheck"), titel: "Prüfen", modul: "Prüf-Suite", icon: ShieldCheck, farbe: "text-sky-600 bg-sky-50" },
-  { ziel: createPageUrl("AVA"), titel: "Ausschreiben", modul: "AVA (Ausschreibung)", icon: FileSpreadsheet, farbe: "text-amber-600 bg-amber-50" },
+  { ziel: createPageUrl("ComplexDesigner"), titel: "Entwurf", modul: "Komplex-Designer", icon: PencilRuler, farbe: "text-muted-foreground bg-muted" },
+  { ziel: createPageUrl("ModelCheck"), titel: "Prüfen", modul: "Prüf-Suite", icon: ShieldCheck, farbe: "text-muted-foreground bg-muted" },
+  { ziel: createPageUrl("AVA"), titel: "Ausschreiben", modul: "AVA (Ausschreibung)", icon: FileSpreadsheet, farbe: "text-muted-foreground bg-muted" },
 ];
 
 // Same rule as everywhere else a ticket counts as open (BimViewer.jsx, ReportDocument.jsx).
@@ -105,7 +105,7 @@ export default function AktivesProjekt() {
     inhalt = <LoadingState variant="list" rows={2} />;
   } else if (zustand.fehler) {
     inhalt = (
-      <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 flex flex-wrap items-center gap-3">
+      <div role="alert" className="rounded-xl border border-fehler-rand bg-fehler-flaeche p-4 text-sm text-fehler flex flex-wrap items-center gap-3">
         <TriangleAlert aria-hidden="true" className="w-4 h-4 shrink-0" />
         <span className="min-w-0 flex-1">
           {fuellen(t("Die Projektdaten konnten nicht geladen werden: {fehler}"), { fehler: zustand.fehler })}
@@ -113,7 +113,7 @@ export default function AktivesProjekt() {
         <button
           type="button"
           onClick={() => setVersuch((v) => v + 1)}
-          className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 font-medium text-rose-800 hover:bg-rose-100"
+          className="rounded-lg border border-fehler-rand bg-background px-3 py-1.5 font-medium text-fehler hover:bg-fehler-flaeche"
         >
           {t("Erneut versuchen")}
         </button>
@@ -156,7 +156,7 @@ export default function AktivesProjekt() {
 function WeiterImProjekt({ t, offeneTickets, offeneNachtraege }) {
   const ticketText = offeneTickets === 1 ? t("1 offenes Ticket") : fuellen(t("{n} offene Tickets"), { n: offeneTickets });
   const nachtragText = offeneNachtraege === 1 ? t("1 offener Nachtrag") : fuellen(t("{n} offene Nachträge"), { n: offeneNachtraege });
-  const punktLink = "group flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:border-emerald-400 hover:text-emerald-700 dark:hover:border-emerald-500 dark:hover:text-emerald-300 transition-colors";
+  const punktLink = "group flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-muted hover:text-foreground transition-colors";
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -169,7 +169,7 @@ function WeiterImProjekt({ t, offeneTickets, offeneNachtraege }) {
               <li key={w.ziel}>
                 <Link
                   to={w.ziel}
-                  className="group h-full flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 hover:border-emerald-400 hover:shadow-md dark:hover:border-emerald-500 transition-all"
+                  className="group h-full flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 hover:bg-muted hover:shadow-md transition-all"
                 >
                   <span aria-hidden="true" className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center ${w.farbe}`}>
                     <Icon className="w-5 h-5" />
@@ -194,7 +194,7 @@ function WeiterImProjekt({ t, offeneTickets, offeneNachtraege }) {
           <li>
             {offeneTickets > 0 ? (
               <Link to={createPageUrl("BimViewer")} className={punktLink}>
-                <Ticket aria-hidden="true" className="w-4 h-4 shrink-0 text-rose-600" />
+                <Ticket aria-hidden="true" className="w-4 h-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">{ticketText}</span>
                 <ArrowRight aria-hidden="true" className="w-4 h-4 shrink-0 text-slate-400" />
               </Link>
@@ -208,7 +208,7 @@ function WeiterImProjekt({ t, offeneTickets, offeneNachtraege }) {
           <li>
             {offeneNachtraege > 0 ? (
               <Link to={createPageUrl("Finance")} className={punktLink}>
-                <FilePen aria-hidden="true" className="w-4 h-4 shrink-0 text-amber-600" />
+                <FilePen aria-hidden="true" className="w-4 h-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">{nachtragText}</span>
                 <ArrowRight aria-hidden="true" className="w-4 h-4 shrink-0 text-slate-400" />
               </Link>

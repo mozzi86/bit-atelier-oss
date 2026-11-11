@@ -88,7 +88,7 @@ export default function ProfilDialog({ offen, profil, pflicht = false, ladeFehle
         <form onSubmit={speichern} className="space-y-4">
           <div className="space-y-1">
             <DialogTitle className="flex items-center gap-2">
-              <UserRound className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              <UserRound className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
               {pflicht ? t('Willkommen bei BIT-Atelier') : t('Profil bearbeiten')}
             </DialogTitle>
             <DialogDescription>
@@ -161,7 +161,7 @@ export default function ProfilDialog({ offen, profil, pflicht = false, ladeFehle
               </button>
             )}
             <button type="submit" disabled={speichert} data-testid="profil-speichern"
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60">
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
               {pflicht ? t('Profil anlegen') : t('Speichern')}
             </button>
           </div>

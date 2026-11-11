@@ -23,7 +23,7 @@ export default function VorlagenReiter({ vorlagen, darfPflegen, onOeffnen }) {
               <p className="font-medium text-slate-900 dark:text-slate-100">{t(v.titel || v.key)}</p>
               <p className="flex flex-wrap gap-2 text-xs text-slate-500">
                 <span>{t("Phase {n}").replace("{n}", String(v.quelle))} · {t("Fassung {n}").replace("{n}", String(v.version))}</span>
-                {v.buero && <span className="rounded bg-emerald-100 px-1 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200" data-testid="vorlage-buero">{t("Büro-Fassung")}</span>}
+                {v.buero && <span className="rounded bg-muted px-1 text-foreground" data-testid="vorlage-buero">{t("Büro-Fassung")}</span>}
                 {v.richtwert && <span className="rounded bg-amber-100 px-1 text-amber-900 dark:bg-amber-950 dark:text-amber-200">{t("Richtwert")}</span>}
               </p>
             </div>

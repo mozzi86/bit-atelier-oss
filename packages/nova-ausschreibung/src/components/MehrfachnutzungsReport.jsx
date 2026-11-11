@@ -80,7 +80,7 @@ export default function MehrfachnutzungsReport({
           <span>Mehrfachnutzung — Doppelzählung finden</span>
           <div className="flex items-center gap-2">
             {report.befunde.length === 0 ? (
-              <Badge className="text-xs bg-emerald-100 text-emerald-800 border border-emerald-300">
+              <Badge className="text-xs bg-erfolg-flaeche text-erfolg border border-erfolg-rand">
                 <CheckCircle2 className="w-3 h-3 mr-1" /> 0 Befunde
               </Badge>
             ) : (
@@ -119,7 +119,7 @@ export default function MehrfachnutzungsReport({
           <button
             type="button"
             onClick={() => setZeige("erklaert")}
-            className={`rounded border px-2 py-0.5 ${zeige === "erklaert" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600"}`}
+            className={`rounded border px-2 py-0.5 ${zeige === "erklaert" ? "border-erfolg-rand bg-erfolg-flaeche text-erfolg" : "border-slate-200 text-slate-600"}`}
           >
             legitim ({erklaertGruppiert.length} Gruppen)
           </button>
@@ -150,7 +150,7 @@ export default function MehrfachnutzungsReport({
                   <td className="px-2 py-1">{g.positionen.join("  +  ")}</td>
                   <td className="px-2 py-1">{g.mengenbasis}</td>
                   <td className="px-2 py-1 text-right">{g.anzahl}</td>
-                  <td className={`px-2 py-1 ${zeige === "befunde" ? "text-red-700" : "text-emerald-700"}`}>
+                  <td className={`px-2 py-1 ${zeige === "befunde" ? "text-red-700" : "text-erfolg"}`}>
                     {zeige === "befunde"
                       ? "BEFUND — kein Bezug gepflegt: entweder zulage_zu setzen oder eine der Regeln korrigieren"
                       : "legitim — Zulage / Folgeleistung zur Basisposition"}

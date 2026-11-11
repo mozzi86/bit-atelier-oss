@@ -174,7 +174,7 @@ export default function PersonalDokumente({ mitarbeiterId, bewerbungId, dokument
             const aufbewahrungBis = d.created_date ? fristEnde(String(d.created_date).slice(0, 10), { jahre: regelWert?.("personal.aufbewahrung_personalakte_jahre") ?? 3 }) : null;
             return (
               <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-2 text-sm dark:border-slate-700">
-                <button type="button" onClick={() => herunterladen(d)} className="inline-flex items-center gap-1.5 text-left text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400">
+                <button type="button" onClick={() => herunterladen(d)} className="inline-flex items-center gap-1.5 text-left text-link underline-offset-4 hover:underline">
                   <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
                   <span>{d.name}</span>
                 </button>

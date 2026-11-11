@@ -215,7 +215,10 @@ describe("107-13 IFC-Export mit Untergeschoss", () => {
     assert.ok(enthaelt(rel(ug), idVon(basis[0])), "Bodenplatte im untersten UG");
     assert.equal(platten.filter((l) => l.includes(".FLOOR.")).length, 3, "Kellerdecke + zwei Geschossdecken");
     const zone = zeilen(ifc, "IFCSPACE").find((l) => l.includes("'Kellerraum'"));
-    assert.ok(enthaelt(rel(ug), idVon(zone)), "Raum auf −1 im UG");
+    // B-114-02-01: a space is aggregated under its storey (IfcRelAggregates), not contained
+    const aggregiert = zeilen(ifc, "IFCRELAGGREGATES").find((r) => r.includes(`,${ug},(`)) || "";
+    assert.ok(enthaelt(aggregiert, idVon(zone)), "Raum auf −1 am UG aggregiert");
+    assert.ok(!enthaelt(rel(ug), idVon(zone)), "Raum nicht mehr im Containment");
   });
   it("Bodenplatten-GUID mit und ohne UG gleich, alle IFCSLAB-GlobalIds paarweise verschieden (U = 0, 1, 2; mit und ohne Steckbrief)", () => {
     const sb = { steckbrief: { projektId: "p-10713" } };

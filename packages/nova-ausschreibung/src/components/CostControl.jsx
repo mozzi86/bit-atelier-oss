@@ -37,7 +37,7 @@ const BenchmarkCell = ({ bm }) => {
     );
   }
   return (
-    <span className="italic text-blue-700 text-xs">
+    <span className="italic text-muted-foreground text-xs">
       {text} · Quelle {SOURCE_LABELS[bm.cell.source] || bm.cell.source}, {deDate(bm.cell.fetched_at)}
     </span>
   );
@@ -106,23 +106,23 @@ export default function CostControl({ positions, tenders, bids, measurements, ch
   return (
     <div className="space-y-4">
       {costEstimate?.total > 0 && (
-        <div className="text-xs bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-emerald-800">
+        <div className="text-xs bg-muted border border-border rounded-lg px-3 py-2 text-muted-foreground">
           Budget aus Kostenberechnung (Gebäudemodell): {eur0(costEstimate.total)} · {(costEstimate.bgf || 0).toLocaleString("de-DE")} m² BGF · {(costEstimate.perM2 || 0).toLocaleString("de-DE")} €/m²
           {" · "}LV-Anschlag {eur0(totEstimate)} →{" "}
-          <span className={totEstimate > costEstimate.total ? "text-rose-600 font-medium" : "text-emerald-600 font-medium"}>
+          <span className={totEstimate > costEstimate.total ? "text-fehler font-medium" : "text-erfolg font-medium"}>
             {totEstimate > costEstimate.total ? "+" : ""}{(((totEstimate - costEstimate.total) / costEstimate.total) * 100).toFixed(1).replace(".", ",")} %
           </span>
         </div>
       )}
       <div className={`grid grid-cols-2 gap-3 ${approvedCOs.length > 0 ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
         <Stat label="Kostenanschlag (LV)" value={eur0(totEstimate)} accent="text-slate-700" />
-        <Stat label="Vergabesumme" value={eur0(totAward)} accent="text-blue-600" />
-        {approvedCOs.length > 0 && <Stat label="Nachträge" value={eur0(coSum)} accent="text-amber-600" />}
-        <Stat label="Abgerechnet" value={eur0(totBilled)} accent="text-emerald-600" />
+        <Stat label="Vergabesumme" value={eur0(totAward)} accent="text-foreground" />
+        {approvedCOs.length > 0 && <Stat label="Nachträge" value={eur0(coSum)} accent="text-foreground" />}
+        <Stat label="Abgerechnet" value={eur0(totBilled)} accent="text-foreground" />
         <Stat
           label={savings >= 0 ? "Einsparung ggü. Anschlag" : "Mehrkosten ggü. Anschlag"}
           value={`${eur0(Math.abs(savings))} (${savingsPct.toFixed(1)}%)`}
-          accent={savings >= 0 ? "text-emerald-600" : "text-rose-600"}
+          accent={savings >= 0 ? "text-erfolg" : "text-fehler"}
         />
       </div>
       {approvedCOs.length > 0 && (
@@ -138,7 +138,7 @@ export default function CostControl({ positions, tenders, bids, measurements, ch
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
-            {savings >= 0 ? <TrendingDown className="w-4 h-4 text-emerald-600" /> : <TrendingUp className="w-4 h-4 text-rose-600" />}
+            {savings >= 0 ? <TrendingDown className="w-4 h-4 text-erfolg" /> : <TrendingUp className="w-4 h-4 text-fehler" />}
             Soll-Ist je Gewerk
           </CardTitle>
         </CardHeader>
@@ -222,7 +222,7 @@ export default function CostControl({ positions, tenders, bids, measurements, ch
                       <td className="py-2 px-3 font-medium">{r.trade}</td>
                       <td className="py-2 px-3 text-right tabular-nums text-slate-500">{eur0(r.estimate)}</td>
                       <td className="py-2 px-3 text-right tabular-nums">{r.award > 0 ? eur0(r.award) : "—"}</td>
-                      <td className={`py-2 px-3 text-right tabular-nums ${delta > 0 ? "text-emerald-600" : delta < 0 ? "text-rose-600" : "text-slate-400"}`}>
+                      <td className={`py-2 px-3 text-right tabular-nums ${delta > 0 ? "text-erfolg" : delta < 0 ? "text-fehler" : "text-slate-400"}`}>
                         {r.award > 0 ? eur0(delta) : "—"}
                       </td>
                     </tr>

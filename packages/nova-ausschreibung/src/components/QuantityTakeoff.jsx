@@ -132,10 +132,10 @@ export default function QuantityTakeoff({
   return (
     <div className="space-y-4">
       {onGenerateLv && (
-        <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50/70 to-teal-50/40">
+        <Card className="border-border bg-muted">
           <CardContent className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-sm text-slate-600">
-              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+              <Sparkles className="w-4 h-4 text-muted-foreground shrink-0" />
               Mengen direkt aus dem BIT-BIM-Gebäudemodell erzeugen
             </div>
             <div className="flex gap-2">
@@ -148,7 +148,7 @@ export default function QuantityTakeoff({
                 onClick={onGenerateLv}
                 disabled={!bimModelAvailable}
                 title={!bimModelAvailable ? "Kein gespeichertes Gebäudemodell — im Komplex-Designer zeichnen" : undefined}
-                className="bg-gradient-to-r from-emerald-600 to-teal-600"
+                className="bg-primary hover:bg-primary/90"
               >
                 <Sparkles className="w-4 h-4 mr-2" /> LV aus Gebäudemodell generieren
               </Button>
@@ -254,11 +254,11 @@ export default function QuantityTakeoff({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="rounded-lg bg-emerald-50 p-3 space-y-1">
-                    <div className="text-xs text-emerald-700 flex items-center gap-1">
+                  <div className="rounded-lg bg-muted p-3 space-y-1">
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <FilterIcon className="w-3 h-3" /> Ermittelte Menge ({filterErgebnis.treffer} Bauteile)
                     </div>
-                    <div className="text-2xl font-bold text-emerald-800">
+                    <div className="text-2xl font-bold text-foreground">
                       {num(filterErgebnis.menge)} {basisUnit}
                     </div>
                     {activeFilter && filterErgebnis.treffer === 0 && (
@@ -283,9 +283,9 @@ export default function QuantityTakeoff({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="rounded-lg bg-emerald-50 p-3">
-                    <div className="text-xs text-emerald-700">Ermittelte Menge ({selected.length} Bauteile)</div>
-                    <div className="text-2xl font-bold text-emerald-800">{num(selQty)} {basisUnit}</div>
+                  <div className="rounded-lg bg-muted p-3">
+                    <div className="text-xs text-muted-foreground">Ermittelte Menge ({selected.length} Bauteile)</div>
+                    <div className="text-2xl font-bold text-foreground">{num(selQty)} {basisUnit}</div>
                   </div>
                 </>
               )}
@@ -317,7 +317,7 @@ export default function QuantityTakeoff({
               <Button
                 onClick={apply}
                 disabled={applyDisabled}
-                className="w-full bg-gradient-to-r from-emerald-600 to-teal-600"
+                className="w-full bg-primary hover:bg-primary/90"
               >
                 <Link2 className="w-4 h-4 mr-2" /> Menge in Position übernehmen
               </Button>
@@ -346,7 +346,7 @@ export default function QuantityTakeoff({
                     key={e.id}
                     onClick={() => toggle(e.id)}
                     className={`w-full flex items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors ${
-                      selected.includes(e.id) ? "bg-emerald-100 text-emerald-800" : "hover:bg-slate-50 text-slate-600"
+                      selected.includes(e.id) ? "bg-muted text-foreground" : "hover:bg-slate-50 text-slate-600"
                     }`}
                   >
                     <span>{e.name}</span>

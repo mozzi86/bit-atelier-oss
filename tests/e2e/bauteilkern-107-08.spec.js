@@ -55,6 +55,11 @@ test("107-08 Box → Bauteil: Typ automatisch und rücknehmbar, Stütze überneh
     await page.waitForFunction(() => !!(/** @type {any} */ (window).__bitBefehle));
     const befehl = (/** @type {string} */ b, /** @type {any} */ params = {}) => page.evaluate((a) => /** @type {any} */ (window).__bitBefehle.ausfuehren(a[0], a[1]), [b, params]);
     const modell = async () => (await befehl("modell")).result;
+    // a tool command returns before React has rendered the new tool: a click in that gap still belongs to the previous one
+    const werkzeug = async (/** @type {string} */ id) => {
+      expect(await befehl(id)).toMatchObject({ ok: true });
+      await expect(page.getByTestId("mm-leiste")).toHaveAttribute("data-werkzeug", id);
+    };
     const eingabe = async (/** @type {string} */ text) => expect(await befehl("eingabe", { text })).toMatchObject({ ok: true });
 
     // site metres → screen through the block outline (site 10…16 × 10…14) and the live screen matrix
@@ -73,7 +78,7 @@ test("107-08 Box → Bauteil: Typ automatisch und rücknehmbar, Stütze überneh
     const typText = page.getByTestId("mm-bauteil-typ");
 
     // (1) the old body stays untyped while its form does not change
-    expect(await befehl("auswahl")).toMatchObject({ ok: true });
+    await werkzeug("auswahl");
     await klick(13, 12);
     await expect(inspektor).toHaveAttribute("data-typ", "");
     await expect(typText).toHaveText("Bauteiltyp offen");
@@ -82,7 +87,7 @@ test("107-08 Box → Bauteil: Typ automatisch und rücknehmbar, Stütze überneh
     // (2) a 5 × 0,3 m box drawn with the line tool (typed lengths towards the pointer), 3 m storey height → load-bearing wall
     /** @param {number} x0 @param {number} y0 @param {number} w @param {number} d */
     const rechteck = async (x0, y0, w, d) => {
-      expect(await befehl("linie")).toMatchObject({ ok: true });
+      await werkzeug("linie");
       // the short side first: a chain whose last point comes within 0.4 m of its start closes at once (flaecheSchliessen)
       await klick(x0, y0);
       await hin(x0, y0 + d + 2); await eingabe(String(d).replace(".", ","));
@@ -130,7 +135,7 @@ test("107-08 Box → Bauteil: Typ automatisch und rücknehmbar, Stütze überneh
     expect(stuetze).toBeTruthy();
     // the full inspector belongs to the selection tool (a drawing tool shows only the compact type mark); the data sheet pins the GUID
     await expect(page.getByTestId("mm-steckbrief")).toHaveCount(0);
-    expect(await befehl("auswahl")).toMatchObject({ ok: true });
+    await werkzeug("auswahl");
     await page.getByTestId("mm-steckbrief").click();
     await expect(page.getByTestId("mm-steckbrief-guid")).toHaveText(/^[0-9A-Za-z_$]{22}$/);
     const stuetzeGuid = (await modell()).koerper.find((/** @type {any} */ k) => k.id === stuetze.id).guid;
@@ -141,7 +146,7 @@ test("107-08 Box → Bauteil: Typ automatisch und rücknehmbar, Stütze überneh
     await expect.poll(async () => ((await gespeichert()).customColumns || []).filter((/** @type {any} */ c) => c.quelle_koerper === stuetze.id).length, { timeout: 20000 }).toBe(1);
 
     // Ctrl copy, then "*3" → three copies, none of them carries the stored guid
-    expect(await befehl("verschieben")).toMatchObject({ ok: true });
+    await werkzeug("verschieben");
     await klick(30.25, 10.25);
     await page.keyboard.down("Control");
     await klick(32.25, 10.25);
@@ -188,7 +193,7 @@ test("107-08 Box → Bauteil: Typ automatisch und rücknehmbar, Stütze überneh
     await expect(page.getByTestId("mm-koerper")).toHaveCount(6, { timeout: 60000 });
     await page.waitForFunction(() => !!(/** @type {any} */ (window).__bitBefehle));
     await pfad.evaluate((el) => el.scrollIntoView({ block: "center" }));
-    expect(await befehl("auswahl")).toMatchObject({ ok: true });
+    await werkzeug("auswahl");
     await klick(30.25, 10.25);
     await expect(page.getByTestId("mm-uebernahme-zurueck")).toBeVisible();
     await page.getByTestId("mm-uebernahme-zurueck").click();

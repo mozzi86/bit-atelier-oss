@@ -82,7 +82,7 @@ export default function VorschlagVergleich({ vorschlaege, footprintM, onSchliess
                 {vorschlaege.map((v) => {
                   const best = beste[k.key]?.has(v.id) === true;
                   return (
-                    <td key={v.id} className={`border-b border-slate-100 p-1 tabular-nums ${best ? "bg-emerald-50 font-semibold text-emerald-900" : "text-slate-800"}`}
+                    <td key={v.id} className={`border-b border-slate-100 p-1 tabular-nums ${best ? "bg-muted font-semibold text-foreground" : "text-slate-800"}`}
                       data-testid="vs-vergleich-zelle" data-kennzahl={k.key} data-vorschlag={v.id} data-best={best ? "1" : "0"} data-wert={v.kennzahlen?.[k.key]?.wert ?? ""}>
                       {kennzahlText(v.kennzahlen?.[k.key])}
                     </td>

@@ -17,7 +17,7 @@ import { DATENQUELLE } from "@core/lib/umgebung";
 import { personalZugang } from "@/lib/people/zugang.js";
 import { anzeigeName } from "@/lib/people/mitarbeiter.js";
 
-const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";
+const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900";
 const LABEL = "text-sm font-medium text-slate-700 dark:text-slate-200";
 
 /**

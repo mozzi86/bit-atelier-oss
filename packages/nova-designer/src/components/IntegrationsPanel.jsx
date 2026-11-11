@@ -68,11 +68,11 @@ function ArchicadCard() {
     );
   }
   return (
-    <Card className={on ? "border-emerald-300" : ""}>
+    <Card className={on ? "border-erfolg-rand" : ""}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
-            <Plug className={`w-4 h-4 ${on ? "text-emerald-600" : "text-slate-400"}`} />
+            <Plug className={`w-4 h-4 ${on ? "text-erfolg" : "text-slate-400"}`} />
             Archicad — Tapir
           </CardTitle>
           <Badge variant="outline" className="text-xs">CAD/BIM</Badge>
@@ -99,7 +99,7 @@ function ArchicadCard() {
         {status && (
           <div className="space-y-1">
             {on ? (
-              <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+              <Badge className="bg-erfolg-flaeche text-erfolg hover:bg-erfolg-flaeche">
                 Verbunden · {status.product}{status.version ? ` ${status.version}` : ""}
                 {status.tapir?.verfuegbar ? ` · Tapir ${status.tapir.version ?? ""}` : " · Tapir nicht verfügbar"}
               </Badge>
@@ -233,7 +233,7 @@ export default function IntegrationsPanel() {
       </div>
 
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+        <div className="text-xs font-semibold text-slate-500 mb-2">
           Angebunden
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -243,7 +243,7 @@ export default function IntegrationsPanel() {
       </div>
 
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+        <div className="text-xs font-semibold text-slate-500 mb-2">
           Geplant — nicht angebunden
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">

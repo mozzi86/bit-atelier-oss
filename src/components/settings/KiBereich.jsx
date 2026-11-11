@@ -36,7 +36,7 @@ export default function KiBereich() {
   return (
     <section aria-labelledby="bereich-ki" data-testid="bereich-ai" className="space-y-4">
       <h2 id="bereich-ki" className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
-        <Plug className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("KI-Verbindungen")}
+        <Plug className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> {t("KI-Verbindungen")}
         <NurLokalPlakette />
       </h2>
 
@@ -54,7 +54,7 @@ export default function KiBereich() {
         <p className="mt-1">
           <code className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-900">python -m harness doctor</code>
           {" · "}
-          <Link to="/KiTool" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">{t("Zum KI-Tool")}</Link>
+          <Link to="/KiTool" className="font-medium text-link hover:underline">{t("Zum KI-Tool")}</Link>
         </p>
       </div>}
     </section>

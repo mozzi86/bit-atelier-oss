@@ -112,21 +112,21 @@ export default function UpdateHinweis() {
   }[phase];
 
   return (
-    <div className="mx-4 mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100"
+    <div className="mx-4 mt-3 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground"
       role="status" data-testid="upd-banner" data-phase={phase} data-neueste={info.neueste}>
       <div className="flex flex-wrap items-center gap-2">
         <Download className="h-4 w-4 shrink-0" />
         <span className="flex-1">
-          <b>{t("Update verfügbar")}: {info.neueste}</b> <span className="text-emerald-800/80 dark:text-emerald-200/80">({t("installiert")} {info.aktuell})</span>
+          <b>{t("Update verfügbar")}: {info.neueste}</b> <span className="text-muted-foreground">({t("installiert")} {info.aktuell})</span>
           {text && <span className="ml-2" data-testid="upd-fortschritt" data-prozent={prozent}>{text}</span>}
         </span>
         {phase === "ruhe" || phase === "fehler" ? (
           info.installierbar ? (
             <>
-              <Button size="sm" onClick={installieren} data-testid="upd-installieren" className="bg-emerald-600 hover:bg-emerald-700">
+              <Button size="sm" onClick={installieren} data-testid="upd-installieren" className="bg-primary hover:bg-primary/90">
                 <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> {t("Jetzt aktualisieren")}
               </Button>
-              <button type="button" className="text-emerald-800 hover:underline dark:text-emerald-200" onClick={() => { schreibeSpaeter(info.neueste); setSpaeter(info.neueste); }} data-testid="upd-spaeter">
+              <button type="button" className="text-link hover:underline" onClick={() => { schreibeSpaeter(info.neueste); setSpaeter(info.neueste); }} data-testid="upd-spaeter">
                 {t("Später")}
               </button>
             </>
@@ -135,11 +135,11 @@ export default function UpdateHinweis() {
           )
         ) : null}
         {phase === "ruhe" && (
-          <button type="button" aria-label={t("Schließen")} className="text-emerald-700 hover:text-emerald-900" onClick={() => { schreibeSpaeter(info.neueste); setSpaeter(info.neueste); }}><X className="h-4 w-4" /></button>
+          <button type="button" aria-label={t("Schließen")} className="text-muted-foreground hover:text-foreground" onClick={() => { schreibeSpaeter(info.neueste); setSpaeter(info.neueste); }}><X className="h-4 w-4" /></button>
         )}
       </div>
       {phase === "ruhe" && vorschau.length > 0 && (
-        <div className="mt-1.5 pl-6 text-xs text-emerald-900/90 dark:text-emerald-100/90">
+        <div className="mt-1.5 pl-6 text-xs text-foreground/90">
           {!alleAenderungen && (
             <ul className="list-disc space-y-0.5 pl-4" data-testid="upd-aenderungen">
               {vorschau.map((z, i) => <li key={i}>{z.text}</li>)}
@@ -164,7 +164,7 @@ export default function UpdateHinweis() {
           )}
         </div>
       )}
-      {phase === "laedt" && <div className="mt-1.5 h-1.5 overflow-hidden rounded bg-emerald-100"><div className="h-full bg-emerald-600 transition-all" style={{ width: `${prozent}%` }} /></div>}
+      {phase === "laedt" && <div className="mt-1.5 h-1.5 overflow-hidden rounded bg-border"><div className="h-full bg-primary transition-all" style={{ width: `${prozent}%` }} /></div>}
       {fehler && <div className="mt-1 text-xs text-rose-700 dark:text-rose-300" data-testid="upd-fehler">{fehler}</div>}
     </div>
   );

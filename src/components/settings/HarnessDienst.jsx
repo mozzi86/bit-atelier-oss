@@ -20,8 +20,8 @@ const ZUSTAENDE = {
   "nicht-eingerichtet": { text: "nicht eingerichtet", farbe: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200" },
   gestoppt: { text: "gestoppt", farbe: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200" },
   startet: { text: "startet …", farbe: "bg-amber-100 text-amber-800" },
-  laeuft: { text: "läuft", farbe: "bg-emerald-100 text-emerald-800" },
-  extern: { text: "läuft (außerhalb von BIT-Atelier gestartet)", farbe: "bg-emerald-100 text-emerald-800" },
+  laeuft: { text: "läuft", farbe: "bg-erfolg-flaeche text-erfolg" },
+  extern: { text: "läuft (außerhalb von BIT-Atelier gestartet)", farbe: "bg-erfolg-flaeche text-erfolg" },
   "richtet-ein": { text: "wird eingerichtet …", farbe: "bg-amber-100 text-amber-800" },
   fehler: { text: "Fehler", farbe: "bg-rose-100 text-rose-800" },
 };
@@ -77,7 +77,7 @@ export default function HarnessDienst() {
     <section data-testid="harness-dienst" className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-700 dark:bg-slate-800/60">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
-          <Bot className="h-4 w-4 text-emerald-600" aria-hidden="true" /> {t("Atelier-KI-Harness (lokal)")}
+          <Bot className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> {t("Atelier-KI-Harness (lokal)")}
         </h3>
         {z && <span data-testid="harness-zustand" className={`rounded-full px-2 py-0.5 text-xs font-medium ${z.farbe}`}>{t(z.text)}{s.zustand === "richtet-ein" && s.schritt ? ` — ${t(SCHRITTE[/** @type {keyof typeof SCHRITTE} */ (s.schritt)] || s.schritt)}` : ""}</span>}
       </div>
@@ -97,7 +97,7 @@ export default function HarnessDienst() {
         {s?.zustand === "fehler" && s.eingerichtet && knopf("einrichten", <Wrench className="h-4 w-4" />, "Erneut einrichten", false)}
       </div>
       <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
-        <input type="checkbox" className="h-4 w-4 accent-emerald-600" data-testid="harness-autostart" checked={Boolean(s?.autostart)} disabled={!s} onChange={(e) => autostart(e.target.checked)} />
+        <input type="checkbox" className="h-4 w-4 accent-primary" data-testid="harness-autostart" checked={Boolean(s?.autostart)} disabled={!s} onChange={(e) => autostart(e.target.checked)} />
         {t("mit BIT-Atelier starten")}
       </label>
       {(s?.fehler || fehler) && <p className="text-xs text-rose-700 dark:text-rose-300" data-testid="harness-fehler">{s?.fehler || fehler}</p>}
@@ -110,7 +110,7 @@ export default function HarnessDienst() {
       <p className="text-xs text-slate-500 dark:text-slate-400">
         {t("Dienst")}: <code className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-900">{s?.url || "http://127.0.0.1:8765"}</code>
         {" · "}{t("Konfiguration")}: <code className="rounded bg-slate-100 px-1 py-0.5 dark:bg-slate-900">harness/config.yaml</code>
-        {" · "}<Link to="/KiTool" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">{t("Zum KI-Tool")}</Link>
+        {" · "}<Link to="/KiTool" className="font-medium text-link hover:underline">{t("Zum KI-Tool")}</Link>
       </p>
     </section>
   );

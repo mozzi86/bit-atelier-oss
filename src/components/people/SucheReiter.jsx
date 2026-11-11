@@ -109,7 +109,7 @@ export default function SucheReiter() {
       <div className="mb-3 flex gap-1.5" role="group" aria-label={t("Bereich")}>
         {SEGMENTE.map((s) => (
           <button key={s.key} type="button" aria-pressed={segment === s.key} onClick={() => setSegment(s.key)}
-            className={`rounded-md px-3 py-1.5 text-sm ${segment === s.key ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"}`}>
+            className={`rounded-md px-3 py-1.5 text-sm ${segment === s.key ? "bg-primary text-primary-foreground" : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"}`}>
             {t(s.label)}
           </button>
         ))}

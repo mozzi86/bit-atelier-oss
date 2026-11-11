@@ -68,7 +68,7 @@ export default function BauablaufKette({ tasks, projectId, projektName = "" }) {
       <CardContent className="space-y-5">
         <section data-testid="bk-pruefung" data-anzahl={liste.length}>
           <p className="text-sm font-medium mb-1">{t("Vorgänger und Reihenfolge")}</p>
-          {liste.length === 0 ? <p className="text-xs text-emerald-700">{t("Keine Auffälligkeiten.")}</p> : (
+          {liste.length === 0 ? <p className="text-xs text-erfolg">{t("Keine Auffälligkeiten.")}</p> : (
             <ul className="space-y-0.5 text-xs">
               {liste.map((h, i) => (
                 <li key={i} data-testid="bk-befund" data-code={h.code} data-task={h.task} className={h.stufe === "warn" ? "text-amber-800" : "text-slate-600"}>

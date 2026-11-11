@@ -42,7 +42,7 @@ export default function StellenListe({ stellen, bewerbungen, hervorhebenId, onBe
         const aktiv = aktiveBewerbungenJeStelle(s.id);
         return (
           <div key={s.id} data-stelle={s.id}
-            className={`rounded-lg border p-3 ${hervorhebenId === s.id ? "border-emerald-400 ring-2 ring-emerald-200 dark:ring-emerald-800" : "border-slate-200 dark:border-slate-700"}`}>
+            className={`rounded-lg border p-3 ${hervorhebenId === s.id ? "border-primary ring-2 ring-ring" : "border-slate-200 dark:border-slate-700"}`}>
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="font-medium text-slate-800 dark:text-slate-100">{s.titel}</p>
@@ -57,7 +57,7 @@ export default function StellenListe({ stellen, bewerbungen, hervorhebenId, onBe
                 <button type="button" onClick={() => onAnzeigentext(s)} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">
                   {t("Anzeigentext")}
                 </button>
-                <button type="button" onClick={() => onNeueBewerbung(s)} className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700">
+                <button type="button" onClick={() => onNeueBewerbung(s)} className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90">
                   {t("Neue Bewerbung")}
                 </button>
               </div>

@@ -87,9 +87,9 @@ export default function KiTool() {
     <div className={seitenWurzel}>
       <div className="max-w-7xl mx-auto space-y-4">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-2xl shadow-lg"><Wrench className="w-7 h-7 text-white" /></div>
+          <div className="p-3 bg-primary rounded-2xl shadow-sm"><Wrench className="w-7 h-7 text-primary-foreground" /></div>
           <div>
-            <h1 className="flex items-center gap-3 text-3xl font-bold"><span className="bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">{t('KI Tool')}</span> <NurLokalPlakette /></h1>
+            <h1 className="flex items-center gap-3 text-3xl font-bold"><span className="text-foreground">{t('KI Tool')}</span> <NurLokalPlakette /></h1>
             <p className="text-slate-600 dark:text-slate-300 mt-1">{t('Provider-unabhängiges Arbeitssystem mit Projekt-Gedächtnis, Werkzeugen und Skills')}</p>
           </div>
         </motion.div>

@@ -7,10 +7,10 @@ import { Play, Square, BatteryCharging, Crosshair, Package, Printer, Bot } from 
 
 const TYPE_LABEL = { robot: "Roboter", drone: "Drohne", truck: "Auto-LKW", printer: "3D-Drucker" };
 const STATUS_BADGE = {
-  working: "bg-emerald-100 text-emerald-800",
+  working: "bg-erfolg-flaeche text-erfolg",
   loading: "bg-amber-100 text-amber-800",
   enroute: "bg-blue-100 text-blue-800",
-  charging: "bg-purple-100 text-purple-800",
+  charging: "bg-muted text-foreground",
   idle: "bg-slate-100 text-slate-700",
   stopped: "bg-red-100 text-red-800",
   safety_stop: "bg-rose-100 text-rose-800",

@@ -133,8 +133,8 @@ export default function ApartmentPlanner() {
   return (
     <div className="space-y-4">
       {/* Persistenter Konzept-Hinweis — NICHT konditional ausblenden. */}
-      <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+      <div className="flex items-start gap-2 rounded-lg border border-warnung-rand bg-warnung-flaeche px-3 py-2 text-sm text-warnung">
+        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-warnung" />
         <span>
           <strong>Konzept-Wohnungsraster — kein Grundriss-/Wohnflächen-Nachweis (WoFlV).</strong>{" "}
           Deterministisches Rechteck-Layout in der Footprint-Box zur Mengenermittlung;
@@ -143,7 +143,7 @@ export default function ApartmentPlanner() {
       </div>
 
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: {pm.storeys} Geschosse · Grundfläche {de(pm.footArea)} m² · NGF {de(pm.ngf)} m²
         </div>
       )}
@@ -172,7 +172,7 @@ export default function ApartmentPlanner() {
                       onChange={(e) => setRow(r.id, { name: e.target.value })}
                       className="h-8 font-medium"
                     />
-                    <Button aria-label={t("Wohnung entfernen")} size="icon" variant="ghost" className="shrink-0 text-slate-400 hover:text-rose-600" onClick={() => delRow(r.id)}>
+                    <Button aria-label={t("Wohnung entfernen")} size="icon" variant="ghost" className="shrink-0 text-slate-400 hover:text-fehler" onClick={() => delRow(r.id)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -252,15 +252,15 @@ export default function ApartmentPlanner() {
         {/* Card C: Kopplung an den Store (WHG-03) */}
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Stat label="WE gesamt (generiert)" value={`${de(genZones.length)} WE`} accent="text-blue-600" />
-            <Stat label="Wohnfläche gesamt (generiert)" value={`${de(genWohnflaeche)} m²`} accent="text-blue-600" />
+            <Stat label="WE gesamt (generiert)" value={`${de(genZones.length)} WE`} accent="text-foreground" />
+            <Stat label="Wohnfläche gesamt (generiert)" value={`${de(genWohnflaeche)} m²`} accent="text-foreground" />
             <Stat label="NGF aus Gebäudemodell" value={`${de(pm.ngf)} m²`} accent="text-slate-800" />
-            <Stat label="Auslastung NGF" value={`${de(auslastung)} %`} accent="text-violet-600" />
-            <Stat label="Balkonfläche (Vorschau)" value={`${de(balkon.flaeche)} m²`} accent="text-teal-600" />
+            <Stat label="Auslastung NGF" value={`${de(auslastung)} %`} accent="text-foreground" />
+            <Stat label="Balkonfläche (Vorschau)" value={`${de(balkon.flaeche)} m²`} accent="text-foreground" />
             <Stat
               label={`Balkon anrechenbar (${Math.round(BALKON_ANRECHNUNG * 100)} %)`}
               value={`${de(balkon.anrechenbar)} m²`}
-              accent="text-teal-600"
+              accent="text-foreground"
             />
           </div>
 

@@ -173,7 +173,7 @@ export default function BrandschutzPlanEditor({ maxFluchtweg, onUebernehmen, pdf
           {(werkzeug === "fluchtweg" || werkzeug === "brandabschnitt") && draft.length > 0 && (
             <>
               <Button size="sm" variant="ghost" onClick={() => setDraft((d) => d.slice(0, -1))} aria-label={t("Letzten Punkt entfernen")}><Undo2 className="w-4 h-4" /></Button>
-              <Button size="sm" variant="ghost" className="text-emerald-700" onClick={abschliessen} disabled={draft.length < mindestPunkte} data-testid="bs-abschliessen"><Check className="w-4 h-4 mr-1" /> {t("Abschließen")}</Button>
+              <Button size="sm" variant="ghost" className="text-foreground" onClick={abschliessen} disabled={draft.length < mindestPunkte} data-testid="bs-abschliessen"><Check className="w-4 h-4 mr-1" /> {t("Abschließen")}</Button>
             </>
           )}
         </div>
@@ -186,7 +186,7 @@ export default function BrandschutzPlanEditor({ maxFluchtweg, onUebernehmen, pdf
       </CardHeader>
       <CardContent className="space-y-2">
         <div className={werkzeug === "symbol" ? "grid lg:grid-cols-[1fr_200px] gap-3" : ""}>
-          <div ref={planRef} tabIndex={0} role="group" aria-label={t("Plan-Zeichenfläche")} className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && sel) { e.preventDefault(); loeschen(); } if (e.key === "Escape") { setDraft([]); setSel(null); } }}>
+          <div ref={planRef} tabIndex={0} role="group" aria-label={t("Plan-Zeichenfläche")} className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && sel) { e.preventDefault(); loeschen(); } if (e.key === "Escape") { setDraft([]); setSel(null); } }}>
             <p className="mb-1 text-[11px] text-slate-500">{t("Tastatur: Entf löscht die Auswahl, Esc bricht das Zeichnen ab.")}</p>
             <BimPlan2D
               model={plan.model}

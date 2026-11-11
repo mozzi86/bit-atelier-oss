@@ -230,7 +230,7 @@ export default function WaermebrueckenPlanner() {
         „Energie“; Effizienzhaus-Stufen → Reiter „Förderungen“. Hier nur der Wärmebrücken-Anteil.
       </div>
 
-      <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+      <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
         Aus Gebäudemodell: {pm.storeys} Geschosse · Grundfläche {de(pm.footArea)} m² · Umfang ≈ {de1(P)} m
         · Höhe {de1(pm.height)} m · Hüllfläche ≈ {de(aHuell)} m²
       </div>
@@ -387,7 +387,7 @@ export default function WaermebrueckenPlanner() {
               <Stat label="H'_T-Anteil am Höchstwert (Richtwert)" value={`${de1(kpi.w.htAnteilPct)} %`} />
             </div>
 
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
+            <div className="rounded-lg border border-border bg-muted p-2 text-xs text-foreground">
               Einsparpotenzial durch Gleichwertigkeitsnachweis (0,10 → 0,05): ≈{" "}
               <strong>{de(kpi.vgl.einsparPotenzialKwh)} kWh/a</strong> bzw.{" "}
               {de1(kpi.vgl.einsparPotenzialPct)} % des Heizwärmebedarfs.
@@ -413,7 +413,7 @@ export default function WaermebrueckenPlanner() {
                       <td className="py-1 pr-2 text-right">{de(z.qWb)}</td>
                       <td className="py-1 pr-2 text-right">{de1(z.anteilPct)}</td>
                       <td className="py-1 pr-2 text-right">{de1(z.heizlastKw)}</td>
-                      <td className={`py-1 text-right ${z.einsparungKwh < 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                      <td className={`py-1 text-right ${z.einsparungKwh < 0 ? "text-rose-700" : "text-erfolg"}`}>
                         {de(z.einsparungKwh)}
                       </td>
                     </tr>
@@ -479,7 +479,7 @@ export default function WaermebrueckenPlanner() {
                       type="button"
                       onClick={() => setDetail(r.key, (d) => ({ ...d, aktiv: !r.aktiv, aktivDirty: true }))}
                       className={`mt-1 shrink-0 rounded border px-2 py-0.5 text-[11px] transition-colors ${
-                        r.aktiv ? "bg-emerald-600 text-white border-emerald-600" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        r.aktiv ? "bg-primary text-primary-foreground border-primary" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                       }`}
                     >
                       {r.aktiv ? "aktiv" : "inaktiv"}

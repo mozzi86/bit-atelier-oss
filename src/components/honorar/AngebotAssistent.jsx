@@ -35,7 +35,7 @@ import { useProject } from "@core/lib/ProjectContext";
 import { bauherrAusKontakt, kontaktText, sortiereKontakte } from "@/lib/honorar/bauherrKontakt.js";
 import { vergissVorschlag } from "@/lib/honorar/vorschlagMerker.js";
 
-const FELD = "h-9 w-full rounded-md border border-border bg-card px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";
+const FELD = "h-9 w-full rounded-md border border-border bg-card px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900";
 const LABEL = "text-sm font-medium text-foreground dark:text-slate-200";
 const SCHRITTE = ["Projekt und Bauherr", "Leistungsbild und Kosten", "Honorarzone", "Leistungsumfang", "Neubau oder Umbau"];
 
@@ -130,7 +130,7 @@ export default function AngebotAssistent({ zh, wert, projektVorwahl = null, vors
           {SCHRITTE.map((s, i) => (
             <li key={s}>
               <button type="button" onClick={() => setSchritt(i)} aria-current={i === schritt ? "step" : undefined}
-                className={`rounded-full border px-2 py-0.5 ${i === schritt ? "border-emerald-600 bg-erfolg-flaeche text-erfolg dark:bg-emerald-950 dark:text-emerald-100" : "border-border text-muted-foreground dark:text-slate-300"}`}>
+                className={`rounded-full border px-2 py-0.5 ${i === schritt ? "border-primary bg-muted text-foreground" : "border-border text-muted-foreground dark:text-slate-300"}`}>
                 {i + 1}. {t(s)}
               </button>
             </li>

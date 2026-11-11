@@ -70,7 +70,7 @@ export default function FilterLibrary({ filters = [], elements = [], onEdit, onD
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
-                <Badge className="bg-emerald-100 text-emerald-800">{treffer} Bauteile</Badge>
+                <Badge className="bg-erfolg-flaeche text-erfolg">{treffer} Bauteile</Badge>
                 {treffer === 0 && (
                   <Badge className="bg-amber-100 text-amber-800 gap-1">
                     <AlertTriangle className="w-3 h-3" /> 0 Treffer — Baustoff/Klassifizierung fehlt?

@@ -969,7 +969,7 @@ export default function WohnungsFokus({
                 {proportionen.map((p, i) => (
                   <div key={i} className="flex justify-between gap-2 text-[11px]" data-raum={p.name} data-status={p.status}>
                     <span className="text-slate-600">{p.name}</span>
-                    <span className={p.status === "gruen" ? "text-emerald-600" : p.status === "gelb" ? "text-amber-600" : "text-slate-400"}>
+                    <span className={p.status === "gruen" ? "text-erfolg" : p.status === "gelb" ? "text-amber-600" : "text-slate-400"}>
                       {p.ausnahme ? "—" : p.text}
                     </span>
                   </div>
@@ -1012,7 +1012,7 @@ export default function WohnungsFokus({
                 {(qualitaet.eintraege || []).length === 0 && <div className="text-slate-400">{t("Keine Befunde.")}</div>}
                 {(qualitaet.eintraege || []).map((e, i) => (
                   <div key={i} className="flex items-start gap-2 text-[11px]" data-regel={e.regel} data-stufe={e.stufe}>
-                    <span className={`mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full ${e.stufe === "fail" ? "bg-red-500" : e.stufe === "warn" ? "bg-amber-500" : "bg-emerald-500"}`} />
+                    <span className={`mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full ${e.stufe === "fail" ? "bg-red-500" : e.stufe === "warn" ? "bg-amber-500" : "bg-erfolg"}`} />
                     <span>
                       <span className="font-medium">{e.raum === "WE" ? we : kurzRaumname(e.raum)}</span>
                       <span className="text-slate-500"> — {e.text}</span>
@@ -1027,7 +1027,7 @@ export default function WohnungsFokus({
                 [ASSUMED] because MassingView3D is h-full. Furniture changes do
                 NOT touch the iso (rooms only — furniture boxes are out of scope). */}
             <div className="rounded-lg border border-slate-200 overflow-hidden">
-              <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-b">
+              <div className="px-2 py-1 text-[10px] font-semibold text-slate-500 border-b">
                 {t("Iso der WE")}
               </div>
               <div data-iso-fokus="1" style={{ height: 240 }}>

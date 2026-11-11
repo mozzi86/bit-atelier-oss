@@ -10,7 +10,7 @@ import React from "react";
 import { useI18n } from "@core/lib/i18n";
 import { anzeigeName } from "@/lib/people/mitarbeiter.js";
 
-const EINGABE = "flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
+const EINGABE = "flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
 const BESCHRIFTUNG = "text-sm font-medium leading-none text-slate-700 dark:text-slate-200";
 
 /** Gesprächsarten. */
@@ -77,7 +77,7 @@ export default function GespraechsNotizen({ gespraeche, bewertung, mitarbeiterLi
                 <div className="mt-1 flex flex-wrap gap-1.5" role="group" aria-label={t("Teilnehmende")}>
                   {mitarbeiterListe.map((m) => (
                     <button key={m.id} type="button" aria-pressed={(g.teilnehmende || []).includes(m.id)} onClick={() => teilnehmerUmschalten(i, m.id)}
-                      className={`rounded-full px-2.5 py-1 text-xs ${(g.teilnehmende || []).includes(m.id) ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"}`}>
+                      className={`rounded-full px-2.5 py-1 text-xs ${(g.teilnehmende || []).includes(m.id) ? "bg-primary text-primary-foreground" : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"}`}>
                       {anzeigeName(m)}
                     </button>
                   ))}
@@ -109,7 +109,7 @@ export default function GespraechsNotizen({ gespraeche, bewertung, mitarbeiterLi
               <div role="radiogroup" aria-label={t(k)} className="flex gap-1">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <button key={n} type="button" role="radio" aria-checked={kriteriumWert(k) === n} onClick={() => kriteriumSetzen(k, n)}
-                    className={`h-7 w-7 rounded-md border text-xs ${kriteriumWert(k) === n ? "border-emerald-500 bg-emerald-600 text-white" : "border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"}`}>
+                    className={`h-7 w-7 rounded-md border text-xs ${kriteriumWert(k) === n ? "border-primary bg-primary text-primary-foreground" : "border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"}`}>
                     {n}
                   </button>
                 ))}

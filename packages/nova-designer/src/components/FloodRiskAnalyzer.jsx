@@ -58,7 +58,7 @@ export default function FloodRiskAnalyzer({ selectedProject, onHochwasserChange 
     ? "bg-red-100 text-red-800"
     : analysis.level === "Mittel"
     ? "bg-amber-100 text-amber-800"
-    : "bg-emerald-100 text-emerald-800";
+    : "bg-erfolg-flaeche text-erfolg";
 
   const mitigations =
     analysis.level === "Hoch"
@@ -121,7 +121,7 @@ export default function FloodRiskAnalyzer({ selectedProject, onHochwasserChange 
             <WifiOff className="w-3 h-3" /> Offline — Schätzwerte
           </Badge>
         ) : (
-          <Badge variant="outline" className="text-emerald-600 border-emerald-300">
+          <Badge variant="outline" className="text-erfolg border-erfolg-rand">
             Open-Meteo Höhe + Klima {loc?.address ? `· ${loc.address}` : ""}
           </Badge>
         )}
@@ -132,11 +132,11 @@ export default function FloodRiskAnalyzer({ selectedProject, onHochwasserChange 
           value={<Badge className={color}>{synthetic ? `${analysis.level} — nicht belastbar` : analysis.level}</Badge>}
         />
         <Stat label="Geländehöhe" value={analysis.siteElev != null ? `${Math.round(analysis.siteElev)} m ü. NN` : "—"} />
-        <Stat label="Niederschlag/Jahr" value={`${annualPrecip} mm`} accent="text-blue-600" />
+        <Stat label="Niederschlag/Jahr" value={`${annualPrecip} mm`} accent="text-foreground" />
         <Stat
           label={synthetic ? "Score (ohne Datengrundlage)" : "Risiko-Score"}
           value={`${analysis.score}/100`}
-          accent={synthetic ? "text-slate-500" : analysis.score >= 60 ? "text-red-600" : "text-emerald-600"}
+          accent={synthetic ? "text-slate-500" : analysis.score >= 60 ? "text-red-600" : "text-erfolg"}
         />
       </div>
 
@@ -157,7 +157,7 @@ export default function FloodRiskAnalyzer({ selectedProject, onHochwasserChange 
           </div>
           <div>
             <div className="flex items-center gap-2 text-sm font-medium mb-2">
-              <ShieldCheck className={`w-4 h-4 ${synthetic ? "text-slate-400" : "text-emerald-600"}`} />
+              <ShieldCheck className={`w-4 h-4 ${synthetic ? "text-slate-400" : "text-erfolg"}`} />
               {synthetic ? "Mögliche Maßnahmen, sobald echte Daten vorliegen" : "Empfohlene Maßnahmen"}
             </div>
             <ul className="space-y-1 text-sm text-slate-600 list-disc list-inside">

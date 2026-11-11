@@ -31,7 +31,7 @@ import { statusLabel, prioritaetLabel, bauteilGuid } from "../lib/ticketLink";
 import { serialisiereZustand } from "../lib/viewerLink";
 
 const priorityColors = {
-  low: "bg-emerald-100 text-emerald-800",
+  low: "bg-erfolg-flaeche text-erfolg",
   medium: "bg-amber-100 text-amber-800",
   high: "bg-red-100 text-red-800",
   critical: "bg-red-200 text-red-900",
@@ -39,8 +39,8 @@ const priorityColors = {
 
 const statusColors = {
   open: "bg-blue-100 text-blue-800",
-  in_progress: "bg-purple-100 text-purple-800",
-  resolved: "bg-emerald-100 text-emerald-800",
+  in_progress: "bg-muted text-foreground",
+  resolved: "bg-erfolg-flaeche text-erfolg",
   closed: "bg-slate-100 text-slate-600",
 };
 
@@ -230,7 +230,7 @@ export default function IssuePanel({
                   onClick={(e) => e.stopPropagation()}
                   title={t("Bauteil im IFC-Viewer zeigen")}
                   aria-label={t("Bauteil {guid} im IFC-Viewer zeigen").replace("{guid}", guid)}
-                  className={`${kleinerKnopf} inline-flex max-w-full items-center gap-1 border-emerald-300 bg-emerald-50 font-mono text-emerald-800 hover:bg-emerald-100`}
+                  className={`${kleinerKnopf} inline-flex max-w-full items-center gap-1 border-border bg-background font-mono text-foreground hover:bg-muted`}
                 >
                   <Box className="w-3 h-3 shrink-0" aria-hidden="true" />
                   <span className="truncate">{guid}</span>

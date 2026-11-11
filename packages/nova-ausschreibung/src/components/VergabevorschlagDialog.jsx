@@ -88,7 +88,7 @@ export default function VergabevorschlagDialog({ tender, tps, bids, projekt, onU
             </thead>
             <tbody>
               {m.bieter.map((b) => (
-                <tr key={b.bid_id} className={`border-t ${b.bid_id === m.vorschlag?.bid_id ? "bg-emerald-50 font-medium" : ""}`}>
+                <tr key={b.bid_id} className={`border-t ${b.bid_id === m.vorschlag?.bid_id ? "bg-muted font-medium" : ""}`}>
                   <td className="px-2 py-1">{b.rang ?? "–"}</td>
                   <td className="px-2 py-1">{b.name}</td>
                   <td className="px-2 py-1 text-right tabular-nums">{euro(b.summe_netto)}</td>
@@ -127,13 +127,13 @@ export default function VergabevorschlagDialog({ tender, tps, bids, projekt, onU
         )}
 
         {fehler && <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert" data-testid="vv-fehler">{fehler}</div>}
-        {info && <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800" role="status">{info}</div>}
+        {info && <div className="rounded border border-erfolg-rand bg-erfolg-flaeche px-3 py-2 text-xs text-erfolg" role="status">{info}</div>}
 
         <div className="flex flex-wrap justify-end gap-2 pt-1">
           <Button type="button" variant="outline" onClick={pdfVorschlag} disabled={busy || !m.vorschlag} data-testid="vv-pdf">{t("Vergabevorschlag als PDF")}</Button>
           <Button type="button" variant="outline" onClick={pdfLv} disabled={busy || !m.vorschlag} data-testid="vv-lv-pdf">{t("Auftrags-LV als PDF")}</Button>
           <Button type="button" variant="outline" onClick={onClose}>{t("Schließen")}</Button>
-          <Button type="button" onClick={speichern} disabled={busy || !m.vorschlag} data-testid="vv-speichern" className="bg-gradient-to-r from-emerald-600 to-teal-600">
+          <Button type="button" onClick={speichern} disabled={busy || !m.vorschlag} data-testid="vv-speichern" className="bg-primary hover:bg-primary/90">
             {busy ? t("Speichern…") : t("Vorschlag speichern")}
           </Button>
         </div>

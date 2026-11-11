@@ -64,7 +64,7 @@ function GeraetKoppeln() {
     <main className="min-h-screen flex items-center justify-center bg-slate-50 p-4 dark:bg-slate-950" data-testid="buero-koppeln">
       <form onSubmit={absenden} className="w-full max-w-sm space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <h1 className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
-          <Link2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("Dieses Gerät koppeln")}
+          <Link2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> {t("Dieses Gerät koppeln")}
         </h1>
         <p className="text-sm text-slate-700 dark:text-slate-200">
           {t("Am Büro-Rechner unter Einstellungen › System & Info › Büro-Modus einen Koppel-Code erzeugen und hier eingeben.")}
@@ -74,7 +74,7 @@ function GeraetKoppeln() {
           value={code} onChange={(e) => setCode(nurZiffern(e.target.value))} placeholder="123456"
           className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-center font-mono text-2xl tracking-[0.4em] text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
         <button type="submit" data-testid="buero-koppeln-knopf" disabled={code.length !== 6 || laeuft}
-          className="w-full rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
+          className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {laeuft ? t("Wird gekoppelt …") : t("Koppeln")}
         </button>
         {fehler && <p role="alert" className="text-sm text-rose-700 dark:text-rose-300" data-testid="buero-koppeln-fehler">{fehler}</p>}

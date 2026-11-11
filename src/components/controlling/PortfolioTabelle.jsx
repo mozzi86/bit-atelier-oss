@@ -48,7 +48,7 @@ export default function PortfolioTabelle({ reihen, onWaehle }) {
             return (
               <tr key={r.project_id} data-testid="portfolio-zeile" data-projekt={r.project_id} className="align-top hover:bg-slate-50 dark:hover:bg-slate-800/40">
                 <th scope="row" className="px-2 py-1.5 text-left font-medium">
-                  <button type="button" onClick={() => onWaehle(r.project_id)} className="text-left text-emerald-700 hover:underline dark:text-emerald-300">
+                  <button type="button" onClick={() => onWaehle(r.project_id)} className="text-left text-link hover:underline">
                     {r.name}
                   </button>
                   {r.archiviert && <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">{t("archiviert")}</span>}
@@ -56,7 +56,7 @@ export default function PortfolioTabelle({ reihen, onWaehle }) {
                     <div className="mt-1 space-y-1 text-xs font-normal text-slate-600 dark:text-slate-300">
                       <p>{t("kein Architektenvertrag")}</p>
                       {r.angebotOffen ? (
-                        <Link to="/Fees?tab=offers" className="text-emerald-700 hover:underline dark:text-emerald-300" data-testid="portfolio-angebot-offen">
+                        <Link to="/Fees?tab=offers" className="text-link hover:underline" data-testid="portfolio-angebot-offen">
                           {t("Offenes Honorarangebot")} {r.angebotOffen.nummer || ""}
                         </Link>
                       ) : (

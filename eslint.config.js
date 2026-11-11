@@ -1,4 +1,4 @@
-// ESLint v9 Flat-Config für NovaConstruct (React + Vite, Browser + Node-Server).
+// ESLint v9 Flat-Config für BIT-Atelier (React + Vite, Browser + Node-Server).
 import js from "@eslint/js";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";

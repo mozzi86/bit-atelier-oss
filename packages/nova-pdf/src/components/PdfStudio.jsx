@@ -681,13 +681,13 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
         <Card className="border-0 shadow-sm rounded-xl">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <FileText className="w-4 h-4 text-emerald-600" /> PDF-Dokumente
+              <FileText className="w-4 h-4 text-muted-foreground" /> PDF-Dokumente
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <label className="block">
               <input type="file" accept="application/pdf" className="hidden" onChange={onUpload} disabled={busy} />
-              <span className="w-full inline-flex items-center justify-center px-3 py-2 rounded-md bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm cursor-pointer shadow-sm hover:shadow-md transition-shadow">
+              <span className="w-full inline-flex items-center justify-center px-3 py-2 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-sm cursor-pointer shadow-sm hover:shadow-md transition-shadow">
                 {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
                 PDF hochladen
               </span>
@@ -702,7 +702,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
                 <button key={d.id} onClick={() => setSelectedDoc(d)}
                   className={`w-full text-left rounded-lg border p-2.5 transition-colors ${
                     selectedDoc?.id === d.id
-                      ? "border-emerald-500 bg-emerald-50"
+                      ? "border-primary bg-muted"
                       : "border-slate-200 hover:bg-slate-50"
                   }`}>
                   <div className="text-sm font-medium text-slate-800 truncate flex items-center gap-1.5">
@@ -799,7 +799,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
               {offenImPdf > 0 && <Badge variant="outline" className="ml-2 text-[10px]">{offenImPdf}</Badge>}
             </Button>
             <Button onClick={exportAnnotated} disabled={!pdf || !!exporting}
-              className="bg-gradient-to-r from-emerald-600 to-teal-600 shadow-md">
+              className="bg-primary hover:bg-primary/90 shadow-sm">
               {exporting
                 ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Exportiere Seite {exporting.cur}/{exporting.total}</>
                 : <><FileDown className="w-4 h-4 mr-2" /> Annotiert exportieren</>}
@@ -927,7 +927,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
                             Abbrechen
                           </Button>
                           <Button size="sm" onClick={savePin}
-                            className="bg-gradient-to-r from-emerald-600 to-teal-600">Speichern</Button>
+                            className="bg-primary hover:bg-primary/90">Speichern</Button>
                         </div>
                       </div>
                     )}
@@ -935,7 +935,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
                     {/* Text-Entwurf: Inline-Input */}
                     {draftText && (
                       <input autoFocus value={draftText.value} placeholder="Text..."
-                        className="absolute z-10 bg-white/95 border border-slate-300 rounded px-1.5 py-0.5 text-sm shadow-lg outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                        className="absolute z-10 bg-white/95 border border-slate-300 rounded px-1.5 py-0.5 text-sm shadow-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         style={{
                           left: Math.min(draftText.x * W, Math.max(W - 160, 0)),
                           top: Math.max(draftText.y * H - 22, 0),
@@ -987,7 +987,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
         <Card className="border-0 shadow-sm rounded-xl">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-emerald-600" /> Kommentare
+              <MessageSquare className="w-4 h-4 text-muted-foreground" /> Kommentare
               {allPins.length > 0 && <Badge variant="outline" className="text-[10px]">{allPins.length}</Badge>}
             </CardTitle>
           </CardHeader>
@@ -1007,7 +1007,7 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
                 <div key={p.id}
                   onClick={() => { setPageNum(p.page); setSelectedAnnId(p.id); }}
                   className={`rounded-lg border p-2 cursor-pointer transition-colors ${
-                    selectedAnnId === p.id ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:bg-slate-50"
+                    selectedAnnId === p.id ? "border-primary bg-muted" : "border-slate-200 hover:bg-slate-50"
                   }`}>
                   <div className="flex items-start gap-2">
                     <span className="shrink-0 w-5 h-5 rounded-full text-white text-[11px] font-bold flex items-center justify-center"

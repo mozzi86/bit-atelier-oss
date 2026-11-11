@@ -45,7 +45,7 @@ export default function WeiterMit({ pathname, labor = false }) {
       {schritte.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {/* The nav's accessible name already says this; hidden to avoid a double announcement. */}
-          <span aria-hidden="true" className="text-xs font-medium uppercase tracking-wider text-slate-500">
+          <span aria-hidden="true" className="text-xs font-medium text-slate-500">
             {t("Weiter mit")}
           </span>
           <ul className="flex flex-wrap gap-2 min-w-0">
@@ -53,12 +53,12 @@ export default function WeiterMit({ pathname, labor = false }) {
               <li key={s.ziel} className="max-w-full">
                 <Link
                   to={s.ziel}
-                  className="group inline-flex max-w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-emerald-400 hover:text-emerald-700 dark:hover:border-emerald-500 dark:hover:text-emerald-300 transition-colors"
+                  className="group inline-flex max-w-full items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted hover:text-foreground transition-colors"
                 >
                   <span className="min-w-0">{t(s.text)}</span>
                   <ArrowRight
                     aria-hidden="true"
-                    className="w-4 h-4 shrink-0 text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-300 transition-colors"
+                    className="w-4 h-4 shrink-0 text-slate-400 group-hover:text-foreground transition-colors"
                   />
                 </Link>
               </li>
@@ -77,7 +77,7 @@ export default function WeiterMit({ pathname, labor = false }) {
           <span>{t("Labor-Modul – zeigt eine Vision oder braucht einen Zusatzdienst, nicht Teil des Kernprodukts")}</span>
           <Link
             to="/Dashboard"
-            className="font-medium text-slate-700 underline underline-offset-2 hover:text-emerald-700 dark:hover:text-emerald-300"
+            className="font-medium text-slate-700 underline underline-offset-2 hover:text-foreground"
           >
             {t("Zurück zur Projektübersicht")}
           </Link>

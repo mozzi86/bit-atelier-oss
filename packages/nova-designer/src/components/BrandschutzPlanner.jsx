@@ -125,8 +125,8 @@ export default function BrandschutzPlanner() {
   return (
     <div className="space-y-4">
       {/* Persistenter Haftungs-Disclaimer — NICHT konditional ausblenden. */}
-      <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+      <div className="flex items-start gap-2 rounded-lg border border-warnung-rand bg-warnung-flaeche px-3 py-2 text-sm text-warnung">
+        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-warnung" />
         <span>
           <strong>Brandschutz — Konzept-Richtwerte, kein prüffähiges Brandschutzkonzept und keine Abnahme.</strong>{" "}
           Gebäudeklasse, Rettungswege, Melderzahl und Feuerwehrplan-Checkliste sind Überschläge nach
@@ -136,7 +136,7 @@ export default function BrandschutzPlanner() {
       </div>
 
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: {pm.storeys} Geschosse · Grundfläche {de(pm.footArea)} m² · BGF {de(pm.bgf)} m² · OKF ≈ {de1(pm.okf_m)} m (Näherung, überschreibbar)
         </div>
       )}
@@ -269,15 +269,15 @@ export default function BrandschutzPlanner() {
         {/* Richtwert-KPIs + Zusammenfassung */}
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Stat label="Gebäudeklasse (Richtwert)" value={`GK ${kpi.gk}`} accent="text-rose-600" />
-            <Stat label="Feuerwiderstand (Richtwert)" value={kpi.fw} accent="text-orange-600" />
-            <Stat label="Hochhaus (Richtwert)" value={kpi.hochhaus ? "ja" : "nein"} accent="text-red-600" />
-            <Stat label="Notwendige Treppenräume (Richtwert)" value={de(kpi.erfTr)} accent="text-amber-600" />
+            <Stat label="Gebäudeklasse (Richtwert)" value={`GK ${kpi.gk}`} accent="text-foreground" />
+            <Stat label="Feuerwiderstand (Richtwert)" value={kpi.fw} accent="text-foreground" />
+            <Stat label="Hochhaus (Richtwert)" value={kpi.hochhaus ? "ja" : "nein"} accent="text-foreground" />
+            <Stat label="Notwendige Treppenräume (Richtwert)" value={de(kpi.erfTr)} accent="text-foreground" />
             <Stat label="2. Rettungsweg (Konzept)" value={kpi.anleiterOk ? "Anleiterung zulässig" : "baulicher 2. RW erforderlich"} accent="text-slate-700" />
-            <Stat label="Überwachte Fläche (Richtwert)" value={`${de(ueberwachteFlaeche)} m²`} accent="text-sky-600" />
-            <Stat label="Melderanzahl (Überschlag)" value={`${de(kpi.melder)} Melder`} accent="text-violet-600" />
-            <Stat label="BMA (Richtwert)" value={kpi.bmaErforderlich ? "erforderlich" : "nicht abgeleitet"} accent="text-cyan-700" />
-            <Stat label="Feuerwehrpläne (Richtwert)" value={kpi.fwpErf ? `erforderlich (${kpi.fwStatus.erfuellt}/${kpi.fwStatus.gesamt})` : "nicht erforderlich"} accent="text-emerald-700" />
+            <Stat label="Überwachte Fläche (Richtwert)" value={`${de(ueberwachteFlaeche)} m²`} accent="text-foreground" />
+            <Stat label="Melderanzahl (Überschlag)" value={`${de(kpi.melder)} Melder`} accent="text-foreground" />
+            <Stat label="BMA (Richtwert)" value={kpi.bmaErforderlich ? "erforderlich" : "nicht abgeleitet"} accent="text-foreground" />
+            <Stat label="Feuerwehrpläne (Richtwert)" value={kpi.fwpErf ? `erforderlich (${kpi.fwStatus.erfuellt}/${kpi.fwStatus.gesamt})` : "nicht erforderlich"} accent="text-foreground" />
           </div>
 
           <Card>

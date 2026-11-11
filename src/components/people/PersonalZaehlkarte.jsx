@@ -47,7 +47,7 @@ export default function PersonalZaehlkarte({ personalZugang }) {
   return (
     <Link to={`/People${bauePersonalLink({ tab: "staff" })}`} data-testid="personal-zaehlkarte"
       className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
-      <IdCard className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+      <IdCard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <span className="text-slate-700 dark:text-slate-200">
         {t("Personal: {n} Fristen fällig").replace("{n}", String(faellig.length))}
       </span>

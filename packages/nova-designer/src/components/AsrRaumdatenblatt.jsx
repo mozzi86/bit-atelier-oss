@@ -44,8 +44,8 @@ const SEITEN = { nord: "Nord", ost: "Ost", sued: "Süd", west: "West" };
 
 // Status-Buttons je Checklisten-Zeile (Vorlage: erfüllt grün / offen rot / n. z. grau).
 const CHECK_BTN = [
-  { v: "ok",    label: "erfüllt", on: "bg-emerald-600 text-white border-emerald-600" },
-  { v: "offen", label: "offen",   on: "bg-rose-600 text-white border-rose-600" },
+  { v: "ok",    label: "erfüllt", on: "bg-erfolg text-background border-erfolg" },
+  { v: "offen", label: "offen",   on: "bg-fehler text-background border-fehler" },
   { v: "nz",    label: "n. z.",   on: "bg-slate-500 text-white border-slate-500" },
 ];
 
@@ -57,7 +57,7 @@ const cardId = (key) => `asr-card-${key}`;
 // keine className durchreicht.
 function DirtyWrap({ dirty, children }) {
   return (
-    <div className={dirty ? "rounded-lg bg-sky-50 ring-1 ring-sky-200 p-1.5 -m-1.5" : ""}>
+    <div className={dirty ? "rounded-lg bg-hinweis-flaeche ring-1 ring-hinweis-rand p-1.5 -m-1.5" : ""}>
       {children}
     </div>
   );
@@ -75,7 +75,7 @@ function AsrCheckliste({ punkte, status, onToggle }) {
         ASR-Checkliste
         <span className="text-xs font-normal text-slate-500">
           {(ok || offen)
-            ? <><span className="text-emerald-700 font-medium">{ok} erfüllt</span> · <span className="text-rose-700 font-medium">{offen} offen</span> · {refs.length} Punkte</>
+            ? <><span className="text-erfolg font-medium">{ok} erfüllt</span> · <span className="text-fehler font-medium">{offen} offen</span> · {refs.length} Punkte</>
             : `${refs.length} Punkte — noch nicht bewertet`}
         </span>
       </summary>
@@ -202,7 +202,7 @@ function RoomCard({ zone, ov, checkStatus, setRoom, setCheck, moebel }) {
               </SelectContent>
             </Select>
           </div>
-          <Stat label="Fläche (aus Modell)" value={`${de(kpi.flaeche)} m²`} accent="text-emerald-700" />
+          <Stat label="Fläche (aus Modell)" value={`${de(kpi.flaeche)} m²`} accent="text-foreground" />
           <Stat label="Geschoss" value={geschossLabel(zone)} accent="text-slate-700" />
         </div>
 
@@ -237,8 +237,8 @@ function RoomCard({ zone, ov, checkStatus, setRoom, setCheck, moebel }) {
           </DirtyWrap>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Stat label="Belegungsäquivalent (Richtwert)" value={`${de1(kpi.aequivalent)} Pers.-Äq.`} accent="text-sky-600" />
-          <Stat label="Fläche je Belegungsäquivalent (Richtwert)" value={`${de1(kpi.flaecheJeAeq)} m²/Pers.-Äq.`} accent="text-violet-600" />
+          <Stat label="Belegungsäquivalent (Richtwert)" value={`${de1(kpi.aequivalent)} Pers.-Äq.`} accent="text-foreground" />
+          <Stat label="Fläche je Belegungsäquivalent (Richtwert)" value={`${de1(kpi.flaecheJeAeq)} m²/Pers.-Äq.`} accent="text-foreground" />
         </div>
         <div className="text-xs text-slate-500">
           Leere Felder = für diese Nutzungsart nicht anwendbar (n. a.) — kein Verstoß.
@@ -272,7 +272,7 @@ function RoomCard({ zone, ov, checkStatus, setRoom, setCheck, moebel }) {
         </div>
         <div className="rounded-lg border bg-white p-2 overflow-x-auto">
           <MoebelDraufsicht polygon={zone.points} items={moebel} band={band} />
-          <div className="text-xs text-amber-700 mt-1">
+          <div className="text-xs text-warnung mt-1">
             freizuhaltende Bewegungsfläche Benutzerseite ({de2(bewegungTiefe)} m tief, ASR A1.2)
           </div>
           {/* Legende (Vorlagen-Muster) */}
@@ -295,14 +295,14 @@ function RoomCard({ zone, ov, checkStatus, setRoom, setCheck, moebel }) {
                 </span>
               ))}
             </div>
-            <div className={`text-xs ${moebelWarn.length ? "text-amber-700" : "text-slate-500"}`}>
+            <div className={`text-xs ${moebelWarn.length ? "text-warnung" : "text-slate-500"}`}>
               ASR A1.2 (Bewegungsflächen): {moebel.length} Möbel, davon{" "}
               {new Set(moebelWarn.map((w) => w.itemId)).size} mit Konflikt
               {moebelWarn.length > 0 ? ":" : "."}
             </div>
             {moebelWarn.map((w, i) => (
-              <div key={i} className="flex items-start gap-1.5 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
-                <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0 text-amber-600" />
+              <div key={i} className="flex items-start gap-1.5 rounded border border-warnung-rand bg-warnung-flaeche px-2 py-1 text-[11px] text-warnung">
+                <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0 text-warnung" />
                 {w.text}
               </div>
             ))}
@@ -433,8 +433,8 @@ export default function AsrRaumdatenblatt({ complexData }) {
   return (
     <div className="space-y-4">
       {/* Persistenter Haftungs-Disclaimer — NICHT konditional ausblenden. */}
-      <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+      <div className="flex items-start gap-2 rounded-lg border border-warnung-rand bg-warnung-flaeche px-3 py-2 text-sm text-warnung">
+        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-warnung" />
         <span>
           <strong>ASR-Raumdatenblatt — Konzept-Richtwerte, kein arbeitsschutzrechtlicher Nachweis.</strong>{" "}
           Soll-Werte nach ASR A3.4 (Beleuchtung), A3.5 (Raumtemperatur/Hitzeschutz), A3.6 (Lüftung),
@@ -465,7 +465,7 @@ export default function AsrRaumdatenblatt({ complexData }) {
         <Button type="button" variant="outline" size="sm" onClick={() => setOffenePanel(true)}>
           <ListTodo className="w-4 h-4 mr-1.5" /> Offene Punkte
           {offenePunkte.length > 0 && (
-            <Badge className="ml-1.5 bg-rose-100 text-rose-700">{offenePunkte.length}</Badge>
+            <Badge className="ml-1.5 bg-fehler-flaeche text-fehler">{offenePunkte.length}</Badge>
           )}
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={() => window.print()}>
@@ -482,7 +482,7 @@ export default function AsrRaumdatenblatt({ complexData }) {
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
             Bestandsräume ({bestandGefiltert.length}/{bestand.length})
-            <Badge className="bg-emerald-100 text-emerald-700">aus Raumdatenblatt-Vorlage · IFC-GUIDs</Badge>
+            <Badge className="bg-muted text-foreground">aus Raumdatenblatt-Vorlage · IFC-GUIDs</Badge>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             {bestandGefiltert.map((r) => (

@@ -53,7 +53,7 @@ export default function ProjectFilters({ filters, onFilterChange }) {
         value={filters.status}
         onValueChange={(value) => handleFilterChange("status", value)}
       >
-        <SelectTrigger aria-label={t("Status")} className="w-40 border-slate-200 focus:border-emerald-500">
+        <SelectTrigger aria-label={t("Status")} className="w-40 border-slate-200 focus:border-ring">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -69,7 +69,7 @@ export default function ProjectFilters({ filters, onFilterChange }) {
         value={filters.climate_zone}
         onValueChange={(value) => handleFilterChange("climate_zone", value)}
       >
-        <SelectTrigger aria-label={t("Klimazone")} className="w-44 border-slate-200 focus:border-emerald-500">
+        <SelectTrigger aria-label={t("Klimazone")} className="w-44 border-slate-200 focus:border-ring">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -85,7 +85,7 @@ export default function ProjectFilters({ filters, onFilterChange }) {
         value={filters.energy_target}
         onValueChange={(value) => handleFilterChange("energy_target", value)}
       >
-        <SelectTrigger aria-label={t("Energiestandard")} className="w-44 border-slate-200 focus:border-emerald-500">
+        <SelectTrigger aria-label={t("Energiestandard")} className="w-44 border-slate-200 focus:border-ring">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

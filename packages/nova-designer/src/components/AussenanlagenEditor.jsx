@@ -31,7 +31,7 @@ import KatalogPanel from "./KatalogPanel";
 const T_STATUS = { ...STATUS_STYLE, offen: { color: "bg-slate-100 text-slate-600", dot: "bg-slate-400", label: "offen" } };
 /** Colours per suitability status (plan symbols + badges). */
 const EIGNUNG_FARBE = {
-  geeignet: { fill: "#4ade80", stroke: "#15803d", badge: "bg-emerald-100 text-emerald-800" },
+  geeignet: { fill: "#4ade80", stroke: "#15803d", badge: "bg-erfolg-flaeche text-erfolg" },
   bedingt: { fill: "#fcd34d", stroke: "#b45309", badge: "bg-amber-100 text-amber-800" },
   ungeeignet: { fill: "#fca5a5", stroke: "#b91c1c", badge: "bg-red-100 text-red-800" },
   offen: { fill: "#e2e8f0", stroke: "#64748b", badge: "bg-slate-100 text-slate-600" },
@@ -126,7 +126,7 @@ export default function AussenanlagenEditor({ complexData, layer: rawLayer, setL
                   {Object.values(FLAECHEN_ARTEN).map((a) => <option key={a.id} value={a.id}>{t(a.name)}</option>)}
                 </select>
                 <Button size="sm" variant="ghost" onClick={() => setDraft((d) => d.slice(0, -1))} disabled={!draft.length} aria-label={t("Letzten Punkt entfernen")}><Undo2 className="w-4 h-4" /></Button>
-                <Button size="sm" variant="ghost" className="text-emerald-700" onClick={abschliessen} disabled={draft.length < 3} data-testid="la-abschliessen"><Check className="w-4 h-4 mr-1" /> {t("Abschließen")}</Button>
+                <Button size="sm" variant="ghost" className="text-foreground" onClick={abschliessen} disabled={draft.length < 3} data-testid="la-abschliessen"><Check className="w-4 h-4 mr-1" /> {t("Abschließen")}</Button>
               </>
             )}
             <Button size="sm" variant={schatten ? "default" : "outline"} onClick={() => setSchatten((s) => !s)} data-testid="la-schatten" title={t("Gebäudeschatten 21. Juni 15:00")}><Sun className="w-3.5 h-3.5 mr-1" /> {t("Schatten")}</Button>
@@ -148,7 +148,7 @@ export default function AussenanlagenEditor({ complexData, layer: rawLayer, setL
       </CardHeader>
       <CardContent className="space-y-3">
         <div className={`grid gap-3 ${werkzeug === "pflanze" ? "lg:grid-cols-[1fr_260px]" : ""}`}>
-          <div tabIndex={0} role="group" aria-label={t("Plan-Zeichenfläche")} className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && sel) { e.preventDefault(); loeschen(); } if (e.key === "Escape") { setDraft([]); setSel(null); } }}>
+          <div tabIndex={0} role="group" aria-label={t("Plan-Zeichenfläche")} className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && sel) { e.preventDefault(); loeschen(); } if (e.key === "Escape") { setDraft([]); setSel(null); } }}>
             <p className="mb-1 text-[11px] text-slate-500">{t("Tastatur: Entf löscht die Auswahl, Esc bricht das Zeichnen ab.")}</p>
             <LageplanPlan
               plan={plan}

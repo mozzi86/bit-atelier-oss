@@ -20,7 +20,7 @@ import { useBuero } from "@/components/buero/BueroTor.jsx";
 import { abmelden, bueroGeaendert, codeErzeugen, ladeStatus, setzeAktiv, widerrufen, zeitpunkt } from "@/lib/bueroModus.js";
 
 const KNOPF = "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 disabled:opacity-50";
-const KNOPF_HAUPT = `${KNOPF} bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500`;
+const KNOPF_HAUPT = `${KNOPF} bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-ring`;
 const KNOPF_RAND = `${KNOPF} border border-slate-300 text-slate-700 hover:bg-white dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800 focus-visible:ring-slate-400`;
 
 /**
@@ -146,8 +146,8 @@ function AmHost() {
             <button type="submit" className={KNOPF_RAND} disabled={!name.trim() || laeuft} data-testid="buero-code-erzeugen">{t("Code erzeugen")}</button>
           </form>
           {code && (
-            <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-700 dark:bg-emerald-950/40" data-testid="buero-code-anzeige">
-              <p className="font-mono text-3xl tracking-[0.3em] text-emerald-900 dark:text-emerald-200">{code.code}</p>
+            <div className="rounded-md border border-border bg-muted p-3" data-testid="buero-code-anzeige">
+              <p className="font-mono text-3xl tracking-[0.3em] text-foreground">{code.code}</p>
               <p className="text-xs text-slate-700 dark:text-slate-200">
                 {t("Für „{name}“, gültig bis {zeit}, einmal verwendbar. Auf dem Gerät die Adresse oben öffnen und den Code eingeben.")
                   .replace("{name}", code.name).replace("{zeit}", zeitpunkt(code.laeuftAb, lang))}
@@ -190,7 +190,7 @@ export default function BueroModusKarte() {
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3 dark:border-slate-700 dark:bg-slate-800/60" data-testid="buero-karte">
       <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-        <Network className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("Büro-Modus (Mehrplatz)")}
+        <Network className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> {t("Büro-Modus (Mehrplatz)")}
       </h3>
       {ich.lokal ? <AmHost /> : ich.geraet ? <DiesesGeraet name={ich.geraet.name} laeuftAb={ich.geraet.laeuftAb} /> : null}
     </div>

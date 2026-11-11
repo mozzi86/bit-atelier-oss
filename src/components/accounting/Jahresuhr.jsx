@@ -90,7 +90,7 @@ export default function Jahresuhr({ modell, jahr, heuteMonat, monatMarkiert, onM
               aria-label={monatText(s)} ref={(el) => { refs.current[s.monat] = el; }}
               onKeyDown={taste} onFocus={() => setFokus(s.monat)}
               onClick={() => waehlen(s.monat)}
-              className="cursor-pointer outline-none focus-visible:[&>path]:stroke-2 focus-visible:[&>path]:stroke-emerald-500">
+              className="cursor-pointer outline-none focus-visible:[&>path]:stroke-2 focus-visible:[&>path]:stroke-ring">
               <path d={s.basis} className={istAktuell ? "fill-slate-300 dark:fill-slate-600" : "fill-slate-200 dark:fill-slate-700"} />
               {s.fuellung && <path data-symbol="fuellung" d={s.fuellung.pfad} className="fill-teal-600 dark:fill-teal-500" />}
               {s.luecke && <path data-symbol="defizit" d={s.luecke.pfad} fill={`url(#${schraffurId})`} />}

@@ -36,7 +36,7 @@ const deDate = (iso) => {
 const ANTRAG_STATUS_BADGE = {
   geplant: "bg-slate-100 text-slate-700",
   eingereicht: "bg-blue-100 text-blue-700",
-  bewilligt: "bg-emerald-100 text-emerald-700",
+  bewilligt: "bg-erfolg-flaeche text-erfolg",
   abgelehnt: "bg-rose-100 text-rose-700",
 };
 
@@ -185,7 +185,7 @@ export default function FoerderPlanner() {
       </div>
 
       {Number(store.costEstimate?.total) > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Kostenschätzung: Bausumme ≈ {eur(store.costEstimate.total)} (Näherung, überschreibbar)
         </div>
       )}
@@ -264,7 +264,7 @@ export default function FoerderPlanner() {
                 onChange={(v) => { setBausumme(v); setBausummeDirty(true); }}
               />
               <div className="col-span-2">
-                <Stat label="Kunst-am-Bau-Betrag (Richtwert)" value={eur(kunstBetrag)} accent="text-violet-600" />
+                <Stat label="Kunst-am-Bau-Betrag (Richtwert)" value={eur(kunstBetrag)} accent="text-foreground" />
               </div>
               <div className="col-span-2 text-xs text-slate-500">
                 Bei öffentlichen Bauvorhaben üblich (RBBau-Kontext) — Satz 0,5–2 % der Bausumme,
@@ -296,8 +296,8 @@ export default function FoerderPlanner() {
                   </SelectContent>
                 </Select>
               </div>
-              <Stat label="Geschätzte Förderung (Richtwert)" value={eur(kpi.schaetzung)} accent="text-emerald-600" />
-              <Stat label="Summe über alle Anträge (Richtwert)" value={eur(kpi.summe)} accent="text-teal-600" />
+              <Stat label="Geschätzte Förderung (Richtwert)" value={eur(kpi.schaetzung)} accent="text-foreground" />
+              <Stat label="Summe über alle Anträge (Richtwert)" value={eur(kpi.summe)} accent="text-foreground" />
               <div className="col-span-2 text-xs text-slate-500">
                 Förderfähige Kosten als Anteil der Bausumme vorbelegt (überschreibbar) —
                 Schätzung = Kosten × Satz, gedeckelt auf den Maximalbetrag.

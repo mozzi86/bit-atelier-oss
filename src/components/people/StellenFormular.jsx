@@ -25,7 +25,7 @@ import FormModal from "@core/components/common/FormModal";
 import { pruefeStellentext } from "@/lib/people/aggHinweise.js";
 import { stellenanzeigeText, leseAnforderung, schreibeAnforderung } from "@/lib/people/stellenanzeige.js";
 
-const EINGABE = "flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
+const EINGABE = "flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
 const BESCHRIFTUNG = "text-sm font-medium leading-none text-slate-700 dark:text-slate-200";
 
 /**
@@ -146,7 +146,7 @@ export default function StellenFormular({ stelle, onClose, onGespeichert }) {
           </div>
           <div className="flex items-center gap-2">
             <input id="sf-befristet" type="checkbox" checked={Boolean(entwurf.befristet)} onChange={(e) => setzen("befristet", e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-ring" />
             <label htmlFor="sf-befristet" className={BESCHRIFTUNG}>{t("Befristet")}</label>
           </div>
           <div className="sm:col-span-2">
@@ -214,7 +214,7 @@ export default function StellenFormular({ stelle, onClose, onGespeichert }) {
           <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
             {t("Abbrechen")}
           </button>
-          <button type="submit" disabled={speichern || !entwurf.titel} className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60">
+          <button type="submit" disabled={speichern || !entwurf.titel} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
             {t("Speichern")}
           </button>
         </div>
@@ -255,10 +255,10 @@ export function AnzeigentextDialog({ stelle, briefkopf, onClose }) {
         <pre ref={textRef} className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">{text}</pre>
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={kopieren} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">
-            {kopiert ? <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
+            {kopiert ? <Check className="h-4 w-4 text-erfolg" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
             {t("Kopieren")}
           </button>
-          <span role="status" className="text-xs text-emerald-700 dark:text-emerald-400">{kopiert ? t("In die Zwischenablage kopiert.") : ""}</span>
+          <span role="status" className="text-xs text-erfolg">{kopiert ? t("In die Zwischenablage kopiert.") : ""}</span>
           <button type="button" onClick={alsPdf} className="ml-auto rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">
             {t("Als PDF")}
           </button>

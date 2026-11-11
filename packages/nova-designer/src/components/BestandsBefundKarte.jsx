@@ -124,7 +124,7 @@ export default function BestandsBefundKarte({ snapshot, elemente = [], onAngehob
             <Button size="sm" data-testid="bb-speichern" disabled={!form.guid || status.laeuft} onClick={speichern}>{t("Befund speichern")}</Button>
           </div>
         )}
-        {status.text && <p className={`text-xs ${status.fehler ? "text-rose-600" : "text-emerald-700"}`} data-testid="bb-status">{status.text}</p>}
+        {status.text && <p className={`text-xs ${status.fehler ? "text-rose-600" : "text-erfolg"}`} data-testid="bb-status">{status.text}</p>}
         {befunde.length > 0 && (
           <ul className="divide-y rounded border text-xs">
             {befunde.map((b) => {
@@ -139,7 +139,7 @@ export default function BestandsBefundKarte({ snapshot, elemente = [], onAngehob
                   {b.foto_dokument_id && (fotos[b.foto_dokument_id]
                     ? <img src={fotos[b.foto_dokument_id]} alt={t("Befundfoto")} className="h-12 rounded border" />
                     : <button type="button" className="text-sky-700 underline" onClick={() => fotoLaden(b.foto_dokument_id)}>{t("Foto zeigen")}</button>)}
-                  {b.angehoben && <span className="rounded bg-emerald-50 px-1 text-emerald-700">{t("angehoben")}</span>}
+                  {b.angehoben && <span className="rounded bg-erfolg-flaeche px-1 text-erfolg">{t("angehoben")}</span>}
                   {kannAnheben && (
                     <Button size="sm" variant="outline" className="ml-auto" data-testid={`bb-anheben-${b.id}`} onClick={() => anheben(b)}>
                       {t("Erfassungsgrad anheben")}: {t(erfassungAnzeige(el.erfassung))} → {t(erfassungAnzeige(b.erfassung_vorschlag))}

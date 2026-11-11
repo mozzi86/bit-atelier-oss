@@ -78,7 +78,7 @@ export default function UpdateEinstellungen() {
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3 dark:border-slate-700 dark:bg-slate-800/60" data-testid="upd-einstellungen">
       <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-        <RefreshCw className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("Updates")}
+        <RefreshCw className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> {t("Updates")}
       </h3>
       <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
         <dt className="font-medium text-slate-600 dark:text-slate-300">{t("Installierte Fassung")}</dt>
@@ -87,7 +87,7 @@ export default function UpdateEinstellungen() {
           <>
             <dt className="font-medium text-slate-600 dark:text-slate-300">{t("Neueste Fassung")}</dt>
             <dd data-testid="upd-neueste">{info?.neueste ? <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-900">{info.neueste}</code> : "—"}
-              {info?.verfuegbar && <span className="ml-2 text-xs text-emerald-700 dark:text-emerald-400">{t("Update verfügbar")}</span>}
+              {info?.verfuegbar && <span className="ml-2 text-xs text-foreground">{t("Update verfügbar")}</span>}
             </dd>
             <dt className="font-medium text-slate-600 dark:text-slate-300">{t("Letzte Prüfung")}</dt>
             <dd data-testid="upd-letzte-pruefung">{zeitText(info?.letztePruefung) || t("noch nicht")}</dd>
@@ -128,7 +128,7 @@ export default function UpdateEinstellungen() {
           {info?.festgehalten && <p className="text-xs text-amber-800 dark:text-amber-200" data-testid="upd-festgehalten">{info.sperre}</p>}
         </>
       )}
-      <p role="status" className="text-xs text-emerald-700 dark:text-emerald-400" data-testid="upd-einst-status">{status}</p>
+      <p role="status" className="text-xs text-erfolg" data-testid="upd-einst-status">{status}</p>
       {fehler && <p role="alert" className="text-xs text-rose-700 dark:text-rose-300" data-testid="upd-einst-fehler">{fehler}</p>}
     </div>
   );

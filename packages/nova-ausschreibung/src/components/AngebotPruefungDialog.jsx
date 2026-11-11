@@ -112,7 +112,7 @@ export default function AngebotPruefungDialog({ tender, bid, tps, andere, onUpda
             {!erg.vollstaendig && <div className="text-rose-700">{t("unvollständig")}</div>}</div>
           <div className="rounded border p-2"><div className="text-slate-500">{t("Summe laut Bieter")}</div><b>{eur(erg.summe_bieter)}</b>
             {erg.summe_differenz !== null && erg.gesamtCodes.includes("summe") && <div className="text-rose-700">Δ {eur(erg.summe_differenz)}</div>}</div>
-          <div className={`rounded border p-2 ${erg.befunde ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
+          <div className={`rounded border p-2 ${erg.befunde ? "border-rose-200 bg-rose-50" : "border-erfolg-rand bg-erfolg-flaeche"}`}>
             <div className="text-slate-500">{t("Befunde (rechnerisch)")}</div><b>{erg.befunde}</b></div>
           <div className={`rounded border p-2 ${erg.hinweise ? "border-amber-200 bg-amber-50" : ""}`}>
             <div className="text-slate-500">{t("Hinweise (Plausibilität)")}</div><b>{erg.hinweise}</b></div>
@@ -153,7 +153,7 @@ export default function AngebotPruefungDialog({ tender, bid, tps, andere, onUpda
                   </td>
                 </tr>
               ))}
-              {!zeilen.length && <tr><td colSpan={7} className="px-2 py-3 text-center text-emerald-700">{t("Keine Auffälligkeiten in den Positionen.")}</td></tr>}
+              {!zeilen.length && <tr><td colSpan={7} className="px-2 py-3 text-center text-erfolg">{t("Keine Auffälligkeiten in den Positionen.")}</td></tr>}
             </tbody>
           </table>
         </div>
@@ -182,12 +182,12 @@ export default function AngebotPruefungDialog({ tender, bid, tps, andere, onUpda
         </div>
 
         {fehler && <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert" data-testid="ap-fehler">{fehler}</div>}
-        {info && <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800" role="status">{info}</div>}
+        {info && <div className="rounded border border-erfolg-rand bg-erfolg-flaeche px-3 py-2 text-xs text-erfolg" role="status">{info}</div>}
 
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="outline" onClick={csv} data-testid="ap-csv">{t("Protokoll als CSV")}</Button>
           <Button type="button" variant="outline" onClick={onClose}>{t("Schließen")}</Button>
-          <Button type="button" onClick={speichern} disabled={!pruefer.trim() || busy} data-testid="ap-speichern" className="bg-gradient-to-r from-emerald-600 to-teal-600">
+          <Button type="button" onClick={speichern} disabled={!pruefer.trim() || busy} data-testid="ap-speichern" className="bg-primary hover:bg-primary/90">
             {busy ? t("Speichern…") : t("Prüfvermerk speichern")}
           </Button>
         </div>

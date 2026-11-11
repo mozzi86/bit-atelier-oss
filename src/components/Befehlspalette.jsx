@@ -248,7 +248,7 @@ export default function Befehlspalette({ offen, onSchliessen }) {
         className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-2xl"
       >
         {/* Focus ring on the container (72-03): the input itself stays borderless. */}
-        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 px-3 focus-within:ring-2 focus-within:ring-inset focus-within:ring-emerald-500">
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 px-3 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring">
           <Search className="w-4 h-4 text-slate-400 shrink-0" />
           <input
             ref={eingabeRef}
@@ -276,7 +276,7 @@ export default function Befehlspalette({ offen, onSchliessen }) {
                   i === aktiv ? 'bg-slate-100 dark:bg-slate-800' : ''
                 }`}
               >
-                <span className="w-20 shrink-0 text-[11px] uppercase tracking-wide text-slate-400">
+                <span className="w-20 shrink-0 text-[11px] text-slate-400">
                   {e.art}
                 </span>
                 <span className="flex-1 min-w-0">

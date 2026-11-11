@@ -330,7 +330,7 @@ export default function EntwaesserungPlanner({ complexData = null } = {}) {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle className="flex items-center gap-2 text-base"><Ruler className="w-4 h-4 text-violet-600" /> {t("Gefälledämmung (Flachdach)")}</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base"><Ruler className="w-4 h-4 text-muted-foreground" /> {t("Gefälledämmung (Flachdach)")}</CardTitle>
             <div className="flex flex-wrap items-center gap-1">
               <Button size="sm" variant={dachWerkzeug === "auswahl" ? "default" : "outline"} onClick={() => { setDachWerkzeug("auswahl"); setSelDach(null); }} data-testid="ew-tool-auswahl"><Move className="w-3.5 h-3.5 mr-1" /> {t("Auswahl")}</Button>
               <Button size="sm" variant={dachWerkzeug === "ablauf" ? "default" : "outline"} onClick={() => { setDachWerkzeug("ablauf"); setSelDach(null); }} data-testid="ew-tool-ablauf"><Droplet className="w-3.5 h-3.5 mr-1" /> {t("Ablauf")}</Button>
@@ -348,7 +348,7 @@ export default function EntwaesserungPlanner({ complexData = null } = {}) {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid md:grid-cols-[1fr_220px] gap-3">
-            <div tabIndex={0} role="group" aria-label={t("Plan-Zeichenfläche")} className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && selDach) { e.preventDefault(); loescheDach(); } if (e.key === "Escape") setSelDach(null); }}>
+            <div tabIndex={0} role="group" aria-label={t("Plan-Zeichenfläche")} className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && selDach) { e.preventDefault(); loescheDach(); } if (e.key === "Escape") setSelDach(null); }}>
               <p className="mb-1 text-[11px] text-slate-500">{t("Tastatur: Entf löscht die Auswahl, Esc bricht das Zeichnen ab.")}</p>
               <BimPlan2D
                 model={plan.model}
@@ -469,7 +469,7 @@ export default function EntwaesserungPlanner({ complexData = null } = {}) {
                     {Object.values(REGEN_ARTEN).map((a) => <option key={a.id} value={a.id}>{t(a.name)}</option>)}
                   </select>
                   <Button size="sm" variant="ghost" onClick={() => setDraft((d) => d.slice(0, -1))} disabled={!draft.length} aria-label={t("Letzten Punkt entfernen")}><Undo2 className="w-4 h-4" /></Button>
-                  <Button size="sm" variant="ghost" className="text-emerald-700" onClick={rhAbschliessen} disabled={draft.length < 3} data-testid="ew-abschliessen"><Check className="w-4 h-4 mr-1" /> {t("Abschließen")}</Button>
+                  <Button size="sm" variant="ghost" className="text-foreground" onClick={rhAbschliessen} disabled={draft.length < 3} data-testid="ew-abschliessen"><Check className="w-4 h-4 mr-1" /> {t("Abschließen")}</Button>
                 </>
               )}
               {selRH && <Button size="sm" variant="outline" className="text-red-600" onClick={loescheRH} data-testid="ew-loeschen-rh"><Trash2 className="w-3.5 h-3.5 mr-1" /> {t("Löschen")}</Button>}
@@ -483,7 +483,7 @@ export default function EntwaesserungPlanner({ complexData = null } = {}) {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className={`grid gap-3 ${regenWerkzeug === "zisterne" ? "lg:grid-cols-[1fr_240px]" : ""}`}>
-            <div tabIndex={0} role="group" aria-label={t("Plan-Zeichenfläche")} className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && selRH) { e.preventDefault(); loescheRH(); } if (e.key === "Escape") { setDraft([]); setSelRH(null); } }}>
+            <div tabIndex={0} role="group" aria-label={t("Plan-Zeichenfläche")} className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring" onKeyDown={(e) => { if ((e.key === "Delete" || e.key === "Backspace") && selRH) { e.preventDefault(); loescheRH(); } if (e.key === "Escape") { setDraft([]); setSelRH(null); } }}>
               <p className="mb-1 text-[11px] text-slate-500">{t("Tastatur: Entf löscht die Auswahl, Esc bricht das Zeichnen ab.")}</p>
               <LageplanPlan
                 plan={plan}

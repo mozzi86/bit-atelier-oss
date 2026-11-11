@@ -20,7 +20,7 @@ import { dateiAnbieten } from "@/lib/accounting/tabellenExport.js";
 import { useBriefkopf } from "@core/lib/useBriefkopf.js";
 import { bueroNameAus } from "@/lib/accounting/bueroName.js";
 
-const FELD = "h-9 rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900";
+const FELD = "h-9 rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900";
 const LABEL = "text-sm font-medium text-slate-700 dark:text-slate-200";
 
 /** @param {number} n @returns {string} zero-padded to 2 digits */
@@ -173,7 +173,7 @@ export default function DatevExportAbschnitt({ bh, von, bis }) {
       )}
 
       <button type="button" disabled={gesperrt.length > 0 || speichert} onClick={herunterladen}
-        className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600">
+        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">
         <Download className="h-4 w-4" aria-hidden="true" /> {t("DATEV-Buchungsstapel herunterladen")}
       </button>
 

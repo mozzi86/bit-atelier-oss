@@ -39,7 +39,7 @@ export function PresenceBar() {
       </div>
       <span className="text-xs text-slate-400">{COLLABORATORS.length === 1 ? "nur du" : `${COLLABORATORS.length} online`}</span>
       {collabChannel.active && (
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[10px] font-medium">
+        <span className="inline-flex items-center gap-1 rounded-full bg-erfolg-flaeche text-erfolg px-2 py-0.5 text-[10px] font-medium">
           <Radio className="w-3 h-3" />Live-Kanal aktiv
         </span>
       )}
@@ -110,7 +110,7 @@ export function CommentsList({ comments, selectedId, onSelect, onResolve, onDele
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(c.id); } }}
           className={`rounded-lg border p-2 cursor-pointer transition-colors ${selectedId === c.id ? "border-amber-400 bg-amber-50" : "border-slate-200 hover:bg-slate-50"} ${c.resolved ? "opacity-60" : ""}`}>
           <div className="flex items-start gap-2">
-            <CircleDot className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${c.resolved ? "text-emerald-500" : "text-amber-500"}`} />
+            <CircleDot className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${c.resolved ? "text-erfolg" : "text-amber-500"}`} />
             <div className="flex-1 min-w-0">
               <div className="text-sm text-slate-800">{c.text}</div>
               <div className="text-[11px] text-slate-400">{c.author} · {new Date(c.created_date).toLocaleString("de-DE")}</div>

@@ -171,7 +171,7 @@ export default function SettlementPanel({ tenders, positions, bids, measurements
           <h3 className="text-lg font-semibold text-slate-800">Aufmaß & Abrechnung</h3>
           <p className="text-sm text-slate-500">Vergabesumme {eur0(totalContract)} · abgerechnet {eur0(totalSettled)}</p>
         </div>
-        <Button onClick={openForm} className="bg-gradient-to-r from-emerald-600 to-teal-600">
+        <Button onClick={openForm} className="bg-primary hover:bg-primary/90">
           <Plus className="w-4 h-4 mr-2" /> Aufmaß erfassen
         </Button>
       </div>
@@ -209,7 +209,7 @@ export default function SettlementPanel({ tenders, positions, bids, measurements
                     </div>
                   </td>
                   <td className="py-2 px-3 text-right tabular-nums">{eur0(r.contractSum)}</td>
-                  <td className="py-2 px-3 text-right tabular-nums font-semibold text-emerald-700">{eur0(r.settled)}</td>
+                  <td className="py-2 px-3 text-right tabular-nums font-semibold text-foreground">{eur0(r.settled)}</td>
                 </tr>
               ))}
             </tbody>
@@ -217,7 +217,7 @@ export default function SettlementPanel({ tenders, positions, bids, measurements
               <tr className="border-t-2 font-semibold">
                 <td className="py-2 px-3" colSpan={6}>Summe</td>
                 <td className="py-2 px-3 text-right tabular-nums">{eur0(totalContract)}</td>
-                <td className="py-2 px-3 text-right tabular-nums text-emerald-700">{eur0(totalSettled)}</td>
+                <td className="py-2 px-3 text-right tabular-nums text-foreground">{eur0(totalSettled)}</td>
               </tr>
             </tfoot>
           </table>
@@ -248,7 +248,7 @@ export default function SettlementPanel({ tenders, positions, bids, measurements
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Abbrechen</Button>
-              <Button type="submit" disabled={!form.position_id} className="bg-gradient-to-r from-emerald-600 to-teal-600">
+              <Button type="submit" disabled={!form.position_id} className="bg-primary hover:bg-primary/90">
                 <FileCheck2 className="w-4 h-4 mr-2" /> Speichern
               </Button>
             </div>

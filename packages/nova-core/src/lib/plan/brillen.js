@@ -8,7 +8,7 @@
 // look until somebody decides (D-BW-03).
 //
 // In: nothing. Out: BRILLEN, brilleVon(), brilleSicht(), zeigtStatus(), sichtbarUnter(),
-// planDarstellung(), dunkler() (107-12, shared with the graphic rules of plan/ansichtszustand.js). No I/O.
+// planDarstellung(), dreiDDarstellung() (261110-vf2: the same lens on a 3D mesh), dunkler() (107-12, shared with the graphic rules of plan/ansichtszustand.js). No I/O.
 
 import { statusDarstellung } from "./statusDarstellung.js";
 
@@ -177,4 +177,32 @@ export function schraffur45(pts, abstand) {
     if (treffer.length >= 2) out.push([treffer[0], treffer[1]]);
   }
   return out;
+}
+
+/** Opacity of a faded ("blass") element, 0..1 — the same value the plan uses (planDarstellung). */
+export const BLASS_DECKKRAFT = 0.35;
+
+/**
+ * How a 3D mesh of this status looks under the lens (261110-vf2) — the 3D counterpart of planDarstellung().
+ * hidden: not drawn; faded: translucent in the status colour; emphasised: opaque in the status colour, also over an
+ * assigned material ("status wins" in renovation lenses, 97-KONZEPT); normal: the mesh keeps what it has.
+ * An element WITHOUT a decided status is never hidden and never recoloured (D-BW-03): there is no status colour to
+ * show, and dropping it silently from a demolition view would be wrong planning.
+ *
+ * Graphic rules (Phase 55): do NOT evaluate rules here — that lives in `dreiDElementDarstellung` of
+ * plan/ansichtszustand.js (same split as planDarstellung → elementDarstellung), so brillen.js stays free of the
+ * rule engine and there is still ONE override core.
+ *
+ * @param {Readonly<Brille>|null|undefined} brille
+ * @param {string|null|undefined} status
+ * @returns {{sichtbar: boolean, deckkraft: number, farbe: string|null, sicht: Sicht}}
+ *   deckkraft: opacity 0..1; farbe: "#rrggbb" to paint the mesh with, or null = leave its material
+ */
+export function dreiDDarstellung(brille, status) {
+  const entschieden = status === "bestand" || status === "abbruch" || status === "neubau" || status === "temporaer";
+  if (!brille || !entschieden) return { sichtbar: true, deckkraft: 1, farbe: null, sicht: "normal" };
+  const sicht = brilleSicht(brille, status);
+  if (sicht === "aus") return { sichtbar: false, deckkraft: 0, farbe: null, sicht };
+  if (sicht === "normal") return { sichtbar: true, deckkraft: 1, farbe: null, sicht };
+  return { sichtbar: true, deckkraft: sicht === "blass" ? BLASS_DECKKRAFT : 1, farbe: statusDarstellung(status).hex, sicht };
 }

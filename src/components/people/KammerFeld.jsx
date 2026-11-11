@@ -13,7 +13,7 @@
 import React from "react";
 import { useI18n } from "@core/lib/i18n";
 
-const EINGABE = "flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
+const EINGABE = "flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
 const BESCHRIFTUNG = "text-sm font-medium leading-none text-slate-700 dark:text-slate-200";
 
 /**
@@ -60,7 +60,7 @@ export default function KammerFeld({ wert = {}, onChange }) {
           type="checkbox"
           checked={Boolean(wert.bauvorlageberechtigt)}
           onChange={(e) => setzen("bauvorlageberechtigt", e.target.checked)}
-          className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+          className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-ring"
         />
         <label htmlFor="mf-kammer-bauvorlage" className={BESCHRIFTUNG}>{t("Bauvorlageberechtigt")}</label>
       </div>

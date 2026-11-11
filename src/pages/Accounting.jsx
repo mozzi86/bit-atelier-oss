@@ -92,8 +92,8 @@ export default function Accounting() {
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div className="min-w-0">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent flex items-center gap-2">
-              <Landmark className="w-7 h-7 text-emerald-600" aria-hidden="true" /> {t("Buchhaltung")}
+            <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
+              <Landmark className="w-7 h-7 text-muted-foreground" aria-hidden="true" /> {t("Buchhaltung")}
             </h1>
             <p className="text-slate-600 mt-1 dark:text-slate-300">{t("Rechnungen · Liquidität · Steuern · Jahresabschluss")}</p>
           </div>

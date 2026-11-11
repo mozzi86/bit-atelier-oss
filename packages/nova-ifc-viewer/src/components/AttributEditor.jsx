@@ -180,7 +180,7 @@ export default function AttributEditor({ element, modell, projectId = null, aktu
           className="text-sky-700 underline disabled:text-slate-300 disabled:no-underline">{t("Journal als JSON")}</button>
       </div>
       <p className="mt-1 text-[10px] text-slate-400">{t("Das IFC bleibt unverändert — der KI-Harness schreibt das Journal mit „/ifc schreibe“ in eine neue Datei, alle GlobalIds bleiben.")}</p>
-      {meldung.text && <p data-testid="ae-meldung" className={meldung.fehler ? "text-red-600" : "text-emerald-700"}>{meldung.text}</p>}
+      {meldung.text && <p data-testid="ae-meldung" className={meldung.fehler ? "text-red-600" : "text-erfolg"}>{meldung.text}</p>}
     </div>
   );
 }

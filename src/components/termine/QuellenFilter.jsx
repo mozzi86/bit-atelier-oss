@@ -74,7 +74,7 @@ export default function QuellenFilter({ status, aktiv, onAktiv, projektfilter, o
         <label className="inline-flex items-center gap-1.5">
           <input type="checkbox" checked={nurFristen} onChange={(e) => onNurFristen(e.target.checked)} data-testid="nur-fristen" /> {t("nur Fristen")}
         </label>
-        {zeigeRegelLink && <Link to="/Settings?tab=rules" className="text-emerald-700 underline dark:text-emerald-300">{t("Vorlaufzeiten und Gewährleistungsfristen einstellen")}</Link>}
+        {zeigeRegelLink && <Link to="/Settings?tab=rules" className="text-link underline">{t("Vorlaufzeiten und Gewährleistungsfristen einstellen")}</Link>}
       </div>
     </div>
   );

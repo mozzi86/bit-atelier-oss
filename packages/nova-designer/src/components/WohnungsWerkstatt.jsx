@@ -797,7 +797,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                 </Select>
                 {/* 75-07: Empfehlung aus der Tiefe — Chip, kein Zwang. [ASSUMED] Blatt 06 */}
                 <div
-                  className={`mt-1 rounded border px-2 py-1 text-[11px] ${empfehlung.typen.includes(cfg.typ) ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}
+                  className={`mt-1 rounded border px-2 py-1 text-[11px] ${empfehlung.typen.includes(cfg.typ) ? "border-erfolg-rand bg-erfolg-flaeche text-erfolg" : "border-amber-200 bg-amber-50 text-amber-900"}`}
                   data-testid="wt-empfehlung" data-stufe={empfehlung.stufe} title={t("Richtwert aus der Gebäudetiefe, kein Norm-Anspruch")}
                 >
                   {t("Empfehlung")}: {empfehlung.text}
@@ -861,7 +861,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                     {t("Vorschlag veraltet")} ({vorschlagStand.grund === "algorithmus" ? t("Algorithmus geändert") : t("Grundfläche geändert")}): {typologieLabel(cfg.gewaehlterVorschlag.typologie)}
                   </div>
                 ) : (
-                  <div className="mt-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-900"
+                  <div className="mt-1 rounded border border-erfolg-rand bg-erfolg-flaeche px-2 py-1 text-[11px] text-erfolg"
                     data-testid="wt-vorschlag-aktiv" data-vorschlag={cfg.gewaehlterVorschlag.id}>
                     {t("Vorschlag")}: {typologieLabel(cfg.gewaehlterVorschlag.typologie)}
                   </div>
@@ -1706,7 +1706,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium">{q.we}</span>
                       <span className="flex items-center gap-2">
-                        <span className={q.zaehler.fail ? "text-red-600" : q.zaehler.warn ? "text-amber-600" : "text-emerald-600"}>
+                        <span className={q.zaehler.fail ? "text-red-600" : q.zaehler.warn ? "text-amber-600" : "text-erfolg"}>
                           {q.zaehler.fail} fail · {q.zaehler.warn} warn · {q.zaehler.ok} ok
                         </span>
                         <button type="button" className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] text-slate-600 hover:bg-slate-50"

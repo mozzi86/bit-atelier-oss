@@ -50,10 +50,10 @@ import ProjektKennzahlen from "../components/feasibility/ProjektKennzahlen";
 
 // KPI tiles: key into the kpis state, German label (i18n key), icon and tint.
 const KPI_KACHELN = [
-  { key: "site_efficiency", label: "Grundstücksausnutzung", icon: Eye, feld: "bg-blue-50", farbe: "text-blue-600" },
-  { key: "zoning_compliance", label: "Baurechtliche Konformität", icon: CheckCircle, feld: "bg-emerald-50", farbe: "text-emerald-600" },
-  { key: "financial_viability", label: "Wirtschaftlichkeit", icon: TrendingUp, feld: "bg-violet-50", farbe: "text-violet-600" },
-  { key: "sustainability_score", label: "Nachhaltigkeitsindex", icon: Zap, feld: "bg-teal-50", farbe: "text-teal-600" },
+  { key: "site_efficiency", label: "Grundstücksausnutzung", icon: Eye, feld: "bg-muted", farbe: "text-muted-foreground" },
+  { key: "zoning_compliance", label: "Baurechtliche Konformität", icon: CheckCircle, feld: "bg-muted", farbe: "text-muted-foreground" },
+  { key: "financial_viability", label: "Wirtschaftlichkeit", icon: TrendingUp, feld: "bg-muted", farbe: "text-muted-foreground" },
+  { key: "sustainability_score", label: "Nachhaltigkeitsindex", icon: Zap, feld: "bg-muted", farbe: "text-muted-foreground" },
 ];
 
 export default function RealEstateFeasibility() {
@@ -171,11 +171,11 @@ export default function RealEstateFeasibility() {
           className="text-center space-y-4"
         >
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="p-4 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-2xl shadow-xl">
-              <Building className="w-8 h-8 text-white" />
+            <div className="p-4 bg-primary rounded-2xl shadow-sm">
+              <Building className="w-8 h-8 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">
+              <h1 className="text-4xl font-bold text-foreground">
                 Machbarkeit
               </h1>
               <p className="text-slate-600 mt-1">KI-gestützte Plattform für den Gebäude-Lebenszyklus — von der Machbarkeit über BIM bis zur Projektabwicklung</p>
@@ -189,7 +189,7 @@ export default function RealEstateFeasibility() {
         {/* Sample banner: the figures below belong to no project. */}
         <div
           role="note"
-          className="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900 sm:flex-row sm:items-center sm:justify-between dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
+          className="flex flex-col gap-3 rounded-xl border border-warnung-rand bg-warnung-flaeche px-4 py-3 text-warnung sm:flex-row sm:items-center sm:justify-between"
         >
           <div className="flex items-start gap-2">
             <Info className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
@@ -210,7 +210,7 @@ export default function RealEstateFeasibility() {
           {KPI_KACHELN.map(({ key, label, icon: Icon, feld, farbe }) => (
             <Card key={key} className="border-0 shadow-sm rounded-xl bg-white hover:shadow-md transition-shadow">
               <CardContent className="relative p-6 text-center">
-                <Badge variant="outline" className="absolute right-3 top-3 border-amber-300 bg-amber-50 text-amber-800">
+                <Badge variant="outline" className="absolute right-3 top-3 border-warnung-rand bg-warnung-flaeche text-warnung">
                   {t("Beispiel")}
                 </Badge>
                 <div className={`p-2.5 rounded-xl ${feld} inline-flex mx-auto mb-3`}>
@@ -225,14 +225,14 @@ export default function RealEstateFeasibility() {
         </div>
 
         {/* KI-Vorschlagsleiste */}
-        <Card className="border-0 shadow-xl rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
+        <Card className="border-0 shadow-sm rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <Bot className="w-6 h-6" />
               <div className="flex-1">
                 <h3 className="flex items-center gap-2 font-semibold">
                   {t("KI-Optimierungsvorschläge")}
-                  <Badge className="bg-white text-emerald-800 hover:bg-white">{t("Beispiel")}</Badge>
+                  <Badge className="bg-white text-foreground hover:bg-white">{t("Beispiel")}</Badge>
                 </h3>
                 <div className="flex gap-4 mt-2">
                   {aiSuggestions.slice(0, 2).map((suggestion, index) => (
@@ -356,7 +356,7 @@ export default function RealEstateFeasibility() {
         {/* The real IFC export lives with the building model (BitBimStudio). */}
         <p className="flex items-center justify-center gap-2 text-sm text-slate-600">
           <Upload className="w-4 h-4" aria-hidden="true" />
-          <Link to="/ComplexDesigner?tab=bim" className="font-medium text-emerald-700 underline-offset-4 hover:underline">
+          <Link to="/ComplexDesigner?tab=bim" className="font-medium text-link underline-offset-4 hover:underline">
             {t("IFC-Export im Komplex-Designer (Gebäudemodell)")}
           </Link>
         </p>

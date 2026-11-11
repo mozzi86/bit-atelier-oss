@@ -11,7 +11,8 @@
 // module that shows its texts, and that module calls englischErgaenzen(EN) of ../i18n.jsx once at module level (existing keys win).
 // Today: raeume-107-11.js — imported by BitBimStudio.jsx and WohnungsWerkstatt.jsx; ansicht-107-12.js — imported by BitBimStudio.jsx;
 // efh-108.js (all plans of phase 108) — imported by BitBimStudio.jsx, BimPlan2D.jsx, MapLibreMap.jsx, ComplexDesigner.jsx, MassingStudio.jsx and WohnungsWerkstatt.jsx;
-// portfolio-112.js — imported by src/pages/AtelierDeveloper.jsx. A NEW consumer of these keys must import the
+// portfolio-112.js — imported by src/pages/AtelierDeveloper.jsx; ueberschreibung-55.js — imported by RegelEditor.jsx, BitBimStudio.jsx, IfcViewer.jsx.
+// A NEW consumer of these keys must import the
 // part the same way, else it shows German in EN mode. Move the part into the list below once the entry chunk has headroom.
 //
 // In:  the part files. Out: TEILE_EN, all English entries of the parts merged.
@@ -164,6 +165,7 @@ import { EN as PLAN_ABLAGE_110 } from "./plan-ablage-110.js";
 import { EN as HUELLE_112 } from "./huelle-112.js";
 // 114-01: group name of the catalogue materials (component catalogue in the app)
 import { EN as BAUTEILKATALOG_114 } from "./bauteilkatalog-114.js";
+import { EN as ZEIGEN_SAGEN_ZS1 } from "./zeigenSagen-zs1.js";
 import { EN as SPLATS_104 } from "./splats-104.js";
 // Plan 104-09: PDF studio — appending save (original bytes untouched) + crash recovery.
 import { EN as PDF_ANHANG_104 } from "./pdf-anhang-104.js";
@@ -306,4 +308,5 @@ export const TEILE_EN = Object.freeze({
   ...PLAN_ABLAGE_110,
   ...HUELLE_112,
   ...BAUTEILKATALOG_114,
+  ...ZEIGEN_SAGEN_ZS1,
 });

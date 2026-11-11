@@ -45,7 +45,7 @@ const ProjectCard = ({ project, index, onReport }) => (
       <CardHeader className="pb-4">
         <div className="flex items-start justify-between">
           <div className="space-y-2">
-            <CardTitle className="text-lg font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
+            <CardTitle className="text-lg font-bold text-slate-800 group-hover:text-foreground transition-colors">
               {project.name}
             </CardTitle>
             <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -99,7 +99,7 @@ const ProjectCard = ({ project, index, onReport }) => (
               {format(new Date(project.completion_date), 'MMM yyyy')}
             </div>
           )}
-          <Button variant="outline" size="sm" className="h-7 px-2 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+          <Button variant="outline" size="sm" className="h-7 px-2 text-xs border-border text-foreground hover:bg-muted"
             onClick={() => onReport?.(project)} aria-label={`Bericht für ${project.name}`}>
             <FileText className="w-3.5 h-3.5 mr-1" /> Bericht
           </Button>
@@ -143,7 +143,7 @@ export default function ProjectsList({ projects, isLoading }) {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-xl font-bold text-slate-800">Recent Projects</CardTitle>
         <Link to={createPageUrl("Projects")}>
-          <Button variant="outline" size="sm" className="border-emerald-200 text-emerald-700 hover:bg-emerald-50">
+          <Button variant="outline" size="sm" className="border-border text-foreground hover:bg-muted">
             <Plus className="w-4 h-4 mr-1" />
             New Project
           </Button>
@@ -157,7 +157,7 @@ export default function ProjectsList({ projects, isLoading }) {
             <h3 className="text-lg font-semibold text-slate-600 mb-2">No projects yet</h3>
             <p className="text-slate-500 mb-4">Start your first climate-optimized project</p>
             <Link to={createPageUrl("Projects")}>
-              <Button className="bg-gradient-to-r from-emerald-600 to-teal-600">
+              <Button className="bg-primary hover:bg-primary/90">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Project
               </Button>

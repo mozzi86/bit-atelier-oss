@@ -115,7 +115,7 @@ export default function ImportWizard({ onDone }) {
           <div className="space-y-3 rounded-lg border border-slate-200 p-3">
             <div className="flex items-center gap-2 text-sm font-medium">
               {bericht.ok
-                ? <><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Trockenlauf bestanden</>
+                ? <><CheckCircle2 className="w-4 h-4 text-erfolg" /> Trockenlauf bestanden</>
                 : <><ShieldAlert className="w-4 h-4 text-rose-600" /> Trockenlauf NICHT bestanden — es wird nichts geschrieben</>}
             </div>
 
@@ -170,7 +170,7 @@ export default function ImportWizard({ onDone }) {
 
             <Button
               size="sm"
-              className="bg-emerald-600 hover:bg-emerald-700"
+              className="bg-primary hover:bg-primary/90"
               disabled={!bericht.ok || busy}
               onClick={schreiben}
             >
@@ -184,10 +184,10 @@ export default function ImportWizard({ onDone }) {
 
         {/* --- Ergebnis ------------------------------------------------------ */}
         {ergebnis && (
-          <div className={`space-y-2 rounded-lg border p-3 text-sm ${ergebnis.ok ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
+          <div className={`space-y-2 rounded-lg border p-3 text-sm ${ergebnis.ok ? "border-erfolg-rand bg-erfolg-flaeche" : "border-rose-200 bg-rose-50"}`}>
             <div className="flex items-center gap-2 font-medium">
               {ergebnis.ok
-                ? <><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Import abgeschlossen</>
+                ? <><CheckCircle2 className="w-4 h-4 text-erfolg" /> Import abgeschlossen</>
                 : <><XCircle className="w-4 h-4 text-rose-600" /> Import abgebrochen</>}
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1">

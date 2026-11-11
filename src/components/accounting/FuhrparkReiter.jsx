@@ -22,7 +22,7 @@ import FahrtenbuchAbschnitt from "./FahrtenbuchAbschnitt.jsx";
 import KilometergeldAbschnitt from "./KilometergeldAbschnitt.jsx";
 import ExportKnopf from "./gemeinsam/ExportKnopf.jsx";
 
-const FELD = "h-9 rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900";
+const FELD = "h-9 rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900";
 
 /**
  * Years present among the vehicles (by acquisition date) plus the current

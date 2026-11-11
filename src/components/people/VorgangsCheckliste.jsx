@@ -73,7 +73,7 @@ export default function VorgangsCheckliste({ vorgang, mitarbeiter, vertraege, do
   if (!vorgang) {
     return (
       <div data-testid="vorgangscheckliste-fehlt">
-        <button type="button" onClick={onZurueck} className="mb-3 inline-flex items-center gap-1 text-sm text-emerald-700 hover:underline dark:text-emerald-400">
+        <button type="button" onClick={onZurueck} className="mb-3 inline-flex items-center gap-1 text-sm text-link hover:underline">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {t("Zurück zur Liste")}
         </button>
         <p className="text-sm text-slate-500 dark:text-slate-400">{t("Vorgang nicht gefunden.")}</p>
@@ -158,7 +158,7 @@ export default function VorgangsCheckliste({ vorgang, mitarbeiter, vertraege, do
   return (
     <div data-testid="vorgangscheckliste" className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button type="button" onClick={onZurueck} className="inline-flex items-center gap-1 text-sm text-emerald-700 hover:underline dark:text-emerald-400">
+        <button type="button" onClick={onZurueck} className="inline-flex items-center gap-1 text-sm text-link hover:underline">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {t("Zurück zur Liste")}
         </button>
       </div>
@@ -177,7 +177,7 @@ export default function VorgangsCheckliste({ vorgang, mitarbeiter, vertraege, do
           aria-valuemin={0}
           aria-valuemax={100}
           data-testid="vorgangscheckliste-fortschritt"
-          className="mt-2 h-2 w-full accent-emerald-600"
+          className="mt-2 h-2 w-full accent-primary"
         >
           {prozent}%
         </progress>
@@ -203,13 +203,13 @@ export default function VorgangsCheckliste({ vorgang, mitarbeiter, vertraege, do
                       checked={erledigt}
                       disabled={istAbgeleitet || speichertSchluessel === schritt.schluessel}
                       onChange={(e) => punktAendern(schritt.schluessel, { erledigt_am: e.target.checked ? heute : null })}
-                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600"
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600"
                     />
                     <div className="min-w-0 flex-1">
                       <label htmlFor={inputId} className="text-sm font-medium text-slate-800 dark:text-slate-100">
                         {t(info.titel)}{!info.pflicht ? ` (${t("optional")})` : ""}
                         {istAbgeleitet && (
-                          <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-normal text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
+                          <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
                             {t("aus Vertrag")}
                           </span>
                         )}
@@ -268,7 +268,7 @@ export default function VorgangsCheckliste({ vorgang, mitarbeiter, vertraege, do
           type="button"
           onClick={abschliessen}
           disabled={!allePflichtErledigt || abschliessend}
-          className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t(vorgang.art === "eintritt" ? "Eintritt abschließen" : "Austritt abschließen")}
         </button>
@@ -294,7 +294,7 @@ function AusstattungListe({ austritt, liste, onAendern }) {
 
   return (
     <div className="mt-3" data-testid="ausstattung-liste">
-      <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("Ausstattung")}</h4>
+      <h4 className="mb-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">{t("Ausstattung")}</h4>
       <ul className="space-y-1.5">
         {liste.map((z, i) => {
           const offen = austritt && !z.zurueck_am;
@@ -314,7 +314,7 @@ function AusstattungListe({ austritt, liste, onAendern }) {
           );
         })}
       </ul>
-      <button type="button" onClick={zeileHinzufuegen} className="mt-1.5 text-xs text-emerald-700 hover:underline dark:text-emerald-400">
+      <button type="button" onClick={zeileHinzufuegen} className="mt-1.5 text-xs text-link hover:underline">
         {t("+ Gegenstand hinzufügen")}
       </button>
     </div>

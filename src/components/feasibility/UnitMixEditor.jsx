@@ -33,14 +33,14 @@ export default function UnitMixEditor({ data, massingData, onChange }) {
   return (
     <div className="space-y-6">
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: BGF {Math.round(pm.bgf).toLocaleString("de-DE")} m² · {pm.storeys} Geschosse · Höhe {Math.round(pm.height).toLocaleString("de-DE")} m
         </div>
       )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Wohneinheiten" value={totalUnits} accent="text-blue-600" />
+        <Stat label="Wohneinheiten" value={totalUnits} accent="text-foreground" />
         <Stat label="Wohnfläche" value={`${totalArea.toLocaleString("de-DE")} m²`} />
-        <Stat label="Mtl. Sollmiete" value={`${Math.round(monthlyRent).toLocaleString("de-DE")} €`} accent="text-emerald-600" />
+        <Stat label="Mtl. Sollmiete" value={`${Math.round(monthlyRent).toLocaleString("de-DE")} €`} accent="text-foreground" />
         <Stat label="Flächeneffizienz" value={gfa ? `${Math.round((totalArea / gfa) * 100)} %` : "—"} />
       </div>
       {pm.footArea > 0 && (

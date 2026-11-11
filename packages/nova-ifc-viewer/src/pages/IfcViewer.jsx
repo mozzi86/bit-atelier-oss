@@ -17,7 +17,7 @@ import { neuesTicketUrl } from "@ifc/lib/ticketLink";
 import AttributEditor from "@ifc/components/AttributEditor";
 import { DATENQUELLE } from "@core/lib/umgebung";
 import { seitenWurzel } from "@core/lib/utils";
-import { useI18n } from "@core/lib/i18n";
+import { useI18n, englischErgaenzen } from "@core/lib/i18n";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
@@ -38,10 +38,29 @@ import { parseFilterXml, applyNovaFilter } from "@ifc/lib/novaFilters";
 import { byTrade } from "@core/lib/tradeSort";
 import { pruefeAttributeVorUebernahme } from "@ifc/lib/mengenAttributPruefung";
 import { statusFarbe } from "@core/lib/plan/statusDarstellung.js";
+// 55-01: ONE graphic-rule engine (ansichtszustand) — same list as the BIM studio when "Grafische Regeln" is on
+import { STANDARD_REGELN, darstellungsWerte, dreiDElementDarstellung } from "@core/lib/plan/ansichtszustand.js";
+import { brilleVon, STANDARD_BRILLE } from "@core/lib/plan/brillen.js";
+import { EN as EN_UEB_55 } from "@core/lib/i18nTeile/ueberschreibung-55.js";
+englischErgaenzen(EN_UEB_55);
+
+/** @param {string} hex "#rrggbb" @returns {[number, number, number]} RGB 0..1 for vertex colours */
+function hexNachRgb(hex) {
+  const n = parseInt(String(hex || "").replace("#", ""), 16);
+  if (!Number.isFinite(n)) return [0.6, 0.6, 0.65];
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
 // 106-01: one ray pick and one highlighter for every viewer (hover, click, later VR controllers).
 import { identitaetAus, pickDrossel, zeigerPick, zeigerArt, TIPP_TOLERANZ_PX, strahlPick, weltNormale } from "@core/lib/zeigen/strahlPick.js";
 // 106-08: "In VR ansehen" (only with a WebXR device; the session code loads on demand)
 import XrKnopf from "@core/components/zeigen/XrKnopf.jsx";
+// 261110-mzj: pointer-anchored orbit / pan / zoom and the walk mode (W A S D), shared by every viewer with OrbitControls
+import { kameraSteuerung } from "@core/lib/zeigen/kameraSteuerung.js";
+import { LAUF_STUFEN, LAUF_STUFE_VORGABE, eingabeFokus } from "@core/lib/zeigen/kameraNavigation.js";
+import LaufModusHinweis from "@core/components/zeigen/LaufModusHinweis.jsx";
+// 261110-mzl: the "3D-Fenster" bar (walk through, whole model, selection, picture)
+import DreiDLeiste from "@core/components/zeigen/DreiDLeiste.jsx";
+import { Footprints, Maximize, Focus, Camera } from "lucide-react";
 import { zweiFingerGeste } from "@core/lib/zeigen/zweiFinger.js";
 import { useZeigerArt, TABLETT_PLATZ } from "@core/lib/zeigen/useZeigerArt.js";
 import { useZugriff } from "@core/lib/ZugriffContext.jsx";
@@ -51,7 +70,7 @@ import { hervorhebung, umrissLinie } from "@core/lib/zeigen/hervorheben.js";
 import { ZEIGE_ZUSTAENDE, ZEIGE_CSS_RAND } from "@core/lib/zeigen/zustaende.js";
 import { ansichtAufBox } from "@core/lib/zeigen/ansichtAufBox.js";
 import { auswahlBefehleRegistrieren } from "@core/lib/zeigen/auswahlBefehle.js";
-import { ansichtAlsPng, xrZeigtGerade } from "@core/lib/zeigen/ansichtBild.js";
+import { ansichtAlsPng, xrZeigtGerade, BILD_BREITE_MAX } from "@core/lib/zeigen/ansichtBild.js";
 import { befehlsRegister } from "@core/lib/befehlsregister.js";
 import { starteSteuerungsBruecke } from "@core/lib/steuerungsBruecke.js";
 import { elementBox, ifcAuswahlKontext, ifcModellUebersicht } from "@ifc/lib/auswahlIfc";
@@ -149,6 +168,8 @@ export default function IfcViewer({ embedded = false }) {
   const [progress, setProgress] = useState("");
   const [busy, setBusy] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
+  // 55-01: graphic rules on the merged mesh (Eingabe lens + STANDARD_REGELN); full editor lives in the BIM studio
+  const [grafischeRegelnAn, setGrafischeRegelnAn] = useState(false);
   // 89-04 (D-BW-03): show/hide by status. "ohne" = the model does not say — its own switch,
   // never folded into "neubau".
   const [statusSichtbar, setStatusSichtbar] = useState({ abbruch: true, neubau: true, bestand: true, ohne: true });
@@ -192,6 +213,24 @@ export default function IfcViewer({ embedded = false }) {
   const [neigung, setNeigung] = useState(30); // ° Kippung (nur „schräg")
   const [gizmoMode, setGizmoMode] = useState("translate"); // translate | rotate
   const [gizmoOn, setGizmoOn] = useState(true); // Gizmo im 3D ein-/ausblenden
+  // 261110-mzj: walk mode as the hint shows it (speed in m/s); written by kameraSteuerung through onLauf
+  const [lauf, setLauf] = useState(/** @type {import("@core/lib/zeigen/kameraSteuerung.js").LaufZustand} */ (
+    { aktiv: false, stufe: LAUF_STUFE_VORGABE, tempo: LAUF_STUFEN[LAUF_STUFE_VORGABE], gefangen: false }));
+  // 261110-mzj: F3 = walk through, the Archicad key of "3D Rundgang". Not while a field has the focus, not without a model.
+  useEffect(() => {
+    const onTaste = (/** @type {KeyboardEvent} */ e) => {
+      if (e.key !== "F3" || eingabeFokus(document.activeElement) || !modelRef.current) return;
+      const nav = threeRef.current?.navigation;
+      if (!nav) return;
+      e.preventDefault();
+      if (nav.laufAktiv()) nav.laufBeenden();
+      else if (!nav.laufStarten()) toast(tText("Durchlaufen startet nicht, solange ein Werkzeug die Kamera hält"));
+    };
+    window.addEventListener("keydown", onTaste);
+    return () => window.removeEventListener("keydown", onTaste);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- refs and the stable translator only
+  // 261110-mzl: actions of the "3D-Fenster" bar that the scene effect needs too (set on every render, read at event time)
+  const leisteRef = useRef(/** @type {{ganzesModell?: () => void}} */ ({}));
   const clipPlaneRef = useRef(null);
   const cutRef = useRef(null); // { dummy, helper, tcHelper, tc } — 3D-Steuerung der Ebene
   const cutManualRef = useRef(false); // true, sobald per Gizmo verschoben/gedreht wurde
@@ -275,13 +314,32 @@ export default function IfcViewer({ embedded = false }) {
     });
     cutRef.current = { dummy, helper, tc, tcHelper };
 
-    threeRef.current = { scene, camera, renderer, controls, grid };
+    // 261110-mzj: the mouse works where the pointer is (orbit about the element under it, pan with the grabbed point,
+    // wheel towards it) plus the walk mode. The pick is the raw first hit on the merged mesh in front of the section
+    // plane — also parts the resolver cannot name, the camera must not look through them. The camera is held while
+    // the section gizmo is under the pointer or dragged, and while a VR session presents.
+    const navigation = kameraSteuerung({
+      kamera: camera, element: renderer.domElement, controls,
+      punktUnterZeiger: (x, y) => {
+        const mesh = meshRef.current;
+        if (!mesh) return null;
+        const tr = zeigerPick(mesh, camera, renderer.domElement, x, y, { art: "mouse", schnittebenen: mesh.material?.clippingPlanes });
+        return tr ? tr.punkt : null;
+      },
+      gesperrt: () => renderer.xr.isPresenting || tc.dragging || (tcHelper.visible && tc.axis != null),
+      // double click on the wheel = whole model (Archicad "Optimieren"); the function lives further down, hence the ref
+      mittelDoppelklick: () => leisteRef.current.ganzesModell?.(),
+      onLauf: setLauf,
+    });
+
+    threeRef.current = { scene, camera, renderer, controls, grid, navigation };
     AUFBAU.szene += 1;
     console.log(`[IFC] three.js-Szene aufgebaut (#${AUFBAU.szene}) — bei mehr als 1 wurde der Viewer neu montiert`);
 
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      navigation.verwerfen();
       controls.dispose();
       if (meshRef.current) {
         scene.remove(meshRef.current);
@@ -1072,6 +1130,33 @@ export default function IfcViewer({ embedded = false }) {
     const byEid = new Map(model.elements.map((el) => [el.expressId, el]));
     applyColors((eid) => STATUS_COLORS[byEid.get(eid)?.status] || STATUS_COLORS.unbekannt, null, "");
     setPicked(null);
+    setGrafischeRegelnAn(false);
+  };
+
+  /**
+   * 55-01: paint the merged mesh with dreiDElementDarstellung (Eingabe + STANDARD_REGELN). Status colours stay when the
+   * switch is off. IFC elements often lack tragend/feuerwiderstand — those rules no-op; status-open and status-based
+   * rules still apply. Full RegelEditor is in the BIM studio (no second editor here).
+   * @param {boolean} an
+   */
+  const setzeGrafischeRegeln = (an) => {
+    setGrafischeRegelnAn(an);
+    const model = modelRef.current;
+    if (!model) return;
+    const byEid = new Map(model.elements.map((el) => [el.expressId, el]));
+    if (!an) {
+      applyColors((eid) => STATUS_COLORS[byEid.get(eid)?.status] || STATUS_COLORS.unbekannt, null, "");
+      return;
+    }
+    const brille = brilleVon(STANDARD_BRILLE);
+    applyColors((eid) => {
+      const el = byEid.get(eid);
+      const werte = darstellungsWerte(el || {}, "wand", { status: el?.status ?? null });
+      const d = dreiDElementDarstellung(brille, werte, STANDARD_REGELN);
+      if (!d.sichtbar) return DIM_COLOR;
+      if (d.farbe) return hexNachRgb(d.farbe);
+      return STATUS_COLORS[el?.status] || STATUS_COLORS.unbekannt;
+    }, null, t("Grafische Regeln"));
   };
 
   // Alle aktuell markierten Treffer zusätzlich AUSWÄHLEN (wie angeklickt): blaues
@@ -1324,14 +1409,16 @@ export default function IfcViewer({ embedded = false }) {
     el.addEventListener("pointercancel", onEnde);
     el.addEventListener("pointermove", onMove, { passive: true });
     el.addEventListener("pointerleave", onLeave);
-    el.addEventListener("wheel", onWheel, { passive: true });
+    // 261110-mzj: kameraSteuerung takes the wheel at the parent in the capture phase and stops it there; listen at the same place
+    const radOrt = el.parentElement || el;
+    radOrt.addEventListener("wheel", onWheel, { passive: true, capture: true });
     return () => {
       el.removeEventListener("pointerdown", onDown);
       el.removeEventListener("pointerup", onUp);
       el.removeEventListener("pointercancel", onEnde);
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerleave", onLeave);
-      el.removeEventListener("wheel", onWheel);
+      radOrt.removeEventListener("wheel", onWheel, { capture: true });
       if (rafId) cancelAnimationFrame(rafId);
       clearTimeout(radTimer);
       zeigen.verwerfen(); // hover, marks and the cached outline geometries
@@ -1395,8 +1482,12 @@ export default function IfcViewer({ embedded = false }) {
         if (!th) return null;
         const d = th.camera.position.clone().sub(th.controls.target);
         // fovGrad / zoom (review 106-08): a VR session must hand back the desktop projection, not the headset's field of view
-        return { abstand: d.length(), azimutRad: Math.atan2(d.x, d.z), fovGrad: th.camera.fov, zoom: th.camera.zoom };
+        // position / ziel (261110-mzj): where the camera stands and what it orbits, m — the navigation moves both
+        return { abstand: d.length(), azimutRad: Math.atan2(d.x, d.z), fovGrad: th.camera.fov, zoom: th.camera.zoom,
+          position: th.camera.position.toArray(), ziel: th.controls.target.toArray() };
       },
+      /** 261110-mzj: walk mode state (active, speed level, speed in m/s, mouse locked). */
+      lauf: () => threeRef.current?.navigation.zustand() ?? null,
       /** 106-07: kind of the last pointer on the canvas and the sum of two-finger steps seen (count, twist rad, pinch factor). */
       zeiger: () => ({ art: zeigerArtRef.current, geste: { ...gestenSummeRef.current } }),
     };
@@ -1414,6 +1505,37 @@ export default function IfcViewer({ embedded = false }) {
     if (!p) return [];
     if (p.multi) return [...(p.eids || [])];
     return p.eid != null ? [p.eid] : [];
+  };
+  // 261110-mzl: fit the view to a box, looking the way the camera looks now (ansichtAufBox, one calculation for the command
+  // "ansicht", the bar and the wheel double click). eids = the elements to show (with their parts); null = the whole model.
+  // Throws in German words when there is nothing to show (the command register passes that on).
+  const einpassen = (/** @type {number[]|null} */ eids) => {
+    const model = modelRef.current;
+    const t3 = threeRef.current;
+    if (!model || !t3) throw new Error("Kein Modell geladen");
+    const box = eids
+      ? elementBox(model.merged, expandWithDescendants(new Set(eids), model.childrenByExpressId || new Map()))
+      : model.merged?.bbox;
+    if (!box) throw new Error(eids ? "Die Auswahl hat keine Geometrie im Modell" : "Das Modell hat keine Geometrie");
+    const cam = t3.camera;
+    const ziel = ansichtAufBox(box, {
+      richtung: [cam.position.x - t3.controls.target.x, cam.position.y - t3.controls.target.y, cam.position.z - t3.controls.target.z],
+      fovGrad: cam.fov, aspekt: cam.aspect,
+    });
+    cam.position.set(...ziel.position);
+    t3.controls.target.set(...ziel.ziel);
+    t3.controls.update();
+  };
+  leisteRef.current.ganzesModell = () => { if (modelRef.current) einpassen(null); };
+  // 261110-mzl: the picture of the view as a PNG file (the same picture the speech field sends, at its largest width)
+  const bildSpeichern = () => {
+    try {
+      const bild = ansichtAlsPng(threeRef.current, { breite: BILD_BREITE_MAX });
+      const a = document.createElement("a");
+      a.href = `data:${bild.format};base64,${bild.png_base64}`;
+      a.download = "ansicht-3d.png";
+      a.click();
+    } catch (err) { toast(String(/** @type {any} */ (err)?.message || err)); }
   };
   // a big multi selection is cut for the record, never silently: the total and `gekuerzt` say so
   const kontextAus = (eids) => {
@@ -1440,22 +1562,7 @@ export default function IfcViewer({ embedded = false }) {
       return kontextAus([eid]);
     },
     aufheben: () => { setPicked(null); }, // the effect on `picked` removes the blue mesh
-    ansichtAufAuswahl: () => {
-      const model = modelRef.current;
-      const t3 = threeRef.current;
-      if (!model || !t3) throw new Error("Kein Modell geladen");
-      const eids = expandWithDescendants(new Set(auswahlEids()), model.childrenByExpressId || new Map());
-      const box = elementBox(model.merged, eids);
-      if (!box) throw new Error("Die Auswahl hat keine Geometrie im Modell");
-      const cam = t3.camera;
-      const ziel = ansichtAufBox(box, {
-        richtung: [cam.position.x - t3.controls.target.x, cam.position.y - t3.controls.target.y, cam.position.z - t3.controls.target.z],
-        fovGrad: cam.fov, aspekt: cam.aspect,
-      });
-      cam.position.set(...ziel.position);
-      t3.controls.target.set(...ziel.ziel);
-      t3.controls.update();
-    },
+    ansichtAufAuswahl: () => { einpassen(auswahlEids()); },
     modell: (/** @type {{klasse?: string}} */ opt) => {
       if (!modelRef.current) throw new Error("Kein Modell geladen");
       return ifcModellUebersicht(modelRef.current, opt);
@@ -1695,7 +1802,7 @@ export default function IfcViewer({ embedded = false }) {
       {/* Page name from the N-02 name table; the embedded pane keeps its compact title. */}
       {!embedded && (
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold text-foreground">
             {t("IFC-Viewer (LV-gekoppelt)")}
           </h1>
           <p className="mt-1 text-slate-600">
@@ -1714,8 +1821,8 @@ export default function IfcViewer({ embedded = false }) {
         {!embedded && (
           <button type="button" onClick={musterprojektLaden} disabled={busy} data-testid="musterprojekt-laden"
             className={modelInfo
-              ? "rounded border border-emerald-600 px-2.5 py-1 text-emerald-700 disabled:opacity-50"
-              : "rounded bg-emerald-600 px-2.5 py-1 text-white disabled:opacity-50"}>
+              ? "rounded border border-border px-2.5 py-1 text-foreground hover:bg-muted disabled:opacity-50"
+              : "rounded bg-primary px-2.5 py-1 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"}>
             {t("Musterprojekt laden")}
           </button>
         )}
@@ -1728,7 +1835,7 @@ export default function IfcViewer({ embedded = false }) {
         {modelInfo && (
           <button onClick={grundrissUebernehmen} disabled={busy || grundrissLaeuft}
             title="Umriss aus der Geometrie ableiten und als footprintM ins Gebäudemodell schreiben — die Fachreiter rechnen danach auf dem echten Gebäude statt auf dem Vorgabe-Rechteck."
-            className="rounded bg-emerald-600 px-2.5 py-1 text-white disabled:opacity-50">
+            className="rounded bg-primary px-2.5 py-1 text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
             {grundrissLaeuft ? "leite ab…" : "Grundriss → Gebäudemodell"}
           </button>
         )}
@@ -1797,6 +1904,12 @@ export default function IfcViewer({ embedded = false }) {
           className="rounded bg-amber-500 px-2.5 py-1 text-white disabled:opacity-40">markieren</button>
         <span className="mx-1 h-5 w-px bg-slate-200" />
         <button onClick={resetColors} className="rounded bg-slate-200 px-2.5 py-1 text-slate-700">zurücksetzen</button>
+        <label className="flex items-center gap-1 text-xs text-muted-foreground" title={t("Regeln im BIM-Studio bearbeiten")}>
+          <input type="checkbox" data-testid="ifc-grafische-regeln" checked={grafischeRegelnAn}
+            aria-label={t("Grafische Regeln")}
+            onChange={(e) => setzeGrafischeRegeln(e.target.checked)} />
+          {t("Grafische Regeln")}
+        </label>
         {zaehlerStatus && (
           <>
             <span className="mx-1 h-5 w-px bg-slate-200" />
@@ -1870,7 +1983,7 @@ export default function IfcViewer({ embedded = false }) {
           {attributPruefung && (
             <div className="basis-full text-xs" data-testid="attribut-pruefung">
               {attributPruefung.befunde.length === 0 ? (
-                <span className="text-emerald-700">{t("Attribute vollständig: DIN 276, Feuerwiderstand, tragend")}</span>
+                <span className="text-erfolg">{t("Attribute vollständig: DIN 276, Feuerwiderstand, tragend")}</span>
               ) : (
                 <ul className="space-y-0.5">
                   {attributPruefung.befunde.map((b) => (
@@ -1925,6 +2038,19 @@ export default function IfcViewer({ embedded = false }) {
           className={grob ? TABLETT_PLATZ.sprechen : "absolute bottom-2 right-2 z-30 w-[22rem] max-w-[40%]"} />
         {/* 106-08: VR - only with a WebXR device; ray, hover, selection, speech and confirmation as here, on a floating panel */}
         <XrKnopf quelle={xrQuelle} t={t} hook="ifcXr" bereit={!!modelInfo} className="absolute left-1/2 top-14 z-30 -translate-x-1/2" />
+        {/* 261110-mzl: the "3D-Fenster" bar, bottom centre (top left is the legend, top right the element card, top centre the
+            VR button and the sync notes). While the walk mode runs its hint takes this place and has the way out. */}
+        {!lauf.aktiv ? (
+          <DreiDLeiste t={t} grob={grob} className="absolute bottom-2 left-1/2 z-30 -translate-x-1/2" eintraege={[
+            { id: "lauf", text: "Durchlaufen", symbol: Footprints, taste: "F3", testid: "lauf-start", gesperrt: !modelInfo,
+              onClick: () => { if (!threeRef.current?.navigation.laufStarten()) toast(t("Durchlaufen startet nicht, solange ein Werkzeug die Kamera hält")); } },
+            { id: "alles", text: "Ganzes Modell zeigen", symbol: Maximize, testid: "leiste-alles", gesperrt: !modelInfo, onClick: () => einpassen(null) },
+            { id: "auswahl", text: "Auswahl zeigen", symbol: Focus, testid: "leiste-auswahl", gesperrt: !modelInfo || !picked, onClick: () => einpassen(auswahlEids()) },
+            { id: "bild", text: "Bild der Ansicht speichern", symbol: Camera, testid: "leiste-bild", gesperrt: !modelInfo, onClick: bildSpeichern },
+          ]} />
+        ) : null}
+        <LaufModusHinweis zustand={lauf} t={t} onEnde={() => threeRef.current?.navigation.laufBeenden()}
+          className="absolute bottom-2 left-1/2 z-40 -translate-x-1/2" />
         {/* 106-09: what arrived from another device (note with origin) and conflicts (both values), top centre of the view. */}
         {abgleichZeigen(abgleich, IFC_QUELLEN) ? (
           <React.Suspense fallback={null}>

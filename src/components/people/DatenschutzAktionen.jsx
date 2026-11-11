@@ -166,7 +166,7 @@ export default function DatenschutzAktionen({ mitarbeiterId, bewerbungId }) {
           {t("Diese Person ist noch beschäftigt — ohne Austrittsdatum gilt keine Aufbewahrungsfrist, alle verknüpften Datensätze wären sofort löschbar.")}
         </p>
       )}
-      {erledigt && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400">{erledigt}</p>}
+      {erledigt && <p role="status" className="text-sm text-erfolg">{erledigt}</p>}
       {fehler && <p role="alert" className="text-sm text-rose-600">{fehler}</p>}
       <p className="text-xs text-slate-500 dark:text-slate-400" data-testid="datenschutz-download-hinweis">
         {t("Bereits heruntergeladene Dateien (Auskunft, Sicherungen) kann die App nicht löschen.")}

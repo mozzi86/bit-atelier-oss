@@ -76,11 +76,11 @@ export default function SiteZoningPanel({ data, onChange }) {
             <CardTitle className="text-base">Abgeleitete Kennwerte</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-3">
-            <Stat label="Max. BGF (GFZ)" value={`${maxGFA.toLocaleString("de-DE")} m²`} accent="text-blue-600" />
+            <Stat label="Max. BGF (GFZ)" value={`${maxGFA.toLocaleString("de-DE")} m²`} accent="text-foreground" />
             <Stat
               label="Erschließung"
               value={
-                <Badge className={Object.values(utilities).every(Boolean) ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}>
+                <Badge className={Object.values(utilities).every(Boolean) ? "bg-erfolg-flaeche text-erfolg" : "bg-amber-100 text-amber-800"}>
                   {Object.values(utilities).filter(Boolean).length}/4 vorhanden
                 </Badge>
               }

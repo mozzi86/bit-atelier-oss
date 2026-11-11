@@ -19,7 +19,7 @@ import { Badge } from "@core/components/ui/badge";
 const STAND_STIL = {
   modell: {
     text: "Live-Modell",
-    klasse: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    klasse: "bg-erfolg-flaeche text-erfolg border-erfolg-rand",
     titel: "Rechnet auf erfasster Geometrie dieses Projekts.",
   },
   richtwert: {
@@ -30,7 +30,7 @@ const STAND_STIL = {
   // 73-02 (BEST-03): fourth state — the tab works on MEASURED geometry of an existing building (survey).
   gemessen: {
     text: "Gemessen",
-    klasse: "bg-violet-100 text-violet-800 border-violet-200",
+    klasse: "bg-muted text-foreground border-border",
     titel: "Rechnet auf der Bauaufnahme (gemessene Geometrie des Bestands).",
   },
   offen: {
@@ -63,7 +63,7 @@ export default function PanelHeader({ reiter, bereichTitel, standOverride, herku
 
       {reiter.braucht.length > 0 && (
         <span className="flex items-center gap-1 text-slate-600">
-          <span className="text-xs uppercase tracking-wide text-slate-400">Braucht</span>
+          <span className="text-xs text-slate-400">Braucht</span>
           {reiter.braucht.map((b) => (
             <Badge key={b} variant="outline" className="font-normal">{b}</Badge>
           ))}
@@ -72,7 +72,7 @@ export default function PanelHeader({ reiter, bereichTitel, standOverride, herku
 
       {reiter.liefert.length > 0 && (
         <span className="flex items-center gap-1 text-slate-600">
-          <span className="text-xs uppercase tracking-wide text-slate-400">Liefert</span>
+          <span className="text-xs text-slate-400">Liefert</span>
           {reiter.liefert.map((l) => (
             <Badge key={l} variant="outline" className="font-normal">{l}</Badge>
           ))}

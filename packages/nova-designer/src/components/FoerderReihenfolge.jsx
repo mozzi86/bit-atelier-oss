@@ -14,7 +14,7 @@ import { useI18n } from "@core/lib/i18n";
 import { useProject } from "@core/lib/ProjectContext";
 import { antragReihenfolge } from "@designer/lib/funding";
 
-const FARBE = { pass: "border-emerald-200 bg-emerald-50", warn: "border-rose-200 bg-rose-50", offen: "border-amber-200 bg-amber-50" };
+const FARBE = { pass: "border-erfolg-rand bg-erfolg-flaeche", warn: "border-rose-200 bg-rose-50", offen: "border-amber-200 bg-amber-50" };
 
 /**
  * @param {{antraege: Array<object>, onAntragDatum: (antrag: object, datum: string) => void, heute: string}} props

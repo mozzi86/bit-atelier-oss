@@ -194,6 +194,8 @@ export function ungepruefteKiAenderungen(schritte) {
  */
 export function vorherNachher(s, t = (x) => x) {
   if (s?.art === "eigenschaft") return { vorher: wertText(s.vorher?.wert ?? null, t), nachher: wertText(s.nachher?.wert ?? null, t) };
+  // 261111-zs1: a creation had nothing before it; the sentence says what was made
+  if (s?.art === "anlegen") return { vorher: t("nicht vorhanden"), nachher: t("neu angelegt") };
   if (s?.art === "teilen") {
     const teile = s.nachher?.teile || [];
     const mass = (/** @type {any} */ x) => (x?.laenge_m != null ? `${zahlText(x.laenge_m)} m` : x?.flaeche_m2 != null ? `${zahlText(x.flaeche_m2)} m²` : "");

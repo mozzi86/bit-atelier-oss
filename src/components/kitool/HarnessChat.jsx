@@ -165,14 +165,14 @@ export default function HarnessChat({ chat, events, skills = [], verbunden, appr
           const me = m.rolle === 'me';
           return (
             <div key={m.id} className={`flex gap-2 ${me ? 'justify-end' : 'justify-start'}`} data-testid={me ? 'chat-me' : 'chat-ai'}>
-              {!me && <Bot className="w-5 h-5 mt-2 text-emerald-600 shrink-0" />}
+              {!me && <Bot className="w-5 h-5 mt-2 text-muted-foreground shrink-0" />}
               <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm border ${me
-                ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 text-slate-900 dark:text-slate-100'
+                ? 'bg-muted border-border text-foreground'
                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100'}`}>
                 {splitFences(m.text).map((part, i) => part.type === 'code'
                   ? <pre key={i} className="my-1 rounded-md bg-slate-900 text-slate-100 text-xs p-2 overflow-x-auto">{part.text}</pre>
                   : <span key={i} className="whitespace-pre-wrap break-words">{part.text}</span>)}
-                {m.offen && <span className="inline-block w-1.5 h-4 ml-0.5 bg-emerald-500 animate-pulse align-text-bottom" />}
+                {m.offen && <span className="inline-block w-1.5 h-4 ml-0.5 bg-muted-foreground animate-pulse align-text-bottom" />}
               </div>
               {me && <User className="w-5 h-5 mt-2 text-slate-500 shrink-0" />}
             </div>
@@ -208,7 +208,7 @@ export default function HarnessChat({ chat, events, skills = [], verbunden, appr
         >
           {transkribiert ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
         </Button>
-        <Button onClick={senden} disabled={!verbunden || !text.trim()} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1" data-testid="chat-send">
+        <Button onClick={senden} disabled={!verbunden || !text.trim()} className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1" data-testid="chat-send">
           <Send className="w-4 h-4" /> {t('Senden')}
         </Button>
       </div>

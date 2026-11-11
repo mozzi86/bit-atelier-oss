@@ -139,7 +139,7 @@ export default function EnergyAnalysis() {
           className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4"
         >
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold text-foreground">
               Energie- & Klimaanalyse
             </h1>
             <p className="text-slate-600 mt-1">{t("Energie-Screening mit Richtwerten — kein GEG-Nachweis")}</p>
@@ -149,7 +149,7 @@ export default function EnergyAnalysis() {
             <Button
               onClick={runEnergyCalculation}
               disabled={!selectedProject || isCalculating}
-              className="bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg"
+              className="bg-primary hover:bg-primary/90 shadow-sm"
             >
               <Calculator className="w-4 h-4 mr-2" />
               {isCalculating ? "Berechnung läuft…" : "Analyse starten"}
@@ -177,7 +177,7 @@ export default function EnergyAnalysis() {
         </div>
 
         {pm.footArea > 0 && (
-          <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+          <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
             Aus Gebäudemodell: BGF {Math.round(pm.bgf).toLocaleString("de-DE")} m² · {pm.storeys} Geschosse · Höhe {Math.round(pm.height).toLocaleString("de-DE")} m
           </div>
         )}
@@ -223,7 +223,7 @@ export default function EnergyAnalysis() {
               <Card className="border-0 shadow-sm rounded-xl">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-                    <BarChart3 className="w-5 h-5 text-emerald-600" />
+                    <BarChart3 className="w-5 h-5 text-muted-foreground" />
                     Energie-Szenarien
                   </CardTitle>
                 </CardHeader>
@@ -285,8 +285,8 @@ export default function EnergyAnalysis() {
 
                       <Card className="border-0 shadow-sm rounded-xl hover:shadow-md transition-shadow">
                         <CardContent className="p-4 text-center">
-                          <div className="inline-flex p-2.5 rounded-xl bg-emerald-50 mb-2">
-                            <TrendingUp className="w-6 h-6 text-emerald-600" />
+                          <div className="inline-flex p-2.5 rounded-xl bg-muted mb-2">
+                            <TrendingUp className="w-6 h-6 text-muted-foreground" />
                           </div>
                           <div className="text-xs text-slate-500">CO₂-Emissionen</div>
                           <div className="text-2xl font-bold text-slate-800">{(selectedScenario.annual_summary?.co2_emissions_kg / 1000).toFixed(1) || 0}</div>
@@ -326,20 +326,20 @@ export default function EnergyAnalysis() {
                     <Card className="border-0 shadow-sm rounded-xl">
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-                          <CheckCircle className="w-5 h-5 text-emerald-600" />
+                          <CheckCircle className="w-5 h-5 text-muted-foreground" />
                           {t("Energie-Screening: Vergleich mit Referenz-Richtwert")}
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                        <div className="flex items-center justify-between p-4 bg-muted rounded-lg border border-border">
                           <div>
                             {/* Liability: screening against a guide value, never a GEG proof (energieScreening.js). */}
-                            <h4 className="font-semibold text-emerald-800">{t(SCREENING_TITEL)}</h4>
-                            <p className="text-sm text-emerald-600" data-energie-screening={screeningAussage(selectedScenario.geg_compliance).stand}>
+                            <h4 className="font-semibold text-foreground">{t(SCREENING_TITEL)}</h4>
+                            <p className="text-sm text-muted-foreground" data-energie-screening={screeningAussage(selectedScenario.geg_compliance).stand}>
                               {t(screeningAussage(selectedScenario.geg_compliance).text)}
                             </p>
                           </div>
-                          <CheckCircle className="w-8 h-8 text-emerald-600" />
+                          <CheckCircle className="w-8 h-8 text-muted-foreground" />
                         </div>
                         
                         <div className="space-y-3">
@@ -357,9 +357,9 @@ export default function EnergyAnalysis() {
                               <div className="text-2xl font-bold text-slate-800">{selectedScenario.geg_compliance?.reference_building_demand || 0}</div>
                               <div className="text-xs text-slate-500">kWh/(m²·a)</div>
                             </div>
-                            <div className="text-center p-3 bg-emerald-50 rounded-lg">
+                            <div className="text-center p-3 bg-muted rounded-lg">
                               <div className="text-xs text-slate-500">Berechneter Bedarf</div>
-                              <div className="text-2xl font-bold text-emerald-700">{selectedScenario.geg_compliance?.calculated_demand || 0}</div>
+                              <div className="text-2xl font-bold text-foreground">{selectedScenario.geg_compliance?.calculated_demand || 0}</div>
                               <div className="text-xs text-slate-500">kWh/(m²·a)</div>
                             </div>
                           </div>

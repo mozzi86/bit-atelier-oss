@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * Smoke-Tests für NovaConstruct.
+ * Smoke-Tests für BIT-Atelier.
  * Prüfen, dass die App lädt, kein JS-Crash auftritt und die Kern-Navigation erreichbar ist.
  */
 

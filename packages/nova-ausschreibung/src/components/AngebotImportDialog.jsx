@@ -108,7 +108,7 @@ export default function AngebotImportDialog({ tender, tps, contacts, onCreateBid
         )}
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="outline" onClick={onClose}>{t("Abbrechen")}</Button>
-          <Button type="button" onClick={speichern} disabled={!stand || !kontakt || busy || !z?.zeilen.length} data-testid="ai-speichern" className="bg-gradient-to-r from-emerald-600 to-teal-600">
+          <Button type="button" onClick={speichern} disabled={!stand || !kontakt || busy || !z?.zeilen.length} data-testid="ai-speichern" className="bg-primary hover:bg-primary/90">
             {busy ? t("Speichern…") : t("Als Angebot übernehmen")}
           </Button>
         </div>

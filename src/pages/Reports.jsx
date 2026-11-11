@@ -181,8 +181,8 @@ export default function Reports() {
       <div className="max-w-7xl mx-auto space-y-6">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex justify-between items-center gap-4 flex-wrap">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent flex items-center gap-2">
-              <FileText className="w-7 h-7 text-emerald-600" /> Berichte & Dokumente
+            <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
+              <FileText className="w-7 h-7 text-muted-foreground" /> Berichte & Dokumente
             </h1>
             <p className="text-slate-600 mt-1">
               Berichte erzeugen, Pläne exportieren und PDFs importieren — alles als PDF
@@ -209,7 +209,7 @@ export default function Reports() {
                     <div className="space-y-2">
                       {REPORT_TYPES.map((r) => (
                         <button key={r.key} onClick={() => setType(r.key)}
-                          className={`w-full text-left rounded-lg border p-2.5 transition-colors ${type === r.key ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:bg-slate-50"}`}>
+                          className={`w-full text-left rounded-lg border p-2.5 transition-colors ${type === r.key ? "border-primary bg-muted" : "border-slate-200 hover:bg-slate-50"}`}>
                           <div className="text-sm font-medium text-slate-800">{r.label}</div>
                           <div className="text-[11px] text-slate-500">{r.desc}</div>
                         </button>
@@ -233,7 +233,7 @@ export default function Reports() {
                         <input aria-label={t("Ort/Anlass")} className="w-full border rounded-md px-2 py-1.5 text-sm" placeholder="z.B. Baubesprechung, Baustelle" value={occasion} onChange={(e) => setOccasion(e.target.value)} />
                       </div>
                       {schriftverkehr && projectId && (
-                        <Link className="text-sm text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300" data-testid="protokoll-als-brief"
+                        <Link className="text-sm text-link underline-offset-2 hover:underline" data-testid="protokoll-als-brief"
                           to={schreibenLink({ neu: "protokoll", bezug: { typ: "projekt", id: projectId } })}>
                           {t("Als Brief mit Verteiler")}
                         </Link>
@@ -251,7 +251,7 @@ export default function Reports() {
                       {t("Pläne lassen sich erst mit einem Gebäude anhängen – für dieses Projekt ist noch keins angelegt.")}
                     </p>
                   )}
-                  <Button onClick={exportReport} disabled={busy || !project} className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg">
+                  <Button onClick={exportReport} disabled={busy || !project} className="w-full bg-primary hover:bg-primary/90 shadow-sm">
                     {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileDown className="w-4 h-4 mr-2" />} Als PDF exportieren
                   </Button>
                 </CardContent></Card>
@@ -263,7 +263,7 @@ export default function Reports() {
                   {(briefkopf.address || briefkopf.contact) && (
                     <div className="text-[11px] text-slate-500">{[briefkopf.address, briefkopf.contact].filter(Boolean).join(" · ")}</div>
                   )}
-                  <Link to="/Settings?tab=office" className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+                  <Link to="/Settings?tab=office" className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-link hover:underline">
                     {t("In den Einstellungen ändern")} <ArrowRight className="w-3 h-3" aria-hidden="true" />
                   </Link>
                 </CardContent></Card>
@@ -285,7 +285,7 @@ export default function Reports() {
               ))}
               <Button onClick={exportDrawing} disabled={busy || !project || !data.building}
                 aria-describedby={gebaeudeFehlt ? "bericht-plan-pdf-grund" : undefined}
-                className="ml-auto bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg">
+                className="ml-auto bg-primary hover:bg-primary/90 shadow-sm">
                 {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />} Plan als PDF
               </Button>
               {gebaeudeFehlt && (
@@ -331,7 +331,7 @@ export default function Reports() {
                 <p className="text-sm text-slate-500 mb-3">PDF oder Dokument zum Projekt importieren</p>
                 <label>
                   <input type="file" accept="application/pdf,image/*" className="hidden" onChange={onUpload} />
-                  <span className="inline-flex items-center px-4 py-2 rounded-md bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm cursor-pointer shadow-sm hover:shadow-md transition-shadow">
+                  <span className="inline-flex items-center px-4 py-2 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-sm cursor-pointer shadow-sm hover:shadow-md transition-shadow">
                     <FileUp className="w-4 h-4 mr-2" /> Datei wählen
                   </span>
                 </label>

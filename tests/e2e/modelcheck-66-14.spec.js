@@ -137,7 +137,7 @@ test.describe("66-14 Befundliste als CSV und Excel", () => {
     await expect(start).toBeEnabled({ timeout: 120000 });
 
     // No rule, no duplicate check, no IDS file → a run without any finding.
-    for (const box of await page.locator('input[type="checkbox"].accent-emerald-600').all()) await box.uncheck();
+    for (const box of await page.locator('input[type="checkbox"].accent-primary').all()) await box.uncheck();
     await start.click();
 
     const hinweis = page.getByTestId("befundliste-leer");

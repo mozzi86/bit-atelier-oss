@@ -134,7 +134,7 @@ export default function FormModal({ title, onClose, children, schuetzen = true }
               type="button"
               aria-label={t("Dialog schließen")}
               onClick={() => { if (pruefeSchliessen("x")) onClose(); }}
-              className="shrink-0 rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+              className="shrink-0 rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-slate-800 dark:hover:text-slate-100"
             >
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
@@ -151,7 +151,7 @@ export default function FormModal({ title, onClose, children, schuetzen = true }
                   type="button"
                   ref={weiterRef}
                   onClick={weiterBearbeiten}
-                  className="rounded-md border border-amber-300 bg-white px-3 py-1 text-slate-700 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-amber-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+                  className="rounded-md border border-amber-300 bg-white px-3 py-1 text-slate-700 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-amber-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
                 >
                   {t("Weiter bearbeiten")}
                 </button>

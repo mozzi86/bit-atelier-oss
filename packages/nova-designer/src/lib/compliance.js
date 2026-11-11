@@ -150,7 +150,7 @@ function summarize(items, extra) {
 }
 
 export const STATUS_STYLE = {
-  pass: { color: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500", label: "OK" },
+  pass: { color: "bg-erfolg-flaeche text-erfolg", dot: "bg-erfolg", label: "OK" },
   warn: { color: "bg-amber-100 text-amber-800", dot: "bg-amber-500", label: "Hinweis" },
   fail: { color: "bg-rose-100 text-rose-700", dot: "bg-rose-500", label: "Nicht erfüllt" },
   [UNCHECKED]: { color: "bg-slate-100 text-slate-600", dot: "bg-slate-300", label: "nicht geprüft" },
@@ -158,5 +158,5 @@ export const STATUS_STYLE = {
   [OFFEN]: { color: "bg-slate-100 text-slate-600 border border-dashed border-slate-300", dot: "bg-white border border-slate-400", label: "offen" },
   // 73-13: fourth state — rule broken, deviation / protection of existing use documented (abweichung.js).
   // Not a pass and not "nicht geprüft": the rule was checked and is knowingly not met.
-  abweichung: { color: "bg-violet-100 text-violet-800", dot: "bg-violet-500", label: "Abweichung" },
+  abweichung: { color: "bg-warnung-flaeche text-warnung", dot: "bg-warnung", label: "Abweichung" },
 };

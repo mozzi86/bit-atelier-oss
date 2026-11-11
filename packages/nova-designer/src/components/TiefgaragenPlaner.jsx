@@ -265,7 +265,7 @@ export default function TiefgaragenPlaner({
                     <tr className="border-b border-slate-100"><td className="py-1">{t("Tiefgarage")}</td><td className="py-1 text-right font-medium">{nachweis.tg_stk ?? 0}</td></tr>
                     <tr className="border-b border-slate-100"><td className="py-1">{t("oberirdisch (Landschafts-Tab)")}</td><td className="py-1 text-right font-medium">{nachweis.oberirdisch_stk ?? 0}</td></tr>
                     <tr className="border-b border-slate-100"><td className="py-1">{t("Differenz")}</td>
-                      <td className={`py-1 text-right font-medium ${(nachweis.differenz ?? 0) < 0 ? "text-rose-700" : "text-emerald-700"}`}>{nachweis.differenz ?? 0}</td></tr>
+                      <td className={`py-1 text-right font-medium ${(nachweis.differenz ?? 0) < 0 ? "text-rose-700" : "text-erfolg"}`}>{nachweis.differenz ?? 0}</td></tr>
                     <tr className="border-b border-slate-100"><td className="py-1">{t("barrierefrei erforderlich / vorhanden")}</td><td className="py-1 text-right font-medium">{nachweis.bfErforderlich ?? 0} / {nachweis.bfVorhanden ?? 0}</td></tr>
                     <tr><td className="py-1">{t("GEIG Leitungsinfrastruktur / Ladepunkte")}</td><td className="py-1 text-right font-medium">{geig.leitungsinfrastruktur_stk ?? 0} / {geig.ladepunkte_stk ?? 0}</td></tr>
                   </tbody>

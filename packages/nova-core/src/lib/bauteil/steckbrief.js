@@ -490,8 +490,9 @@ export function steckbrief(el, typKey, ctx = {}) {
   quelle.status = status ? "gesetzt" : "offen";
 
   const istWand = typ.ifc === "IfcWall";
-  // 107-03 task 5: a slab with a `composite` (project build-up) has a build-up too; other non-walls still have none
-  const aufbau = istWand || el?.composite ? aufbauVon(el) : null;
+  // 107-03 task 5: a slab with a `composite` (project build-up) has a build-up too; 114-02: so has a slab with `katalog_typ` (catalogue
+  // type, resolved by aufbauVon first); other non-walls still have none
+  const aufbau = istWand || el?.composite || el?.katalog_typ ? aufbauVon(el) : null;
   // `null` states "no core" on purpose (wandGeometrie does the same); a thickness-only wall has no core for the reference lines (kernVon)
   const kernSplit = ctx.kern !== undefined ? ctx.kern : aufbau && aufbau.quelle !== "dicke" ? kernLage(aufbau.schichten) : null;
   // 107-01 (D-BK-01, D-BW-03): a core reference line ("coreOutside" …) without a known core layer is drawn like "center"

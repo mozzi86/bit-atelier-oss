@@ -61,7 +61,7 @@ export default function EinstellungsSuche({ kontext }) {
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder={t("z. B. Briefkopf, Mindestlohn, Zahlungsziel …")}
-            className="w-full rounded-lg border border-slate-300 py-1.5 pl-8 pr-2.5 text-sm text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="w-full rounded-lg border border-slate-300 py-1.5 pl-8 pr-2.5 text-sm text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
           />
         </div>
       </label>
@@ -75,7 +75,7 @@ export default function EinstellungsSuche({ kontext }) {
               <button
                 type="button"
                 onClick={() => waehle(eintrag)}
-                className="block w-full rounded-md px-2 py-1 text-left text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-200 dark:hover:bg-slate-800"
+                className="block w-full rounded-md px-2 py-1 text-left text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 {t(eintrag.titel)}
               </button>

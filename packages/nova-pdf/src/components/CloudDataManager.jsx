@@ -241,7 +241,7 @@ export default function CloudDataManager({ selectedProject }) {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center justify-between gap-3 text-base">
             <span className="flex items-center gap-2">
-              <FolderOpen className="w-5 h-5 text-emerald-600" /> Projektablage
+              <FolderOpen className="w-5 h-5 text-muted-foreground" /> Projektablage
               <span className="text-sm font-normal text-slate-400">{selectedProject.name}</span>
             </span>
             {laedt && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
@@ -272,7 +272,7 @@ export default function CloudDataManager({ selectedProject }) {
               onChange={(e) => setNeuerName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); ordnerAnlegen(); } }} />
             <Button size="sm" onClick={ordnerAnlegen} disabled={anlegen || !neuerName.trim()}
-              className="bg-gradient-to-r from-emerald-600 to-teal-600">
+              className="bg-primary hover:bg-primary/90">
               <FolderPlus className="w-4 h-4 mr-1.5" />
               {aktuell ? 'Unterordner anlegen' : 'Ordner anlegen'}
             </Button>
@@ -296,10 +296,10 @@ export default function CloudDataManager({ selectedProject }) {
                 const inhalt = inhaltVon(o.id);
                 return (
                   <div key={o.id}
-                    className="group flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 hover:border-emerald-300 hover:bg-emerald-50/40 transition-colors">
+                    className="group flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 hover:border-border hover:bg-muted transition-colors">
                     <button type="button" onClick={() => setAktuell(o.id)}
                       className="flex flex-1 items-center gap-2 text-left min-w-0">
-                      <Folder className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
                       <span className="truncate text-sm text-slate-800">{o.name}</span>
                       {(inhalt.ordner > 0 || inhalt.dateien > 0) && (
                         <Badge variant="outline" className="ml-auto text-[10px] shrink-0">
@@ -335,10 +335,10 @@ export default function CloudDataManager({ selectedProject }) {
                     <td className="p-2 flex items-center gap-2">
                       {d.type === 'IFC-Modell' ? (
                         <>
-                          <Boxes className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <Boxes className="w-4 h-4 text-muted-foreground shrink-0" />
                           <button type="button" onClick={() => imViewerOeffnen(d)}
                             title={`Im IFC-Viewer öffnen — ${d.quelle_pfad || d.notes || ''}`}
-                            className="truncate text-left text-emerald-800 hover:underline flex items-center gap-1">
+                            className="truncate text-left text-link hover:underline flex items-center gap-1">
                             {d.name} <ExternalLink className="w-3 h-3 shrink-0 opacity-60" />
                           </button>
                         </>

@@ -116,7 +116,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   onChange={(e) => handleChange('name', e.target.value)}
                   placeholder="Projektname eingeben"
                   required
-                  className="border-slate-200 focus:border-emerald-500"
+                  className="border-slate-200 focus:border-ring"
                 />
               </div>
               
@@ -127,7 +127,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   onValueChange={(value) => handleChange('type', value)}
                   required
                 >
-                  <SelectTrigger aria-label={t("Projekttyp")} className="border-slate-200 focus:border-emerald-500">
+                  <SelectTrigger aria-label={t("Projekttyp")} className="border-slate-200 focus:border-ring">
                     <SelectValue placeholder="Projekttyp auswählen" />
                   </SelectTrigger>
                   <SelectContent>
@@ -148,7 +148,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   onChange={(e) => handleChange('location', e.target.value)}
                   placeholder="Stadt, Land"
                   required
-                  className="border-slate-200 focus:border-emerald-500"
+                  className="border-slate-200 focus:border-ring"
                 />
               </div>
               
@@ -160,7 +160,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   value={formData.climate_zone} 
                   onValueChange={(value) => handleChange('climate_zone', value)}
                 >
-                  <SelectTrigger aria-label={t("Klimazone")} className="border-slate-200 focus:border-emerald-500">
+                  <SelectTrigger aria-label={t("Klimazone")} className="border-slate-200 focus:border-ring">
                     <SelectValue placeholder="automatisch (DE/AT/CH: gemäßigt)" />
                   </SelectTrigger>
                   <SelectContent>
@@ -183,7 +183,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                     value={formData.build_kind}
                     onValueChange={(value) => handleChange('build_kind', value)}
                   >
-                    <SelectTrigger aria-label={t("Vorhabentyp")} className="border-slate-200 focus:border-emerald-500">
+                    <SelectTrigger aria-label={t("Vorhabentyp")} className="border-slate-200 focus:border-ring">
                       <SelectValue placeholder="Neubau oder Sanierung" />
                     </SelectTrigger>
                     <SelectContent>
@@ -206,7 +206,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                       value={formData.scan_3d_url}
                       onChange={(e) => handleChange('scan_3d_url', e.target.value)}
                       placeholder="z. B. Punktwolke (.e57 / .rcp), Matterport-Link …"
-                      className="border-slate-200 focus:border-emerald-500"
+                      className="border-slate-200 focus:border-ring"
                     />
                   </div>
                   <div className="space-y-2">
@@ -216,7 +216,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                       value={formData.as_built_url}
                       onChange={(e) => handleChange('as_built_url', e.target.value)}
                       placeholder="z. B. Bestandspläne (.pdf / .dwg / IFC) …"
-                      className="border-slate-200 focus:border-emerald-500"
+                      className="border-slate-200 focus:border-ring"
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
@@ -226,7 +226,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                       value={formData.existing_building_notes}
                       onChange={(e) => handleChange('existing_building_notes', e.target.value)}
                       placeholder="Baujahr, vorhandene Substanz, Aufmaßgüte, bekannte Schadstoffe/Tragwerksbesonderheiten …"
-                      className="h-20 border-slate-200 focus:border-emerald-500"
+                      className="h-20 border-slate-200 focus:border-ring"
                     />
                   </div>
                 </div>
@@ -241,7 +241,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   value={formData.status} 
                   onValueChange={(value) => handleChange('status', value)}
                 >
-                  <SelectTrigger aria-label={t("Status")} className="border-slate-200 focus:border-emerald-500">
+                  <SelectTrigger aria-label={t("Status")} className="border-slate-200 focus:border-ring">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -260,7 +260,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   value={formData.hoai_phase?.toString()} 
                   onValueChange={(value) => handleChange('hoai_phase', parseInt(value))}
                 >
-                  <SelectTrigger id="hoai_phase" className="border-slate-200 focus:border-emerald-500">
+                  <SelectTrigger id="hoai_phase" className="border-slate-200 focus:border-ring">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -279,7 +279,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   value={formData.energy_target} 
                   onValueChange={(value) => handleChange('energy_target', value)}
                 >
-                  <SelectTrigger aria-label={t("Energiestandard")} className="border-slate-200 focus:border-emerald-500">
+                  <SelectTrigger aria-label={t("Energiestandard")} className="border-slate-200 focus:border-ring">
                     <SelectValue placeholder="Energiestandard auswählen" />
                   </SelectTrigger>
                   <SelectContent>
@@ -311,7 +311,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   value={formData.building_area}
                   onChange={(e) => handleChange('building_area', e.target.value)}
                   placeholder="0"
-                  className="border-slate-200 focus:border-emerald-500"
+                  className="border-slate-200 focus:border-ring"
                 />
               </div>
               
@@ -327,7 +327,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   value={formData.estimated_cost}
                   onChange={(e) => handleChange('estimated_cost', e.target.value)}
                   placeholder="0"
-                  className="border-slate-200 focus:border-emerald-500"
+                  className="border-slate-200 focus:border-ring"
                 />
               </div>
               
@@ -341,7 +341,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   value={formData.sustainability_rating}
                   onChange={(e) => handleChange('sustainability_rating', e.target.value)}
                   placeholder="0"
-                  className="border-slate-200 focus:border-emerald-500"
+                  className="border-slate-200 focus:border-ring"
                 />
               </div>
               
@@ -352,7 +352,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                   type="date"
                   value={formData.completion_date}
                   onChange={(e) => handleChange('completion_date', e.target.value)}
-                  className="border-slate-200 focus:border-emerald-500"
+                  className="border-slate-200 focus:border-ring"
                 />
               </div>
             </div>
@@ -374,7 +374,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
                 value={formData.notes}
                 onChange={(e) => handleChange('notes', e.target.value)}
                 placeholder="Weitere Projektdetails, Ziele oder Randbedingungen ergänzen …"
-                className="h-24 border-slate-200 focus:border-emerald-500"
+                className="h-24 border-slate-200 focus:border-ring"
               />
             </div>
 
@@ -385,7 +385,7 @@ export default function ProjectForm({ project, onSubmit, onCancel }) {
               </Button>
               <Button 
                 type="submit" 
-                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+                className="bg-primary hover:bg-primary/90"
               >
                 <Save className="w-4 h-4 mr-2" />
                 {project ? 'Projekt aktualisieren' : 'Projekt anlegen'}

@@ -803,16 +803,31 @@ function extractFromModelKern(api, modelID, progress, katalogSnapshot) {
 // --- Parser (Browser-Pfad) ---------------------------------------------------------------
 
 /**
+ * Load web-ifc: browser via ifcWasm.js (Vite `?url`), Node via ifcApiNode.js
+ * (SetWasmPath to the package WASM). Keeps this module importable in both
+ * environments — Phase 77 bit-check.
+ * @returns {Promise<any>} initialised IfcAPI
+ */
+export async function loadIfcApiEnv() {
+  const imBrowser = typeof window !== "undefined" && typeof document !== "undefined";
+  if (imBrowser) {
+    const { loadIfcApi } = await import("./ifcWasm.js");
+    return loadIfcApi();
+  }
+  const { loadIfcApiNode } = await import("./ifcApiNode.js");
+  return loadIfcApiNode();
+}
+
+/**
  * parseIfcFile(arrayBuffer, onProgress?) → `extractFromModel`-Ergebnis.
- * Lädt den WASM-Bootstrap DYNAMISCH (ifcWasm.js, Vite-`?url`) — dadurch bleibt dieses
- * Modul in Node importierbar. Wirft Error mit deutscher Meldung bei nicht lesbaren
- * Dateien; CloseModel im finally.
+ * Lädt den WASM-Bootstrap DYNAMISCH (Browser: ifcWasm.js / Node: ifcApiNode.js) —
+ * dadurch bleibt dieses Modul in Node importierbar. Wirft Error mit deutscher
+ * Meldung bei nicht lesbaren Dateien; CloseModel im finally.
  */
 export async function parseIfcFile(arrayBuffer, onProgress) {
   const progress = typeof onProgress === "function" ? onProgress : () => {};
   progress("Initialisiere web-ifc (WASM)…");
-  const { loadIfcApi } = await import("./ifcWasm.js");
-  const api = await loadIfcApi();
+  const api = await loadIfcApiEnv();
 
   progress("Öffne IFC-Modell…");
   let modelID = -1;
@@ -901,14 +916,113 @@ function centerOf(aabb) {
 //   z ≈ 280 m — Float32-Auflösung dort ~3·10⁻⁵ m = 0,03 mm, messbar genug).
 //   Default bleibt true: Ein-Modell-Läufe mit UTM-Millionenkoordinaten
 //   (Archicad-Exporte) brauchen die Zentrierung wie bisher.
+/**
+ * Geometry extraction on an ALREADY open model (Phase 77 Node path + browser).
+ * Same mesh contract as extractGeometry — caller owns OpenModel/CloseModel.
+ * @param {any} api initialised web-ifc IfcAPI
+ * @param {number} modelID open model id
+ * @param {(msg: string) => void} [onProgress]
+ * @returns {{elemente: object[], uebersprungen: number}}
+ */
+export function extractGeometryFromModel(api, modelID, onProgress) {
+  const progress = typeof onProgress === "function" ? onProgress : () => {};
+  // Im Stream-Callback NUR expressId + Welt-Dreiecke sammeln — GetLine im
+  // Callback wäre ein Re-Entry in WASM während des Streamings; robuster ist
+  // die Zweitlese der Metadaten NACH dem Stream (nur für gestreamte IDs).
+  const roh = []; // [{ expressId, tris }]
+  let uebersprungen = 0;
+
+  // StreamAllMeshes(modelID, (mesh: FlatMesh, index, total) => void)
+  api.StreamAllMeshes(modelID, (mesh, index, total) => {
+    if (index % 25 === 0) progress(`Geometrie ${index + 1}/${total}…`);
+    const expressId = mesh.expressID;
+    // mesh.geometries (Vector) gehört dem C++-Streaming-Scope — NICHT delete()n;
+    // FlatMesh.delete ist im Stream-Callback zur Laufzeit undefined — nicht aufrufen.
+    const placed = mesh.geometries;
+    const chunks = [];
+    for (let i = 0; i < placed.size(); i++) {
+      // PlacedGeometry { color, geometryExpressID, flatTransformation: number[16] }
+      const pg = placed.get(i);
+      let geom;
+      try {
+        geom = api.GetGeometry(modelID, pg.geometryExpressID);
+      } catch {
+        continue; // Geometrie nicht auflösbar — diese PlacedGeometry überspringen
+      }
+      // GetVertexArray/GetIndexArray liefern KOPIEN; Size = ELEMENT-Anzahl
+      // (Floats bzw. Indizes), NICHT Bytes.
+      const verts = api.GetVertexArray(geom.GetVertexData(), geom.GetVertexDataSize());
+      const idx = api.GetIndexArray(geom.GetIndexData(), geom.GetIndexDataSize());
+      // PFLICHT: IfcGeometry sofort freigeben — sonst leakt WASM-Speicher je
+      // Geometrie. Die Arrays bleiben gültig (Kopien).
+      if (typeof geom.delete === "function") geom.delete();
+
+      // Vertices sind LOKAL — flatTransformation (column-major 4x4, world = M·v)
+      // MUSS angewendet werden; web-ifc verschiebt zudem Offsets in die Matrix.
+      // Niemals Vertices einer Geometrie mit der Matrix einer anderen mischen.
+      const m = pg.flatTransformation;
+      const out = new Float32Array(idx.length * 3);
+      for (let k = 0; k < idx.length; k++) {
+        // Vertex-Stride 6: [px,py,pz,nx,ny,nz] — Normalen (v+3..v+5) für Clash ignorieren.
+        const v = idx[k] * 6;
+        const x = verts[v], y = verts[v + 1], z = verts[v + 2];
+        // Matrix in double (JS-Number) anwenden, erst am Ende nach Float32 —
+        // Präzision bei georeferenzierten Modellen (UTM/Gauß-Krüger).
+        out[k * 3] = m[0] * x + m[4] * y + m[8] * z + m[12];
+        out[k * 3 + 1] = m[1] * x + m[5] * y + m[9] * z + m[13];
+        out[k * 3 + 2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+      }
+      if (out.length) chunks.push(out);
+    }
+    if (!chunks.length) {
+      uebersprungen++; // Mesh ohne verwertbare Geometrie
+      return;
+    }
+    roh.push({ expressId, tris: concatFloat32(chunks) });
+  });
+
+  // Zweitlese NUR für gestreamte expressIDs: GlobalId/ifcType/name/storey.
+  progress("Löse Bauteil-Metadaten auf…");
+  // buildStoreyIndex liefert { byElement, nameOf } — NICHT die Map selbst.
+  const { byElement: storeyByElement } = buildStoreyIndex(api, modelID);
+  const elemente = [];
+  for (const { expressId, tris } of roh) {
+    let globalId = "";
+    let name = "";
+    let ifcType = "";
+    try {
+      const line = api.GetLine(modelID, expressId);
+      globalId = String(val(line?.GlobalId) ?? "");
+      name = String(val(line?.Name) ?? val(line?.ObjectType) ?? "");
+    } catch { /* Element ohne Zeile: Geometrie trotzdem behalten */ }
+    try {
+      // GetNameFromTypeCode liefert PascalCase ("IfcWall", "IfcFlowSegment", …) —
+      // exakt kompatibel zu den PRODUCT_TYPES-Strings; deckt auch TGA-Typen ab,
+      // die in PRODUCT_TYPES fehlen, aber gestreamt werden.
+      ifcType = api.GetNameFromTypeCode(api.GetLineType(modelID, expressId)) || "";
+    } catch { /* Typ nicht auflösbar — leer lassen */ }
+    const aabb = aabbOf(tris);
+    elemente.push({
+      expressId,
+      globalId,
+      ifcType,
+      name: name || `${ifcType || "Element"} #${expressId}`,
+      storey: storeyByElement.get(expressId) || "",
+      tris,
+      aabb,
+      center: centerOf(aabb),
+    });
+  }
+
+  progress(`${elemente.length} Bauteil-Geometrien extrahiert.`);
+  return { elemente, uebersprungen };
+}
+
 export async function extractGeometry(arrayBuffer, onProgress, { coordinateToOrigin = true } = {}) {
   const progress = typeof onProgress === "function" ? onProgress : () => {};
   progress("Initialisiere web-ifc (WASM)…");
-  // Merge 2026-08-26: derselbe Bootstrap wie in `parseIfcFile`. Der frühere
-  // getApi()-Singleton entfiel in Phase 33 (W2), damit dieses Modul in Node
-  // importierbar bleibt — das WASM lädt nur der Browser-Pfad, dynamisch.
-  const { loadIfcApi } = await import("./ifcWasm.js");
-  const api = await loadIfcApi();
+  // Browser: ifcWasm.js; Node (Phase 77): ifcApiNode.js — same extractGeometryFromModel.
+  const api = await loadIfcApiEnv();
 
   progress("Öffne IFC-Modell (Geometrie)…");
   let modelID = -1;
@@ -931,102 +1045,7 @@ export async function extractGeometry(arrayBuffer, onProgress, { coordinateToOri
   }
 
   try {
-    // Im Stream-Callback NUR expressId + Welt-Dreiecke sammeln — GetLine im
-    // Callback wäre ein Re-Entry in WASM während des Streamings; robuster ist
-    // die Zweitlese der Metadaten NACH dem Stream (nur für gestreamte IDs).
-    const roh = []; // [{ expressId, tris }]
-    let uebersprungen = 0;
-
-    // StreamAllMeshes(modelID, (mesh: FlatMesh, index, total) => void)
-    api.StreamAllMeshes(modelID, (mesh, index, total) => {
-      if (index % 25 === 0) progress(`Geometrie ${index + 1}/${total}…`);
-      const expressId = mesh.expressID;
-      // mesh.geometries (Vector) gehört dem C++-Streaming-Scope — NICHT delete()n;
-      // FlatMesh.delete ist im Stream-Callback zur Laufzeit undefined — nicht aufrufen.
-      const placed = mesh.geometries;
-      const chunks = [];
-      for (let i = 0; i < placed.size(); i++) {
-        // PlacedGeometry { color, geometryExpressID, flatTransformation: number[16] }
-        const pg = placed.get(i);
-        let geom;
-        try {
-          geom = api.GetGeometry(modelID, pg.geometryExpressID);
-        } catch {
-          continue; // Geometrie nicht auflösbar — diese PlacedGeometry überspringen
-        }
-        // GetVertexArray/GetIndexArray liefern KOPIEN; Size = ELEMENT-Anzahl
-        // (Floats bzw. Indizes), NICHT Bytes.
-        const verts = api.GetVertexArray(geom.GetVertexData(), geom.GetVertexDataSize());
-        const idx = api.GetIndexArray(geom.GetIndexData(), geom.GetIndexDataSize());
-        // PFLICHT: IfcGeometry sofort freigeben — sonst leakt WASM-Speicher je
-        // Geometrie. Die Arrays bleiben gültig (Kopien).
-        if (typeof geom.delete === "function") geom.delete();
-
-        // Vertices sind LOKAL — flatTransformation (column-major 4x4, world = M·v)
-        // MUSS angewendet werden; web-ifc verschiebt zudem Offsets in die Matrix.
-        // Niemals Vertices einer Geometrie mit der Matrix einer anderen mischen.
-        const m = pg.flatTransformation;
-        const out = new Float32Array(idx.length * 3);
-        for (let k = 0; k < idx.length; k++) {
-          // Vertex-Stride 6: [px,py,pz,nx,ny,nz] — Normalen (v+3..v+5) für Clash ignorieren.
-          const v = idx[k] * 6;
-          const x = verts[v], y = verts[v + 1], z = verts[v + 2];
-          // Matrix in double (JS-Number) anwenden, erst am Ende nach Float32 —
-          // Präzision bei georeferenzierten Modellen (UTM/Gauß-Krüger).
-          out[k * 3] = m[0] * x + m[4] * y + m[8] * z + m[12];
-          out[k * 3 + 1] = m[1] * x + m[5] * y + m[9] * z + m[13];
-          out[k * 3 + 2] = m[2] * x + m[6] * y + m[10] * z + m[14];
-        }
-        if (out.length) chunks.push(out);
-      }
-      if (!chunks.length) {
-        uebersprungen++; // Mesh ohne verwertbare Geometrie
-        return;
-      }
-      roh.push({ expressId, tris: concatFloat32(chunks) });
-    });
-
-    // Zweitlese NUR für gestreamte expressIDs: GlobalId/ifcType/name/storey.
-    progress("Löse Bauteil-Metadaten auf…");
-    // buildStoreyIndex liefert { byElement, nameOf } — NICHT die Map selbst.
-    // Ohne die Destrukturierung warf die Zweitlese unten
-    // "storeyByElement.get is not a function", und zwar für JEDES Modell: die
-    // Prüf-Suite konnte gar kein IFC laden. Gefunden am 04.09.2026 beim Bauen des
-    // Musterprojekts (Phase 65-03) — kein Unit-Test ruft extractGeometry auf, weil
-    // die Funktion das WASM über einen Vite-`?url`-Import zieht und unter Node
-    // nicht läuft. Der Headless-Lauf tmp-verify-beispiel.mjs deckt sie jetzt ab.
-    const { byElement: storeyByElement } = buildStoreyIndex(api, modelID);
-    const elemente = [];
-    for (const { expressId, tris } of roh) {
-      let globalId = "";
-      let name = "";
-      let ifcType = "";
-      try {
-        const line = api.GetLine(modelID, expressId);
-        globalId = String(val(line?.GlobalId) ?? "");
-        name = String(val(line?.Name) ?? val(line?.ObjectType) ?? "");
-      } catch { /* Element ohne Zeile: Geometrie trotzdem behalten */ }
-      try {
-        // GetNameFromTypeCode liefert PascalCase ("IfcWall", "IfcFlowSegment", …) —
-        // exakt kompatibel zu den PRODUCT_TYPES-Strings; deckt auch TGA-Typen ab,
-        // die in PRODUCT_TYPES fehlen, aber gestreamt werden.
-        ifcType = api.GetNameFromTypeCode(api.GetLineType(modelID, expressId)) || "";
-      } catch { /* Typ nicht auflösbar — leer lassen */ }
-      const aabb = aabbOf(tris);
-      elemente.push({
-        expressId,
-        globalId,
-        ifcType,
-        name: name || `${ifcType || "Element"} #${expressId}`,
-        storey: storeyByElement.get(expressId) || "",
-        tris,
-        aabb,
-        center: centerOf(aabb),
-      });
-    }
-
-    progress(`${elemente.length} Bauteil-Geometrien extrahiert.`);
-    return { elemente, uebersprungen };
+    return extractGeometryFromModel(api, modelID, progress);
   } finally {
     try { if (modelID >= 0) api.CloseModel(modelID); } catch { /* bereits geschlossen */ }
   }

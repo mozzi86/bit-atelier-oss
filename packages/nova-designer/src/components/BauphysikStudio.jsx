@@ -238,7 +238,7 @@ export default function BauphysikStudio() {
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <Layers className="w-5 h-5 text-teal-600" />
+          <Layers className="w-5 h-5 text-muted-foreground" />
           <h2 className="text-lg font-bold text-slate-800">Bauphysik-Studio — Schichtaufbau, U-Wert &amp; Tauwasser</h2>
         </div>
         <Badge className={ampelStyle.color}>{ampelStyle.label}</Badge>
@@ -342,12 +342,12 @@ export default function BauphysikStudio() {
 
       {/* Kennwerte */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Stat label="U-Wert (Richtwert)" value={`${de2(g.U)} W/(m²K)`} accent={g.U <= U_REFERENZ_AUSSENWAND ? "text-emerald-600" : "text-amber-600"} />
+        <Stat label="U-Wert (Richtwert)" value={`${de2(g.U)} W/(m²K)`} accent={g.U <= U_REFERENZ_AUSSENWAND ? "text-erfolg" : "text-amber-600"} />
         <Stat label="R_T gesamt" value={`${de2(g.RT)} m²K/W`} />
         <Stat label="sd gesamt (wirksam)" value={`${de2(g.sdGesamt)} m`} />
         <Stat label="θ innere Oberfläche" value={`${de1(g.thetaSi)} °C`} />
         <Stat label="Taupunkt Raumluft" value={`${de1(tpInnen)} °C`} />
-        <Stat label="f_Rsi (Rsi 0,25)" value={de2(g.fRsi)} accent={g.fRsi >= 0.7 ? "text-emerald-600" : "text-amber-600"} />
+        <Stat label="f_Rsi (Rsi 0,25)" value={de2(g.fRsi)} accent={g.fRsi >= 0.7 ? "text-erfolg" : "text-amber-600"} />
       </div>
 
       {/* Diagramm */}

@@ -7,6 +7,7 @@ import { WALL_COMPOSITES, aufbauById, aufbautenListe } from "./bauteil/aufbauten
 import { elevationOf, geschosshoehe, geschosseAus, deckenLage, kniestockAus, MIN_WANDHOEHE_M, DECKEN_STANDARD } from "./bauteil/hoehen.js";
 import { untergeschosseAnzahl, geschossName } from "./bauteil/ebenen.js";
 import { globalesDach, dachEbenen, deckeUnterDach } from "./bauteil/dachGeometrie.js";
+import { deckenUmriss } from "./bauteil/deckenRand.js"; // 108-03 follow-up: hull slabs end at the insulation of the envelope (one truth for 3D, IFC, quantities)
 
 /**
  * Build-up of the basement hull walls (107-13, D-BK-20). [ASSUMED] "single24" (reinforced concrete 24 cm, bauteil/aufbauten.js):
@@ -143,11 +144,11 @@ const GENEIGTE_DACHFORMEN = Object.freeze(["sattel", "walm", "pult"]);
  * User decision 01.11.2026 (assumption A1 of 108-02): the hull slab ABOVE the top storey stays as a collar-beam floor, its outline clipped
  * to the inside of the roof faces at the TOP of the slab (dachGeometrie.deckeUnterDach) — a slab whose top lies above the ridge is dropped.
  * @param {{footprintM?: Array<{x: number, z: number}>|null, storeys?: number, storeyHeight?: number, geschosse?: Array<any>|null,
- *          deckenDicke?: number, deckenBezug?: string, dachform?: string|null, dachneigung?: number|null}} [q] footprint in m, storey
+ *          deckenDicke?: number, deckenBezug?: string, dachform?: string|null, dachneigung?: number|null, wallComposite?: any}} [q] footprint in m, storey
  *   height in m, storey table, hull slab thickness in m and reference side, roof form and slope in degrees (fields of the BimModel record)
  * @returns {KniestockGeometrie|null}
  */
-export function kniestockGeometrie({ footprintM, storeys = 4, storeyHeight = 3, geschosse = null, deckenDicke = DECKEN_STANDARD.huelle.dicke_m, deckenBezug = DECKEN_STANDARD.huelle.bezug, dachform = null, dachneigung = null } = {}) {
+export function kniestockGeometrie({ footprintM, storeys = 4, storeyHeight = 3, geschosse = null, deckenDicke = DECKEN_STANDARD.huelle.dicke_m, deckenBezug = DECKEN_STANDARD.huelle.bezug, dachform = null, dachneigung = null, wallComposite = null } = {}) {
   if (!dachform || !GENEIGTE_DACHFORMEN.includes(dachform)) return null;
   if (!Array.isArray(geschosse) || !geschosse.length) return null;
   const tab = geschosseAus({ geschosse, storeyHeight });
@@ -173,7 +174,9 @@ export function kniestockGeometrie({ footprintM, storeys = 4, storeyHeight = 3, 
   // the roof exactly as the 3D view, the section and the IFC export build it (globalesDach with this eaves height)
   const dach = globalesDach({ footprint: fp, traufhoehe_m }, dachform, Number(dachneigung));
   const ebenen = dach && dach.ok ? dachEbenen(dach) : [];
-  const kehl = ebenen.length ? deckeUnterDach(fp, ebenen, oben.oberkante_m) : fp;
+  // the collar-beam floor starts from the slab outline (inset by the envelope insulation, deckenRand.js), not from the footprint
+  const deckeFp = deckenUmriss(fp, compositeById(wallComposite)).polygon;
+  const kehl = ebenen.length ? deckeUnterDach(deckeFp, ebenen, oben.oberkante_m) : deckeFp;
   return { kniestock_m: k, okRohdecke_m, traufhoehe_m, wandHoehe_m, kehlbalken: kehl.length >= 3 ? kehl : null };
 }
 
@@ -237,7 +240,10 @@ export function createBuildingModel({ footprintM, storeys = 4, storeyHeight = 3,
   const hSeite = umlauf2 < 0 ? { outside: "inside", inside: "outside" }[huelleBezug] : huelleBezug;
   const hRef = huelleBezug === "outside" || huelleBezug === "inside" ? { refLine: hSeite } : {};
   // 108-02: knee wall of the top storey (null without one or with a flat roof = everything below as before)
-  const knie = kniestockGeometrie({ footprintM: fp, storeys: n, storeyHeight, geschosse, deckenDicke, deckenBezug, dachform, dachneigung });
+  const knie = kniestockGeometrie({ footprintM: fp, storeys: n, storeyHeight, geschosse, deckenDicke, deckenBezug, dachform, dachneigung, wallComposite });
+  // 108-03 follow-up (user 08.11.2026): the hull slabs end at the insulation of the envelope build-up — a slab to the outer face would be a
+  // thermal bridge. Without a build-up with an insulation layer the slab is the footprint (as before). The base slab keeps the footprint.
+  const deckeFp = deckenUmriss(fp, compositeById(wallComposite)).polygon;
 
   const storeyList = [];
   const walls = [];
@@ -263,7 +269,7 @@ export function createBuildingModel({ footprintM, storeys = 4, storeyHeight = 3,
     // 108-02: above the top storey with a knee wall = the collar-beam floor, clipped to the roof (dropped above the ridge)
     if (knie && lvl === n - 1) {
       if (knie.kehlbalken) slabs.push({ level: lvl, elevation: elevation + hLvl, polygon: knie.kehlbalken, ...slabFelder, kehlbalkenlage: true });
-    } else slabs.push({ level: lvl, elevation: elevation + hLvl, polygon: fp, ...slabFelder });
+    } else slabs.push({ level: lvl, elevation: elevation + hLvl, polygon: deckeFp, ...slabFelder });
     // Ein Raum (Space) je Geschoss
     // 107-11: one space per storey (the footprint); rooms inside it are customZones / workshop zones (bauteil/raeume.js)
     spaces.push({ level: lvl, polygon: fp, name: lvlName, elevation });
@@ -288,7 +294,7 @@ export function createBuildingModel({ footprintM, storeys = 4, storeyHeight = 3,
       walls.push({ a, b, height: hLvl, thickness: ugWt, composite: ugComposite, level: lvl, elevation, edge: i, ...hRef, unterirdisch: true });
     }
     // ceiling above the basement (same convention as the storeys above: slab on the top of its storey); own id against a shared GUID
-    slabs.push({ level: lvl, id: `ug${lvl}`, elevation: elevation + hLvl, polygon: fp, ...slabFelder, unterirdisch: true });
+    slabs.push({ level: lvl, id: `ug${lvl}`, elevation: elevation + hLvl, polygon: deckeFp, ...slabFelder, unterirdisch: true });
     spaces.push({ level: lvl, polygon: fp, name: lvlName, elevation, unterirdisch: true });
   }
   const fusshoehe_m = U > 0 ? elev(-U) : 0;

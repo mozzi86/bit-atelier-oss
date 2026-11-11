@@ -65,7 +65,7 @@ export default function HarnessOffline({ onRetry, detail }) {
         {dienst && !dienst.eingerichtet && (
           <p data-testid="harness-offline-einrichten">
             {t('Der Harness ist noch nicht eingerichtet:')}{' '}
-            <Link to="/Settings?tab=ai" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">{t('Einstellungen › KI › Einrichten')}</Link>
+            <Link to="/Settings?tab=ai" className="font-medium text-link hover:underline">{t('Einstellungen › KI › Einrichten')}</Link>
           </p>
         )}
         {startFehler && <p className="text-xs text-rose-700 dark:text-rose-300">{startFehler}</p>}

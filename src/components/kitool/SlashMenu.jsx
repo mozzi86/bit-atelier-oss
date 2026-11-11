@@ -33,7 +33,7 @@ export default function SlashMenu({ items, selIdx, onPick }) {
           role="option"
           aria-selected={i === selIdx}
           onMouseDown={(e) => { e.preventDefault(); onPick(s.name); }}
-          className={`px-2.5 py-1.5 rounded-md cursor-pointer flex items-baseline gap-2 ${i === selIdx ? 'bg-emerald-50 dark:bg-emerald-900/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+          className={`px-2.5 py-1.5 rounded-md cursor-pointer flex items-baseline gap-2 ${i === selIdx ? 'bg-muted' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
         >
           <span className="font-mono text-slate-900 dark:text-slate-100">/{s.name}</span>
           <span className="text-xs text-slate-500 dark:text-slate-400 truncate">{s.description}</span>

@@ -59,6 +59,9 @@ async function harnessFake(page) {
     /** @type {any[]} */ nachrichten: [],
     /** D-IM-07: optional agent turn (tool calls over the control channel) before the answer. @type {null | ((msg: any) => Promise<void>)} */ agent: null,
   };
+  await page.route("**/api/ki/harness/dienst", (route) => route.fulfill({
+    status: 200, contentType: "application/json", body: JSON.stringify(h.status),
+  }));
   await page.route(`${HARNESS}/**`, async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/status") return route.fulfill({ status: 200, headers: CORS, body: JSON.stringify(h.status) });

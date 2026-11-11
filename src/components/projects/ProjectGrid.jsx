@@ -52,7 +52,7 @@ const ProjectCard = ({ project, onEdit, onReport, onDelete, onActivate, onChroni
     {/* 72-01 A-11 (Befund N-17): Karten-Klick = Projekt aktivieren — vorher
         ging das nur über die Kopfzeile; die Knöpfe darunter stoppen das Event. */}
     <Card
-      className={`group hover:shadow-xl transition-all duration-300 border-0 shadow-lg bg-white/80 backdrop-blur-sm cursor-pointer ${isAktiv ? "ring-2 ring-emerald-500" : ""}`}
+      className={`group hover:shadow-xl transition-all duration-300 border-0 shadow-lg bg-white/80 backdrop-blur-sm cursor-pointer ${isAktiv ? "ring-2 ring-primary" : ""}`}
       onClick={() => onActivate?.(project)}
       role="button"
       tabIndex={0}
@@ -69,9 +69,9 @@ const ProjectCard = ({ project, onEdit, onReport, onDelete, onActivate, onChroni
             narrow card and the icons spilled over the neighbouring card, which then caught the clicks. */}
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0 flex-1 basis-40 space-y-2">
-            <CardTitle className="text-lg font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
+            <CardTitle className="text-lg font-bold text-slate-800 group-hover:text-foreground transition-colors">
               {project.name}
-              {isAktiv && <Badge variant="outline" className="ml-2 text-[10px] border-emerald-300 text-emerald-700 align-middle">Aktiv</Badge>}
+              {isAktiv && <Badge variant="outline" className="ml-2 text-[10px] border-primary text-foreground align-middle">Aktiv</Badge>}
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
               <MapPin className="w-4 h-4" />
@@ -89,7 +89,7 @@ const ProjectCard = ({ project, onEdit, onReport, onDelete, onActivate, onChroni
               <History className="w-4 h-4 text-slate-600" />
             </Button>
             <Button variant="ghost" size="icon" onClick={() => onReport(project)} title="Bericht erstellen" aria-label={`Bericht für ${project.name}`}>
-              <FileText className="w-4 h-4 text-emerald-600" />
+              <FileText className="w-4 h-4 text-muted-foreground" />
             </Button>
             {/* 72-01 A-11/A-22: namenloser Stift-Knopf bekommt aria-label. */}
             <Button variant="ghost" size="icon" onClick={() => onEdit(project)} title="Bearbeiten" aria-label={`Bearbeiten: ${project.name}`}>
@@ -158,7 +158,7 @@ const ProjectCard = ({ project, onEdit, onReport, onDelete, onActivate, onChroni
 function BauartBadge({ project }) {
   const { t } = useI18n();
   const { bauart, gesetzt } = bauartVon(project);
-  const farbe = bauart === "bestand" ? "border-violet-300 text-violet-700 bg-violet-50" : "border-slate-300 text-slate-600";
+  const farbe = bauart === "bestand" ? "border-border text-foreground bg-muted" : "border-slate-300 text-slate-600";
   return (
     <Badge variant="outline" className={farbe} data-testid="projekt-bauart" data-bauart={bauart} data-gesetzt={gesetzt ? "1" : "0"}
       title={gesetzt ? undefined : t("Vorhabentyp nicht gesetzt — bitte im Projekt bearbeiten")}>

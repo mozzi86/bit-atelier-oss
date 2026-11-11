@@ -248,7 +248,7 @@ export default function TgaNetzEditor() {
                   <Button size="sm" variant="ghost" className="h-6" onClick={() => setDraft((d) => (d && d.points.length > 1 ? { ...d, points: d.points.slice(0, -1) } : null))} aria-label={t("Letzten Punkt entfernen")}>
                     <Undo2 className="w-3.5 h-3.5" />
                   </Button>
-                  <Button size="sm" variant="outline" className="h-6 text-emerald-700" onClick={() => leitungAbschliessen(null, null)} disabled={draft.points.length < 2} data-testid="tn-abschliessen">
+                  <Button size="sm" variant="outline" className="h-6 text-foreground" onClick={() => leitungAbschliessen(null, null)} disabled={draft.points.length < 2} data-testid="tn-abschliessen">
                     <Check className="w-3.5 h-3.5 mr-1" /> {t("Abschließen")}
                   </Button>
                 </div>

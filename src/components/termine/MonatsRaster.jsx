@@ -64,7 +64,7 @@ export default function MonatsRaster({ termine, heute, feiertage, projektNamen }
           <div key={d.datum} role="gridcell" tabIndex={0} data-index={i} data-datum={d.datum} data-feiertag={d.feiertag ? "1" : undefined}
             onKeyDown={(e) => taste(e, i)} onClick={() => setGewaehlt(d.datum)}
             aria-label={`${d.datum}${d.feiertagName ? " · " + t(feiertagLabel(d.feiertagName)) : ""} · ${d.termine.length}`}
-            className={`min-h-20 cursor-pointer p-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${d.imMonat ? "bg-white dark:bg-slate-900" : "bg-slate-50 text-slate-400 dark:bg-slate-800/60"} ${d.wochenende ? "bg-slate-50 dark:bg-slate-800" : ""} ${d.feiertag ? SCHRAFFUR : ""} ${d.datum === heute ? "ring-2 ring-inset ring-emerald-500" : ""}`}>
+            className={`min-h-20 cursor-pointer p-1 focus:outline-none focus:ring-2 focus:ring-ring ${d.imMonat ? "bg-white dark:bg-slate-900" : "bg-slate-50 text-slate-400 dark:bg-slate-800/60"} ${d.wochenende ? "bg-slate-50 dark:bg-slate-800" : ""} ${d.feiertag ? SCHRAFFUR : ""} ${d.datum === heute ? "ring-2 ring-inset ring-primary" : ""}`}>
             <div className="flex justify-between"><span className="font-medium">{Number(d.datum.slice(8, 10))}</span>{d.feiertagName && <span className="truncate text-[10px] text-slate-500" title={t(feiertagLabel(d.feiertagName))}>{t(feiertagLabel(d.feiertagName))}</span>}</div>
             {d.termine.slice(0, 3).map((x) => <p key={x.id} className={`truncate ${x.klasse === "frist" ? "text-rose-700 dark:text-rose-300" : ""}`}>{terminTitel(t, x)}</p>)}
             {d.termine.length > 3 && <p className="text-slate-500">+{d.termine.length - 3}</p>}

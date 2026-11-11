@@ -97,7 +97,9 @@ export function antwortSatz(r, t = (s) => s) {
     }
     case "vorschlaege": return f(V.vorschlaege, { offen: e?.offen?.length ?? 0, schritte: (e?.verlauf ?? []).filter((/** @type {any} */ s) => !s.zurueckgenommen).length });
     case "pruefen": return f(V.geprueft, { anzahl: Array.isArray(e) ? e.length : 0 });
-    case "eigenschaft-setzen": case "transformieren": case "teilen": return f(V.verstanden, { satz: r.verstanden ?? "" });
+    case "eigenschaft-setzen": case "transformieren": case "teilen":
+    case "anlegen": case "raum-umbenennen": case "wand-zwischen-raeumen": // 261111-zs1
+      return f(V.verstanden, { satz: r.verstanden ?? "" });
     default: return r.verstanden ?? "";
   }
 }

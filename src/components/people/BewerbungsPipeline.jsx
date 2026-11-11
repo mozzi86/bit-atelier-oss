@@ -90,8 +90,8 @@ export default function BewerbungsPipeline({ bewerbungen, stellen, regelWert, he
     const ziele = (UEBERGAENGE[stufe] || []).filter((z) => z !== naechste && z !== vorige);
     return (
       <li key={bewerbung.id} data-bewerbung={bewerbung.id} tabIndex={-1}
-        className="rounded-lg border border-slate-200 p-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-700">
-        <button type="button" onClick={() => onOeffnen(bewerbung)} className="text-left font-medium text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400">
+        className="rounded-lg border border-slate-200 p-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-700">
+        <button type="button" onClick={() => onOeffnen(bewerbung)} className="text-left font-medium text-link underline-offset-4 hover:underline">
           {[bewerbung.vorname, bewerbung.nachname].filter(Boolean).join(" ")}
         </button>
         <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -103,12 +103,12 @@ export default function BewerbungsPipeline({ bewerbungen, stellen, regelWert, he
             (Behavior 9). */}
         {stufe === "zusage" && (
           bewerbung.uebernommen_mitarbeiter_id ? (
-            <p className="mt-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+            <p className="mt-1.5 text-xs text-erfolg">
               {t("übernommen")} — <Link to={`/People${bauePersonalLink({ tab: "staff", mitarbeiter: bewerbung.uebernommen_mitarbeiter_id })}`} className="underline-offset-4 hover:underline">{t("Person ansehen")}</Link>
             </p>
           ) : (
             <button type="button" onClick={() => setUebernahmeFuer(bewerbung)}
-              className="mt-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs text-emerald-800 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-100">
+              className="mt-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground hover:bg-muted">
               {t("Einstellung anlegen")}
             </button>
           )
@@ -116,7 +116,7 @@ export default function BewerbungsPipeline({ bewerbungen, stellen, regelWert, he
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {naechste && darfWechseln(stufe, naechste) && (
             <button type="button" disabled={wechselndId === bewerbung.id} onClick={() => wechseln(bewerbung, naechste)}
-              className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs text-emerald-800 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-100">
+              className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground hover:bg-muted">
               {t("Nächste Stufe")}
             </button>
           )}
@@ -149,7 +149,7 @@ export default function BewerbungsPipeline({ bewerbungen, stellen, regelWert, he
           const eintraege = bewerbungen.filter((b) => effektiveStufe(b) === s.key);
           return (
             <section key={s.key} aria-labelledby={`bp-h-${s.key}`}>
-              <h3 id={`bp-h-${s.key}`} className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <h3 id={`bp-h-${s.key}`} className="mb-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
                 {t(s.label)} ({eintraege.length})
               </h3>
               <ul className="space-y-2">{eintraege.map(karte)}</ul>

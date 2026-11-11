@@ -18,7 +18,7 @@ import { plusMonate } from "@core/lib/kalender/datum.js";
 import { centZuEuro, euroZuCent, formatEuro } from "@/lib/accounting/geld.js";
 import BetragFeld from "./gemeinsam/BetragFeld.jsx";
 
-const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900";
+const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900";
 const LABEL = "text-sm font-medium text-slate-700 dark:text-slate-200";
 const FEHLER = "text-sm text-red-700 dark:text-red-300";
 

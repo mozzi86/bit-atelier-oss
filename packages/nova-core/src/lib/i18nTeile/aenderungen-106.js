@@ -22,6 +22,10 @@ export const EN = {
   "auf {prozent} % skalieren": "scale to {prozent} %",
   "{ziel}: bei {t} m teilen → {laengeA} m + {laengeB} m": "{ziel}: split at {t} m → {laengeA} m + {laengeB} m",
   "{ziel}: entlang der Linie teilen → {flaecheA} m² + {flaecheB} m²": "{ziel}: split along the line → {flaecheA} m² + {flaecheB} m²",
+  // 261111-zs1: creating elements (SATZ_VORLAGEN anlegen*)
+  "Neu: {wandart} {dicke} cm, {laenge} m lang (Status Neubau)": "New: {wandart} {dicke} cm, {laenge} m long (status new build)",
+  "Neu: Tür {breite} m in Wand W-{wand}, Mitte bei {u} m{zusatz} (Status Neubau)": "New: door {breite} m in wall W-{wand}, centre at {u} m{zusatz} (status new build)",
+  "Neu: Notiz „{text}“ bei {x} / {z} m": "New: note “{text}” at {x} / {z} m",
   // check sentences (PRUEF_VORLAGEN)
   "Gesperrt: {text} — erst klären, dann ändern": "Blocked: {text} — clarify first, then change",
   "{text} — neu durch diese Änderung": "{text} — new through this change",

@@ -38,9 +38,9 @@ const datum = (iso) => {
 };
 
 const feldKlasse =
-  'w-28 rounded-md border border-slate-300 bg-white px-2 py-1 text-right text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500';
+  'w-28 rounded-md border border-slate-300 bg-white px-2 py-1 text-right text-sm text-slate-900 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring';
 const knopfKlasse =
-  'rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50';
+  'rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50';
 const knopfLeise =
   'rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50';
 
@@ -102,7 +102,7 @@ function VergabeKarte({ eintrag, fragen, name, onGeaendert }) {
           <h2 className="text-base font-semibold text-slate-800">{vergabe.name || t('Vergabe')}</h2>
           {vergabe.trade && <p className="text-xs text-slate-500">{vergabe.trade}</p>}
         </div>
-        <p className={`text-sm ${status === 'laeuft' ? 'text-emerald-700' : 'text-slate-500'}`}>
+        <p className={`text-sm ${status === 'laeuft' ? 'text-erfolg' : 'text-slate-500'}`}>
           {t('Angebotsfrist')}: {datum(vergabe.frist)}
           {' · '}
           {status === 'laeuft' ? t('läuft') : status === 'abgelaufen' ? t('abgelaufen') : t('nicht angegeben')}

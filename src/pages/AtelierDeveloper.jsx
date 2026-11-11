@@ -101,7 +101,7 @@ export default function AtelierDeveloper() {
           className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4"
         >
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold text-foreground">
               {t("Portfolio (Projektentwicklung)")}
             </h1>
             <p className="text-slate-600 mt-1">Durchgängige Plattform für den Gebäude-Lebenszyklus — Machbarkeit → BIM → Übergabe</p>
@@ -109,7 +109,7 @@ export default function AtelierDeveloper() {
           {/* 72-08 (CONSISTENCY-13): a project is created in one place — the
               form on /Projects — not by landing on the feasibility study. */}
           <Link to={NEUES_PROJEKT}>
-            <Button className="bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg">
+            <Button className="bg-primary hover:bg-primary/90 shadow-sm">
               <Plus className="w-4 h-4 mr-2" />
               Neues Projekt
             </Button>
@@ -131,8 +131,8 @@ export default function AtelierDeveloper() {
 
           <Card className="border-0 shadow-sm rounded-xl hover:shadow-md transition-shadow">
             <CardContent className="p-6 text-center">
-              <div className="inline-flex p-2.5 rounded-xl bg-violet-50 mb-2">
-                <Calculator className="w-6 h-6 text-violet-600" />
+              <div className="inline-flex p-2.5 rounded-xl bg-muted mb-2">
+                <Calculator className="w-6 h-6 text-muted-foreground" />
               </div>
               {/* Sum of the areas entered per project (building_area / area_net), not a computed BGF. */}
               <h3 className="text-2xl font-bold text-slate-800 mb-1" data-portfolio-flaeche>
@@ -151,8 +151,8 @@ export default function AtelierDeveloper() {
 
           <Card className="border-0 shadow-sm rounded-xl hover:shadow-md transition-shadow">
             <CardContent className="p-6 text-center">
-              <div className="inline-flex p-2.5 rounded-xl bg-emerald-50 mb-2">
-                <CheckCircle className="w-6 h-6 text-emerald-600" />
+              <div className="inline-flex p-2.5 rounded-xl bg-muted mb-2">
+                <CheckCircle className="w-6 h-6 text-muted-foreground" />
               </div>
               <h3 className="text-2xl font-bold text-slate-800 mb-1" data-energie-screening-kpi>
                 {kpis.screening.mitErgebnis
@@ -173,7 +173,7 @@ export default function AtelierDeveloper() {
             <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-slate-800">
-                  <Building className="w-5 h-5 text-emerald-600" />
+                  <Building className="w-5 h-5 text-muted-foreground" />
                   {t("Zuletzt geänderte Projekte")}
                 </CardTitle>
               </CardHeader>
@@ -182,8 +182,8 @@ export default function AtelierDeveloper() {
                   {projects.slice(0, 5).map((project) => (
                     <div key={project.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center">
-                          <Building className="w-6 h-6 text-white" />
+                        <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
+                          <Building className="w-6 h-6 text-primary-foreground" />
                         </div>
                         <div>
                           <h4 className="font-semibold text-slate-800">{project.name}</h4>
@@ -227,7 +227,7 @@ export default function AtelierDeveloper() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <Link to={createPageUrl("RealEstateFeasibility")}>
-                  <Button className="w-full justify-start bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg">
+                  <Button className="w-full justify-start bg-primary hover:bg-primary/90 shadow-sm">
                     <MapPin className="w-4 h-4 mr-2" />
                     Neue Machbarkeitsstudie
                   </Button>
@@ -259,7 +259,7 @@ export default function AtelierDeveloper() {
             <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-slate-800">
-                  <Calendar className="w-5 h-5 text-emerald-600" />
+                  <Calendar className="w-5 h-5 text-muted-foreground" />
                   {t("Letzte Aktivitäten")}
                 </CardTitle>
               </CardHeader>

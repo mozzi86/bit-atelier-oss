@@ -50,10 +50,10 @@ export default function DateiSichernLaden() {
       <h3 className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-200">{t("Projektdatei (.bitproj)")}</h3>
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t("Alle Projekte als eine Datei sichern oder eine Datei laden — beim Laden erscheint zuerst die Vorschau.")}</p>
       <div className="flex flex-wrap gap-2">
-        <button type="button" data-testid="datei-sichern" onClick={sichern} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+        <button type="button" data-testid="datei-sichern" onClick={sichern} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
           <Download className="h-4 w-4" aria-hidden="true" /> {t("Als Datei sichern")}
         </button>
-        <button type="button" data-testid="datei-laden" onClick={() => eingabe.current?.click()} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+        <button type="button" data-testid="datei-laden" onClick={() => eingabe.current?.click()} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
           <Upload className="h-4 w-4" aria-hidden="true" /> {t("Aus Datei laden …")}
         </button>
         <input ref={eingabe} type="file" accept=".bitproj" className="hidden" aria-label={t("Projektdatei wählen")} data-testid="datei-laden-eingabe" onChange={laden} />

@@ -76,7 +76,7 @@ export default function WorkflowBuilder({ agents = [] }) {
             <div className="flex flex-wrap items-center gap-2">
               {steps.map((s, i) => (
                 <React.Fragment key={i}>
-                  <Badge className="bg-indigo-100 text-indigo-800 py-1.5 pl-3 pr-2 flex items-center gap-1">
+                  <Badge className="border border-dashed border-input bg-transparent text-muted-foreground py-1.5 pl-3 pr-2 flex items-center gap-1">
                     {s.name}
                     <button aria-label={t("Schritt entfernen")} onClick={() => removeStep(i)} className="hover:text-red-600">
                       <Trash2 className="w-3 h-3" />

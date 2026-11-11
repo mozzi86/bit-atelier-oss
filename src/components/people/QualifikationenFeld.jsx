@@ -10,7 +10,7 @@ import { X } from "lucide-react";
 import { useI18n } from "@core/lib/i18n";
 
 // Native <input>/<label> statt shadcn-Wrapper (CLAUDE.md "shadcn-tsc-Altlast").
-const EINGABE = "flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
+const EINGABE = "flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
 const BESCHRIFTUNG = "text-sm font-medium leading-none text-slate-700 dark:text-slate-200";
 
 /** @param {string} text @param {Record<string, string>} werte @returns {string} */

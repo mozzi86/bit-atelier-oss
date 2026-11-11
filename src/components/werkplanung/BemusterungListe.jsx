@@ -188,7 +188,7 @@ export default function BemusterungListe({ projectId, projekt = null }) {
             </table>
           </div>
         )}
-        {meldung && <p className="text-sm text-emerald-700" data-testid="bm-meldung">{meldung}</p>}
+        {meldung && <p className="text-sm text-erfolg" data-testid="bm-meldung">{meldung}</p>}
         {fehler && <p className="text-sm text-rose-700" role="alert" data-testid="bm-fehler">{fehler}</p>}
       </CardContent>
 

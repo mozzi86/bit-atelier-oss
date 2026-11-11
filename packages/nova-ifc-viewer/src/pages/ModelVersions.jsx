@@ -101,8 +101,8 @@ export default function ModelVersions() {
     <div className={seitenWurzel}>
       <div className="max-w-6xl mx-auto space-y-6">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent flex items-center gap-2">
-            <History className="w-7 h-7 text-emerald-600" /> {t("Projektstände")}
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
+            <History className="w-7 h-7 text-muted-foreground" /> {t("Projektstände")}
           </h1>
           <p className="text-slate-600 mt-1">
             {t("Kennzahlen je festgehaltenem Stand – keine Wiederherstellung")}
@@ -117,7 +117,7 @@ export default function ModelVersions() {
               <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base text-slate-800"><BookmarkPlus className="w-4 h-4" /> {t("Stand festhalten")}</CardTitle></CardHeader>
               <CardContent className="flex gap-2">
                 <Input value={message} onChange={(e) => setMessage(e.target.value)} placeholder={t("Beschreibung, z. B. Entwurf nach Bauherren-Termin")} />
-                <Button onClick={festhalten} disabled={busy || !projectId} className="bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg shrink-0">
+                <Button onClick={festhalten} disabled={busy || !projectId} className="bg-primary hover:bg-primary/90 shadow-sm shrink-0">
                   <BookmarkPlus className="w-4 h-4 mr-2" /> {t("Stand festhalten")}
                 </Button>
               </CardContent>
@@ -131,12 +131,12 @@ export default function ModelVersions() {
                   {versions.map((v, i) => (
                     <div key={v.id} className="flex gap-3 pb-4">
                       <div className="flex flex-col items-center">
-                        <div className="w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-emerald-100" />
+                        <div className="w-3 h-3 rounded-full bg-muted-foreground ring-4 ring-muted" />
                         {i < versions.length - 1 && <div className="w-px flex-1 bg-slate-200 mt-1" />}
                       </div>
                       <div className="flex-1 -mt-1">
                         <div className="flex items-center gap-2">
-                          <Badge className="bg-emerald-100 text-emerald-800">v{v.version}</Badge>
+                          <Badge className="bg-muted text-foreground">v{v.version}</Badge>
                           <span className="font-medium text-slate-800">{v.message}</span>
                         </div>
                         <div className="text-xs text-slate-400">{v.author === LOKALER_AUTOR ? t(LOKALER_AUTOR) : v.author} · {new Date(v.created_date).toLocaleString("de-DE")}</div>
@@ -179,7 +179,7 @@ export default function ModelVersions() {
                               <td className="py-1.5">{t(r.label)}</td>
                               <td className="text-right tabular-nums text-slate-500">{r.a.toLocaleString("de-DE")}</td>
                               <td className="text-right tabular-nums">{r.b.toLocaleString("de-DE")}</td>
-                              <td className={`text-right tabular-nums font-medium ${delta > 0 ? "text-emerald-600" : delta < 0 ? "text-rose-600" : "text-slate-300"}`}>
+                              <td className={`text-right tabular-nums font-medium ${delta > 0 ? "text-erfolg" : delta < 0 ? "text-rose-600" : "text-slate-300"}`}>
                                 {delta > 0 ? "+" : ""}{delta.toLocaleString("de-DE")}
                               </td>
                             </tr>

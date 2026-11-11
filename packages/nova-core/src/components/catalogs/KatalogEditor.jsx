@@ -189,7 +189,7 @@ export default function KatalogEditor({
 
         {/* --- Formular ---------------------------------------------------- */}
         {entwurf && (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-3">
+          <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-700">
                 {entwurf.id ? "Zeile ändern" : "Neue Zeile"} · {entity}
@@ -327,7 +327,7 @@ export default function KatalogEditor({
                   <td className="px-2 py-1 whitespace-nowrap">
                     <button
                       type="button"
-                      className="text-emerald-700 hover:underline"
+                      className="text-link hover:underline"
                       onClick={() => beginnen(z)}
                     >
                       ändern

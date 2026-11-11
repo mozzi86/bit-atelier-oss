@@ -116,7 +116,7 @@ export default function StaticsPlanner() {
       </div>
 
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: {pm.storeys} Geschosse · Höhe {de(pm.height)} m · Grundfläche {de(pm.footArea)} m²
         </div>
       )}
@@ -262,12 +262,12 @@ export default function StaticsPlanner() {
         {/* KPIs + Sohldruck-Check */}
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Stat label="Deckenstärke (Richtwert)" value={`${de(kpi.dicke)} cm`} accent="text-blue-600" />
+            <Stat label="Deckenstärke (Richtwert)" value={`${de(kpi.dicke)} cm`} accent="text-foreground" />
             <Stat label="Gesamtlast/Geschoss (Richtwert)" value={`${de(kpi.gPro)} kN`} accent="text-slate-800" />
             <Stat label="Schnee auf Dach (μ1 0,8 · sk)" value={`${de(kpi.schnee)} kN`} accent="text-slate-800" />
             <Stat label="Vertikale Gebäudelast (Richtwert)" value={`${de(kpi.N)} kN`} accent="text-slate-800" />
-            <Stat label="Gründungslast σ (Richtwert)" value={`${de(kpi.sigma)} kN/m²`} accent="text-violet-600" />
-            <Stat label="Stützenquerschnitt A_c (Richtwert)" value={`${de(kpi.Ac)} cm²`} accent="text-amber-600" />
+            <Stat label="Gründungslast σ (Richtwert)" value={`${de(kpi.sigma)} kN/m²`} accent="text-foreground" />
+            <Stat label="Stützenquerschnitt A_c (Richtwert)" value={`${de(kpi.Ac)} cm²`} accent="text-foreground" />
             <Stat label="Bewehrung Decke (Richtwert)" value={`${de(kpi.bewehr)} kg`} accent="text-slate-800" />
             <Stat label="Betonvolumen Decken (Richtwert)" value={`${de(kpi.vol)} m³`} accent="text-slate-800" />
           </div>

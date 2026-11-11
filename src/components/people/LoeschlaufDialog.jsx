@@ -112,7 +112,7 @@ export default function LoeschlaufDialog() {
               </ul>
             )}
             {fehler && <p role="alert" className="text-sm text-rose-600">{fehler}</p>}
-            {bericht && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400">{bericht}</p>}
+            {bericht && <p role="status" className="text-sm text-erfolg">{bericht}</p>}
             <p className="text-xs text-slate-500 dark:text-slate-400">{t("Heruntergeladene Dateien kann die App nicht löschen.")}</p>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setOffen(false)} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-600">

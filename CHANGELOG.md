@@ -10,6 +10,31 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.15.0] - 2026-11-11
+
+### Neu
+
+- **Neues Erscheinungsbild:** flache App-Hülle, Schrift Inter, überarbeitete Farben und Kopfzeilen; das Logo steht in der Seitenleiste.
+- **3D-Fenster im Gebäudemodell:** eine Leiste mit Durchlaufen (F3), Ganzes Modell, Auswahl zeigen, Axonometrie (Parallelprojektion), 3D-Schnitt (waagerecht oder senkrecht, mit Schieberegler), Exposé-Bild und Render-Modus. Das Rad zoomt zum Zeiger, Rad drücken schiebt, Umschalt + Rad drücken dreht um den Punkt unter dem Zeiger; dieselbe Navigation gilt im IFC-Viewer.
+- **Brillen in 3D:** Im Bestandsprojekt färbt, blendet oder verbirgt die gewählte Brille die Bauteile auch in der 3D-Ansicht nach ihrem Status; grafische Regeln lassen sich je Projekt als Vorlage anlegen und wirken in 3D.
+- **Zeigen und Sagen legt Bauteile an:** Mit dem Werkzeug „Punkte“ im Grundriss zeigen und per Knopf oder Sprache eine Wand, eine Tür oder eine Notiz vorschlagen lassen. Angelegt wird erst nach „Übernehmen“.
+- **Grundriss-Bedienung:** Auswahl im Plan ziehen (mit Fang, Umschalt-Sperre, Esc), Alt beim Ziehen hinterlässt Kopien, Griffe ziehen mit Objektfang, Länge tippen bei offener Wandkette, Umschalt + Rahmen ergänzt die Auswahl, die Tür schlägt zur geklickten Wandseite auf.
+- **Planstände:** DXF-Leser für Plangrundlagen, Planserie und Stand aus dem Dateinamen, Ausrichten eines Stands auf die Referenz, Vorschlag für Basis und Revisionsindex.
+- **Prüfen ohne Oberfläche:** `bit-check` prüft eine IFC-Datei von der Kommandozeile gegen Regeln und IDS.
+- **Katalogtypen im IFC-Export:** Wände, Decken und Beläge mit Katalogtyp werden mit IfcWallType, IfcSlabType oder IfcCoveringType geschrieben, mit denselben Kennungen wie in der Typbibliothek des Python-Bauers (elmonkey-core).
+
+### Geändert
+
+- **Räume im IFC-Export:** Räume hängen jetzt über IfcRelAggregates an ihrem Geschoss, wie IFC4 es verlangt. Vorher standen sie in der Liste der Geschossbauteile, was Schema- und IDS-Prüfungen als Fehler meldeten. Bestehende Projekte exportieren dadurch eine leicht andere Datei; Inhalt und Geometrie sind gleich.
+- **Geschossdecken enden an der Dämmebene der Hülle:** ein Umriss für 3D, IFC und Mengen.
+
+### Behoben
+
+- **Dunkelmodus im Gebäudemodell:** Werkzeugleiste und Ebenenpanel waren fast weiß mit heller Schrift und kaum lesbar.
+- **Gelöschte Wand nimmt ihre Türen und Fenster mit;** Wandende ziehen und Länge tippen halten Öffnungen im Raum.
+- **Kontextmenü** schloss sich in manchen Fällen sofort wieder; **Duplizieren** im Gebäudemodell griff auf eine veraltete Auswahl zu; im PDF-Studio ging ein gewählter Upload beim Neuzeichnen des Dialogs verloren.
+- **Schmale Fenster:** Kopfzeilen und die 3D-Leiste bleiben stabil.
+
 ## [1.14.0] - 2026-11-08
 
 ### Neu

@@ -26,13 +26,13 @@ export default function KatalogeBereich() {
     <section aria-labelledby="bereich-kataloge" data-testid="bereich-catalogs"
       className="rounded-xl border border-slate-200 bg-white p-6 space-y-3 dark:border-slate-700 dark:bg-slate-900">
       <h2 id="bereich-kataloge" className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
-        <Library className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("Kataloge & Bürostandards")}
+        <Library className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> {t("Kataloge & Bürostandards")}
       </h2>
       <p className="text-sm text-slate-600 dark:text-slate-300">
         {t("Mengenregeln und Kataloge pflegen Sie an einer Stelle: in der Ausschreibung (AVA) im Reiter Mengenregeln. Sie gelten dort für alle Leistungsverzeichnisse des Büros.")}
       </p>
       <Link to={KATALOG_ZIEL} data-testid="kataloge-link"
-        className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-500 dark:text-emerald-200 dark:hover:bg-emerald-950">
+        className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         {t("Zu den Mengenregeln der AVA")} <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </Link>
     </section>

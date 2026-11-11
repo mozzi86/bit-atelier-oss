@@ -32,7 +32,7 @@ import KostenDriftHinweis from "./KostenDriftHinweis.jsx";
 import LphTabelle from "./LphTabelle.jsx";
 import MvbAusBestand from "./MvbAusBestand.jsx";
 
-const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900";
+const FELD = "h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900";
 const LABEL = "text-sm font-medium text-slate-700 dark:text-slate-200";
 
 /** @param {number|null|undefined} euro @returns {number|null} cents */
@@ -130,7 +130,7 @@ export default function LeistungsbildFelder({ wert, onChange, idPraefix, projekt
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
                 <span>{t("Anrechenbare Kosten nach § 33 HOAI: KG 400 voll bis 25 % der übrigen, darüber zur Hälfte.")}</span>
-                {wert.anrechenbare_quelle === "lv" && <span className="rounded bg-emerald-100 px-1.5 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100">{t("aus dem LV")}</span>}
+                {wert.anrechenbare_quelle === "lv" && <span className="rounded bg-muted px-1.5 text-foreground">{t("aus dem LV")}</span>}
                 {wert.kosten_eingefroren_am && <span data-testid="kosten-eingefroren-am">{t("eingefroren am {datum}").replace("{datum}", datumText(wert.kosten_eingefroren_am, lang === "en" ? "en" : "de"))}</span>}
                 {projekt && <button type="button" className={buttonVariants({ variant: "outline", size: "sm" })} onClick={ausLv}>{t("aus LV übernehmen")}</button>}
               </div>

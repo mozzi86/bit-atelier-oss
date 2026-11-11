@@ -53,8 +53,44 @@ export async function harnessFetch(path, opt = {}) {
   }
 }
 
-/** @returns {Promise<any>} status object (mode, display_name, model, projekt, tokens, kosten_eur, …) */
-export const status = () => harnessFetch('/status');
+/**
+ * What a same-origin probe of the optional harness (`GET /api/ki/harness/dienst`) means.
+ * `aus` = the service is down (the browser must not call :8765 itself — that logs
+ * ERR_CONNECTION_REFUSED). `status` = the body already is the harness status.
+ * `direkt` = ask :8765 (node tests, or a probe that did not decide).
+ * @param {any} body
+ * @returns {{ art: "aus" } | { art: "status", status: any } | { art: "direkt" }}
+ */
+export function statusAusDienst(body) {
+  if (body && body.erreichbar === false) return { art: "aus" };
+  if (body && typeof body === "object" && ("stt" in body || "provider" in body)) return { art: "status", status: body };
+  return { art: "direkt" };
+}
+
+/**
+ * Harness status. In the browser the app server probes 127.0.0.1:8765 and answers
+ * `{erreichbar:false}` or the status JSON, so a missing optional service does not
+ * show up as a failed request in the console. Node (unit tests) still calls :8765.
+ * @returns {Promise<any>} status object (mode, display_name, model, projekt, tokens, kosten_eur, …)
+ */
+export async function status() {
+  if (typeof window !== "undefined") {
+    try {
+      const res = await fetch("/api/ki/harness/dienst", { cache: "no-store" });
+      if (res.ok) {
+        const g = statusAusDienst(await res.json());
+        if (g.art === "aus") throw new Error(`Kein Dienst unter ${HARNESS_URL} erreichbar`);
+        if (g.art === "status") return g.status;
+      } else if (res.status === 403) {
+        throw new Error(`Kein Dienst unter ${HARNESS_URL} erreichbar`);
+      }
+    } catch (err) {
+      if (String(/** @type {any} */ (err)?.message || "").includes("Kein Dienst")) throw err;
+      if (err instanceof TypeError) throw new Error(`Kein Dienst unter ${HARNESS_URL} erreichbar`);
+    }
+  }
+  return harnessFetch("/status");
+}
 /** @returns {Promise<{aktiv: string|null, projekte: string[]}>} */
 export const projects = () => harnessFetch('/projects');
 /** @param {string} slug */

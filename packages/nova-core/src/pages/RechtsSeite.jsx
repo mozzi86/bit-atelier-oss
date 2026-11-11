@@ -27,14 +27,14 @@ export default function RechtsSeite({ titel, children }) {
   const { t } = useI18n();
   const rueckweg = rechtsRueckweg(DATENQUELLE);
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-slate-50 via-green-50/30 to-blue-50/20 p-4">
+    <div className="min-h-dvh bg-background p-4">
       <main
         className="mx-auto w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-xl sm:p-8"
         aria-labelledby="rechts-titel"
       >
         <div className="mb-6 flex items-center gap-3 border-b border-slate-100 pb-4">
           <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 text-lg font-bold text-white shadow"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-lg font-bold text-primary-foreground shadow"
             aria-hidden="true"
           >
             BA
@@ -65,7 +65,7 @@ export default function RechtsSeite({ titel, children }) {
         <p className="mt-3 text-center text-xs">
           <Link
             to={rueckweg.ziel}
-            className="font-medium text-emerald-700 underline hover:text-emerald-900"
+            className="font-medium text-link underline"
           >
             {t(rueckweg.text)}
           </Link>

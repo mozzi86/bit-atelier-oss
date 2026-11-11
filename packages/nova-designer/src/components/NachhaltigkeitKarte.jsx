@@ -18,7 +18,7 @@ import { flaechenSummen, LAGEPLAN_DEFAULT } from "@designer/lib/lageplan";
 import { nachhaltigkeitsModell, wertText, STATUS_TEXT } from "@designer/lib/nachhaltigkeitskonzept";
 
 const STATUS_KLASSE = {
-  umgesetzt: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  umgesetzt: "bg-erfolg-flaeche text-erfolg border-erfolg-rand",
   teilweise: "bg-amber-50 text-amber-800 border-amber-200",
   offen: "bg-slate-50 text-slate-500 border-slate-200",
 };
@@ -63,7 +63,7 @@ export default function NachhaltigkeitKarte({ complexData }) {
     <Card data-testid="nk-karte">
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="flex items-center gap-2 text-base"><Leaf className="h-4 w-4 text-emerald-600" /> {t("Nachhaltigkeitskonzept")}</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base"><Leaf className="h-4 w-4 text-muted-foreground" /> {t("Nachhaltigkeitskonzept")}</CardTitle>
           <Button size="sm" variant="outline" onClick={pdfErzeugen} data-testid="nk-pdf"><FileDown className="mr-1 h-4 w-4" />{t("Konzeptblatt als PDF")}</Button>
         </div>
         <p className="text-xs text-slate-500">{t("Kennzahlen aus Entwässerungs-, Außenanlagen- und Energieplanung — Entwurf, keine Zertifizierung.")}</p>

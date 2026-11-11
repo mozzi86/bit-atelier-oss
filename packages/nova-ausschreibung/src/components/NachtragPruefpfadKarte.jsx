@@ -37,13 +37,13 @@ export default function NachtragPruefpfadKarte({ changeOrders }) {
       <CardContent className="space-y-3">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div data-testid="cc-np-gefordert"><Stat label={t("Gefordert")} value={eur0(s.gefordert)} accent="text-slate-700" /></div>
-          <div data-testid="cc-np-geprueft"><Stat label={t("Geprüft")} value={eur0(s.geprueft)} accent="text-blue-600" /></div>
-          <div data-testid="cc-np-freigegeben"><Stat label={t("Freigegeben")} value={eur0(s.freigegeben)} accent="text-emerald-600" /></div>
+          <div data-testid="cc-np-geprueft"><Stat label={t("Geprüft")} value={eur0(s.geprueft)} accent="text-foreground" /></div>
+          <div data-testid="cc-np-freigegeben"><Stat label={t("Freigegeben")} value={eur0(s.freigegeben)} accent="text-erfolg" /></div>
           <div data-testid="cc-np-kuerzung">
             <Stat
               label={t("Kürzung durch Prüfung")}
               value={`${eur0(s.kuerzung)}${s.quote == null ? "" : ` (${((1 - s.quote) * 100).toFixed(1).replace(".", ",")} %)`}`}
-              accent="text-amber-600"
+              accent="text-foreground"
             />
           </div>
         </div>
@@ -77,7 +77,7 @@ export default function NachtragPruefpfadKarte({ changeOrders }) {
                     <td className="py-1.5 px-2 text-right tabular-nums">{eur0(betragOderNull(o.betrag_freigegeben))}</td>
                     <td className="py-1.5 px-2">{t(nachtragStatusLabel(o.status))}</td>
                     <td className="py-1.5 px-2 text-xs">
-                      {hw.length === 0 ? <span className="text-emerald-700">{t("keine")}</span> : (
+                      {hw.length === 0 ? <span className="text-erfolg">{t("keine")}</span> : (
                         <ul className="space-y-0.5">
                           {hw.map((h) => (
                             <li key={h.code} data-code={h.code} className={h.stufe === "warn" ? "text-amber-700" : "text-slate-600"}>

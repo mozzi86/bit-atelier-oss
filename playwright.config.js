@@ -15,7 +15,7 @@ const NODE_OPTIONS = process.env.NODE_OPTIONS?.includes("max-old-space-size")
   : `${process.env.NODE_OPTIONS || ""} --max-old-space-size=4096`.trim();
 
 /**
- * Playwright-Konfiguration für NovaConstruct.
+ * Playwright-Konfiguration für BIT-Atelier.
  * Startet automatisch den Dev-Stack (Express :3001 + Vite :5173) über `npm run dev`
  * und testet gegen die laufende App. Wenn bereits ein Server läuft, wird er wiederverwendet.
  */

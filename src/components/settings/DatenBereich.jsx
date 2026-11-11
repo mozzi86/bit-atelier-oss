@@ -193,7 +193,7 @@ export default function DatenBereich({ kontext }) {
   return (
     <section aria-labelledby="bereich-daten" data-testid="bereich-data" className="space-y-5">
       <h2 id="bereich-daten" className="flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
-        <Database className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t("Daten & Sicherung")}
+        <Database className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> {t("Daten & Sicherung")}
       </h2>
 
       {/* 89-07 (D-BW-05): which store holds the truth in this edition — said once, plainly. */}
@@ -257,7 +257,7 @@ export default function DatenBereich({ kontext }) {
           {/* D-P80-20: what the .bitproj carries — and what it never does. */}
           <p className="text-xs text-slate-500 dark:text-slate-400" data-testid="daten-bitproj-hinweis">
             {t("Übergabedatei an Fachplaner und Bauherr — enthält Projektdaten und Büro-Einstellungen wie den Briefkopf, Büro-Bereiche nur per Häkchen, keine Personaldaten.")}{" "}
-            <Link to="/People" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">{t("Personaldaten sichern")}</Link>
+            <Link to="/People" className="font-medium text-link hover:underline">{t("Personaldaten sichern")}</Link>
           </p>
 
           <ImportVorschauDialog vorschau={aktionen.importVorschau} onAbbrechen={aktionen.importAbbrechen} onUebernehmen={importBestaetigen} rueckfokus={fokusZurueck(ladenKnopfRef)} />
@@ -315,7 +315,7 @@ export default function DatenBereich({ kontext }) {
           className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
           <Eraser className="h-4 w-4" aria-hidden="true" /> {t("Gerätespeicher leeren")}
         </button>
-        <p role="status" data-testid="geraetespeicher-status" className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">
+        <p role="status" data-testid="geraetespeicher-status" className="mt-2 text-xs text-erfolg">
           {geraetespeicherGeleert ? t("Gerätespeicher geleert.") : ""}
         </p>
       </div>

@@ -110,10 +110,10 @@ const AlertDialogDescription = React.forwardRef(
 AlertDialogDescription.displayName = AlertDialogPrimitive.Description.displayName;
 
 /** Class string shared by both buttons: size, focus ring, disabled state. */
-const KNOPF = "inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 disabled:pointer-events-none disabled:opacity-50";
+const KNOPF = "inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 disabled:pointer-events-none disabled:opacity-50";
 
 /**
- * Confirming button; closes the dialog after its onClick. Default look: emerald;
+ * Confirming button; closes the dialog after its onClick. Default look: primary;
  * pass a className (e.g. red for a dangerous action) to override.
  * @type {React.ForwardRefExoticComponent<React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action> & React.RefAttributes<HTMLButtonElement>>}
  */
@@ -125,7 +125,7 @@ const AlertDialogAction = React.forwardRef(
   ({ className, ...props }, ref) => (
     <AlertDialogPrimitive.Action
       ref={ref}
-      className={cn(KNOPF, "bg-emerald-700 text-white hover:bg-emerald-800", className)}
+      className={cn(KNOPF, "bg-primary text-primary-foreground hover:bg-primary/90", className)}
       {...props}
     />
   )

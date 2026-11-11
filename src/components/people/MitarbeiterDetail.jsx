@@ -153,7 +153,7 @@ function VorgangSlot({ mitarbeiter }) {
         <ul className="mb-2 space-y-1 text-sm">
           {eigeneVorgaenge.map((v) => (
             <li key={v.id}>
-              <Link to={`/People${bauePersonalLink({ tab: "onboarding", vorgang: v.id })}`} className="text-emerald-700 underline-offset-4 hover:underline dark:text-emerald-400">
+              <Link to={`/People${bauePersonalLink({ tab: "onboarding", vorgang: v.id })}`} className="text-link underline-offset-4 hover:underline">
                 {t(v.art === "eintritt" ? "Eintritt" : "Austritt")} — {t(v.status === "abgeschlossen" ? "Abgeschlossen" : "Offen")}
               </Link>
             </li>
@@ -199,7 +199,7 @@ export default function MitarbeiterDetail({ mitarbeiter, projekte, onSchliessen,
   if (!mitarbeiter) {
     return (
       <div data-testid="mitarbeiter-detail-fehlt">
-        <button type="button" onClick={onSchliessen} className="mb-3 inline-flex items-center gap-1 text-sm text-emerald-700 hover:underline dark:text-emerald-400">
+        <button type="button" onClick={onSchliessen} className="mb-3 inline-flex items-center gap-1 text-sm text-link hover:underline">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {t("Zurück zur Liste")}
         </button>
         <EmptyState title={t("Person nicht gefunden")} description={t("Der Eintrag wurde vielleicht entfernt oder gehört zu einem anderen Datenstand.")} action={null} />
@@ -215,7 +215,7 @@ export default function MitarbeiterDetail({ mitarbeiter, projekte, onSchliessen,
   return (
     <div data-testid="mitarbeiter-detail" className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button type="button" onClick={onSchliessen} className="inline-flex items-center gap-1 text-sm text-emerald-700 hover:underline dark:text-emerald-400">
+        <button type="button" onClick={onSchliessen} className="inline-flex items-center gap-1 text-sm text-link hover:underline">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {t("Zurück zur Liste")}
         </button>
         <button type="button" onClick={() => onBearbeiten(mitarbeiter)}

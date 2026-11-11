@@ -66,7 +66,7 @@ export default function AenderungsVorschau({ vorschlag, onUebernehmen, onVerwerf
   return (
     <div data-testid="aenderung-vorschau" data-vorschlag-id={vorschlag.id} data-stufe={stufe}
       className="rounded border border-border bg-card p-2 text-xs text-foreground shadow">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("Änderung vorgeschlagen")}</div>
+      <div className="text-[10px] font-semibold text-muted-foreground">{t("Änderung vorgeschlagen")}</div>
       <div data-testid="aenderung-satz" className="mt-0.5 font-medium">{satzVon(vorschlag, t)}</div>
       <ul className="mt-1 space-y-1">
         {zeilen.map((z, i) => {
@@ -115,7 +115,7 @@ export function AenderungsVerlauf({ schritte, onZuruecknehmen, t = (s) => s, dar
   const zeilen = [...schritte].reverse().slice(0, VERLAUF_ZEILEN);
   return (
     <div data-testid="aenderung-verlauf" className="rounded border border-border bg-card p-2 text-xs text-foreground shadow">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("Änderungsverlauf")}</div>
+      <div className="text-[10px] font-semibold text-muted-foreground">{t("Änderungsverlauf")}</div>
       <ul className="mt-0.5 space-y-1">
         {zeilen.map((s) => (
           <li key={s.vorschlag_id} data-testid="aenderung-schritt" data-vorschlag-id={s.vorschlag_id}

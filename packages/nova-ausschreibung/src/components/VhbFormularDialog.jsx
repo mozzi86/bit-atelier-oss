@@ -141,7 +141,7 @@ export default function VhbFormularDialog({ tender, bids, contacts, projekt, onU
           </>
         )}
 
-        {info && <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800" role="status">{info}</div>}
+        {info && <div className="rounded border border-erfolg-rand bg-erfolg-flaeche px-3 py-2 text-xs text-erfolg" role="status">{info}</div>}
 
         {protokoll.length > 0 && (
           <div className="text-[11px] text-slate-500" data-testid="vf-protokoll" data-anzahl={protokoll.length}>
@@ -154,7 +154,7 @@ export default function VhbFormularDialog({ tender, bids, contacts, projekt, onU
 
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="outline" onClick={onClose}>{t("Schließen")}</Button>
-          <Button type="button" onClick={herunterladen} disabled={!bereit || busy} data-testid="vf-herunterladen" className="bg-gradient-to-r from-emerald-600 to-teal-600">
+          <Button type="button" onClick={herunterladen} disabled={!bereit || busy} data-testid="vf-herunterladen" className="bg-primary hover:bg-primary/90">
             {t("Entwurf herunterladen")}
           </Button>
         </div>

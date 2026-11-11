@@ -170,6 +170,8 @@ test("107-07 Modellierer: Linie, Achsfarbe, Umschalt-Sperre, Hilfslinie einraste
 
     // (5) rotate the block about a clicked centre: Ctrl+Enter = rotated copy, then "*4" — the row is previewed before Enter
     expect(await befehl("drehen")).toMatchObject({ ok: true });
+    // the command returns before React has rendered the new tool: a click in that gap still belongs to the previous one (line)
+    await expect(page.getByTestId("mm-leiste")).toHaveAttribute("data-werkzeug", "drehen");
     await klick(13, 12); // select the block
     await expect(page.getByTestId("mm-dreh-zeile")).toBeVisible();
     await klick(30, 12); // beside the bodies = centre
@@ -230,12 +232,13 @@ test("107-07 Lageplan (SVG): Strg-Kopie, getipptes *3 und /2 über dieselbe Eing
     const pt = (/** @type {number} */ x, /** @type {number} */ y) => ({ x: m.e + x * m.a, y: m.f + y * m.d });
     const bloecke = () => plan.getByTestId("sd-block").evaluateAll((els) => els.map((e) => Number(String(e.getAttribute("data-mitte")).split(",")[0])).sort((a, b) => a - b));
 
-    // Ctrl + Alt (no snapping) drag 20 px = 25 m to the right → one copy
-    await page.keyboard.down("Control"); await page.keyboard.down("Alt");
+    // Ctrl + Alt (no snapping) drag 20 px = 25 m to the right → one copy (Cmd on macOS: there Ctrl + mouse button is the
+    // secondary click and opens the context menu instead)
+    await page.keyboard.down("ControlOrMeta"); await page.keyboard.down("Alt");
     const p = pt(408, 304), q = pt(428, 304);
     await page.mouse.move(p.x, p.y); await page.mouse.down();
     await page.mouse.move(q.x, q.y, { steps: 8 }); await page.mouse.up();
-    await page.keyboard.up("Alt"); await page.keyboard.up("Control");
+    await page.keyboard.up("Alt"); await page.keyboard.up("ControlOrMeta");
     await expect.poll(bloecke).toEqual([510, 535]);
     await expect(page.getByTestId("sd-fang")).toContainText("Kopie gesetzt");
     await expect(page.getByTestId("sd-eingabe")).toBeEnabled();

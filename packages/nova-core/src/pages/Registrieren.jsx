@@ -27,10 +27,10 @@ import { REGISTRIERUNG_ROLLEN, pruefeRegistrierung, registrierungMailto, registr
 import { AngebotsUmfang } from '@core/lib/rechtstexte';
 
 const feldKlasse =
-  'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500';
+  'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring';
 const labelKlasse = 'mb-1 block text-xs font-medium text-slate-600';
 const knopfKlasse =
-  'w-full rounded-md bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-sm font-medium text-white shadow hover:opacity-90';
+  'w-full rounded-md bg-primary hover:bg-primary/90 px-4 py-2 text-sm font-medium text-primary-foreground shadow';
 
 /** @type {import('@core/lib/registrierung').RegistrierungsAngaben} */
 const LEER = { name: '', buero: '', email: '', telefon: '', rolle: '', nachricht: '' };
@@ -43,10 +43,10 @@ const LEER = { name: '', buero: '', email: '', telefon: '', rolle: '', nachricht
 function Rahmen({ untertitel, children }) {
   const { t } = useI18n();
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-slate-50 via-green-50/30 to-blue-50/20 p-4">
+    <div className="min-h-dvh flex items-center justify-center bg-background p-4">
       <main className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl" aria-labelledby="registrieren-titel">
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 text-lg font-bold text-white shadow" aria-hidden="true">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-lg font-bold text-primary-foreground shadow" aria-hidden="true">
             BA
           </div>
           <div>
@@ -83,10 +83,10 @@ export function Registrieren() {
   if (DATENQUELLE !== 'supabase') {
     return (
       <Rahmen untertitel={t('Registrieren')}>
-        <div role="status" data-testid="registrieren-lokal" className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
+        <div role="status" data-testid="registrieren-lokal" className="rounded-md border border-erfolg-rand bg-erfolg-flaeche px-3 py-3 text-sm text-erfolg">
           <p>{t('Die lokale Fassung braucht kein Konto — einfach loslegen.')}</p>
           <p className="mt-2">
-            <Link to="/" className="font-medium underline hover:text-emerald-950">{t('Zur Startseite')}</Link>
+            <Link to="/" className="font-medium underline">{t('Zur Startseite')}</Link>
           </p>
         </div>
       </Rahmen>
@@ -117,7 +117,7 @@ ${text}`);
           </p>
           <p className="text-xs text-slate-500">
             {t('Ihr E-Mail-Programm hat sich nicht geöffnet?')}{' '}
-            <a href={mailHref} className="font-medium text-emerald-700 underline hover:text-emerald-900">{t('E-Mail erneut öffnen')}</a>
+            <a href={mailHref} className="font-medium text-link underline">{t('E-Mail erneut öffnen')}</a>
             {' · '}
             {t('oder den Text unten kopieren und selbst senden an')}{' '}
             <span className="select-all font-mono" data-testid="registrieren-empfaenger">{ANBIETER.anfrageEmail}</span>
@@ -139,14 +139,14 @@ ${text}`}
             <button type="button" onClick={kopieren} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
               {t('Text kopieren')}
             </button>
-            <button type="button" onClick={() => { setMailHref(''); setKopiert(''); }} className="text-xs font-medium text-emerald-700 underline hover:text-emerald-900">
+            <button type="button" onClick={() => { setMailHref(''); setKopiert(''); }} className="text-xs font-medium text-link underline">
               {t('Angaben ändern')}
             </button>
-            {kopiert === 'ok' && <span className="text-xs text-emerald-700">{t('Kopiert.')}</span>}
+            {kopiert === 'ok' && <span className="text-xs text-erfolg">{t('Kopiert.')}</span>}
             {kopiert === 'fehler' && <span className="text-xs text-rose-700">{t('Kopieren nicht möglich — bitte den Text markieren und kopieren.')}</span>}
           </div>
           <p>
-            <Link to="/anmeldung" className="font-medium text-emerald-700 underline hover:text-emerald-900">{t('Zur Anmeldung')}</Link>
+            <Link to="/anmeldung" className="font-medium text-link underline">{t('Zur Anmeldung')}</Link>
           </p>
         </div>
       </Rahmen>
@@ -221,7 +221,7 @@ ${text}`}
 
         <p className="text-center text-xs text-slate-500">
           {t('Schon ein Konto?')}{' '}
-          <Link to="/anmeldung" className="font-medium text-emerald-700 underline hover:text-emerald-900">{t('Anmelden')}</Link>
+          <Link to="/anmeldung" className="font-medium text-link underline">{t('Anmelden')}</Link>
         </p>
       </form>
     </Rahmen>

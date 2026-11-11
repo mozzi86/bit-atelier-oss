@@ -82,7 +82,7 @@ export default function InvestmentPlatform() {
 
   const getListingStatusColor = (status) => {
     const colors = {
-      active: "bg-green-100 text-green-800",
+      active: "bg-erfolg-flaeche text-erfolg",
       in_negotiation: "bg-blue-100 text-blue-800",
       under_contract: "bg-orange-100 text-orange-800",
       completed: "bg-gray-100 text-gray-800",
@@ -117,17 +117,14 @@ export default function InvestmentPlatform() {
     <div className={seitenWurzel}>
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center space-y-4"
-        >
+        {/* Header. No opacity entrance: framer-motion writes opacity 0 before the first frame, and a preview
+            that never runs the animation left the title invisible. */}
+        <div className="text-center space-y-4">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="p-4 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-xl">
-              <Building2 className="w-8 h-8 text-white" />
+            <div className="p-4 bg-primary rounded-2xl shadow-sm">
+              <Building2 className="w-8 h-8 text-primary-foreground" />
             </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 via-emerald-700 to-teal-600 bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold text-foreground">
               {t("Investment")}
             </h1>
           </div>
@@ -135,13 +132,13 @@ export default function InvestmentPlatform() {
             Grundstückseigentümer, Investoren und Architekten zusammenbringen — mit
             integrierten HOAI-Honorarstrukturen und Gewinnbeteiligung.
           </p>
-        </motion.div>
+        </div>
 
         {/* Platform Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <Card className="border-0 shadow-sm bg-white rounded-xl hover:shadow-md transition-shadow">
             <CardContent className="p-6 text-center">
-              <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 w-fit mx-auto mb-3">
+              <div className="p-2.5 rounded-xl bg-muted text-muted-foreground w-fit mx-auto mb-3">
                 <MapPin className="w-6 h-6" />
               </div>
               <h3 className="text-2xl font-bold text-slate-800 mb-1">{listings.length}</h3>
@@ -161,7 +158,7 @@ export default function InvestmentPlatform() {
 
           <Card className="border-0 shadow-sm bg-white rounded-xl hover:shadow-md transition-shadow">
             <CardContent className="p-6 text-center">
-              <div className="p-2.5 rounded-xl bg-violet-50 text-violet-600 w-fit mx-auto mb-3">
+              <div className="p-2.5 rounded-xl bg-muted text-muted-foreground w-fit mx-auto mb-3">
                 <Gavel className="w-6 h-6" />
               </div>
               <h3 className="text-2xl font-bold text-slate-800 mb-1">{myBids.length}</h3>
@@ -185,24 +182,26 @@ export default function InvestmentPlatform() {
           <CardContent className="p-0">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <div className="border-b border-slate-200 p-4">
-                <TabsList className="grid w-full grid-cols-5 bg-slate-100">
-                  <TabsTrigger value="marketplace" className="flex items-center gap-2">
+                {/* Five labels do not fit in one row at ~556 px; a 5-column grid let them overlap.
+                    Wrap, each trigger stays on one line. */}
+                <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-slate-100">
+                  <TabsTrigger value="marketplace" className="flex h-auto shrink-0 items-center gap-2">
                     <MapPin className="w-4 h-4" />
                     Marktplatz
                   </TabsTrigger>
-                  <TabsTrigger value="my_listings" className="flex items-center gap-2">
+                  <TabsTrigger value="my_listings" className="flex h-auto shrink-0 items-center gap-2">
                     <Building2 className="w-4 h-4" />
                     Meine Inserate
                   </TabsTrigger>
-                  <TabsTrigger value="my_bids" className="flex items-center gap-2">
+                  <TabsTrigger value="my_bids" className="flex h-auto shrink-0 items-center gap-2">
                     <Gavel className="w-4 h-4" />
                     Meine Gebote
                   </TabsTrigger>
-                  <TabsTrigger value="contracts" className="flex items-center gap-2">
+                  <TabsTrigger value="contracts" className="flex h-auto shrink-0 items-center gap-2">
                     <FileSignature className="w-4 h-4" /> {/* Changed icon */}
                     Aktive Projekte
                   </TabsTrigger>
-                  <TabsTrigger value="hoai_calculator" className="flex items-center gap-2">
+                  <TabsTrigger value="hoai_calculator" className="flex h-auto shrink-0 items-center gap-2">
                     <Calculator className="w-4 h-4" />
                     HOAI-Rechner
                   </TabsTrigger>
@@ -215,7 +214,7 @@ export default function InvestmentPlatform() {
                     <h2 className="text-2xl font-bold text-slate-800">Investitionsangebote</h2>
                     <Button
                       onClick={() => { setBearbeitung(null); setShowListingForm(true); }}
-                      className="bg-gradient-to-r from-emerald-600 to-teal-600"
+                      className="bg-primary hover:bg-primary/90"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       {t("Grundstück inserieren")}
@@ -279,7 +278,7 @@ export default function InvestmentPlatform() {
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
-                                className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600"
+                                className="flex-1 bg-primary hover:bg-primary/90"
                                 onClick={() => {
                                   setSelectedListing(listing);
                                   setShowBidForm(true);
@@ -307,7 +306,7 @@ export default function InvestmentPlatform() {
                     <h2 className="text-2xl font-bold text-slate-800">Meine Grundstücksinserate</h2>
                     <Button
                       onClick={() => { setBearbeitung(null); setShowListingForm(true); }}
-                      className="bg-gradient-to-r from-emerald-600 to-teal-600"
+                      className="bg-primary hover:bg-primary/90"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Neues Inserat erstellen

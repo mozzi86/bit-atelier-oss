@@ -25,7 +25,7 @@ export default function MonatsAnsicht({ reihe, projektName, hatVerlauf }) {
       {!hatVerlauf && (
         <p className="text-sm text-slate-600 dark:text-slate-300" data-testid="monat-ohne-verlauf">
           {t("Noch kein Leistungsstand-Verlauf: Er entsteht einmal je Monat beim Speichern des Leistungsstands im Designer-Reiter „Planer“. Bis dahin fehlt die erarbeitete Leistung je Monat.")}{" "}
-          <Link to="/ComplexDesigner?tab=planner" className="text-emerald-700 underline dark:text-emerald-300">{t("Leistungsstand pflegen")}</Link>
+          <Link to="/ComplexDesigner?tab=planner" className="text-link underline">{t("Leistungsstand pflegen")}</Link>
         </p>
       )}
       {reihe.length === 0 ? <p className="text-sm text-slate-600 dark:text-slate-300">{t("Noch keine Monatswerte für dieses Projekt.")}</p> : (

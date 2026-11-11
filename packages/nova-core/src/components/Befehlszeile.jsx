@@ -51,7 +51,7 @@ export default function Befehlszeile({ befehl, aufforderung, meldung = "", meldu
         <span className="ml-auto flex items-center gap-1">
           {schalter.map((s) => (
             <button key={s.id} type="button" aria-pressed={s.an} title={s.titel} onClick={s.onClick} data-testid={`${schalterTestid}-${s.id}`}
-              className={`rounded border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${s.an ? "border-background bg-background text-foreground" : "border-background/40 text-background/70 hover:text-background"}`}>
+              className={`rounded border px-1.5 py-px text-[10px] font-semibold ${s.an ? "border-background bg-background text-foreground" : "border-background/40 text-background/70 hover:text-background"}`}>
               {s.label}
             </button>
           ))}

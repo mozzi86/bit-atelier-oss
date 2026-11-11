@@ -30,7 +30,7 @@ import { eur, num, dinLabel } from "./avaUtils";
 // die Behauptung einer Prüfung, die nicht stattgefunden hat (Pitfall 8).
 
 const AMPEL_KLASSE = {
-  gruen: "bg-emerald-100 text-emerald-800",
+  gruen: "bg-erfolg-flaeche text-erfolg",
   gelb: "bg-amber-100 text-amber-800",
   rot: "bg-red-100 text-red-800",
 };
@@ -130,7 +130,7 @@ export default function KostenberechnungTabelle({
   };
 
   const CHIP_KLASSE = {
-    hoch: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    hoch: "bg-erfolg-flaeche text-erfolg border-erfolg-rand",
     mittel: "bg-amber-100 text-amber-800 border-amber-200",
     niedrig: "bg-slate-100 text-slate-600 border-slate-200",
   };
@@ -303,7 +303,7 @@ export default function KostenberechnungTabelle({
                 <th colSpan={3} className="px-2 py-1 bg-slate-200 text-slate-700">
                   <span className="inline-flex items-center gap-1"><Lock className="w-3 h-3" /> Kostenanschlag 17.12.2020 (fix)</span>
                 </th>
-                <th colSpan={3} className="px-2 py-1 bg-emerald-50 text-emerald-800">Kostenstand heute</th>
+                <th colSpan={3} className="px-2 py-1 bg-muted text-foreground">Kostenstand heute</th>
                 <th colSpan={3} className="px-2 py-1">Analyse</th>
               </tr>
               <tr className="text-left border-b border-slate-300">
@@ -337,7 +337,7 @@ export default function KostenberechnungTabelle({
                       key={z.p.id ?? `${key}-${i}`}
                       onClick={onSelect ? () => onSelect(z.p.id ?? null) : undefined}
                       className={`border-b border-slate-100 ${onSelect ? "cursor-pointer hover:bg-slate-50" : ""} ${
-                        selectedId && z.p.id === selectedId ? "bg-emerald-50" : ""
+                        selectedId && z.p.id === selectedId ? "bg-muted" : ""
                       }`}
                     >
                         <td className="px-2 py-1 font-mono">{z.p.oz}</td>

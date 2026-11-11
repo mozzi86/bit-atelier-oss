@@ -31,7 +31,7 @@ import { personenPruefen, rechtsformWirkung } from "@/lib/accounting/rechtsform.
 import { useBriefkopf } from "@core/lib/useBriefkopf.js";
 import { bueroNameAus, nurAlterBueroName } from "@/lib/accounting/bueroName.js";
 
-const FELD = "h-9 w-full rounded-md border border-border bg-card px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900";
+const FELD = "h-9 w-full rounded-md border border-border bg-card px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900";
 const LABEL = "text-sm font-medium text-foreground dark:text-slate-200";
 
 /**
@@ -126,7 +126,7 @@ export default function EinstellungenDialog({ bh, onClose }) {
   return (
     <FormModal title={t("Einstellungen der Buchhaltung")} onClose={onClose}>
       <form onSubmit={speichern} className="space-y-6" data-testid="buchhaltung-einstellungen">
-        <section className="space-y-2 rounded-lg border border-erfolg-rand bg-erfolg-flaeche p-3 dark:border-emerald-800 dark:bg-emerald-950/40" aria-labelledby="bh-regeln-titel">
+        <section className="space-y-2 rounded-lg border border-erfolg-rand bg-erfolg-flaeche p-3" aria-labelledby="bh-regeln-titel">
           <h3 id="bh-regeln-titel" className="font-semibold text-foreground dark:text-slate-100">{t("Sätze und Bürowerte der Buchhaltung pflegen Sie in Einstellungen › Regelwerke")}</h3>
           <Link to="/Settings?tab=rules" className={buttonVariants({ variant: "outline" })}>{t("Zu den Regelwerken")}</Link>
         </section>

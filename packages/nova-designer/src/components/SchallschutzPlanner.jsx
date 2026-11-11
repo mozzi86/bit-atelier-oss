@@ -405,7 +405,7 @@ export default function SchallschutzPlanner() {
       </div>
 
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: {pm.storeys} Geschosse · Grundfläche {de(pm.footArea)} m² · BGF {de(pm.bgf)} m² · NGF {de(pm.ngf)} m²
         </div>
       )}
@@ -485,7 +485,7 @@ export default function SchallschutzPlanner() {
                   </SelectContent>
                 </Select>
               </div>
-              <Stat label="L'n,w erwartet (Richtwert)" value={`${de(kpi.lnwErwartet)} dB`} accent={kpi.lnwErwartet <= TRITTSCHALL_GRENZE ? "text-emerald-600" : "text-amber-600"} />
+              <Stat label="L'n,w erwartet (Richtwert)" value={`${de(kpi.lnwErwartet)} dB`} accent={kpi.lnwErwartet <= TRITTSCHALL_GRENZE ? "text-erfolg" : "text-amber-600"} />
               <Stat label="Grenze L'n,w (Richtwert)" value={`≤ ${de(TRITTSCHALL_GRENZE)} dB`} accent="text-slate-700" />
             </CardContent>
           </Card>
@@ -494,7 +494,7 @@ export default function SchallschutzPlanner() {
             <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Fan className="w-4 h-4" /> Anlagengeräusche (TGA)</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-2 gap-3">
               <NumberField label="Anlagen-Schalldruckpegel im schutzbedürftigen Raum" value={tgaPegel} step={1} suffix="dB(A)" min={0} onChange={setTgaPegel} />
-              <Stat label="Grenze Anlagenpegel (Richtwert)" value={`≤ ${de(TGA_GRENZE)} dB(A)`} accent={tgaPegel <= TGA_GRENZE ? "text-emerald-600" : "text-amber-600"} />
+              <Stat label="Grenze Anlagenpegel (Richtwert)" value={`≤ ${de(TGA_GRENZE)} dB(A)`} accent={tgaPegel <= TGA_GRENZE ? "text-erfolg" : "text-amber-600"} />
               <div className="col-span-2 text-xs text-slate-500">
                 Geräusche gebäudetechnischer Anlagen (Heizung, Lüftung, Aufzug) in fremden
                 schutzbedürftigen Räumen — Anlagen-Auslegung im Reiter „Haustechnik (TGA)“.
@@ -507,10 +507,10 @@ export default function SchallschutzPlanner() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <Stat label="Lärmpegelbereich (Richtwert)" value={`Bereich ${bereich}`} accent={BEREICH_ACCENT[bereich] || "text-slate-700"} />
-            <Stat label="Erf. R'w,ges Außenbauteile (Richtwert)" value={`${de(erfAussen)} dB`} accent="text-sky-600" />
-            <Stat label="Wohnungstrennwand (Richtwert)" value={`R'w ≥ ${de(TRENN_RICHTWERTE.wand_wohnungstrennend)} dB`} accent="text-violet-600" />
-            <Stat label="Wohnungstrenndecke (Richtwert)" value={`R'w ≥ ${de(TRENN_RICHTWERTE.decke_wohnungstrennend)} dB`} accent="text-violet-700" />
-            <Stat label="Trittschall (Richtwert)" value={`L'n,w ≈ ${de(kpi.lnwErwartet)} dB`} accent={kpi.lnwErwartet <= TRITTSCHALL_GRENZE ? "text-emerald-600" : "text-amber-600"} />
+            <Stat label="Erf. R'w,ges Außenbauteile (Richtwert)" value={`${de(erfAussen)} dB`} accent="text-foreground" />
+            <Stat label="Wohnungstrennwand (Richtwert)" value={`R'w ≥ ${de(TRENN_RICHTWERTE.wand_wohnungstrennend)} dB`} accent="text-foreground" />
+            <Stat label="Wohnungstrenndecke (Richtwert)" value={`R'w ≥ ${de(TRENN_RICHTWERTE.decke_wohnungstrennend)} dB`} accent="text-foreground" />
+            <Stat label="Trittschall (Richtwert)" value={`L'n,w ≈ ${de(kpi.lnwErwartet)} dB`} accent={kpi.lnwErwartet <= TRITTSCHALL_GRENZE ? "text-erfolg" : "text-amber-600"} />
             <Stat label="Anlagenpegel (Richtwert)" value={`${de(tgaPegel)} dB(A)`} accent={tgaPegel <= TGA_GRENZE ? "text-cyan-700" : "text-amber-600"} />
           </div>
 

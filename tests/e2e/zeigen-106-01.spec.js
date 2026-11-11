@@ -221,11 +221,6 @@ test.describe("106-01 Zeigen: Strahl-Pick, Hover und Hervorheben", () => {
       const hilfe = await zeigen(page, "bim", "hilfsobjekte");
       expect(hilfe.some((h) => h.zustand === "fokus" && h.material === "LineDashedMaterial")).toBe(true);
 
-      // --- A generated hull wall is addressable too: it has the GUID the export gives it, not null ---
-      const huelle = await hoverSuchen(page, canvas, "bim", (h) => h.kind === "wallShell");
-      expect(huelle.hover.guid).toMatch(/^[0-9A-Za-z_$]{22}$/);
-      expect(huelle.hover.guid).not.toBe(hover.guid);
-
       // --- Click selects as before; the selection is drawn blue with a solid aura (not teal like fokus) ---
       await page.mouse.move(x, y);
       await page.waitForTimeout(120);
@@ -236,6 +231,13 @@ test.describe("106-01 Zeigen: Strahl-Pick, Hover und Hervorheben", () => {
       expect(auswahl.aura.every((a) => a.material === "LineBasicMaterial" && a.farbe === 0x3b82f5)).toBe(true);
       expect(auswahl.emissiv).toContain("wall");
       expect((await zeigen(page, "bim", "hilfsobjekte")).filter((h) => h.zustand === "auswahl").length).toBeGreaterThan(0);
+
+      // --- A generated hull wall is addressable too: it has the GUID the export gives it, not null. Looked for only now, after the
+      //     click on the drawn wall: a point found before that click did not reliably select the same hull wall afterwards (with the
+      //     head row laid out differently the first click there selected the storey below while the hover named the upper one) ---
+      const huelle = await hoverSuchen(page, canvas, "bim", (h) => h.kind === "wallShell");
+      expect(huelle.hover.guid).toMatch(/^[0-9A-Za-z_$]{22}$/);
+      expect(huelle.hover.guid).not.toBe(hover.guid);
 
       // --- Select a hull wall too (the attribute panel floats over the right of the canvas and covers the
       //     drawn wall; the hull wall lies in the middle of the picture). Hover over the SELECTED element:

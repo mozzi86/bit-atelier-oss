@@ -153,8 +153,8 @@ export default function HaustechnikPlanner({ complexData = null } = {}) {
   return (
     <div className="space-y-4">
       {/* Persistenter Haftungs-Disclaimer — NICHT konditional ausblenden. */}
-      <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+      <div className="flex items-start gap-2 rounded-lg border border-warnung-rand bg-warnung-flaeche px-3 py-2 text-sm text-warnung">
+        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-warnung" />
         <span>
           <strong>Konzept-Richtwerte (TGA) — keine Anlagenplanung, kein GEG-/DIN-Nachweis.</strong>{" "}
           Heizlast, Energiebedarf, Volumenströme, Wasser- und Anschlusswerte sind Überschläge
@@ -164,7 +164,7 @@ export default function HaustechnikPlanner({ complexData = null } = {}) {
       </div>
 
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: {pm.storeys} Geschosse · BGF {de(pm.bgf)} m² · NGF {de(pm.ngf)} m² ≈ {Math.max(1, Math.round(pm.ngf / 75))} WE à 75 m²
         </div>
       )}
@@ -322,19 +322,19 @@ export default function HaustechnikPlanner({ complexData = null } = {}) {
         {/* Richtwert-KPIs + Zusammenfassung */}
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Stat label="Heizlast (Richtwert)" value={`${de(kpi.heizlast)} kW`} accent="text-rose-600" />
-            <Stat label="Heizwärmebedarf (Richtwert)" value={`${de(kpi.bedarf)} kWh/a`} accent="text-orange-600" />
-            <Stat label="WP-Strombedarf (Richtwert)" value={istWP ? `${de(kpi.wpStrom)} kWh/a` : "—"} accent="text-violet-600" />
-            <Stat label="Lüftungs-Volumenstrom (Richtwert)" value={`${de(kpi.volumenstrom)} m³/h`} accent="text-sky-600" />
-            <Stat label="Trinkwasser (Richtwert)" value={`${de(kpi.tw)} l/d`} accent="text-cyan-600" />
-            <Stat label="Trinkwasser p. a. (Richtwert)" value={`${de(kpi.twJahr)} m³/a`} accent="text-cyan-700" />
-            <Stat label="Warmwasser (Richtwert)" value={`${de(kpi.ww)} l/d`} accent="text-blue-600" />
-            <Stat label="Elektro-Anschlusswert (Richtwert)" value={`${de1(kpi.anschluss)} kW`} accent="text-amber-600" />
+            <Stat label="Heizlast (Richtwert)" value={`${de(kpi.heizlast)} kW`} accent="text-foreground" />
+            <Stat label="Heizwärmebedarf (Richtwert)" value={`${de(kpi.bedarf)} kWh/a`} accent="text-foreground" />
+            <Stat label="WP-Strombedarf (Richtwert)" value={istWP ? `${de(kpi.wpStrom)} kWh/a` : "—"} accent="text-foreground" />
+            <Stat label="Lüftungs-Volumenstrom (Richtwert)" value={`${de(kpi.volumenstrom)} m³/h`} accent="text-foreground" />
+            <Stat label="Trinkwasser (Richtwert)" value={`${de(kpi.tw)} l/d`} accent="text-foreground" />
+            <Stat label="Trinkwasser p. a. (Richtwert)" value={`${de(kpi.twJahr)} m³/a`} accent="text-foreground" />
+            <Stat label="Warmwasser (Richtwert)" value={`${de(kpi.ww)} l/d`} accent="text-foreground" />
+            <Stat label="Elektro-Anschlusswert (Richtwert)" value={`${de1(kpi.anschluss)} kW`} accent="text-foreground" />
             {kpi.pv && (
-              <Stat label="PV-Leistung (Richtwert)" value={`${de(kpi.pv.kwp)} kWp`} accent="text-emerald-600" />
+              <Stat label="PV-Leistung (Richtwert)" value={`${de(kpi.pv.kwp)} kWp`} accent="text-foreground" />
             )}
             {kpi.pv && (
-              <Stat label="PV-Ertrag (Richtwert)" value={`${de(kpi.pv.kwhA)} kWh/a`} accent="text-emerald-700" />
+              <Stat label="PV-Ertrag (Richtwert)" value={`${de(kpi.pv.kwhA)} kWh/a`} accent="text-foreground" />
             )}
           </div>
 

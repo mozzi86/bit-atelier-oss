@@ -9,7 +9,7 @@
 // dark-theme tokens (--warnung 46 97% 55%, --fehler 0 94% 70%) are deliberately NOT followed).
 // tests/unit/zeigen-farben-10601.test.js parses index.css and compares, so a token change that is
 // not copied here turns the unit run red:
-//   fokus    #0d968b  --ring (index.css:37, 175 84% 32%). There is no "akzent" token in this app — the
+//   fokus    #0d968b  --zeige-fokus (index.css, 175 84% 32%; until 09.11.2026 this was --ring, which is navy now). There is no "akzent" token in this app — the
 //                     focus ring colour is the closest thing [ASSUMED]. (Earlier teal-600 #0d9488 was a
 //                     near-copy that did not equal the token; BIM aura no longer uses it.)
 //   auswahl  #3b82f5  SELECT_COLOR [0.23, 0.51, 0.96] of ifcGeometry.js:38 (stays the selection blue;

@@ -287,7 +287,7 @@ export function ImportVorschauDialog({ vorschau, onAbbrechen, onUebernehmen, rue
               onClick={() => onUebernehmen(true)}
               disabled={importGesperrt || beschaeftigt}
               data-testid="import-vorher-sichern"
-              className="px-3 py-2 rounded-lg border border-emerald-600 text-emerald-700 dark:text-emerald-300 text-sm font-medium hover:bg-emerald-50 dark:hover:bg-emerald-950 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              className="px-3 py-2 rounded-lg border border-border text-foreground text-sm font-medium hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             >
               {t('Vorher sichern (.bitproj)')}
             </button>
@@ -297,7 +297,7 @@ export function ImportVorschauDialog({ vorschau, onAbbrechen, onUebernehmen, rue
             onClick={() => onUebernehmen(false)}
             disabled={importGesperrt || beschaeftigt}
             data-testid={wieder.length > 0 ? 'import-aktualisieren' : 'import-ersetzen'}
-            className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
+            className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary"
           >
             {wieder.length > 0 ? t('Aktualisieren') : t('Laden und ersetzen')}
           </button>
@@ -343,7 +343,7 @@ export function ZuruecksetzenDialog({ offen, onOpenChange, titel, text, knopf, o
             type="button"
             onClick={() => onZuruecksetzen(true)}
             data-testid="reset-vorher-sichern"
-            className="px-3 py-2 rounded-lg border border-emerald-600 text-emerald-700 dark:text-emerald-300 text-sm font-medium hover:bg-emerald-50 dark:hover:bg-emerald-950"
+            className="px-3 py-2 rounded-lg border border-border text-foreground text-sm font-medium hover:bg-muted"
           >
             {t('Vorher sichern (.bitproj)')}
           </button>
@@ -413,7 +413,7 @@ export function SchnappschussDialog({ liste, fehler = '', onSchliessen, onWieder
                     type="button"
                     onClick={() => onWiederherstellen(s.id)}
                     data-testid={`snapshot-ja-${s.id}`}
-                    className="px-2 py-1 rounded-md bg-emerald-600 text-white text-xs hover:bg-emerald-700"
+                    className="px-2 py-1 rounded-md bg-primary text-primary-foreground text-xs hover:bg-primary/90"
                   >
                     {t('Wiederherstellen?')}
                   </button>
@@ -454,7 +454,7 @@ export function SchnappschussDialog({ liste, fehler = '', onSchliessen, onWieder
 }
 
 /** Shared input look — same class as PersonalSicherung.jsx's own passphrase fields. */
-const PASSPHRASE_EINGABE = 'flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100';
+const PASSPHRASE_EINGABE = 'flex h-9 w-full rounded-md border border-slate-300 bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100';
 
 /**
  * Export dialog (79-12, E-07, extended 80-05/80-10/B-2): one checkbox per
@@ -661,7 +661,7 @@ export function ExportDialog({ registry = EXPORT_BEREICHE, anzahlen, onAbbrechen
             type="button"
             onClick={bestaetigen}
             data-testid="export-bestaetigen"
-            className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700"
+            className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"
           >
             {optionenAktuell.art === 'sicherung' ? t('Sicherung speichern (alles)') : t('Projektdatei speichern')}
           </button>

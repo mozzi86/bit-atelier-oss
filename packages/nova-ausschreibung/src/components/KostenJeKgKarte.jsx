@@ -68,7 +68,7 @@ export default function KostenJeKgKarte({ positions, tenders, bids, measurements
                 <td className="px-2 py-1 text-right tabular-nums">{eur(z.budget)}</td>
                 <td className="px-2 py-1 text-right tabular-nums">{eur(z.vergabe)}</td>
                 <td className="px-2 py-1 text-right tabular-nums">{eur(z.prognose)}</td>
-                <td className={`px-2 py-1 text-right tabular-nums ${z.abweichung > 0.005 ? "text-rose-600 font-medium" : z.abweichung < -0.005 ? "text-emerald-600" : ""}`}>{z.abweichung > 0 ? "+" : ""}{eur(z.abweichung)}</td>
+                <td className={`px-2 py-1 text-right tabular-nums ${z.abweichung > 0.005 ? "text-rose-600 font-medium" : z.abweichung < -0.005 ? "text-erfolg" : ""}`}>{z.abweichung > 0 ? "+" : ""}{eur(z.abweichung)}</td>
                 <td className="px-2 py-1 text-right tabular-nums">{eur(z.abgerechnet)}</td>
                 <td className="px-2 py-1 text-right">
                   <button type="button" className={`inline-flex items-center gap-1 text-[11px] hover:underline ${z.abweichung > 0.005 ? "text-rose-700" : "text-slate-400"}`} onClick={() => antragOeffnen(z)} data-testid="kk-antrag">
@@ -98,7 +98,7 @@ export default function KostenJeKgKarte({ positions, tenders, bids, measurements
               <textarea className="mt-0.5 w-full rounded border border-slate-300 p-1.5" rows={2} value={antrag.deckung} onChange={(e) => setAntrag({ ...antrag, deckung: e.target.value })} placeholder={t("z. B. Einsparung in KG …, Reserve")} data-testid="ka-deckung" /></label>
             <div className="flex justify-end gap-2 pt-1">
               <Button type="button" variant="outline" onClick={() => setAntrag(null)}>{t("Schließen")}</Button>
-              <Button type="button" onClick={antragPdf} disabled={!Number.isFinite(Number(antrag.budget)) || antrag.budget.trim() === ""} data-testid="ka-pdf" className="bg-gradient-to-r from-emerald-600 to-teal-600">{t("Antrag als PDF (Entwurf)")}</Button>
+              <Button type="button" onClick={antragPdf} disabled={!Number.isFinite(Number(antrag.budget)) || antrag.budget.trim() === ""} data-testid="ka-pdf" className="bg-primary hover:bg-primary/90">{t("Antrag als PDF (Entwurf)")}</Button>
             </div>
           </div>
         </FormModal>

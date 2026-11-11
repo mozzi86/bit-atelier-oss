@@ -55,18 +55,18 @@ export default function EnergyPlanner({ complexData, onEnergySystemsChange }) {
   return (
     <div className="space-y-6">
       {pm.footArea > 0 && (
-        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-flex">
+        <div className="text-xs text-muted-foreground bg-muted border border-border rounded px-2 py-1 inline-flex">
           Aus Gebäudemodell: BGF {Math.round(pm.bgf).toLocaleString("de-DE")} m² · {pm.storeys} Geschosse · Höhe {Math.round(pm.height).toLocaleString("de-DE")} m
         </div>
       )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Installierte Leistung" value={`${totalKw.toLocaleString("de-DE")} kW`} accent="text-amber-600" />
-        <Stat label="Bedarfsdeckung" value={`${totalCoverage} %`} accent="text-emerald-600" />
+        <Stat label="Installierte Leistung" value={`${totalKw.toLocaleString("de-DE")} kW`} accent="text-foreground" />
+        <Stat label="Bedarfsdeckung" value={`${totalCoverage} %`} accent="text-foreground" />
         <Stat label="Erneuerbare Systeme" value={`${renewable}/${systems.length || 0}`} />
         <Stat
           label="Spez. Leistung"
           value={heatedArea > 0 ? `${Math.round((totalKw * 1000) / heatedArea).toLocaleString("de-DE")} W/m²` : "—"}
-          accent="text-sky-600"
+          accent="text-foreground"
         />
       </div>
 
@@ -79,7 +79,7 @@ export default function EnergyPlanner({ complexData, onEnergySystemsChange }) {
           onChange={(e) => { setAreaTouched(true); setHeatedArea(Number(e.target.value)); }}
         />
         {pm.footArea > 0 && !areaTouched && (
-          <span className="text-[11px] text-emerald-600">aus dem Gebäudemodell vorbelegt</span>
+          <span className="text-[11px] text-muted-foreground">aus dem Gebäudemodell vorbelegt</span>
         )}
       </div>
 

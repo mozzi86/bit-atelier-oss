@@ -135,7 +135,7 @@ export default function RegelwerkBereich({ kontext, fokusId }) {
         return (
           <section key={gruppe.gruppe} aria-labelledby={`regelwerk-titel-${gruppe.gruppe}`} data-testid={`regelwerk-gruppe-${gruppe.gruppe}`} className="space-y-3">
             <h2 id={`regelwerk-titel-${gruppe.gruppe}`} className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-100">
-              <Scale className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> {t(gruppe.titel)}
+              <Scale className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> {t(gruppe.titel)}
             </h2>
             {gruppe.gruppe === BUCHHALTUNG_GRUPPE && veralteteBuchhaltung.map((v) => {
               const regel = regelNachId(v.regel);

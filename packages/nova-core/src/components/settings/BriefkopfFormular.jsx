@@ -20,7 +20,7 @@ import { useBriefkopf } from "@core/lib/useBriefkopf";
 import { useBestaetigung } from "@core/lib/useBestaetigung";
 
 /** Shared input look — visible focus ring, dark mode (task 2 acceptance). */
-const EINGABE = "mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100";
+const EINGABE = "mt-1 w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100";
 
 /** Fields in display order; `label`/`platzhalter` are German i18n keys. */
 const FELDER = [
@@ -97,11 +97,11 @@ export default function BriefkopfFormular() {
         <p className="text-xs text-slate-500 dark:text-slate-400">{t("Gilt für Berichte und Prüfberichte dieses Büros.")}</p>
         <div className="flex flex-wrap justify-end gap-2 pt-1">
           <button type="button" onClick={onVerwerfen} disabled={speichert || !geaendert}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
             {t("Änderungen verwerfen")}
           </button>
           <button type="submit" disabled={speichert}
-            className="rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60">
+            className="rounded-lg bg-primary hover:bg-primary/90 px-3 py-1.5 text-sm font-medium text-primary-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60">
             {t("Speichern")}
           </button>
         </div>
@@ -109,10 +109,10 @@ export default function BriefkopfFormular() {
 
       {/* Live preview — same order/look as ReportDocument.jsx's header. */}
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">{t("Vorschau")}</p>
+        <p className="mb-2 text-xs font-medium text-slate-400">{t("Vorschau")}</p>
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
-            <Building2 className="h-5 w-5 text-white" aria-hidden="true" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary">
+            <Building2 className="h-5 w-5 text-primary-foreground" aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <div className="max-w-[360px] truncate font-bold leading-tight text-slate-800 dark:text-slate-100">{form.office || t("Architekturbüro")}</div>

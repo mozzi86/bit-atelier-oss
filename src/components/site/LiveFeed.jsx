@@ -4,7 +4,7 @@ import { Radio } from "lucide-react";
 
 const levelColor = {
   info: "text-slate-600",
-  success: "text-emerald-600",
+  success: "text-erfolg",
   warning: "text-amber-600",
   danger: "text-red-600 font-semibold",
 };

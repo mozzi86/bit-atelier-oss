@@ -139,7 +139,7 @@ export default function ErdbebenSimulation({ open, onClose, zone = "0", storeys 
         className="w-full max-w-3xl rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b px-4 py-3">
           <h3 className="flex items-center gap-2 text-base font-semibold text-slate-800">
-            <Activity className="w-4 h-4 text-rose-600" /> Erdbeben-Simulation — {k.zoneLabel}
+            <Activity className="w-4 h-4 text-fehler" /> Erdbeben-Simulation — {k.zoneLabel}
           </h3>
           <div className="flex items-center gap-2">
             <button
@@ -160,8 +160,8 @@ export default function ErdbebenSimulation({ open, onClose, zone = "0", storeys 
             role="img" aria-label="Animierte Darstellung der Gebäudeschwingung unter Erdbebenlast; die Kennwerte stehen rechts als Text" />
 
           <div className="space-y-3">
-            <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+            <div className="flex items-start gap-2 rounded-lg border border-warnung-rand bg-warnung-flaeche px-3 py-2 text-xs text-warnung">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-warnung" />
               <span><strong>Vereinfachte Modellvorstellung (Richtwerte) — kein Erdbebennachweis nach EC8.</strong> Antwortspektrum, Baugrund- und Verhaltensbeiwert sind grob angenommen.</span>
             </div>
 
@@ -170,8 +170,8 @@ export default function ErdbebenSimulation({ open, onClose, zone = "0", storeys 
               <Kpi label="Eigenperiode T₁ (Richtwert)" value={`${de(k.T1, 2)} s`} />
               <Kpi label="Spektralbeschl. Sd (Richtwert)" value={`${de(k.Sd, 2)} m/s²`} />
               <Kpi label="Erdbebenbeiwert (Richtwert)" value={de(k.seismicCoeff, 3)} />
-              <Kpi label="Basisschub Fb (Richtwert)" value={`${de(k.Fb)} kN`} accent="text-rose-600" />
-              <Kpi label="Kopfauslenkung (Richtwert)" value={`${de(k.topDisp, 1)} cm`} accent="text-violet-600" />
+              <Kpi label="Basisschub Fb (Richtwert)" value={`${de(k.Fb)} kN`} accent="text-foreground" />
+              <Kpi label="Kopfauslenkung (Richtwert)" value={`${de(k.topDisp, 1)} cm`} accent="text-foreground" />
             </div>
 
             <p className="text-[11px] leading-relaxed text-slate-500">

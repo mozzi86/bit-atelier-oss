@@ -1,4 +1,4 @@
-// NovaConstruct-Backend — Kompositionswurzel der Gesamt-App (Phase 31).
+// BIT-Atelier-Backend — Kompositionswurzel der Gesamt-App (Phase 31).
 // Mountet die Router-Factories aus den Paketen: core (auth/entities/llm),
 // @ava (ted-search) und @designer (geo). Inline-Routen: telemetry/config, status.
 //

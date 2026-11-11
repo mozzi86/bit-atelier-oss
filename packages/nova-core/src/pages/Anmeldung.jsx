@@ -21,10 +21,10 @@ import { useI18n } from '@core/lib/i18n';
  * @returns {string} class list
  */
 const feldKlasse = (extra = '') =>
-  `w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60 ${extra}`;
+  `w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 ${extra}`;
 
 const knopfKlasse =
-  'w-full rounded-md bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-sm font-medium text-white shadow hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60';
+  'w-full rounded-md bg-primary hover:bg-primary/90 px-4 py-2 text-sm font-medium text-primary-foreground shadow disabled:cursor-not-allowed disabled:opacity-60';
 
 /**
  * Returns the Supabase client — ONLY behind a DATENQUELLE === 'supabase'
@@ -128,10 +128,10 @@ export function Anmeldung() {
   };
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-gradient-to-br from-slate-50 via-green-50/30 to-blue-50/20 p-4">
+    <div className="min-h-dvh flex items-center justify-center bg-background p-4">
       <main className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-xl" aria-labelledby="anmeldung-titel">
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 text-lg font-bold text-white shadow" aria-hidden="true">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-lg font-bold text-primary-foreground shadow" aria-hidden="true">
             BA
           </div>
           <div>
@@ -212,7 +212,7 @@ export function Anmeldung() {
           <p className="text-center text-xs text-slate-500">
             <a
               href="/passwort-zuruecksetzen"
-              className="font-medium text-emerald-700 underline hover:text-emerald-900"
+              className="font-medium text-link underline"
             >
               Passwort vergessen?
             </a>
@@ -222,7 +222,7 @@ export function Anmeldung() {
               (scripts/zugang-freischalten.mjs). <Link>, see the footer note. */}
           <p className="text-center text-xs text-slate-500" data-testid="anmeldung-registrieren">
             {t('Noch kein Konto?')}{' '}
-            <Link to="/registrieren" className="font-medium text-emerald-700 underline hover:text-emerald-900">
+            <Link to="/registrieren" className="font-medium text-link underline">
               {t('Registrieren')}
             </Link>
           </p>
