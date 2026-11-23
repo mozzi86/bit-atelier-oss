@@ -40,7 +40,7 @@ jobs:
         run: npm ci
 
       # 105-24: Python for the harness pytest step (harness/pyproject.toml: requires-python >=3.11,<3.14).
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
