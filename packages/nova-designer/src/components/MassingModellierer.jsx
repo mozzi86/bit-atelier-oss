@@ -32,6 +32,7 @@
 //
 // In:  projectId, plan transforms of the studio (mx, my, px, offX, offY, scale, svgRef, clampPt),
 //      storey height, t. Out: hook state + <ModellWerkzeugleiste/> (HTML) + <ModellEbene/> (SVG).
+import { naechsteNr } from "@core/lib/komplexHistorie.js";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   leererLayer, geometrie, koerperAnlegen, pushPull, verschieben, kopieren, gruppeBilden, eindeutigMachen,
@@ -49,9 +50,10 @@ import { leererStack, merke, zurueck, vor } from "@core/lib/undoStack";
 import { punktInnen } from "@core/lib/polygonInnen";
 import { auswerten, beispielGraph } from "@core/lib/massing/knoten.js";
 import { leeresGelaende, formen, glaetten, stempeln } from "@core/lib/massing/gelaende.js";
+import { erdmassenZwischen } from "@core/lib/massing/gelaendeEbenen.js"; // 108-10: cut and fill between existing and new ground
 import { riegelLayout, WOHNUNGSTYPEN, MIX_VORLAGEN, RIEGEL_STANDARD } from "@core/lib/massing/riegel.js";
 import { koordinateLesen, zielPunkt } from "@core/lib/massing/koordinaten.js";
-import { befehlsRegister } from "@core/lib/befehlsregister.js";
+import { befehlsRegister, registerAnmelden } from "@core/lib/befehlsregister.js";
 import { editorKuerzel } from "@designer/lib/zeichnenModell.js";
 import { starteSteuerungsBruecke } from "@core/lib/steuerungsBruecke.js";
 import Befehlszeile from "@core/components/Befehlszeile";
@@ -62,6 +64,7 @@ import { befehlsAufforderung } from "@core/lib/befehlszeile";
 import { fangIndex, fangPunkt, orthoPunkt, segmenteAusRingen, segmenteNahe, naechsterAufSegment, QUELLE_URSPRUNG, HILFSGERADE_HALB_M } from "@core/lib/objektfang.js";
 import { useFangEinstellungen, useFangTasten, fangBefehleRegistrieren, fangBefehlLesen, fangEinstellungen, fangKontextEintraege, fangSchalter, FANG_LABEL } from "@core/lib/fangEinstellungen.js";
 import { loadBimModel, saveBimModel } from "@core/lib/useBimModelSync";
+import { naechsteFreieIdx } from "@core/lib/abgleich/idxListen.js";
 
 /** Tools with their SketchUp shortcut. */
 export const WERKZEUGE = Object.freeze([
@@ -138,7 +141,15 @@ export function reiheBilden(lk, n, modus) {
   return kopieren(lk.vorher, lk.ids, lk.delta || { x: 0, y: 0 }, { anzahl: n, modus });
 }
 
-export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug = null }) {
+/**
+ * 115-05d (C-4): page-wide step numbers of a body stack, kept beside the stack object (the stack itself holds plain layers). With
+ * them the bodies, the body outline and the site data of the massing page are undone in ONE order (komplexHistorie.neuesterVerlauf).
+ * @type {WeakMap<object, {past: number[], future: number[]}>}
+ */
+const stapelNummern = new WeakMap();
+const nummernVon = (/** @type {object} */ stack) => stapelNummern.get(stack) || { past: [], future: [] };
+
+export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug = null, bestandVorschlag = null, tasten = true }) {
   // 107-05: refusals carry a reason from the core (German i18n key); the line shows "<what>: <why>" already translated
   const { t: tz } = useI18n();
   const [layer, setLayerRoh] = useState(/** @type {import("@core/lib/massing/massingModell.js").MassingLayer} */ (leererLayer()));
@@ -191,6 +202,9 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   const leerZug = useRef(false);
   // 98-06: sandbox settings (UI state) — mode, radius (m), step (m per click).
   const [gModus, setGModus] = useState("anheben");
+  // 108-10: which of the two terrain layers the sandbox shows and edits — "neu" (planned ground, layer.gelaende) or "bestand" (existing
+  // ground, layer.gelaendeBestand)
+  const [gZiel, setGZiel] = useState(/** @type {"neu"|"bestand"} */ ("neu"));
   const [gRadius, setGRadius] = useState(6);
   const [gSchritt, setGSchritt] = useState(0.5);
   // 98-09: parameters of the residential bar tool (new bars and the active one).
@@ -263,14 +277,34 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
     const vorherTyp = new Map(neu.koerper.map((/** @type {any} */ k) => [k.id, k.bauteil_typ]));
     const gesetzt = auto.koerper.filter((/** @type {any} */ k) => k.bauteil_typ_quelle === "automatisch" && vorherTyp.get(k.id) !== k.bauteil_typ).map((/** @type {any} */ k) => k.id);
     // review 107-08: the intermediate step is built from `auto` (not `neu`): a type the same edit removed on another body stays removed
-    setStack((s) => (gesetzt.length ? merke(merke(s, layer), typZuruecknehmen(auto, gesetzt)) : merke(s, layer)));
+    setStack((s) => {
+      const r = gesetzt.length ? merke(merke(s, layer), typZuruecknehmen(auto, gesetzt)) : merke(s, layer);
+      // 115-05d: a number for every entry this edit added (the updater may run twice: the numbers hang on the result object)
+      if (!stapelNummern.has(r)) {
+        const neu = r.past.filter((x) => !s.past.includes(x)).length;
+        stapelNummern.set(r, { past: [...nummernVon(s).past, ...Array.from({ length: neu }, () => naechsteNr())].slice(-r.past.length), future: [] });
+      }
+      return r;
+    });
     setLayerRoh(auto);
     return auto;
   }, [layer]);
   // Review 107-07: the last copy counts only while the layer is the one it produced (see letzteKopie.nach)
   const kopieAktiv = letzteKopie && letzteKopie.nach === layer ? letzteKopie : null;
-  const undo = () => { const r = zurueck(stack, layer); if (r) { setStack(r.stack); setLayerRoh(r.snapshot); } };
-  const redo = () => { const r = vor(stack, layer); if (r) { setStack(r.stack); setLayerRoh(r.snapshot); } };
+  const undo = () => {
+    const r = zurueck(stack, layer); if (!r) return;
+    const n = nummernVon(stack);
+    stapelNummern.set(r.stack, { past: n.past.slice(0, -1), future: [...n.future, n.past[n.past.length - 1]] });
+    setStack(r.stack); setLayerRoh(r.snapshot);
+  };
+  const redo = () => {
+    const r = vor(stack, layer); if (!r) return;
+    const n = nummernVon(stack);
+    stapelNummern.set(r.stack, { past: [...n.past, n.future[n.future.length - 1]], future: n.future.slice(0, -1) });
+    setStack(r.stack); setLayerRoh(r.snapshot);
+  };
+  /** 115-05d: numbers of the newest undo step and the next redo step (null = none), for one order with the page's other histories. */
+  const verlaufNummern = () => { const n = nummernVon(stack); return { zurueckNr: stack.past.length ? n.past[n.past.length - 1] ?? null : null, vorNr: stack.future.length ? n.future[n.future.length - 1] ?? null : null }; };
 
   // 107-05: with the derived validity (never stored) — the plan, 3D and the toolbar mark invalid bodies from it.
   const aufgeloest = useMemo(() => layer.koerper.map((k) => {
@@ -474,7 +508,9 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   const gelaendeKlick = (p) => {
     const w = flaeche?.w || 60, d = flaeche?.d || 40;
     // Cell 1 m, coarser for large sites so the node limit holds [ASSUMED].
-    const g0 = layer.gelaende || leeresGelaende(w, d, { zelle: w * d > 15000 ? 2 : 1 });
+    // 108-10: the tool works on the chosen layer; a new ground starts from the kept existing one (planning starts from what is there)
+    const feld = gZiel === "bestand" ? "gelaendeBestand" : "gelaende";
+    const g0 = layer[feld] || (gZiel === "neu" && layer.gelaendeBestand) || leeresGelaende(w, d, { zelle: w * d > 15000 ? 2 : 1 });
     let g = g0, text = "";
     if (gModus === "anheben" || gModus === "absenken") g = formen(g0, p, gRadius, gModus === "anheben" ? gSchritt : -gSchritt);
     else if (gModus === "glaetten") g = glaetten(g0, p, gRadius, 0.6);
@@ -486,7 +522,7 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
       g = res.gelaende;
       text = `Gestempelt: Abtrag ${res.abtrag.toLocaleString("de-DE")} m³, Auftrag ${res.auftrag.toLocaleString("de-DE")} m³`;
     }
-    setLayer({ ...layer, gelaende: g });
+    setLayer({ ...layer, [feld]: g });
     if (text) setMeldung(text);
   };
 
@@ -882,7 +918,8 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   useEffect(() => {
     const onKey = (e) => {
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName || "") || e.altKey) return;
-      if (!e.defaultPrevented) {
+      // 115-05d: with `tasten: false` the host (MassingStudio) handles Strg+Z / Strg+Y for all histories of the page in one order
+      if (tasten && !e.defaultPrevented) {
         const kuerzel = editorKuerzel(e);
         if (kuerzel === "undo") { e.preventDefault(); undo(); return; }
         if (kuerzel === "redo") { e.preventDefault(); redo(); return; }
@@ -929,8 +966,12 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   useEffect(() => {
     if (!projectId) { setUebernommen(new Set()); return undefined; }
     let aktiv = true;
-    loadBimModel(projectId)
-      .then((m) => { if (aktiv) setUebernommen(new Set([...(m?.customWalls || []), ...(m?.customSlabs || []), ...(m?.customColumns || [])].map((e) => e?.quelle_koerper).filter(Boolean))); })
+    // 115-05c: the stored record with the draft's lists on top (a takeover that only waits in the draft counts)
+    Promise.all([loadBimModel(projectId), import("@core/lib/entwurf/entwurfStand.js").then((E) => E.starten(projectId))])
+      .then(([gesp, st]) => {
+        const m = { ...(gesp || {}), ...(st.entwurf?.aenderungen.bim || {}) };
+        if (aktiv) setUebernommen(new Set([...(m?.customWalls || []), ...(m?.customSlabs || []), ...(m?.customColumns || [])].map((e) => e?.quelle_koerper).filter(Boolean)));
+      })
       .catch(() => { /* the takeover button reads the record itself again */ });
     return () => { aktiv = false; };
   }, [projectId]);
@@ -973,55 +1014,66 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
   const koerperSteckbrief = (/** @type {any} */ k) => (k?.bauteil_typ && BAUTEIL_TYPEN[k.bauteil_typ]
     ? steckbrief(koerperElement(layer, k, bezug), k.bauteil_typ, { projektId: projectId ?? null, quelle: "massing", storeyHeight: geschossHoehe }) : null);
   /**
-   * "Als Bauteil übernehmen" (D-BK-10): walls / slabs / columns of the body into the BIM record (one write path saveBimModel, strict:
-   * nothing is written over a change of another device), each with quelle_koerper. A second takeover of the same body is refused.
+   * "Als Bauteil übernehmen" (D-BK-10): walls / slabs / columns of the body into the building model, each with quelle_koerper. A
+   * second takeover of the same body is refused. 115-05c: a draft change (entwurfStand.bimListenAendern), "Speichern" writes it with
+   * the stand protection of the studio's save (before: a strict direct write).
    * @param {string} id body
    */
   const alsBauteil = async (id) => {
     const k = layer.koerper.find((x) => x.id === id);
     if (!k || !projectId) return;
     try {
-      const m = (await loadBimModel(projectId)) || {};
-      if (istUebernommen(m, id)) { setUebernommen((u) => new Set([...u, id])); setMeldung(tz("Schon übernommen — erst „Übernahme zurücknehmen“")); return; }
-      const alle = ["customWalls", "customColumns", "customWindows", "envOpenings", "customZones", "customSlabs", "customRoofs"].flatMap((f) => (Array.isArray(m[f]) ? m[f] : []));
-      const startIdx = Math.max(0, ...alle.map((e) => Number(e?._idx) || 0)) + 1;
-      const ue = bauteileAusKoerper(layer, k, { geschossHoehe_m: geschossHoehe, startIdx, composite: m.envComposite || null, bezug });
-      // review 107-08: a type without a BIM element of its own, a wall/column without a rectangle, a slab off the storey ceilings —
-      // refused with the reason, nothing is written
-      if (ue.art === "abgelehnt" && ue.abgelehnt) {
-        const a = ue.abgelehnt;
-        const label = a.typ && BAUTEIL_TYPEN[a.typ] ? tz(BAUTEIL_TYPEN[a.typ].label) : "";
-        const m2 = (/** @type {number|undefined} */ v) => (v ?? 0).toFixed(2).replace(".", ",");
-        setMeldung(a.grund === "lage"
-          ? tz("Übernahme nicht verfügbar: Decke liegt auf keiner Geschossdecke (Unterkante {{u}} m, Oberkante {{o}} m)").replace("{{u}}", m2(a.unterkante_m)).replace("{{o}}", m2(a.oberkante_m))
-          : a.grund === "profil"
-            ? tz("Übernahme nicht verfügbar: Bauteiltyp „{{typ}}“ braucht ein Rechteckprofil").replace("{{typ}}", label)
-            : tz("Übernahme für Bauteiltyp „{{typ}}“ nicht verfügbar — nur Wand, Stütze, Decke oder ohne Typ").replace("{{typ}}", label));
-        return;
-      }
-      /** @type {Record<string, any[]>} */
-      const patch = {};
-      if (ue.customWalls.length) patch.customWalls = [...(m.customWalls || []), ...ue.customWalls];
-      if (ue.customSlabs.length) patch.customSlabs = [...(m.customSlabs || []), ...ue.customSlabs];
-      if (ue.customColumns.length) patch.customColumns = [...(m.customColumns || []), ...ue.customColumns];
-      await saveBimModel(projectId, patch, { streng: true });
-      setUebernommen((u) => new Set([...u, id]));
-      setMeldung(`${tz("Als Bauteil übernommen")}: ${ue.customWalls.length} ${tz("Wände")}, ${ue.customSlabs.length} ${tz("Decken")}, ${ue.customColumns.length} ${tz("Stützen")}`);
+      // 115-05c (D-115-12): a DRAFT change of the building model ("Speichern" writes it; before: a strict direct write). The lists are
+      // the stored record with the draft's lists on top, so the next free number holds for both (K11).
+      const E = await import("@core/lib/entwurf/entwurfStand.js");
+      /** @type {string|null} */ let meldung = null;
+      const neu = await E.bimListenAendern(projectId, (m) => {
+        if (istUebernommen(m, id)) { meldung = tz("Schon übernommen — erst „Übernahme zurücknehmen“"); return null; }
+        // 115-05a: the first free number over all ten lists of the studio's counter
+        const startIdx = naechsteFreieIdx(m);
+        const ue = bauteileAusKoerper(layer, k, { geschossHoehe_m: geschossHoehe, startIdx, composite: m.envComposite || null, bezug });
+        // review 107-08: a type without a BIM element of its own, a wall/column without a rectangle, a slab off the storey ceilings —
+        // refused with the reason, nothing is written
+        if (ue.art === "abgelehnt" && ue.abgelehnt) {
+          const a = ue.abgelehnt;
+          const label = a.typ && BAUTEIL_TYPEN[a.typ] ? tz(BAUTEIL_TYPEN[a.typ].label) : "";
+          const m2 = (/** @type {number|undefined} */ v) => (v ?? 0).toFixed(2).replace(".", ",");
+          meldung = a.grund === "lage"
+            ? tz("Übernahme nicht verfügbar: Decke liegt auf keiner Geschossdecke (Unterkante {{u}} m, Oberkante {{o}} m)").replace("{{u}}", m2(a.unterkante_m)).replace("{{o}}", m2(a.oberkante_m))
+            : a.grund === "profil"
+              ? tz("Übernahme nicht verfügbar: Bauteiltyp „{{typ}}“ braucht ein Rechteckprofil").replace("{{typ}}", label)
+              : tz("Übernahme für Bauteiltyp „{{typ}}“ nicht verfügbar — nur Wand, Stütze, Decke oder ohne Typ").replace("{{typ}}", label);
+          return null;
+        }
+        /** @type {Record<string, any[]>} */
+        const patch = {};
+        if (ue.customWalls.length) patch.customWalls = [...(m.customWalls || []), ...ue.customWalls];
+        if (ue.customSlabs.length) patch.customSlabs = [...(m.customSlabs || []), ...ue.customSlabs];
+        if (ue.customColumns.length) patch.customColumns = [...(m.customColumns || []), ...ue.customColumns];
+        meldung = `${tz("Als Bauteil übernommen")}: ${ue.customWalls.length} ${tz("Wände")}, ${ue.customSlabs.length} ${tz("Decken")}, ${ue.customColumns.length} ${tz("Stützen")}`;
+        return patch;
+      });
+      if (neu || (meldung && meldung.startsWith(tz("Schon übernommen")))) setUebernommen((u) => new Set([...u, id]));
+      if (meldung) setMeldung(meldung);
     } catch (e) {
-      setMeldung(`${tz("Übernahme fehlgeschlagen")}: ${/** @type {any} */ (e)?.message || e}`);
+      setMeldung(`${tz("Übernahme fehlgeschlagen")}: ${tz(String(/** @type {any} */ (e)?.message || e))}`);
     }
   };
-  /** "Übernahme zurücknehmen": removes every element with quelle_koerper = this body from the BIM record; the body stays. */
+  /** "Übernahme zurücknehmen": removes every element with quelle_koerper = this body from the model (115-05c: a draft change). */
   const uebernahmeZurueck = async (/** @type {string} */ id) => {
     if (!projectId) return;
     try {
-      const m = (await loadBimModel(projectId)) || {};
-      const r = uebernahmeEntfernen(m, id);
-      if (r.entfernt) await saveBimModel(projectId, { customWalls: r.customWalls, customSlabs: r.customSlabs, customColumns: r.customColumns }, { streng: true });
+      const E = await import("@core/lib/entwurf/entwurfStand.js");
+      let entfernt = 0;
+      await E.bimListenAendern(projectId, (m) => {
+        const r = uebernahmeEntfernen(m, id);
+        entfernt = r.entfernt;
+        return r.entfernt ? { customWalls: r.customWalls, customSlabs: r.customSlabs, customColumns: r.customColumns } : null;
+      });
       setUebernommen((u) => { const n = new Set(u); n.delete(id); return n; });
-      setMeldung(`${tz("Übernahme zurückgenommen")}: ${r.entfernt} ${tz("Bauteile entfernt")}`);
+      setMeldung(`${tz("Übernahme zurückgenommen")}: ${entfernt} ${tz("Bauteile entfernt")}`);
     } catch (e) {
-      setMeldung(`${tz("Übernahme fehlgeschlagen")}: ${/** @type {any} */ (e)?.message || e}`);
+      setMeldung(`${tz("Übernahme fehlgeschlagen")}: ${tz(String(/** @type {any} */ (e)?.message || e))}`);
     }
   };
 
@@ -1065,6 +1117,8 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
         hilfslinien: a().layer?.hilfslinien || [] }) });
     return reg;
   }, []);
+  // 105-14: publish the register while mounted, so the shortcut help "?" lists its keys (no hand-written list).
+  useEffect(() => registerAnmelden(befehle, { bereich: "Massenmodell" }), [befehle]);
   // reachable for local agents / tests while the modeller is open (window.__bitBefehle.zeileBearbeiten('{"method":"befehle"}'))
   // 104-04: and through the local control channel (server/steuerungRouter.js) while the studio is open.
   useEffect(() => {
@@ -1128,9 +1182,16 @@ export function useModellierer({ projectId, geschossHoehe, flaeche = null, bezug
     // 107-07: guide lines, rotate centre / copy switch, reference edge, Shift axis lock, row preview
     hilfslinien: layer.hilfslinien || [], hlArt, setHlArt, drehZentrum, drehKopie, setDrehKopie, bezugKante, setAchsSperre, reihenVorschau,
     hilfslinienWeg: () => { setLayer(hilfslinienLoeschen(layer)); setMeldung("Hilfslinien gelöscht"); },
-    pfadZu, folgeVorlage, setFolgeVorlage, fangCursor, fangEinst, einmalFang, setFangAus, befehle, merkeLeerZug: () => { leerZug.current = true; }, rOpt, setROpt, riegelAbgeleitet, aktiverRiegel, setAktiverRiegel, riegelLoeschen, pushPullAnwenden, eckeZieht, setEckeZieht, eckeLoslassen, erledigt, layer, aufgeloest, gelaende: layer.gelaende || null, gModus, setGModus, gRadius, setGRadius, gSchritt, setGSchritt,
-    gelaendeLoeschen: () => { const { gelaende: _g, ...rest } = layer; setLayer(/** @type {any} */ (rest)); }, graph, setGraph, ergebnis, vorschau, backen, beispiel: (mitteSite) => setGraph(beispielGraph(mitteSite)), werkzeug, waehle, aus: () => { zuruecksetzen(); setWerkzeug(null); }, punkte, cursor, setCursor, fange, auswahl, start,
-    klick, eingabe, setEingabe, eingabeAnwenden, meldung, gruppe, eindeutig, loeschen, undo, redo,
+    pfadZu, folgeVorlage, setFolgeVorlage, fangCursor, fangEinst, einmalFang, setFangAus, befehle, merkeLeerZug: () => { leerZug.current = true; }, rOpt, setROpt, riegelAbgeleitet, aktiverRiegel, setAktiverRiegel, riegelLoeschen, pushPullAnwenden, eckeZieht, setEckeZieht, eckeLoslassen, erledigt, layer, aufgeloest, gelaende: (gZiel === "bestand" ? layer.gelaendeBestand : layer.gelaende) || null, gZiel, setGZiel, gelaendeBestand: layer.gelaendeBestand || null,
+    // 108-10: keep the terrain as it is now as the existing ground (a copy — the new ground is shaped on from there); discard it again
+    bestandFesthalten: () => { if (layer.gelaende) setLayer({ ...layer, gelaendeBestand: { ...layer.gelaende, h: [...layer.gelaende.h] } }); },
+    bestandVerwerfen: () => { const { gelaendeBestand: _b, ...rest } = layer; setGZiel("neu"); setLayer(/** @type {any} */ (rest)); },
+    // 108-10: start of the existing ground from the public elevation model (coarse, see sandkastenAusHoehenmodell); shown at once
+    bestandVorschlag: bestandVorschlag?.gelaende || null, bestandVorschlagInfo: bestandVorschlag,
+    bestandAusHoehenmodell: () => { if (bestandVorschlag?.gelaende) { setLayer({ ...layer, gelaendeBestand: bestandVorschlag.gelaende }); setGZiel("bestand"); } },
+    erdmassen: erdmassenZwischen(layer.gelaendeBestand || null, layer.gelaende || null), gModus, setGModus, gRadius, setGRadius, gSchritt, setGSchritt,
+    gelaendeLoeschen: () => { const { [gZiel === "bestand" ? "gelaendeBestand" : "gelaende"]: _g, ...rest } = /** @type {any} */ (layer); setLayer(/** @type {any} */ (rest)); }, graph, setGraph, ergebnis, vorschau, backen, beispiel: (mitteSite) => setGraph(beispielGraph(mitteSite)), werkzeug, waehle, aus: () => { zuruecksetzen(); setWerkzeug(null); }, punkte, cursor, setCursor, fange, auswahl, start,
+    klick, eingabe, setEingabe, eingabeAnwenden, meldung, gruppe, eindeutig, loeschen, undo, redo, verlaufNummern,
     // 107-08: inspector of one body
     typZurueck, typZulassen, typVonHand, statusVonHand, dachVonHand, spiegelnAuswahl, steckbriefOffen, steckbriefUmschalten, koerperSteckbrief, koerperGuid,
     alsBauteil, uebernahmeZurueck, uebernommen,
@@ -1320,6 +1381,29 @@ export function ModellWerkzeugleiste({ m, t }) {
             <label className="flex items-center gap-1 text-muted-foreground">{t("Schritt")}
               <input type="number" min="0.1" max="10" step="0.1" value={m.gSchritt} onChange={(e) => m.setGSchritt(Math.max(0.1, Number(e.target.value) || 0.1))} className="w-12 rounded border border-border bg-card px-1 text-right" /> m</label>
             {m.gelaende && <button type="button" className="rounded-md border border-border px-1.5 py-0.5 hover:bg-muted" onClick={m.gelaendeLoeschen}>{t("Gelände zurücksetzen")}</button>}
+            {/* 108-10: two terrain layers — existing ground and new ground; the difference is cut and fill */}
+            <span className="inline-flex overflow-hidden rounded-md border border-border" role="group" aria-label={t("Gelände")} data-testid="mm-gelaende-ziel">
+              {/** @type {Array<["neu"|"bestand", string]>} */ ([["bestand", "Gelände Bestand"], ["neu", "Gelände neu"]]).map(([k, l]) => (
+                <button key={k} type="button" aria-pressed={m.gZiel === k} onClick={() => m.setGZiel(k)} data-testid={`mm-gelaende-ziel-${k}`}
+                  className={`px-1.5 py-0.5 ${m.gZiel === k ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}>{t(l)}</button>
+              ))}
+            </span>
+            {m.gZiel === "neu" && m.gelaende && !m.gelaendeBestand && (
+              <button type="button" className="rounded-md border border-border px-1.5 py-0.5 hover:bg-muted" onClick={m.bestandFesthalten} data-testid="mm-gelaende-festhalten"
+                title={t("Das Gelände, wie es jetzt ist, als Bestand festhalten — danach formen Sie das neue Gelände; die Differenz sind Abtrag und Auftrag.")}>{t("Als Bestand festhalten")}</button>
+            )}
+            {m.gelaendeBestand && <button type="button" className="rounded-md border border-border px-1.5 py-0.5 hover:bg-muted" onClick={m.bestandVerwerfen}>{t("Bestand verwerfen")}</button>}
+            {!m.gelaendeBestand && m.bestandVorschlag && (
+              <button type="button" className="rounded-md border border-border px-1.5 py-0.5 hover:bg-muted" onClick={m.bestandAusHoehenmodell} data-testid="mm-gelaende-hoehenmodell"
+                title={t("Bestandsgelände aus dem öffentlichen Höhenmodell anlegen (Raster etwa 90 m, nur grob). ±0,00 = {{h}} m ü. NHN — aus der Bauaufnahme oder höchster Punkt unter dem Baukörper (Annahme). Danach mit den Werkzeugen nachformen oder durch ein Aufmaß ersetzen.").replace("{{h}}", String(m.bestandVorschlagInfo?.bezugNHN_m ?? "").replace(".", ","))}>
+                {t("Bestand aus Höhenmodell")}
+              </button>
+            )}
+            {m.erdmassen && (
+              <span className="text-muted-foreground" data-testid="mm-gelaende-erdmassen">
+                {t("Abtrag")} {m.erdmassen.abtrag_m3.toLocaleString("de-DE")} m³ · {t("Auftrag")} {m.erdmassen.auftrag_m3.toLocaleString("de-DE")} m³
+              </span>
+            )}
           </span>
         )}
         {m.werkzeug === "riegel" && (

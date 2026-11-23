@@ -24,4 +24,14 @@ export const EN = {
   "Enter setzt den Punkt, Esc leert": "Enter sets the point, Esc clears",
   "Kein gültiges Maß – Ziffern mit Komma, in Metern.": "Not a valid length – digits with a decimal comma, in metres.",
   "Keine Richtung – den Zeiger vom letzten Punkt wegbewegen.": "No direction – move the pointer away from the last point.",
+  // 115-04: turn the floor plan view (display only), sheet orientation of PDF / DXF
+  "Plan drehen": "Rotate plan",
+  "Plan drehen 90° links": "Rotate plan 90° left",
+  "Plan drehen 90° rechts": "Rotate plan 90° right",
+  "nur die Darstellung, das Modell bleibt unverändert": "display only, the model stays unchanged",
+  "Blattausrichtung": "Sheet orientation",
+  "Blattausrichtung des Grundrisses in PDF und DXF — unabhängig von der Drehung am Bildschirm": "Sheet orientation of the floor plan in PDF and DXF — independent of the rotation on screen",
+  "wie am Bildschirm": "as on screen",
+  "90° links": "90° left",
+  "90° rechts": "90° right",
 };

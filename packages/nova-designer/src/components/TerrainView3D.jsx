@@ -26,6 +26,7 @@ import { useElevationGrid, DEM_RESOLUTION_M } from "@designer/lib/useElevationGr
 import { useBuildingProgram } from "@core/lib/useBuildingProgram";
 import { exportExposePng } from "@designer/components/MassingView3D";
 import { objektFreigeben } from "@core/lib/threeFreigeben";
+import { radGestenLeser } from "@core/lib/radGeste.js";
 import SplatSteuerung from "@designer/components/SplatSteuerung";
 import GelaendeSteuerung from "@designer/components/GelaendeSteuerung";
 import { SplatWolke, beispielSplats } from "@designer/lib/splats/SplatWolke";
@@ -396,13 +397,25 @@ export default function TerrainView3D({ complexData = null }) {
       k.px = e.clientX; k.py = e.clientY;
     };
     const up = () => { kam.current.ziehen = false; walk.current.on = false; };
+    const radLesen = radGestenLeser();
     const rad = (/** @type {WheelEvent} */ e) => {
       if (walk.current.active) return;
       e.preventDefault();
+      const k = kam.current;
+      // 115-01: mouse wheel as before; a trackpad pinch changes the distance by its zoom factor. This camera only orbits
+      // around the site (it has no pan), so a two-finger swipe turns and tilts like the drag does. [ASSUMED] not confirmed
+      // by the user; the other 3D views pan on a swipe and orbit with Shift.
+      const g = radLesen(e);
+      if (g.art === "schieben") {
+        k.yaw = (((k.yaw + g.dx * 0.3) % 360) + 360) % 360; // a drag by (−dx, −dy) px, same degrees per px as `move`
+        k.pitch = pitchKlemmen(k.pitch - g.dy * 0.25);
+        return;
+      }
+      if (g.art !== "zoom") return;
       const tr = three.current.terrain;
       const span = tr ? tr.spanM : 1000;
-      const k = kam.current;
-      k.abstand = Math.max(ABSTAND_MIN_FAKTOR * span, Math.min(ABSTAND_MAX_FAKTOR * span, k.abstand * Math.exp(e.deltaY * 0.001)));
+      const f = g.quelle === "pinch" ? 1 / g.faktor : Math.exp(e.deltaY * 0.001);
+      k.abstand = Math.max(ABSTAND_MIN_FAKTOR * span, Math.min(ABSTAND_MAX_FAKTOR * span, k.abstand * f));
     };
     el.addEventListener("pointerdown", down);
     window.addEventListener("pointermove", move);

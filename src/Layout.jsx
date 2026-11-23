@@ -52,13 +52,15 @@ import { I18nProvider, useI18n, LANGS } from "@core/lib/i18n";
 import { useBriefkopf } from "@core/lib/useBriefkopf";
 import AssistentButton from "./components/AssistentButton";
 import { navGroups } from "./navigation";
-import Befehlspalette from "./components/Befehlspalette";
+// 105-28/105-14: palette and shortcut help load on first use — they carry the record search and the register help,
+// and the entry chunk is near its size budget.
+const Befehlspalette = React.lazy(() => import("./components/Befehlspalette"));
 import KeinZugriff from "./components/KeinZugriff";
 import NutzerUmschalter from "./components/NutzerUmschalter";
 import { useZugriff } from "@core/lib/ZugriffContext.jsx";
 import { useFaelligZaehler } from "@/lib/termine/useFaelligZaehler.js";
 import { cloudGesperrt } from "@core/lib/rechte.js";
-import KuerzelHilfe from "./components/KuerzelHilfe";
+const KuerzelHilfe = React.lazy(() => import("./components/KuerzelHilfe"));
 import { aktionenFuer, passtKuerzel, parseKuerzel, abonnieren, aktionenVersion } from "@core/lib/aktionen";
 import { SERVERLOS, DATENQUELLE } from "@core/lib/umgebung";
 // 112-01: storage status of the serverless edition, lazy and only there (pattern of ClientTor in main.jsx). The static import
@@ -331,6 +333,9 @@ function LayoutInner({ children }) {
   // never while typing in input/textarea/contenteditable.
   const [paletteOffen, setPaletteOffen] = React.useState(false);
   const [hilfeOffen, setHilfeOffen] = React.useState(false);
+  // Stable handlers for the help (it builds its global command register from them, 105-14).
+  const hilfeSchliessen = React.useCallback(() => setHilfeOffen(false), []);
+  const paletteAusHilfe = React.useCallback(() => { setHilfeOffen(false); setPaletteOffen(true); }, []);
   // Re-bind the global handler when the registry or the route changes so the
   // chord lookup below sees the actions of the CURRENT view.
   React.useSyncExternalStore(abonnieren, aktionenVersion);
@@ -433,8 +438,16 @@ function LayoutInner({ children }) {
   return (
     <>
       <a href="#hauptinhalt" className="skip-link">{t("Zum Inhalt springen")}</a>
-      <Befehlspalette offen={paletteOffen} onSchliessen={() => setPaletteOffen(false)} />
-      <KuerzelHilfe offen={hilfeOffen} onSchliessen={() => setHilfeOffen(false)} />
+      {paletteOffen && (
+        <React.Suspense fallback={null}>
+          <Befehlspalette offen={paletteOffen} onSchliessen={() => setPaletteOffen(false)} />
+        </React.Suspense>
+      )}
+      {hilfeOffen && (
+        <React.Suspense fallback={null}>
+          <KuerzelHilfe offen={hilfeOffen} onSchliessen={hilfeSchliessen} onPalette={paletteAusHilfe} />
+        </React.Suspense>
+      )}
       <div className="app-huelle h-dvh overflow-hidden flex w-full bg-background">
         {/* 72-10 (N-06): "dark" because the sidebar is dark in both themes. The
             light-mode contrast fix in index.css turns text-slate-400 into

@@ -4,6 +4,8 @@
 // genaue Koordinaten; die Karte (mit Standort) bekommt einen Kurztest der Verdrahtung.
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 
 const NAME = "E2E Bloecke 9504";
 const NAME_KARTE = "E2E Bloecke 9504 Karte";
@@ -165,8 +167,10 @@ test("95-04 Blöcke auf der Karte: Auswahlmodus setzt keine Blöcke, Rahmen, Str
     await expect(plan).toHaveAttribute("data-auswahl", "b1,b2");
     await expect(plan.getByTestId("sd-drehgriff")).toBeVisible();
     await page.keyboard.press("Delete");
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(anzahl, { timeout: 20000 }).toBe(0);
     await page.keyboard.press("Control+z");
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(anzahl, { timeout: 20000 }).toBe(2);
     expect(warnungen, `Konsole: ${warnungen.join(" | ")}`).toEqual([]);
   } finally {

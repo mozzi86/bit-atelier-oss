@@ -81,7 +81,7 @@ export default function VorschlaegePanel({ footprintM, cfg, storeys, storeyHeigh
     onUebernehmen(neu);
     const teile = [
       [verworfen.gesperrteGrenzen, t("Sperren")], [verworfen.anordnung, t("Anordnungen")], [verworfen.grenzenPositionen, t("Grenzpositionen")],
-      [verworfen.tuerAufschlaege, t("Türaufschläge")], [verworfen.stufeJeWe, t("Stufen-Schalter")], [verworfen.raumGrenzen, t("Innenwand-Versätze")], [verworfen.geschosseJeRiegel, t("Geschosszahlen je Haus")],
+      [verworfen.tuerAufschlaege, t("Türaufschläge")], [verworfen.stufeJeWe, t("Stufen-Schalter")], [verworfen.raumGrenzen, t("Innenwand-Versätze")], [verworfen.raumHand, t("von Hand gesetzte Räume")], [verworfen.geschosseJeRiegel, t("Geschosszahlen je Haus")],
     ].filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}`);
     setHinweis(`${t("Vorschlag übernommen")}: ${typologieLabel(v.typologie)} — ${teile.length ? `${t("verworfen")}: ${teile.join(", ")}` : t("keine layout-gebundenen Eingaben verworfen")}`);
   };

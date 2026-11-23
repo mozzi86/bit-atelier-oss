@@ -241,12 +241,16 @@ describe("108-02 IFC und PDF-Schnitt", () => {
     assert.equal((text.match(/=IFCSLAB\(/g) || []).length, 4, "Bodenplatte, KG-Decke, EG-Decke, Kehlbalkenlage");
   });
 
-  it("PDF-Schnitt B-B: Seitenwände bis zur Traufe, Kehlbalkenlage ±3,50, Maß „Kniestock 1,00“; ohne Kniestock unverändert", () => {
+  it("PDF-Schnitt B-B: Seitenwände bis zur Traufe, Kehlbalkenlage ±3,50, Maß „1,00“ mit eigener Beschriftung „Kniestock“; ohne Kniestock unverändert", () => {
     const m = efhModellMitKniestock(1);
     const dach = globalesDach(m, "sattel", 45);
     const g = schnittGrafik({ model: m, storeyHeight: 2.9, dach, achse: "z" });
     const texte = g.elemente.filter((/** @type {any} */ e) => e.art === "text").map((/** @type {any} */ e) => e.text);
-    assert.ok(texte.includes("Kniestock 1,00"), texte.join(" | "));
+    // 115-02 (W-1115-05): the name is its own text beside the chain, the number stands at its piece (3,15 … 4,15 m)
+    assert.ok(texte.includes("Kniestock"), texte.join(" | "));
+    assert.ok(!texte.some((/** @type {string} */ t) => /Kniestock\s*\d/.test(t)), "Beschriftung getrennt vom Maß");
+    const knieMass = g.elemente.find((/** @type {any} */ e) => e.art === "text" && e.ebene === "bemassung" && e.text === "1,00" && Math.abs(e.z + 3.65) < 1e-9);
+    assert.ok(knieMass, "Maß 1,00 in der Mitte des Kniestocks");
     assert.ok(texte.some((/** @type {string} */ t) => t.includes("+4,15") && t.includes("Traufe")));
     const waende = g.elemente.filter((/** @type {any} */ e) => e.ebene === "wand" && e.art === "poly");
     assert.ok(waende.length >= 2);
@@ -279,7 +283,8 @@ describe("108-02 Bildschirm-Schnitt (BimPlan2D, SSR)", () => {
     const m = efhModellMitKniestock(1);
     const svg = u.rendern(BimPlan2D, { model: m, mode: "schnitt", storeyHeight: 2.9, height: 520, dach: globalesDach(m, "sattel", 45), achse: "z" });
     assert.match(svg, /data-kote="kniestock"/);
-    assert.match(svg, /Kniestock 1[.,]00/);
+    assert.match(svg, /data-kote="kniestock"[^>]*>Kniestock</); // 115-02: the name alone; the number is its own text
+    assert.match(svg, />1,00</);
     assert.match(svg, /data-kehlbalkenlage="1"/);
     const o = efhModell();
     const svg0 = u.rendern(BimPlan2D, { model: o, mode: "schnitt", storeyHeight: 2.9, height: 520, dach: globalesDach(o, "sattel", 45), achse: "z" });

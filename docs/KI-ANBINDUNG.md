@@ -220,6 +220,7 @@ Modell. **Bestätigen kann ein Agent nie** — es gibt kein Werkzeug dafür (Ent
 | `delete_record` | Datensatz in den **Papierkorb** (`entity`, `id`, optional `grund`): ohne `ausfuehren` nur Vorschau; endgültig gelöscht wird nie; Projekte nicht | **nur mit `--schreiben`** |
 | `papierkorb_lesen` | Papierkorb, neueste zuerst (optional `entity`, `project_id`, `limit`): Eintrags-id, Datensatz, Zeit, Grund, Herkunft | lesen |
 | `wiederherstellen` | Datensatz aus dem Papierkorb zurück, mit derselben id (`id` des Eintrags): ohne `ausfuehren` nur Vorschau; belegte id → „nicht übernommen“ | **nur mit `--schreiben`** |
+| `modell_importieren` | Gebäudemodell eines Projekts aus einem Geometrie-JSON (`projekt_id`, `modell`, Format siehe unten): ohne `ausfuehren` nur **Probelauf** mit Fehlern (Pfad + Satz), Warnungen und Bauteilen je Liste vorher/nachher; mit `ausfuehren: true` und dem `stand` des Probelaufs angewendet, der alte Stand als Sicherung (zurücknehmen nur durch die Person, D-IM-04) | **nur mit `--schreiben`** |
 | `aufrufprotokoll_lesen` (nur mit `--protokoll-lesen`) | letzte Einträge des Aufrufprotokolls (`anzahl`, optional `werkzeug`, `ergebnis`); erscheint nur, wenn der Server mit `--protokoll-lesen` gestartet wurde — das Protokoll enthält die Argumente jedes Aufrufs | lesen |
 
 Ohne `--schreiben` (Alias `--write`) erscheinen die Schreibwerkzeuge nicht in der Werkzeugliste, und ein
@@ -231,6 +232,33 @@ der MCP-Server nie endgültig (seit 111-02 legt `delete_record` sie in den Papie
 weniger Einträge, mit Hinweis; Antworten des Viewers sind kompaktes JSON, die längste Liste verliert Einträge
 vom Ende); das Bild von `ansicht_bild` ist davon ausgenommen. API-Schlüssel (`LlmConnection`) und
 Personaldaten sind über diesen Weg gesperrt.
+
+**Modell aus Geometrie-JSON (108-09)**
+
+`modell_importieren` (und `POST /api/modell/import?projekt=<id>&modus=pruefen|anwenden&stand=<updated_date>`, nur auf diesem
+Rechner, nicht für gekoppelte Geräte) liest das Format `bit-modell`, Version 1. Alle Längen in **Metern**, Grundriss-Achsen
+**x nach rechts, z nach Süden** (wie im Gebäudemodell); `level` 0 ist das Erdgeschoss, Untergeschosse sind negativ. Jedes Bauteil
+braucht ein `_idx` (ganze Zahl ab 1, über alle Listen eindeutig); Öffnungen in gezeichneten Wänden nennen die Wand mit `wallIdx`,
+Öffnungen in der Hülle die Umrisskante mit `level` + `edge`. Gekürztes Beispiel (EFH 11,40 × 10,20 m, KG/EG/DG, Satteldach 45°):
+
+```json
+{ "format": "bit-modell", "version": 1, "einheit": "m", "achsen": "x-rechts-z-sued",
+  "programm": { "footprintM": [{"x": -5.7, "z": -5.1}, {"x": 5.7, "z": -5.1}, {"x": 5.7, "z": 5.1}, {"x": -5.7, "z": 5.1}],
+                "storeys": 2, "storeyHeight": 2.9, "untergeschosse": 1,
+                "geschosse": [{"level": -1, "hoehe_m": 2.75}, {"level": 0, "hoehe_m": 2.9}, {"level": 1, "hoehe_m": 2.6, "kniestock_m": 1}] },
+  "dachform": "sattel", "dachneigung": 45,
+  "customWalls": [{"_idx": 1, "level": 0, "a": {"x": -0.5, "z": -5.1}, "b": {"x": -0.5, "z": 5.1}, "thickness": 0.115}],
+  "customWindows": [{"_idx": 2, "wallIdx": 1, "u": 3, "kind": "door", "anschlag": "links", "aufschlag": "innen"}],
+  "envOpenings": [{"_idx": 3, "level": 0, "edge": 0, "u": 2.2, "kind": "door", "width": 1.01, "height": 2.135, "sill": 0}] }
+```
+
+Fehler kommen als Liste `{pfad, text}`, z. B. `customWindows[3].wallIdx`: „Fenster 7: Wand 12 gibt es nicht (vorhanden: 1–5)“.
+Werte über 1000 gelten als vermutlich Millimeter (Fehler). Öffnungen, die nicht in ihre Wand passen, und Treppen außerhalb der
+Schrittmaßregel sind **Warnungen** — das Studio speichert solche Bauteile auch. Der Import ersetzt Programmfelder und Bauteillisten;
+Fachlayer, Gauben und Plannotizen bleiben. Jede Anwendung legt den alten Stand als `BimModelImport` ab; zurückgenommen wird er
+nur von der Person an diesem Rechner (`POST /api/modell/import/zuruecknehmen?projekt=…&id=…&modus=pruefen|anwenden&stand=…`) —
+ein Agent nimmt nichts zurück (D-IM-04), darum gibt es dafür kein MCP-Werkzeug. Ein im Studio offenes Projekt überschreibt den Import nicht still: es bekommt die Änderung
+über den Abgleich, und sein nächster Speichervorgang trifft den neuen Stand.
 
 **Wie ein Agent das Modell anfasst (Zeigen und Sprechen)**
 
@@ -295,6 +323,7 @@ update_record {"entity": "Notiz", "id": "n1", "data": {"text": "Besprechung entf
 delete_record {"entity": "Notiz", "id": "n1", "grund": "doppelt angelegt"}
 papierkorb_lesen {"entity": "Notiz"}
 wiederherstellen {"id": "pk1"}
+modell_importieren {"projekt_id": "tp-a", "modell": {"format": "bit-modell", "version": 1, "einheit": "m", "achsen": "x-rechts-z-sued", "programm": {"footprintM": [{"x": 0, "z": 0}, {"x": 10, "z": 0}, {"x": 10, "z": 8}, {"x": 0, "z": 8}], "storeys": 1, "storeyHeight": 2.8}}}
 ```
 
 **Beispiel-Dialog: zeigen, ändern, bestätigen**
@@ -374,6 +403,11 @@ Die Person hat im BIM-Studio eine Wand angeklickt und sagt zum Agenten: „Diese
   Einschalten — stehen als Problem in der Vorschau und werden beim Ausführen nicht gesendet (`nicht_gesetzt` in der
   Antwort); ebenso `id`, `created_date`, `updated_date` (vergibt die App) und das reservierte `ki_vorgang`.
   Kein Werkzeug übernimmt einen Vorschlag des Modells — das bleibt bei der Person.
+- **Modell nur über Vorschläge (B-106-10-02).** `BimModel` und `IfcAenderung` (das gezeichnete Modell und das
+  IFC-Änderungsjournal) lehnen `create_record`, `update_record`, `delete_record` und `wiederherstellen` in jeder
+  Schreibweise ab. Ein Agent ändert das Modell nur mit `eigenschaft_setzen`, `transformieren` oder `teilen`: die
+  Person bestätigt den Vorschlag im Viewer, und der Schritt steht danach im Änderungsprotokoll (Modellfreigabe) und
+  im Änderungsstrom wie jede andere KI-Änderung der App.
 
 **Am einfachsten aus der App (seit 92-07):** Einstellungen → **KI-Verbindungen** → „Mit einem
 KI-Assistenten verbinden“ zeigt beide Einträge unten fertig ausgefüllt — mit dem echten Pfad dieser

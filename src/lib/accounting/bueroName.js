@@ -11,7 +11,7 @@
 // In:  the normalised letterhead ({office, …}, see useBriefkopf) and the
 //      accounting settings ({buero: {name}}). Out: plain strings.
 
-import { DEFAULT_BRIEFKOPF } from "@core/lib/briefkopf.js";
+import { eigenerBueroName } from "@core/lib/briefkopfBrief.js";
 
 /**
  * The letterhead's office name, or "" while it is empty or still the shipped
@@ -20,8 +20,8 @@ import { DEFAULT_BRIEFKOPF } from "@core/lib/briefkopf.js";
  * @returns {string} office name from the letterhead, trimmed; "" when unset
  */
 export function briefkopfName(briefkopf) {
-  const name = String(briefkopf?.office || "").trim();
-  return name && name !== DEFAULT_BRIEFKOPF.office ? name : "";
+  // Wave 1: the placeholder rule lives once in @core/lib/briefkopf.js.
+  return eigenerBueroName(briefkopf);
 }
 
 /**

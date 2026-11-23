@@ -11,16 +11,20 @@
 // blocks stay exactly where they are, so their hooks keep their call order
 // (Rules of Hooks) and the diff in ComplexDesigner.jsx stays small.
 //
+// 115-03 (user wish W-1115-02): the building model ("Gebäudemodell", key `bim`) sits in area 3 "Gebäude" as its
+// first tab — it IS the building; keys never change, only the grouping. Added: the direct views of the building
+// model (floor plan / section / 3D, `?tab=bim&ansicht=…`) and the tabs per kind of project (reiterFuerProjektart).
+//
 // In:  nothing (static data + lucide icon components).
 // Out: DESIGNER_BEREICHE (5 areas), DESIGNER_REITER (31 tabs), TAB_ALIAS,
-//      BESTAND_LESART (73-02) and the lookups the page needs.
+//      BESTAND_LESART (73-02), BIM_ANSICHTEN + AUSGEBLENDET_JE_PROJEKTART (115-03) and the lookups the page needs.
 
 import {
   MapPin, Boxes, ClipboardList, ShieldCheck, Building, Mountain, Frame, Trees,
   Thermometer, Flame, ClipboardCheck, Accessibility, Volume2,
   ThermometerSnowflake, Layers, ThermometerSun, HandCoins, LayoutTemplate,
   Puzzle, Sofa, Sun, Sparkles, CheckSquare, Calculator, Plug, CalendarRange,
-  Droplets, LifeBuoy, ScanLine,
+  Droplets, LifeBuoy, ScanLine, Grid2x2, Scissors, Box,
 } from "lucide-react";
 
 /**
@@ -76,12 +80,16 @@ export const DESIGNER_REITER = Object.freeze([
     braucht: ["Parzelle"], liefert: ["Baukörper", "GRZ/GFZ", "BGF"], stand: "modell" },
   { key: "massing", label: "Baufeld-Planung", icon: Building, bereich: "baukoerper",
     braucht: ["Parzelle"], liefert: ["Baukörper", "Footprints"], stand: "modell" },
-  { key: "bim", label: "Gebäudemodell", icon: Boxes, bereich: "baukoerper",
-    braucht: ["Baukörper"], liefert: ["Geschosse", "Bauteile"], stand: "modell" },
+  // 115-03: reads the shared building programme (storeys, outline) the massing writes, so it says "Baukörper" —
+  // the building model moved to area 3 and can no longer be a prerequisite of a tab in area 2.
   { key: "buildings", label: "Gebäude & Nutzung", icon: Building, bereich: "baukoerper",
-    braucht: ["Gebäudemodell"], liefert: ["Nutzungsmix"], stand: "modell" },
+    braucht: ["Baukörper"], liefert: ["Nutzungsmix"], stand: "modell" },
 
   // --- 3 Gebäude ----------------------------------------------------------
+  // 115-03 (W-1115-02): the building model (BIM studio: 3D, floor plan, section) is the FIRST tab of area 3 —
+  // it was under "2 · Baukörper" and the user did not find the floor plan. The key stays `bim` (deep links).
+  { key: "bim", label: "Gebäudemodell", icon: Boxes, bereich: "gebaeude",
+    braucht: ["Baukörper"], liefert: ["Geschosse", "Bauteile"], stand: "modell" },
   { key: "program", label: "Raumprogramm", icon: ClipboardList, bereich: "gebaeude",
     braucht: ["Gebäudemodell"], liefert: ["Räume", "NUF"], stand: "modell" },
   { key: "compliance", label: "Wohnungen & Compliance", icon: ShieldCheck, bereich: "gebaeude",
@@ -208,7 +216,9 @@ export function reiterImBereich(bereichId) {
 /**
  * Resolves a `?tab=` URL parameter: alias first, then validity. Deep-link guard (73-02): an unknown or
  * invalid key returns null and the page falls back to the first tab instead of an empty card; since no tab
- * is hidden in either kind of work (BEST-02), the kind of work does not change the result.
+ * is hidden in either kind of work (BEST-02), the kind of work does not change the result. 115-03: the kind
+ * of project (reiterFuerProjektart) does not change it either — a tab hidden for a single-family house still
+ * resolves here and the page shows it (option `aktiv`).
  * @param {string|null|undefined} param raw URL value
  * @returns {string|null} a valid tab key, or null (caller falls back to 'site')
  */
@@ -216,4 +226,132 @@ export function aufloesen(param) {
   if (!param) return null;
   const key = TAB_ALIAS[param] ?? param;
   return istGueltigerTab(key) ? key : null;
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// 115-03: direct views of the building model
+// ---------------------------------------------------------------------------------------------------------
+
+/** Key of the building model tab (BIM studio). Deep links `?tab=bim` hang on it — never renamed. */
+export const GEBAEUDEMODELL_TAB = "bim";
+
+/** Name of the query parameter that carries the view of the building model: `?tab=bim&ansicht=grundriss`. */
+export const ANSICHT_PARAMETER = "ansicht";
+
+/**
+ * The three views of the building model that can be opened directly, in the order of the direct buttons
+ * (floor plan first — the way the user asked for). `id` equals the view state of BitBimStudio.jsx
+ * ("3d" | "grundriss" | "schnitt"); `label` is the German UI text (goes through t()).
+ * @type {ReadonlyArray<{ id: "grundriss"|"schnitt"|"3d", label: string, icon: import("lucide-react").LucideIcon }>}
+ */
+export const BIM_ANSICHTEN = Object.freeze([
+  { id: "grundriss", label: "Grundriss", icon: Grid2x2 },
+  { id: "schnitt", label: "Schnitt", icon: Scissors },
+  { id: "3d", label: "3D", icon: Box },
+]);
+
+/**
+ * Resolves a raw `?ansicht=` value to a view of the building model. Case and surrounding whitespace are
+ * ignored; anything else returns null (the studio then keeps its own start view, 3D).
+ * @param {string|null|undefined} param raw URL value
+ * @returns {"grundriss"|"schnitt"|"3d"|null} a view id of BIM_ANSICHTEN, or null
+ */
+export function bimAnsichtAusParam(param) {
+  if (typeof param !== "string") return null;
+  const roh = param.trim().toLowerCase();
+  return BIM_ANSICHTEN.find((a) => a.id === roh)?.id ?? null;
+}
+
+/**
+ * Query string that opens the building model in one view, e.g. "tab=bim&ansicht=grundriss" (no leading "?").
+ * @param {string|null} [ansicht] view id of BIM_ANSICHTEN; an unknown or missing value gives the plain tab link "tab=bim"
+ * @returns {string} query string for /ComplexDesigner
+ */
+export function gebaeudemodellSuche(ansicht) {
+  const a = bimAnsichtAusParam(ansicht);
+  return `tab=${GEBAEUDEMODELL_TAB}` + (a ? `&${ANSICHT_PARAMETER}=${a}` : "");
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// 115-03: tabs per kind of project
+// ---------------------------------------------------------------------------------------------------------
+
+/**
+ * Kinds of project the navigation knows, with their German UI name. Only the single-family house so far;
+ * every other project (and every project the app cannot classify) shows all tabs, as before 115-03.
+ * @type {Readonly<Record<string, { titel: string }>>}
+ */
+export const PROJEKTARTEN = Object.freeze({
+  efh: Object.freeze({ titel: "Einfamilienhaus" }),
+});
+
+/**
+ * Tabs hidden per kind of project (keys of DESIGNER_REITER). Hidden means: not in the tab row by default —
+ * "Alle Reiter zeigen" brings them back and a deep link `?tab=<key>` still opens them.
+ *
+ * The list for the single-family house: proposal of plan 115-03, confirmed by the user on 16.11.2026 WITHOUT "Hochwasser"
+ * (flood_risk stays visible — the HQ levels of the plot are entered there). Deliberately conservative — only what clearly
+ * serves apartment blocks or workplaces, plus the tab the wish itself names as irrelevant for a house:
+ *   - apartments  "Wohnungsplaner": spreads several dwellings over the floor area (apartment block).
+ *   - compliance  "Wohnungen & Compliance": unit mix, quotas and parking key of a housing complex.
+ *   - asr         "ASR-Raumdatenblatt": workplace regulations (Arbeitsstättenregeln) — offices, not homes.
+ * Everything else stays visible, also "Wohnungs-Werkstatt" (it generates the rooms of the house and carries
+ * the typology "efh") and "Gebäude & Nutzung" (the unit mix that makes the project a single-family house).
+ * @type {Readonly<Record<string, ReadonlyArray<string>>>}
+ */
+export const AUSGEBLENDET_JE_PROJEKTART = Object.freeze({
+  efh: Object.freeze(["compliance", "apartments", "asr"]),
+});
+
+/** Project types (Project.type) that can be a single-family house; empty = the project form was not filled in. */
+const EFH_PROJEKT_TYPEN = new Set(["", "residential"]);
+
+/**
+ * Kind of project for the navigation, from what the project says about its use. Same rule as the density
+ * figures (lib/kennzahlen.js, 108-12): a single-family house is a residential building with ONE dwelling —
+ * the typology "efh" of the dwelling workshop, or a unit mix of exactly one dwelling. Stricter than there:
+ * a mixed-use project never counts (it has more than the house), and neither does any non-residential type.
+ * @param {{ projektTyp?: string|null, werkstattTyp?: string|null, wohneinheiten?: number|null }} [nutzung]
+ *   projektTyp = Project.type key ("residential", "commercial", …), werkstattTyp = werkstatt_layer.typ,
+ *   wohneinheiten = number of dwellings of the unit mix (pieces; 0 or null = no mix)
+ * @returns {"efh"|null} key of PROJEKTARTEN, or null when the kind is not known (= show every tab)
+ */
+export function projektartVon(nutzung) {
+  const typ = nutzung?.projektTyp == null ? "" : String(nutzung.projektTyp);
+  if (!EFH_PROJEKT_TYPEN.has(typ)) return null;
+  if (nutzung?.werkstattTyp === "efh") return "efh";
+  return Number(nutzung?.wohneinheiten) === 1 ? "efh" : null;
+}
+
+/**
+ * Keys of the tabs hidden for a kind of project, in registry order.
+ * @param {string|null|undefined} projektart key of PROJEKTARTEN; unknown, null or undefined = nothing hidden
+ * @returns {string[]} tab keys (new array)
+ */
+export function ausgeblendeteReiter(projektart) {
+  const liste = projektart != null && Object.prototype.hasOwnProperty.call(AUSGEBLENDET_JE_PROJEKTART, projektart)
+    ? AUSGEBLENDET_JE_PROJEKTART[projektart]
+    : [];
+  return DESIGNER_REITER.filter((r) => liste.includes(r.key)).map((r) => r.key);
+}
+
+/**
+ * The visible tabs per area for a kind of project — what the tab row shows. Pure.
+ * Default (unknown kind): every tab, exactly reiterImBereich() per area. An area never comes back empty: if a
+ * list would hide all of its tabs, the area shows all of them (no dead step in the phase bar).
+ * @param {string|null|undefined} projektart key of PROJEKTARTEN ("efh"); null/unknown = everything
+ * @param {{ alle?: boolean, aktiv?: string|null }} [optionen] alle = the user switched "Alle Reiter zeigen" on;
+ *   aktiv = key of the open tab — it stays in its row even when hidden (deep link to a hidden tab)
+ * @returns {Record<string, Array<object>>} area id → registry entries in registry order (new arrays)
+ */
+export function reiterFuerProjektart(projektart, optionen = {}) {
+  const weg = optionen.alle ? [] : ausgeblendeteReiter(projektart);
+  /** @type {Record<string, Array<object>>} */
+  const jeBereich = {};
+  for (const b of DESIGNER_BEREICHE) {
+    const alle = reiterImBereich(b.id);
+    const sichtbar = alle.filter((r) => !weg.includes(r.key) || r.key === optionen.aktiv);
+    jeBereich[b.id] = sichtbar.length ? sichtbar : alle;
+  }
+  return jeBereich;
 }

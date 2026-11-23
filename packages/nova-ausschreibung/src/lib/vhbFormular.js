@@ -150,9 +150,10 @@ function winAnsi(font, text) {
  * reader shows the values. Fields not in `werte` stay as they are.
  * @param {Uint8Array} bytes blank form
  * @param {Array<{name: string, wert: string}>} werte
+ * @param {{titel?: string}} [o] titel (105-19): title when the blank form has none (form number and name)
  * @returns {Promise<{bytes: Uint8Array, gefuellt: number}>}
  */
-export async function formularFuellen(bytes, werte) {
+export async function formularFuellen(bytes, werte, { titel = "" } = {}) {
   const doc = await laden(bytes);
   const form = doc.getForm();
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -167,6 +168,10 @@ export async function formularFuellen(bytes, werte) {
     gefuellt += 1;
   }
   form.updateFieldAppearances(font);
+  // 105-19: the official form keeps its own /Lang and /Title; only missing ones are added (VHB forms are German).
+  // W0-F6: dynamic import, so the entry's preload map does not name the helper's chunk.
+  const { pdfLibMetadaten } = await import("@core/lib/pdfMetadaten.js");
+  pdfLibMetadaten(doc, { titel, nurErgaenzen: true });
   return { bytes: await doc.save(), gefuellt };
 }
 

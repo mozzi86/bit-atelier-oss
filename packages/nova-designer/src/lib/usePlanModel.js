@@ -17,7 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createBuildingModel } from "@core/lib/buildingModel";
 import { setzeProjektAufbauten } from "@core/lib/bauteil/aufbauten.js";
 import { useBuildingProgram } from "@core/lib/useBuildingProgram";
-import { loadBimModel, aufBimModelAenderung } from "@core/lib/useBimModelSync";
+import { bimModelLesen, aufBimModelAenderung } from "@core/lib/useBimModelSync";
 import { eingangDesDatensatzes } from "@designer/lib/autoOpenings"; // 108-01
 // 89-02: the workshop's walls/doors/rooms as classified components (read model for planners).
 import { werkstattBauteile } from "@core/lib/werkstattBauteile";
@@ -77,7 +77,8 @@ export function usePlanModel(projectId) {
     }
     let cancelled = false;
     if (aufbautenProjekt !== projectId) { setzeProjektAufbauten(null); aufbautenProjekt = projectId; }
-    loadBimModel(projectId)
+    // 115-05c: the stored record with the page's unsaved draft on top (reader overlay)
+    bimModelLesen(projectId)
       .then((m) => {
         // 107-03 (D-BK-22): project build-ups must be known before the model is built (wall thickness of a project build-up)
         if (!cancelled) { setzeProjektAufbauten(m?.aufbauten_layer ?? null); setGeladen(m || null); }

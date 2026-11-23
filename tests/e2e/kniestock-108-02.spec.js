@@ -8,6 +8,8 @@ import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import { EFH_PROJEKT, efhZuruecksetzen } from "./fixtures/efh108.js";
 
 const ORDNER = path.join(".planning", "phases", "108-efh-satteldach", "tmp-e2e", "108-02");
@@ -71,21 +73,22 @@ test.describe("108-02 Kniestock im Gebäudemodell", () => {
     await expect(page.locator('[data-dachschnitt="z"]')).toHaveCount(1, { timeout: 15000 });
     await expect(page.locator('[data-kote="kniestock"]')).toHaveCount(1);
     await expect(page.locator('[data-kote="kniestock"]')).toContainText("Kniestock");
-    await expect(page.locator('[data-kote="traufe"]')).toHaveText("Traufe +4.15");
-    await expect(page.locator('[data-kote="first"]')).toHaveText("First +9.25");
+    await expect(page.locator('[data-kote="traufe"]')).toHaveText("Traufe +4,15");
+    await expect(page.locator('[data-kote="first"]')).toHaveText("First +9,25");
     await expect(page.locator('[data-kehlbalkenlage="1"]')).toHaveCount(1);
     await page.screenshot({ path: path.join(ORDNER, "schnitt-bb-kniestock.png") });
 
     // ---- undo removes the field (one step of the drawing history) ----
     await page.getByTestId("bim-undo").click();
     await expect(page.locator('[data-kote="kniestock"]')).toHaveCount(0);
-    await expect(page.locator('[data-kote="traufe"]')).toHaveText("Traufe +5.50");
+    await expect(page.locator('[data-kote="traufe"]')).toHaveText("Traufe +5,50");
     await expect(page.getByTestId("vollgeschoss")).toHaveCount(0);
     await geschossPanel(page);
     await expect(page.getByTestId("kniestock")).toHaveValue("");
 
     // ---- set again: saved in the record, kept after a reload ----
     await page.getByTestId("kniestock").fill("1");
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(() => gespeicherterKniestock(request, projekt.id), { timeout: 30000, message: "kniestock_m im Datensatz" }).toBe(1);
     await page.reload();
     await studioOeffnen(page);
@@ -107,6 +110,7 @@ test.describe("108-02 Kniestock im Gebäudemodell", () => {
     await expect(page.getByTestId("kniestock")).toHaveValue("");
     await page.getByTestId("kniestock").fill("1"); // on the new top storey (level 2): the DG value is cleared
     await expect(page.getByTestId("kniestock-verwaist")).toHaveCount(0);
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(() => gespeicherterKniestock(request, projekt.id, 2), { timeout: 30000, message: "kniestock_m auf Level 2" }).toBe(1);
     await page.getByLabel("Geschosse", { exact: true }).selectOption("2"); // the row of level 2 stays in the table
     await expect(page.getByTestId("kniestock-verwaist")).toBeVisible();
@@ -115,13 +119,16 @@ test.describe("108-02 Kniestock im Gebäudemodell", () => {
     await expect(page.getByTestId("kniestock")).toHaveValue("1");
     await expect(page.getByTestId("kniestock-verwaist")).toHaveCount(0);
     await expect(page.getByTestId("vollgeschoss")).toHaveAttribute("data-voll", "ja");
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(() => gespeicherterKniestock(request, projekt.id, 1), { timeout: 30000, message: "kniestock_m wieder am DG" }).toBe(1);
 
     // ---- "alle gleich (zurücksetzen)" asks and keeps the knee wall ----
     page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "alle gleich (zurücksetzen)" }).click();
     await expect(page.getByTestId("kniestock")).toHaveValue("1");
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(() => gespeicherterKniestock(request, projekt.id, 2), { timeout: 30000, message: "Zeile Level 2 weg" }).toBe(null);
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(() => gespeicherterKniestock(request, projekt.id, 1), { timeout: 30000 }).toBe(1);
 
     // ---- flat roof: the stored knee wall is named, not hidden; pitched again, it applies again ----

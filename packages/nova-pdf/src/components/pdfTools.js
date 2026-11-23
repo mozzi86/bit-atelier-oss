@@ -115,6 +115,27 @@ async function loadPdf(bytes) {
   return doc;
 }
 
+/**
+ * 105-19: /Lang and /Title of a result. The tools only re-pack the user's own file, so its own language and title win
+ * (taken from `quelle` for a new document, kept as they are for a loaded one); what is missing comes from the UI
+ * language (pdfSpracheAusUi) and `titel` (the source file name, given by PdfToolsGrid).
+ * @param {PDFDocument} doc result document (changed in place)
+ * @param {PDFDocument|null} quelle source document a new result was copied from (null: `doc` is the loaded source)
+ * @param {string} [titel] fallback title
+ * @param {string} [zusatz] appended to the title of a part (split: page range)
+ * @returns {Promise<PDFDocument>} doc (async: the helper is imported dynamically — W0-F6, entry preload map)
+ */
+async function metadatenSetzen(doc, quelle, titel = "", zusatz = "") {
+  const { pdfLibMetadaten, pdfLibSprache, pdfSpracheAusUi } = await import("@core/lib/pdfMetadaten");
+  const basis = String((quelle && quelle.getTitle()) || titel || "").trim();
+  pdfLibMetadaten(doc, {
+    titel: [basis, zusatz].filter(Boolean).join(" "),
+    sprache: (quelle && pdfLibSprache(quelle)) || pdfSpracheAusUi(),
+    nurErgaenzen: true,
+  });
+  return doc;
+}
+
 // pdfjs-Load mit Kopie der Bytes (Transfer-sicher) und deutscher Fehlermeldung.
 async function openWithPdfjs(bytes) {
   try {
@@ -152,25 +173,36 @@ export async function getPageCount(bytes) {
 // Operationen (pdf-lib)
 // ---------------------------------------------------------------------------
 
-/** Mehrere PDFs in Reihenfolge zu einem Dokument zusammenfügen. */
-export async function mergePdfs(arrayOfBytes) {
+/**
+ * Mehrere PDFs in Reihenfolge zu einem Dokument zusammenfügen.
+ * @param {Uint8Array[]} arrayOfBytes
+ * @param {{titel?: string}} [o] titel (105-19): title when the first file has none
+ */
+export async function mergePdfs(arrayOfBytes, { titel = "" } = {}) {
   if (!arrayOfBytes || arrayOfBytes.length < 2) {
     throw new Error("Bitte mindestens zwei PDFs auswählen.");
   }
   const out = await PDFDocument.create();
+  /** @type {PDFDocument|null} */
+  let erste = null;
   for (const bytes of arrayOfBytes) {
     const src = await loadPdf(bytes);
+    if (!erste) erste = src;
     const pages = await out.copyPages(src, src.getPageIndices());
     pages.forEach((p) => out.addPage(p));
   }
+  await metadatenSetzen(out, erste, titel);
   return out.save();
 }
 
 /**
  * PDF anhand eines Range-Strings ("1-3,5,7-9") in Teil-PDFs zerlegen.
  * Rückgabe: [{ suffix: "S1-3", bytes }, ...] — je Range ein eigenes PDF.
+ * @param {Uint8Array} bytes
+ * @param {string} ranges
+ * @param {{titel?: string}} [o] titel (105-19): title when the file has none; each part gets its range appended
  */
-export async function splitPdf(bytes, ranges) {
+export async function splitPdf(bytes, ranges, { titel = "" } = {}) {
   const src = await loadPdf(bytes);
   const segments = parseRangeSegments(ranges, src.getPageCount());
   const results = [];
@@ -178,23 +210,31 @@ export async function splitPdf(bytes, ranges) {
     const doc = await PDFDocument.create();
     const pages = await doc.copyPages(src, seg.indices);
     pages.forEach((p) => doc.addPage(p));
+    await metadatenSetzen(doc, src, titel, seg.label);
     results.push({ suffix: seg.label, bytes: await doc.save() });
   }
   return results;
 }
 
-/** Nur die angegebenen Seiten (0-basierte Indizes) in ein neues PDF übernehmen. */
-export async function extractPages(bytes, pageIndices) {
+/**
+ * Nur die angegebenen Seiten (0-basierte Indizes) in ein neues PDF übernehmen.
+ * @param {Uint8Array} bytes @param {number[]} pageIndices @param {{titel?: string}} [o] titel: 105-19 fallback title
+ */
+export async function extractPages(bytes, pageIndices, { titel = "" } = {}) {
   if (!pageIndices || !pageIndices.length) throw new Error("Keine Seiten ausgewählt.");
   const src = await loadPdf(bytes);
   const doc = await PDFDocument.create();
   const pages = await doc.copyPages(src, pageIndices);
   pages.forEach((p) => doc.addPage(p));
+  await metadatenSetzen(doc, src, titel);
   return doc.save();
 }
 
-/** Die angegebenen Seiten (0-basierte Indizes) entfernen, Rest behalten. */
-export async function removePages(bytes, pageIndices) {
+/**
+ * Die angegebenen Seiten (0-basierte Indizes) entfernen, Rest behalten.
+ * @param {Uint8Array} bytes @param {number[]} pageIndices @param {{titel?: string}} [o] titel: 105-19 fallback title
+ */
+export async function removePages(bytes, pageIndices, { titel = "" } = {}) {
   if (!pageIndices || !pageIndices.length) throw new Error("Keine Seiten ausgewählt.");
   const src = await loadPdf(bytes);
   const removeSet = new Set(pageIndices);
@@ -203,14 +243,17 @@ export async function removePages(bytes, pageIndices) {
   const doc = await PDFDocument.create();
   const pages = await doc.copyPages(src, keep);
   pages.forEach((p) => doc.addPage(p));
+  await metadatenSetzen(doc, src, titel);
   return doc.save();
 }
 
 /**
  * Seiten drehen. pageIndices = null/undefined → alle Seiten.
  * angle in Grad (90/180/270), wird zur bestehenden Drehung addiert.
+ * @param {Uint8Array} bytes @param {number[]|null|undefined} pageIndices @param {number} angle degrees
+ * @param {{titel?: string}} [o] titel: 105-19 fallback title
  */
-export async function rotatePages(bytes, pageIndices, angle) {
+export async function rotatePages(bytes, pageIndices, angle, { titel = "" } = {}) {
   const doc = await loadPdf(bytes);
   const all = doc.getPages();
   const idx = pageIndices == null ? all.map((_, i) => i) : pageIndices;
@@ -220,6 +263,7 @@ export async function rotatePages(bytes, pageIndices, angle) {
     const current = page.getRotation().angle || 0;
     page.setRotation(degrees((((current + angle) % 360) + 360) % 360));
   }
+  await metadatenSetzen(doc, null, titel);
   return doc.save();
 }
 
@@ -229,7 +273,7 @@ export async function rotatePages(bytes, pageIndices, angle) {
  */
 export async function addPageNumbers(
   bytes,
-  { position = "bottom-center", start = 1, format = "Seite {n} von {total}" } = {}
+  { position = "bottom-center", start = 1, format = "Seite {n} von {total}", titel = "" } = {}
 ) {
   const doc = await loadPdf(bytes);
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -245,17 +289,19 @@ export async function addPageNumbers(
     const x = position === "bottom-right" ? width - w - 40 : (width - w) / 2;
     page.drawText(text, { x, y: 24, size, font, color: rgb(0.45, 0.45, 0.45) });
   });
+  await metadatenSetzen(doc, null, titel);
   return doc.save();
 }
 
 /**
  * Text-Wasserzeichen auf jede Seite — standardmäßig diagonal (45 Grad) und mittig.
  * @param {Uint8Array} bytes
- * @param {{text?: string, opacity?: number, fontSize?: number, color?: any, diagonal?: boolean}} [o]
+ * @param {{text?: string, opacity?: number, fontSize?: number, color?: any, diagonal?: boolean, titel?: string}} [o]
+ *   titel: 105-19 fallback title
  */
 export async function addWatermark(
   bytes,
-  { text, opacity = 0.15, fontSize = 60, color = rgb(0.6, 0.6, 0.6), diagonal = true } = {}
+  { text, opacity = 0.15, fontSize = 60, color = rgb(0.6, 0.6, 0.6), diagonal = true, titel = "" } = {}
 ) {
   if (!text || !text.trim()) throw new Error("Bitte einen Wasserzeichen-Text angeben.");
   const doc = await loadPdf(bytes);
@@ -282,6 +328,7 @@ export async function addWatermark(
       });
     }
   }
+  await metadatenSetzen(doc, null, titel);
   return doc.save();
 }
 
@@ -298,6 +345,8 @@ export async function setPdfMetadata(bytes, { title, author, subject, keywords }
       : String(keywords).split(",").map((s) => s.trim()).filter(Boolean);
     doc.setKeywords(list);
   }
+  // 105-19: adds only a missing /Lang. The title is the user's input (also an empty one) and is never replaced.
+  await metadatenSetzen(doc, null, "");
   return doc.save();
 }
 
@@ -320,8 +369,10 @@ const A4_H = 841.89;
 /**
  * Bilder (File[] oder data-URL[]; JPG/PNG) → PDF, je Bild eine Seite in
  * Bildgröße (auf maximal A4 herunterskaliert).
+ * @param {Array<File|string>} files
+ * @param {{titel?: string}} [o] titel (105-19): document title, e.g. the first image's name
  */
-export async function imagesToPdf(files) {
+export async function imagesToPdf(files, { titel = "" } = {}) {
   if (!files || !files.length) throw new Error("Bitte mindestens ein Bild auswählen.");
   const doc = await PDFDocument.create();
   for (const f of files) {
@@ -340,6 +391,7 @@ export async function imagesToPdf(files) {
     const page = doc.addPage([w, h]);
     page.drawImage(img, { x: 0, y: 0, width: w, height: h });
   }
+  await metadatenSetzen(doc, null, titel);
   return doc.save();
 }
 
@@ -384,9 +436,11 @@ export async function pdfToImages(bytes, { scale = 2, onProgress } = {}) {
  * selektier- oder durchsuchbar. Bei text-lastigen PDFs kann die Datei sogar
  * größer werden; der Gewinn entsteht vor allem bei scan-/bildlastigen PDFs.
  * @param {Uint8Array} bytes
- * @param {{quality?: number, scale?: number, onProgress?: (seite: number, gesamt: number) => void}} [o]
+ * @param {{quality?: number, scale?: number, onProgress?: (seite: number, gesamt: number) => void, titel?: string, quellMetadaten?: boolean}} [o]
+ *   titel: 105-19 fallback title; quellMetadaten=false: do NOT carry the source's /Title and /Lang over (a neutral
+ *   attachment is re-rastered precisely so that nothing of the old title block survives — its title could name the office)
  */
-export async function compressPdf(bytes, { quality = 0.6, scale = 1.3, onProgress } = {}) {
+export async function compressPdf(bytes, { quality = 0.6, scale = 1.3, onProgress, titel = "", quellMetadaten = true } = {}) {
   const pdf = await openWithPdfjs(bytes);
   try {
     const out = await PDFDocument.create();
@@ -406,6 +460,13 @@ export async function compressPdf(bytes, { quality = 0.6, scale = 1.3, onProgres
       const p = out.addPage([base.width, base.height]);
       p.drawImage(jpeg, { x: 0, y: 0, width: base.width, height: base.height });
     }
+    // 105-19: the source is a pdfjs document — its info dictionary gives title and language.
+    const info = quellMetadaten ? /** @type {any} */ ((await pdf.getMetadata().catch(() => null))?.info) : null;
+    const { pdfLibMetadaten, pdfSpracheAusUi } = await import("@core/lib/pdfMetadaten"); // W0-F6: dynamic import
+    pdfLibMetadaten(out, {
+      titel: String(info?.Title || titel || "").trim(),
+      sprache: String(info?.Language || "").trim() || pdfSpracheAusUi(),
+    });
     return out.save();
   } finally {
     schliessePdfjs(pdf);

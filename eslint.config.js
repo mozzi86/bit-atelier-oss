@@ -29,6 +29,9 @@ export default [
       // Phase 67: the Python harness sidecar. Its venv vendors JS (pip/urllib3
       // emscripten worker) and its UI is a build-free HTML file — not ESLint's job.
       "harness/**",
+      // Phase 116: the Rust workspace has its own gates (cargo fmt / clippy / test). The few Node helper
+      // scripts of the probe (record expected JS output, measure the web app) are tooling, not product code.
+      "rust/**",
     ],
   },
   js.configs.recommended,

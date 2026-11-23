@@ -120,7 +120,7 @@ export function loeschVorschlaege(daten, heute, regelWert) {
  * — der Aufrufer kann so ehrlich berichten, was schon geschehen ist, ohne den
  * Lauf stillschweigend zu wiederholen.
  * @param {{loeschen: Array<{entitaet: string, id: string}>, sperren: Array<{entitaet: string, id: string, bis: string, grund: string, norm: string}>, grabstein: boolean, mitarbeiterId?: string, bewerbungId?: string}} plan
- * @param {Record<string, {get: (id: string) => Promise<any>, create: (data: object) => Promise<any>, delete: (id: string) => Promise<any>}> & {dateien: {delete: (id: string) => Promise<any>}}} api dieselbe Form wie bitApi.personal
+ * @param {Record<string, {get: (id: string) => Promise<any>, create: (data: object, opts?: {kennungUebernehmen?: boolean}) => Promise<any>, delete: (id: string) => Promise<any>}> & {dateien: {delete: (id: string) => Promise<any>}}} api dieselbe Form wie bitApi.personal
  * @param {string} anlass z. B. 'antrag_art17', 'austritt', 'frist', 'frist_ablauf'
  * @param {string} heute 'YYYY-MM-DD'
  * @returns {Promise<{erledigt: Array<{entitaet: string, id: string}>, protokoll: object}>}
@@ -144,8 +144,8 @@ export async function fuehrePlanAus(plan, api, anlass, heute) {
       const grund = [...new Set(plan.sperren.map((s) => s.grund))].join("; ");
       await api.Mitarbeiter.delete(plan.mitarbeiterId);
       // Neuanlage MIT derselben ID statt Update: personalDb.create() übernimmt
-      // eine mitgegebene `id` (sie steht nach dem `...data`-Spread in der
-      // Objektliteral-Reihenfolge) und erzeugt so einen echten Ersatz — kein
+      // eine mitgegebene `id` (on the express path only over the explicit id
+      // path, B-111-02-01: opts.kennungUebernehmen) und erzeugt so einen echten Ersatz — kein
       // Feld des alten Datensatzes bleibt übrig, anders als bei einem Update,
       // das nur überschreibt, was mitgegeben wird (Task-2-Vorgabe "per
       // Ersetzen, nicht per Mischen").
@@ -154,7 +154,7 @@ export async function fuehrePlanAus(plan, api, anlass, heute) {
         personalnummer: bisher?.personalnummer ?? null,
         status: "gesperrt",
         sperre: { gesperrt_bis: gesperrtBis || heute, grund, anonymisiert_am: heute },
-      });
+      }, { kennungUebernehmen: true });
       erledigt.push({ entitaet: "Mitarbeiter", id: plan.mitarbeiterId });
     }
 

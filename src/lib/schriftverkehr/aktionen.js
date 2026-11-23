@@ -10,9 +10,9 @@
 
 import { dokumentAblegen } from "@core/lib/ablage";
 import { briefLayout } from "@core/lib/brief/briefLayout.js";
-import { erzeugeBriefPdf } from "@core/lib/brief/briefPdf.js";
+import { erzeugeBriefPdf, fixiertFuerVersion } from "@core/lib/brief/briefPdf.js";
 import { bezugErledigen, eintragAusSchreiben, naechsteNummer, nummerSichern } from "@core/lib/brief/postbuch.js";
-import { briefModell, dateiIdAus, fehlendIn, festschreiben, LAYOUT_VERSION, statusWechsel, umschreiben } from "@core/lib/brief/schreiben.js";
+import { briefModell, dateiIdAus, fehlendIn, festschreiben, LAYOUT_VERSION_MIT_SPRACHE, layoutVersionVon, statusWechsel, umschreiben } from "@core/lib/brief/schreiben.js";
 import { DOKUMENT_BEREICH } from "@core/lib/brief/status.js";
 import { bueroEntitaet, speichereBuero } from "@/lib/bueroOrga/speicher.js";
 
@@ -59,7 +59,10 @@ export function dateiname(schreiben) {
  */
 export async function schreibenPdf(schreiben, { briefkopf, fixiert = null }) {
   const { schreiben: u, ersetzt } = umschreiben(schreiben);
-  const bytes = await erzeugeBriefPdf(briefLayout(/** @type {any} */ (briefModell(u, { briefkopf, datumText: datumText(u.datum) }))), { fixiert });
+  // 105-19 follow-up: /Lang only for letters of a layout version that carries it — a letter fixed before is rebuilt
+  // byte for byte (its stored SHA-256).
+  const fix = fixiertFuerVersion(fixiert, layoutVersionVon(schreiben) >= LAYOUT_VERSION_MIT_SPRACHE);
+  const bytes = await erzeugeBriefPdf(briefLayout(/** @type {any} */ (briefModell(u, { briefkopf, datumText: datumText(u.datum) }))), { fixiert: fix });
   return { bytes, ersetzt, schreiben: u };
 }
 
@@ -80,7 +83,8 @@ export async function festschreibenUndAblegen(api, entwurf, { briefkopf, jetzt, 
   const gespeichert = await speichereBuero(api, "Schreiben", entwurf, { datenquelle });
   const fixiert = { erstelltAm: jetzt, dateiId: await dateiIdAus(gespeichert.id) };
   const { bytes, ersetzt, schreiben: u } = await schreibenPdf(gespeichert, { briefkopf, fixiert });
-  const fest = await festschreiben(u, { pdfBytes: bytes, jetzt, layoutVersion: LAYOUT_VERSION });
+  // The stamp is the version the PDF was just built with (a draft: the current LAYOUT_VERSION).
+  const fest = await festschreiben(u, { pdfBytes: bytes, jetzt, layoutVersion: layoutVersionVon(gespeichert) });
   const ablage = await dokumentAblegen({
     projectId: fest.bereich === "projekt" ? fest.project_id : undefined,
     name: dateiname(fest),

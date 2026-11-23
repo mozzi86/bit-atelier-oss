@@ -5,6 +5,8 @@
 // shown read-only and cannot be deleted; the app sends nothing itself — "Als
 // versendet markieren" only records it, "E-Mail vorbereiten" opens the mail
 // program with the subject (external effect stays with the user, D-P82-29).
+// Phase 115: a letter with an amount table shows a second text field, the
+// closing text printed after the table (`schluss`).
 //
 // In:  props (see the JSDoc). Out: the dialog.
 
@@ -68,6 +70,10 @@ export default function SchreibenEditor({ schreiben, vorlagen, kontakte, projekt
   const fehlend = fehlendIn(f);
   const ersetzt = useMemo(() => umschreiben(f).ersetzt, [f]);
   const projektFehlt = f.bereich === "projekt" && !f.project_id;
+  // 115: a letter with an amount table (the dunning letter) has a second text — what stands AFTER the table (deadline
+  // sentence, greeting). The preview names the table's place, so the order of the PDF is visible without opening it.
+  const mitSchluss = !verteiler && (typeof f.schluss === "string" || Boolean(f.tabelle?.zeilen?.length));
+  const vorschauText = f.schluss ? [f.text || "", `— ${t("Betragstabelle")} —`, f.schluss].join("\n\n") : f.text || "";
 
   const lauf = async (/** @type {() => Promise<any>} */ aktion) => { setBusy(true); try { return await aktion(); } finally { setBusy(false); } };
   const vorschau = () => lauf(async () => {
@@ -154,13 +160,18 @@ export default function SchreibenEditor({ schreiben, vorlagen, kontakte, projekt
             <label className={feld}>{t("Text")}
               <textarea className={`${auswahl} h-48 py-1 font-mono text-xs`} value={f.text || ""} onChange={(e) => setze("text", e.target.value)} data-testid="schreiben-text" />
             </label>
+            {mitSchluss && (
+              <label className={feld}>{t("Schlusstext (nach der Betragstabelle)")}
+                <textarea className={`${auswahl} h-24 py-1 font-mono text-xs`} value={f.schluss || ""} onChange={(e) => setze("schluss", e.target.value)} data-testid="schreiben-schluss" />
+              </label>
+            )}
             <label className={feld}>{t("Anlagen (durch Komma getrennt)")}
               <Input value={(f.anlagen || []).join(", ")} onChange={(e) => setze("anlagen", e.target.value.split(",").map((x) => x.trim()).filter(Boolean))} />
             </label>
           </>
         )}
 
-        <TextVorschau betreff={f.betreff || ""} text={f.text || ""} />
+        <TextVorschau betreff={f.betreff || ""} text={vorschauText} />
         {ersetzt > 0 && <p role="status" className="text-xs text-amber-800 dark:text-amber-200" data-testid="zeichen-ersetzt">{t("{n} Zeichen ersetzt").replace("{n}", String(ersetzt))}</p>}
         {bearbeitbar && fehlend.length > 0 && <p role="alert" className="text-xs text-rose-700 dark:text-rose-300" data-testid="pflicht-fehlt">{t("Pflichtangaben fehlen: {liste}").replace("{liste}", fehlend.join(", "))}</p>}
         {!entwurf && f.pdf_sha256 && <p className="break-all text-xs text-slate-500" data-testid="schreiben-hash">SHA-256: {f.pdf_sha256}</p>}

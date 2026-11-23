@@ -9,9 +9,12 @@
 //
 // Sanctioned exception (107-11, entry chunk near its size budget): a LAZY part is NOT listed below. Its file is imported by every
 // module that shows its texts, and that module calls englischErgaenzen(EN) of ../i18n.jsx once at module level (existing keys win).
-// Today: raeume-107-11.js — imported by BitBimStudio.jsx and WohnungsWerkstatt.jsx; ansicht-107-12.js — imported by BitBimStudio.jsx;
+// Today: raeume-107-11.js — imported by BitBimStudio.jsx, WohnungsWerkstatt.jsx and BimPlan2D.jsx (115-02, "Kniestock" of the section); ansicht-107-12.js — imported by BitBimStudio.jsx;
 // efh-108.js (all plans of phase 108) — imported by BitBimStudio.jsx, BimPlan2D.jsx, MapLibreMap.jsx, ComplexDesigner.jsx, MassingStudio.jsx and WohnungsWerkstatt.jsx;
-// portfolio-112.js — imported by src/pages/AtelierDeveloper.jsx; ueberschreibung-55.js — imported by RegelEditor.jsx, BitBimStudio.jsx, IfcViewer.jsx.
+// portfolio-112.js — imported by src/pages/AtelierDeveloper.jsx; suche-105.js — imported by src/components/Befehlspalette.jsx and KuerzelHilfe.jsx;
+// ueberschreibung-55.js — imported by RegelEditor.jsx, BitBimStudio.jsx, IfcViewer.jsx;
+// kalender-laender-w1.js (wave 1, B-81-04) — imported by RegelwerkBereich.jsx, FeiertageReiter.jsx, MonatsRaster.jsx;
+// kosten-pauschal-kd09.js (wave 1, KD-09) — imported by CostCalculator.jsx and CostControl.jsx.
 // A NEW consumer of these keys must import the
 // part the same way, else it shows German in EN mode. Move the part into the list below once the entry chunk has headroom.
 //
@@ -179,6 +182,11 @@ import { EN as DXF_104 } from "./dxf-104.js";
 import { EN as KOSTENDRIFT_96 } from "./kostendrift-96.js";
 // Plan 104-05: object snap (switches, right-click group, command line chips).
 import { EN as OBJEKTFANG_104 } from "./objektfang-104.js";
+import { EN as PLANSATZ_W111821 } from "./plansatz-w111821.js";
+import { EN as VORDACH_W111829 } from "./vordach-w111829.js";
+import { EN as EXPOSE_W111828 } from "./expose-w111828.js";
+import { EN as UNDO_11505D } from "./undo-11505d.js";
+import { EN as MOEBELRUECKEN_W111822 } from "./moebelruecken-w111822.js";
 // 105-12: personnel key in "Daten & Sicherung" (fingerprint, open folder, locked store).
 import { EN as SCHLUESSEL_105 } from "./schluessel-105.js";
 // 106-01: labels of the pointing states (zeigen/zustaende.js)
@@ -298,6 +306,11 @@ export const TEILE_EN = Object.freeze({
   ...ERDMASSEN_103,
   ...DXF_104,
   ...OBJEKTFANG_104,
+  ...PLANSATZ_W111821,
+  ...VORDACH_W111829,
+  ...EXPOSE_W111828,
+  ...UNDO_11505D,
+  ...MOEBELRUECKEN_W111822,
   ...SCHLUESSEL_105,
   ...ZEIGEN_106,
   ...AENDERUNGEN_106,

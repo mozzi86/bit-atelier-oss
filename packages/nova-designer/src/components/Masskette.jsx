@@ -29,13 +29,15 @@ import { kettenPaar, formatMeter } from "@designer/lib/masskette";
  * @param {number} [p.schriftPx=9] font height in screen px
  * @param {string} [p.testid] data-testid of the group
  * @param {Record<string, string|number|boolean|undefined>} [p.daten] extra data-* attributes for the group
+ * @param {number} [p.drehung=0] 115-04: rotation of the host drawing (degrees counter-clockwise as seen, 0 | 90 | 180 | 270) — the
+ *   chain is drawn inside the turned group, the numbers keep reading from below or from the right
  */
 export default function Masskette({
   punkte, X, Z, px, SCALE, offsetM = 0.5, seite = 1, gesamt = true, format = formatMeter,
-  farbe = "#334155", schriftPx = 9, testid, daten,
+  farbe = "#334155", schriftPx = 9, testid, daten, drehung = 0,
 }) {
   const pxJeM = SCALE / (px(1) || 1); // screen px per metre
-  const { teil, gesamt: ges } = kettenPaar({ punkte, offsetM, seite, pxJeM, schrift: schriftPx, format, gesamt });
+  const { teil, gesamt: ges } = kettenPaar({ punkte, offsetM, seite, pxJeM, schrift: schriftPx, format, gesamt, drehung });
   // No piece at all → nothing to draw. Zoomed out the part numbers may all be
   // dropped (masskette.js `ausgelassen`) while slashes and the total stay.
   if (teil.hilfslinien.length < 2) return null;

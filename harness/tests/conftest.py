@@ -63,6 +63,11 @@ def workspace(tmp_path: Path) -> dict:
     repo.mkdir()
     (repo / "package.json").write_text('{"name": "fake-app"}', encoding="utf-8")
     shutil.copytree(EXAMPLE, projects / "efh-satteldach")
+    # Same as Runtime.open_project(): a copied example gets its files/ and model/ folders. git does
+    # not track the empty examples/efh-satteldach/files/, so a fresh clone lacks it (the symlink test
+    # in test_sandbox.py failed with FileNotFoundError on every clean checkout).
+    for sub in ("files", "model"):
+        (projects / "efh-satteldach" / sub).mkdir(exist_ok=True)
     skills = tmp_path / "skills"
     shutil.copytree(HARNESS_DIR / "skills", skills)
     return {"tmp": tmp_path, "projects": projects, "repo": repo, "skills": skills,

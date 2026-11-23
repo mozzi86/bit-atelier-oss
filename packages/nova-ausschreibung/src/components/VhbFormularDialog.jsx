@@ -59,7 +59,7 @@ export default function VhbFormularDialog({ tender, bids, contacts, projekt, onU
     if (!datei || !bel || !formular || busy) return;
     setBusy(true); setFehler(null);
     try {
-      const { bytes, gefuellt } = await formularFuellen(datei.bytes, bel.belegt);
+      const { bytes, gefuellt } = await formularFuellen(datei.bytes, bel.belegt, { titel: [formular.nummer, formular.titel].filter(Boolean).join(" ") });
       const name = `${[formular.nummer, formular.titel].filter(Boolean).join("_").replace(/[^\p{L}\p{N}._-]+/gu, "_")}_Entwurf.pdf`;
       const url = URL.createObjectURL(new Blob([/** @type {BlobPart} */ (/** @type {unknown} */ (bytes))], { type: "application/pdf" }));
       const a = document.createElement("a");

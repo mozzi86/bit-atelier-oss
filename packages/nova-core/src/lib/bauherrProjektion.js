@@ -31,6 +31,10 @@ export const BAUHERR_FELDER = Object.freeze({
   BauherrTermin: Object.freeze(['project_id', 'titel', 'beginn', 'ende', 'status', 'art']),
   BauherrPlan: Object.freeze(['project_id', 'titel', 'plannummer', 'index', 'massstab', 'status', 'stand', 'datei', 'entscheidung_offen']),
   BauherrModell: Object.freeze(['project_id', 'titel', 'stand', 'datei']),
+  // W-1118-22: the furnished rooms the client may move furniture in (bauherrMoeblierung.js) — outlines and furniture, no building element
+  BauherrMoeblierung: Object.freeze(['project_id', 'titel', 'stand', 'aenderbar', 'raeume', 'moebel']),
+  'BauherrMoeblierung.raeume': Object.freeze(['schluessel', 'name', 'geschoss', 'umriss']),
+  'BauherrMoeblierung.moebel': Object.freeze(['id', 'raum', 'typ', 'name', 'kategorie', 'b', 't', 'x', 'y', 'rot']),
   BauherrKosten: Object.freeze(['project_id', 'titel', 'stufe', 'stand', 'summe_netto', 'summe_brutto', 'gruppen', 'hinweis']),
   'BauherrKosten.gruppen': Object.freeze(['kg', 'bezeichnung', 'betrag_netto', 'betrag_brutto']),
   BauherrDokument: Object.freeze(['project_id', 'titel', 'kategorie', 'datum', 'datei', 'entscheidung_offen']),
@@ -41,7 +45,7 @@ export const BAUHERR_FELDER = Object.freeze({
   BauherrBeteiligter: Object.freeze(['project_id', 'titel', 'personen']),
   'BauherrBeteiligter.personen': Object.freeze(['name', 'rolle', 'firma', 'email', 'telefon']),
   BauherrAntwort: Object.freeze(['project_id', 'bezug_id', 'frage', 'antwort']),
-  BauherrRueckmeldung: Object.freeze(['project_id', 'bezug_id', 'bezug_entity', 'art', 'option', 'text', 'zeitpunkt']),
+  BauherrRueckmeldung: Object.freeze(['project_id', 'bezug_id', 'bezug_entity', 'art', 'option', 'text', 'vorschlag', 'zeitpunkt']),
   BauherrUpload: Object.freeze(['project_id', 'titel', 'datei', 'groesse_bytes', 'mime', 'text', 'zeitpunkt']),
 });
 
@@ -54,6 +58,7 @@ export const BAUHERR_QUELLEN = Object.freeze({
   BauherrTermin: Object.freeze(['ScheduleTask', 'Termin']),
   BauherrPlan: Object.freeze(['Plan']),
   BauherrModell: Object.freeze(['BimModel', 'BIMModel']),
+  BauherrMoeblierung: Object.freeze(['BuildingComplex']),
   BauherrKosten: Object.freeze(['Project', 'KostenStand']),
   BauherrDokument: Object.freeze(['Document']),
   BauherrBemusterung: Object.freeze(['Bemusterung', 'Sonderwunsch']),
@@ -77,6 +82,7 @@ export const BAUHERR_LABELS = Object.freeze({
   BauherrTermin: 'Termine',
   BauherrPlan: 'Pläne',
   BauherrModell: 'Gebäudemodell',
+  BauherrMoeblierung: 'Möblierung',
   BauherrKosten: 'Kosten',
   BauherrDokument: 'Dokumente',
   BauherrBemusterung: 'Bemusterung',
@@ -86,7 +92,10 @@ export const BAUHERR_LABELS = Object.freeze({
 });
 
 /** Kinds of a client feedback row (trigger records_bauherr). @type {ReadonlyArray<string>} */
-export const RUECKMELDUNG_ARTEN = Object.freeze(['freigabe', 'ablehnung', 'auswahl', 'frage', 'kommentar']);
+export const RUECKMELDUNG_ARTEN = Object.freeze(['freigabe', 'ablehnung', 'auswahl', 'frage', 'kommentar', 'moeblierung']);
+
+/** Longest furniture proposal text (characters) — the same bound as bauherrMoeblierung.js VORSCHLAG_MAX and the trigger. */
+export const VORSCHLAG_MAX = 16000;
 
 /** Feedback kinds that are a DECISION on a projection that asks for one. */
 const ENTSCHEIDUNGEN = Object.freeze(['freigabe', 'ablehnung', 'auswahl']);
@@ -165,6 +174,27 @@ export function bauherrDateiname(name) {
   const sauber = roh.normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._]+/, '');
   if (!sauber || /\.ifc(zip)?$/i.test(sauber)) return null;
   return sauber.slice(-200);
+}
+
+/**
+ * The name the client's browser saves a released file under: the title the
+ * client sees in the portal, not the storage name ("<id>-Expose_…pdf" from
+ * bauherrDateiname, finding 22.11.2026). Umlauts, dashes and spaces stay; only
+ * characters Windows, macOS or Android refuse in file names are replaced. When
+ * the title carries no extension, the one of the stored file is appended.
+ * @param {unknown} titel title of the projection row, e.g. 'Exposé – Entwurf vom 22.11.2026.pdf'
+ * @param {unknown} [datei] stored file name, source of the extension and fallback
+ * @returns {string} file name, at most 180 characters plus extension
+ */
+export function lesbarerDateiname(titel, datei = '') {
+  const gespeichert = String(datei || '').split(/[\\/]/).pop() || '';
+  const endung = (gespeichert.match(/\.[A-Za-z0-9]{1,8}$/) || [''])[0];
+  // eslint-disable-next-line no-control-regex -- control characters are exactly what must go
+  const verboten = /[\u0000-\u001f\u007f<>:"/\\|?*]+/g;
+  let name = String(titel || '').replace(verboten, ' ').replace(/\s+/g, ' ').trim().replace(/[. ]+$/, '');
+  if (!name) name = gespeichert.replace(/^[a-z0-9]{10,20}-/, '') || 'Datei';
+  if (endung && !name.toLowerCase().endsWith(endung.toLowerCase())) name = name.slice(0, 180) + endung;
+  return name.length > 180 + endung.length ? name.slice(0, 180) + endung : name;
 }
 
 // --- Which rows may go out ---------------------------------------------------------
@@ -308,12 +338,14 @@ export function kostenAusLv(positionen, standard = UST_SATZ) {
  * @param {string} entity entity name of the source row
  * @param {Record<string, any>} q the source row
  * @param {{ entscheidung?: boolean, hinweis?: string, gruppen?: ReadonlyArray<any>,
- *   kontakte?: ReadonlyArray<Record<string, any>>, rollenLabel?: (id: string) => string, ust?: number }} [opt]
+ *   kontakte?: ReadonlyArray<Record<string, any>>, rollenLabel?: (id: string) => string, ust?: number,
+ *   moeblierung?: { raeume?: ReadonlyArray<any>, moebel?: ReadonlyArray<any> }|null }} [opt]
  *   entscheidung: the office asks the client for a decision; hinweis: one
  *   sentence the office writes for the client; gruppen: KG rows for
  *   BauherrKosten (kostenAusLv: net and gross in euro; a row without gross gets
  *   the flat rate); kontakte: Contact rows to resolve Project.beteiligte;
- *   rollenLabel: participant role id → label; ust: VAT rate (default UST_SATZ)
+ *   rollenLabel: participant role id → label; ust: VAT rate (default UST_SATZ);
+ *   moeblierung (W-1118-22): rooms and furniture for BauherrMoeblierung, built by bauherrMoeblierung.moeblierungProjektion
  * @returns {Record<string, unknown>|null} the projection, already stripped by bereinigen()
  */
 export function projektionAus(art, entity, q, opt = {}) {
@@ -352,6 +384,14 @@ export function projektionAus(art, entity, q, opt = {}) {
     case 'BauherrModell':
       p = { titel: text(q.name) || 'Gebäudemodell', stand: text(q.updated_date) || text(q.created_date) };
       break;
+    case 'BauherrMoeblierung': {
+      // W-1118-22: rooms and furniture are built by the caller from the model (bauherrMoeblierung.moeblierungProjektion — it needs
+      // the rooms of the BimModel and the furniture catalogue); here only the frame. `aenderbar` = the client may send a proposal.
+      const m = opt.moeblierung || null;
+      if (!m || !Array.isArray(m.raeume) || !m.raeume.length) return null;
+      p = { titel: 'Möblierung', stand: text(q.updated_date) || text(q.created_date), aenderbar: opt.entscheidung === true, raeume: m.raeume, moebel: Array.isArray(m.moebel) ? m.moebel : [] };
+      break;
+    }
     case 'BauherrKosten': {
       // 08.11.2026 (finding on the live project): the total is ALWAYS the sum of the rows
       // shown — a client reads a mismatch as a calculation error. Gross comes per row
@@ -518,11 +558,24 @@ export function fuerBauherrSichtbar(zeilen, projektId) {
   return aus;
 }
 
+/**
+ * The note to the client that is live now, so the office field starts with it.
+ * Without this the field started empty after every reload, and the next
+ * release (which rewrites BauherrProjekt with whatever the field holds)
+ * silently removed the welcome note from the client's portal.
+ * @param {ReadonlyArray<Record<string, any>>|null|undefined} zeilen BauherrProjekt rows of the project
+ * @returns {string} note of the released row; '' when nothing is released or it has no note
+ */
+export function freigegebenerHinweis(zeilen) {
+  const z = (zeilen || []).find((r) => r?.freigegeben === true && typeof r.hinweis === 'string' && r.hinweis.trim() !== '');
+  return z ? z.hinweis : '';
+}
+
 // --- Client feedback -------------------------------------------------------------
 
 /**
  * The checks of trigger records_bauherr, in plain words, before the insert.
- * @param {{ art: string, text?: string, option?: string }} eingabe
+ * @param {{ art: string, text?: string, option?: string, vorschlag?: string }} eingabe
  * @param {Record<string, any>|null} [bezug] the projection the feedback refers to
  * @returns {{ ok: boolean, grund?: string }} grund: plain-text reason when ok is false
  */
@@ -532,6 +585,13 @@ export function rueckmeldungPruefen(eingabe, bezug = null) {
   const t = String(eingabe?.text || '');
   if (t.length > TEXT_MAX) return { ok: false, grund: `Der Text ist zu lang (höchstens ${TEXT_MAX} Zeichen).` };
   if ((art === 'frage' || art === 'kommentar') && !t.trim()) return { ok: false, grund: 'Bitte einen Text eingeben.' };
+  if (art === 'moeblierung') {
+    // W-1118-22: a furniture proposal answers a furnishing that asks for one; the content is checked by the office (vorschlagPruefen)
+    if (!bezug || bezug.aenderbar !== true || !Array.isArray(bezug.moebel)) return { ok: false, grund: 'Zu diesem Eintrag ist kein Möblierungsvorschlag angefragt.' };
+    const v = String(eingabe?.vorschlag || '');
+    if (!v) return { ok: false, grund: 'Der Vorschlag ändert nichts.' };
+    if (v.length > VORSCHLAG_MAX) return { ok: false, grund: 'Der Vorschlag ist zu groß.' };
+  }
   if (ENTSCHEIDUNGEN.includes(art)) {
     if (!bezug || bezug.entscheidung_offen !== true) return { ok: false, grund: 'Zu diesem Eintrag ist keine Entscheidung angefragt.' };
     if (art === 'auswahl' && !(bezug.optionen || []).some((/** @type {any} */ o) => o?.schluessel === eingabe.option)) {

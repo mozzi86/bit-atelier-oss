@@ -267,11 +267,11 @@ describe("107-13 Planausgaben tragen den UG-Namen", () => {
 });
 
 describe("107-13 Vektorschnitt mit UG", () => {
-  it("Wand bis fusshoehe_m, Kote „-3,00  1. UG“, bbox schließt das UG ein; ohne UG unverändert", () => {
+  it("Wand bis fusshoehe_m, Kote „−3,00  1. UG“, bbox schließt das UG ein; ohne UG unverändert", () => {
     const ohne = createBuildingModel(EINGABE_A);
     const mit = createBuildingModel({ ...EINGABE_A, untergeschosse: 1 });
     const gOhne = schnittGrafik({ model: ohne }), gMit = schnittGrafik({ model: mit });
-    assert.ok(gMit.elemente.some((e) => e.art === "text" && e.text === "-3,00  1. UG"));
+    assert.ok(gMit.elemente.some((e) => e.art === "text" && e.text === "−3,00  1. UG")); // 115-02: minus sign U+2212
     // z is stored as −height: the basement wall reaches z = +3
     const ugW = ugSchnittWaende(mit);
     assert.equal(ugW.length, 2);

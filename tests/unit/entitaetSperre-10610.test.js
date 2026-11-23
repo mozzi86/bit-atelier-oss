@@ -24,9 +24,9 @@ describe("B-106-10-01: locked entities hold for every spelling", () => {
   before(async () => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "bit-atelier-10610s-"));
     db = createDb(path.join(tmp, "db.json"));
-    db.create("LlmConnection", { id: "c1", provider: "openai", api_key: SCHLUESSEL, active: true });
-    db.create("Mitarbeiter", { id: "m1", name: "Testperson", gehalt: 1 });
-    db.create("KiEinstellung", { id: "k1", nur_lokal: true });
+    db.create("LlmConnection", { id: "c1", provider: "openai", api_key: SCHLUESSEL, active: true }, { kennungUebernehmen: true });
+    db.create("Mitarbeiter", { id: "m1", name: "Testperson", gehalt: 1 }, { kennungUebernehmen: true });
+    db.create("KiEinstellung", { id: "k1", nur_lokal: true }, { kennungUebernehmen: true });
     const app = express();
     app.use(express.json());
     app.use("/api", entitiesRouter(db));

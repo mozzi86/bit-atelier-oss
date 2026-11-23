@@ -69,9 +69,10 @@ export async function pdfAnalyse(bytes) {
  * regenerates the appearance streams before flattening (updateFieldAppearances), so a filled-in
  * field without its own appearance is not lost.
  * @param {Uint8Array} bytes
+ * @param {{titel?: string}} [o] titel (105-19): title when the file has none (e.g. the source file name)
  * @returns {Promise<{bytes: Uint8Array, bericht: {felder: number, annotationenEntfernt: number, arten: Record<string, number>, seiten: number}}>}
  */
-export async function formularAbflachen(bytes) {
+export async function formularAbflachen(bytes, { titel = "" } = {}) {
   const doc = await laden(bytes);
   let felder = 0;
   try {
@@ -92,5 +93,8 @@ export async function formularAbflachen(bytes) {
   }
   // An empty AcroForm entry would still make viewers offer "fill in" — drop it.
   doc.catalog.delete(PDFName.of("AcroForm"));
+  // W0-F6: dynamic import, so the entry's preload map does not name the helper's chunk.
+  const { pdfLibMetadaten, pdfSpracheAusUi } = await import("@core/lib/pdfMetadaten.js");
+  pdfLibMetadaten(doc, { titel, sprache: pdfSpracheAusUi(), nurErgaenzen: true }); // 105-19: only what the file lacks
   return { bytes: await doc.save(), bericht: { felder, annotationenEntfernt: entfernt, arten, seiten: doc.getPageCount() } };
 }

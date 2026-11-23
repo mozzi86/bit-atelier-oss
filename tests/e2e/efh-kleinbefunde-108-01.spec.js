@@ -1,7 +1,7 @@
 // Headless proof 108-01 (small visible findings of the single-family house with gable roof, 108-RESEARCH §4, §5, §9) on the neutral
 // test house "Review EFH 108" (fixtures/efh108.js: 11.40 × 10.20 m, KG/EG/DG, gable roof 45°, one own entrance door in the hull):
-//  - 9c: the section starts as B-B (across the ridge), shows the cut roof plate (data-dachschnitt) and the marks Traufe +5.50 /
-//    First +10.60 instead of "OK Dach"; A-A shows the plate along the ridge; the PDF of B-B is named "Schnitt_B-B";
+//  - 9c: the section starts as B-B (across the ridge), shows the cut roof plate (data-dachschnitt) and the marks Traufe +5,50 /
+//    First +10,60 instead of "OK Dach"; A-A shows the plate along the ridge; the PDF of B-B is named "Schnitt_B-B";
 //  - 9a: at 1400 × 900 no control of the studio header leaves the card; at 1400 × 1200 the floor plan is higher than the old 460 px
 //    and ends inside the visible work area;
 //  - 4: the automatic entrance is off (an own ground-floor door, `enabled` not stored) and no hint is shown;
@@ -94,8 +94,8 @@ test.describe("108-01 Kleine Befunde am EFH mit Satteldach", () => {
     await page.getByRole("button", { name: "Ansicht Schnitt" }).click();
     await expect(page.locator('[data-testid="schnitt-achse"] [data-achse="z"]')).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator('[data-dachschnitt="z"]')).toHaveCount(1, { timeout: 15000 });
-    await expect(page.locator('[data-kote="traufe"]')).toHaveText("Traufe +5.50");
-    await expect(page.locator('[data-kote="first"]')).toHaveText("First +10.60");
+    await expect(page.locator('[data-kote="traufe"]')).toHaveText("Traufe +5,50");
+    await expect(page.locator('[data-kote="first"]')).toHaveText("First +10,60");
     await expect(page.locator("svg text", { hasText: "OK Dach" })).toHaveCount(0);
     // the roof plate is a closed path of six corners (triangle below, triangle above) reaching up to the ridge
     const ecken = await page.locator('[data-dachschnitt="z"]').evaluate((el) => (el.getAttribute("d") || "").split(/[ML]/).filter((x) => x.trim()).length);
@@ -105,7 +105,7 @@ test.describe("108-01 Kleine Befunde am EFH mit Satteldach", () => {
     // ---- A-A: along the ridge, the plate is a horizontal band at ridge height ----
     await page.locator('[data-testid="schnitt-achse"] [data-achse="x"]').click();
     await expect(page.locator('[data-dachschnitt="x"]')).toHaveCount(1);
-    await expect(page.locator('[data-kote="first"]')).toHaveText("First +10.60");
+    await expect(page.locator('[data-kote="first"]')).toHaveText("First +10,60");
     await page.screenshot({ path: path.join(ORDNER, "schnitt-aa.png") });
 
     // ---- the PDF of B-B names the section in the stamp and the file name ----
@@ -139,8 +139,8 @@ test.describe("108-01 Kleine Befunde am EFH mit Satteldach", () => {
     await page.getByRole("button", { name: "Ansicht Schnitt" }).click();
     await expect(page.locator('[data-dachschnitt="z"]')).toHaveCount(1, { timeout: 15000 });
     const attika = page.locator("[data-bim-plan2d] svg text", { hasText: "OK Attika" });
-    await expect(attika).toHaveText("OK Attika +6.50"); // eaves 5.50 + parapet 1.00 (the PDF section says the same)
-    await expect(page.locator('[data-kote="first"]')).toHaveText("First +10.60");
+    await expect(attika).toHaveText("OK Attika +6,50"); // eaves 5.50 + parapet 1.00 (the PDF section says the same)
+    await expect(page.locator('[data-kote="first"]')).toHaveText("First +10,60");
     const yAttika = await attika.evaluate((el) => el.getBoundingClientRect().top);
     const yFirst = await page.locator('[data-kote="first"]').evaluate((el) => el.getBoundingClientRect().top);
     const yTraufe = await page.locator('[data-kote="traufe"]').evaluate((el) => el.getBoundingClientRect().top);

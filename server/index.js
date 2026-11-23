@@ -47,6 +47,7 @@ import { geoRouter } from '../packages/nova-designer/server/routes.js';
 import { ifcTestPfad } from './ifcTestDatei.js';
 import { aenderungsStrom, aenderungenMelden, aenderungsRouter, clientAus, ereignisAusSchreiben, STROM_ENTITAETEN } from './aenderungsStrom.js';
 import { papierkorbRouter, papierkorbSperre } from '../packages/nova-core/server/papierkorbRouter.js';
+import { modellImportRouter } from './modellImportRouter.js';
 
 /** Path notation of this machine for the path rule (104-10). */
 const PLATTFORM = process.platform === 'win32' ? 'win32' : 'posix';
@@ -181,6 +182,14 @@ app.use('/api', papierkorbRouter(db, {
   nachAenderung: (w) => {
     if (!STROM_ENTITAETEN.includes(w.entitaet)) return;
     const e = ereignisAusSchreiben({ methode: w.methode, entitaet: w.entitaet, id: w.id, datensatz: w.datensatz, vorher: w.vorher,
+      geraet: geraetVonAnfrage(w.req), client: clientAus(w.req) });
+    if (e) strom.melden(e);
+  },
+}));
+// 108-09: a model from a geometry JSON (dry run first, strict stand, backup, one event of the change stream; operator only).
+app.use('/api', modellImportRouter(db, {
+  nachAenderung: (w) => {
+    const e = ereignisAusSchreiben({ methode: w.methode, entitaet: w.entitaet, id: w.id, datensatz: w.datensatz, vorher: w.vorher, body: w.body,
       geraet: geraetVonAnfrage(w.req), client: clientAus(w.req) });
     if (e) strom.melden(e);
   },

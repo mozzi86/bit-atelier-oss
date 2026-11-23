@@ -64,3 +64,16 @@ export function passtFilter(record, query) {
     ([k, v]) => record?.[k] === v || String(record?.[k]) === String(v)
   );
 }
+
+/**
+ * 115-05b part 2: the refusal of a strict write on another stored state, in the shape bitApi's express path throws for HTTP 409
+ * (err.status, err.data.gespeichert) - one shape for the callers on every data path.
+ * @param {any} gespeichert the stored record
+ * @returns {Error & {status: number, data: {konflikt: true, gespeichert: any}}}
+ */
+export function standKonflikt(gespeichert) {
+  const err = /** @type {Error & {status: number, data: {konflikt: true, gespeichert: any}}} */ (new Error('Request failed: 409'));
+  err.status = 409;
+  err.data = { konflikt: true, gespeichert };
+  return err;
+}

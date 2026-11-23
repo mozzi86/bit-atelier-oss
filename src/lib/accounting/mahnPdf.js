@@ -10,17 +10,23 @@ import { erzeugeBriefPdf } from "@core/lib/brief/briefPdf.js";
 
 /**
  * The shared letter core's input from one set of dunning text fields.
- * @param {ReturnType<typeof import("./mahnwesen.js").mahnTextFelder>} felder
- * @returns {Parameters<typeof briefLayout>[0]}
+ * Phase 115 (user finding 15.11.2026): with `felder.schlussAb` the paragraphs from that index on (deadline sentence,
+ * greeting) become `schluss` — printed AFTER the amount table; before, the table stood below the greeting. Fields
+ * without `schlussAb` give the input they gave before (everything in `absaetze`).
+ * @param {Omit<ReturnType<typeof import("./mahnwesen.js").mahnTextFelder>, 'schlussAb'> & {schlussAb?: number}} felder
+ * @returns {NonNullable<Parameters<typeof briefLayout>[0]>}
  */
 export function mahnBrief(felder) {
+  const ab = felder.schlussAb;
+  const geteilt = typeof ab === "number" && Number.isInteger(ab) && ab >= 0 && ab < felder.absaetze.length;
   return {
     absender: felder.absenderZeilen,
     empfaenger: felder.empfaengerZeilen,
     datum: felder.datum,
     betreff: felder.betreff,
-    absaetze: [felder.anrede, ...felder.absaetze],
+    absaetze: [felder.anrede, ...(geteilt ? felder.absaetze.slice(0, ab) : felder.absaetze)],
     tabelle: felder.tabelle,
+    ...(geteilt ? { schluss: felder.absaetze.slice(ab) } : {}),
   };
 }
 

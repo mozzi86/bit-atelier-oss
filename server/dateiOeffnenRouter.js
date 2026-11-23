@@ -45,8 +45,8 @@ import zlib from 'node:zlib';
 import express, { Router } from 'express';
 import { datenOrdner } from './datenPfad.js';
 import {
-  DATEI_ENDUNG, parseProjektDatei, serialisiereProjekt, entferneBereiche, mitBehaltenem,
-  kopieAnfuegen, projekteIn, vorhandeneProjekte,
+  DATEI_ENDUNG, parseProjektDatei, serialisiereProjekt, entferneBereiche, mitBehaltenem, wendeEinschraenkungAn,
+  kopieAnfuegen, projekteIn, vorhandeneProjekte, zurueckKonflikt, ZURUECK_EINGESCHRAENKT_TEXT,
 } from '../packages/nova-core/src/api/projektDateiFormat.js';
 import { pfadRichtlinie } from '../packages/nova-core/src/lib/pfadRichtlinie.js';
 
@@ -247,6 +247,28 @@ export function schluesselSchreiben(ordner) {
   return wert;
 }
 
+/**
+ * Wave 1 (BEFUNDE-82 H-2, W1-BUERO-F1): the export restriction a save request names (built by
+ * @core/api/exportSicht.js). `eingeschraenkt=1` marks a restricted export; `sicht=zuordnung` plus the
+ * visible project ids (`projekt`, one value or a list; none = no project) limits the projects; `ohne`,
+ * `ohneSettingKey`, `ohneDokumentBereich` drop the office areas the role may not export. Without any of
+ * these the export holds everything (the owner, E-17). The local server has no sign-in (BEFUNDE-82 H-1),
+ * so it applies what the app on THIS computer names — both routes are nurLokal, a paired LAN device
+ * cannot reach them at all.
+ * @param {any} quelle req.query or req.body (untrusted)
+ * @returns {{projektIds: string[]|null, ohne: string[], ohneSettingKeys: string[], ohneDokumentBereiche: string[]}|null}
+ *   null = no restriction
+ */
+function einschraenkungAus(quelle) {
+  /** @param {unknown} roh @returns {string[]} */
+  const liste = (roh) => strings(Array.isArray(roh) ? roh : roh === undefined ? [] : [roh]);
+  const projektIds = quelle?.sicht === 'zuordnung' ? liste(quelle.projekt) : null;
+  const e = { projektIds, ohne: liste(quelle?.ohne), ohneSettingKeys: liste(quelle?.ohneSettingKey), ohneDokumentBereiche: liste(quelle?.ohneDokumentBereich) };
+  const markiert = quelle?.eingeschraenkt === '1' || quelle?.eingeschraenkt === 1 || quelle?.eingeschraenkt === true;
+  if (!markiert && projektIds === null && !e.ohne.length && !e.ohneSettingKeys.length && !e.ohneDokumentBereiche.length) return null;
+  return e;
+}
+
 /** @param {unknown} liste @returns {string[]} only the string entries (request bodies are untrusted) */
 const strings = (liste) => (Array.isArray(liste) ? liste.filter((x) => typeof x === 'string' && x.length < 200).slice(0, 500) : []);
 
@@ -326,10 +348,13 @@ export function dateiOeffnenRouter({ db, lokalGebunden, port, origins = [], anfr
 
   // --- 93-13: save / load from inside the app (installed edition) ------------------------------------
   // "Als Datei sichern": the current workspace as a .bitproj (same format and areas as the PWA export).
-  r.get('/datei/export', nurLokal, nurAppLesen, (_req, res) => {
+  // Wave 1 (H-2, W1-BUERO-F1): the query names the role's restriction (einschraenkungAus).
+  r.get('/datei/export', nurLokal, nurAppLesen, (req, res) => {
     try {
       const datum = new Date(jetzt()).toISOString().slice(0, 10);
-      const bytes = projektDateiBytes(serialisiereProjekt(db._raw(), 'BIT-Atelier'));
+      const e = einschraenkungAus(req.query);
+      const daten = wendeEinschraenkungAn(db._raw(), e);
+      const bytes = projektDateiBytes(serialisiereProjekt(daten, 'BIT-Atelier', e ? { art: 'weitergabe' } : {}));
       res.set('Content-Type', 'application/octet-stream');
       res.set('Content-Disposition', `attachment; filename="bit-atelier-${datum}${DATEI_ENDUNG}"`);
       res.send(Buffer.from(bytes));
@@ -429,17 +454,21 @@ export function dateiOeffnenRouter({ db, lokalGebunden, port, origins = [], anfr
       if (entscheidung != null && entscheidung !== 'ueberschreiben' && entscheidung !== 'kopie') throw new DateiFehler(400, 'Unbekannte Entscheidung.');
       const stand = await dateiStand(q.pfad);
       const geaendert = !stand || stand.groesse !== q.groesse || stand.sha256 !== q.sha256;
-      if (geaendert && !entscheidung) {
+      const e = einschraenkungAus(req.body);
+      // R-BUERO-1: a restricted role never overwrites the linked file (it may be the full office file).
+      const konflikt = zurueckKonflikt({ eingeschraenkt: !!e, geaendert, vorhanden: !!stand, entscheidung });
+      if (konflikt) {
         // An expected answer, not an error: 200 with `konflikt`, the app asks the user (no red console line).
         return res.json({
-          ok: false, konflikt: stand ? 'geaendert' : 'fehlt', pfad: q.pfad,
-          error: stand ? 'Die Datei wurde seit dem Öffnen geändert.' : 'Die Datei ist nicht mehr vorhanden.',
+          ok: false, konflikt, pfad: q.pfad,
+          error: konflikt === 'eingeschraenkt' ? ZURUECK_EINGESCHRAENKT_TEXT
+            : konflikt === 'geaendert' ? 'Die Datei wurde seit dem Öffnen geändert.' : 'Die Datei ist nicht mehr vorhanden.',
         });
       }
       const ziel = entscheidung === 'kopie' ? kopieName(q.pfad, new Date(jetzt())) : q.pfad;
       if (!fs.existsSync(path.dirname(ziel))) throw new DateiFehler(409, 'Der Ordner der Datei ist nicht mehr vorhanden.');
-      const daten = entferneBereiche(db._raw(), strings(q.ohne), strings(q.ohneSettingKeys), strings(q.ohneDokumentBereiche));
-      const obj = serialisiereProjekt(daten, q.projektname || undefined, { art: q.art, bereiche: q.bereiche });
+      const daten = wendeEinschraenkungAn(entferneBereiche(db._raw(), strings(q.ohne), strings(q.ohneSettingKeys), strings(q.ohneDokumentBereiche)), e);
+      const obj = serialisiereProjekt(daten, q.projektname || undefined, { art: e ? 'weitergabe' : q.art, bereiche: q.bereiche });
       await atomarSchreiben(ziel, projektDateiBytes(obj));
       const neu = await dateiStand(ziel);
       await quelleSchreiben({ ...q, pfad: ziel, name: path.basename(ziel), ...neu, gespeichertAm: new Date(jetzt()).toISOString() });

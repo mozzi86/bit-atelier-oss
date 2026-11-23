@@ -303,36 +303,40 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
     try {
       let out = null;
       const srcStem = source ? stem(source.kind === "doc" ? source.doc.name : source.name) : "";
+      // 105-19: fallback document title (when the user's file has none) = the source file name.
+      // W0-F6: the helper is imported dynamically, so the entry's preload map does not name its chunk.
+      const { pdfTitelAusDateiname } = await import("@core/lib/pdfMetadaten");
+      const titel = pdfTitelAusDateiname(srcStem);
       switch (tool.key) {
         case "merge": {
           if (sources.length < 2) throw new Error("Bitte mindestens zwei PDFs auswählen.");
           const list = [];
           for (const s of sources) list.push(getSourceBytes(s));
-          const bytes = await mergePdfs(list);
+          const bytes = await mergePdfs(list, { titel: pdfTitelAusDateiname(stem(sources[0].name)) });
           out = [{ name: `${stem(sources[0].name)}_zusammengefügt.pdf`, mime: "application/pdf", bytes }];
           break;
         }
         case "split": {
-          const parts = await splitPdf(getSourceBytes(source), ranges);
+          const parts = await splitPdf(getSourceBytes(source), ranges, { titel });
           out = parts.map((p) => ({ name: `${srcStem}_${p.suffix}.pdf`, mime: "application/pdf", bytes: p.bytes }));
           break;
         }
         case "extract": {
           const b = getSourceBytes(source);
           const idx = parsePageRanges(ranges, await getPageCount(b));
-          out = [{ name: `${srcStem}_Auszug.pdf`, mime: "application/pdf", bytes: await extractPages(b, idx) }];
+          out = [{ name: `${srcStem}_Auszug.pdf`, mime: "application/pdf", bytes: await extractPages(b, idx, { titel }) }];
           break;
         }
         case "remove": {
           const b = getSourceBytes(source);
           const idx = parsePageRanges(ranges, await getPageCount(b));
-          out = [{ name: `${srcStem}_reduziert.pdf`, mime: "application/pdf", bytes: await removePages(b, idx) }];
+          out = [{ name: `${srcStem}_reduziert.pdf`, mime: "application/pdf", bytes: await removePages(b, idx, { titel }) }];
           break;
         }
         case "rotate": {
           const b = getSourceBytes(source);
           const idx = scope === "all" ? null : parsePageRanges(ranges, await getPageCount(b));
-          out = [{ name: `${srcStem}_gedreht.pdf`, mime: "application/pdf", bytes: await rotatePages(b, idx, parseInt(angle, 10)) }];
+          out = [{ name: `${srcStem}_gedreht.pdf`, mime: "application/pdf", bytes: await rotatePages(b, idx, parseInt(angle, 10), { titel }) }];
           break;
         }
         case "pagenumbers": {
@@ -340,12 +344,13 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
             position,
             start: Math.max(1, parseInt(startNo, 10) || 1),
             format: format || "Seite {n} von {total}",
+            titel,
           });
           out = [{ name: `${srcStem}_nummeriert.pdf`, mime: "application/pdf", bytes }];
           break;
         }
         case "watermark": {
-          const bytes = await addWatermark(getSourceBytes(source), { text: wmText, opacity: wmOpacity / 100 });
+          const bytes = await addWatermark(getSourceBytes(source), { text: wmText, opacity: wmOpacity / 100, titel });
           out = [{ name: `${srcStem}_Wasserzeichen.pdf`, mime: "application/pdf", bytes }];
           break;
         }
@@ -356,7 +361,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
         }
         case "img2pdf": {
           if (!images.length) throw new Error("Bitte mindestens ein Bild auswählen.");
-          const bytes = await imagesToPdf(images.map((i) => i.dataUrl));
+          const bytes = await imagesToPdf(images.map((i) => i.dataUrl), { titel: pdfTitelAusDateiname(stem(images[0].name).replace(/\.(png|jpe?g)$/i, "")) });
           out = [{ name: `${stem(images[0].name).replace(/\.(png|jpe?g)$/i, "")}.pdf`, mime: "application/pdf", bytes }];
           break;
         }
@@ -366,7 +371,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
           break;
         }
         case "compress": {
-          const bytes = await compressPdf(getSourceBytes(source), { quality: quality / 100, onProgress });
+          const bytes = await compressPdf(getSourceBytes(source), { quality: quality / 100, onProgress, titel });
           out = [{ name: `${srcStem}_komprimiert.pdf`, mime: "application/pdf", bytes }];
           break;
         }
@@ -375,8 +380,8 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
           // existing compressPdf path at scale 2 (≈ 144 dpi) and JPEG 92 % [ASSUMED] — 1:1 look.
           const b = getSourceBytes(source);
           const bytes = puModus === "rastern"
-            ? await compressPdf(b, { quality: 0.92, scale: 2, onProgress })
-            : (await formularAbflachen(b)).bytes;
+            ? await compressPdf(b, { quality: 0.92, scale: 2, onProgress, titel })
+            : (await formularAbflachen(b, { titel })).bytes;
           out = [{ name: `${srcStem}_unveraenderbar.pdf`, mime: "application/pdf", bytes }];
           break;
         }
@@ -394,7 +399,7 @@ function ToolDialog({ tool, project, pdfDocs, onClose, onRefresh, onAnnotate }) 
           // attachment must not carry the office's name → re-raster (existing compressPdf path,
           // scale 2 ≈ 144 dpi, JPEG 92 % [ASSUMED]).
           const fertig = plankopf.neutral && plankopf.rastern !== false
-            ? await compressPdf(r.bytes, { quality: 0.92, scale: 2, onProgress })
+            ? await compressPdf(r.bytes, { quality: 0.92, scale: 2, onProgress, titel, quellMetadaten: false })
             : r.bytes;
           out = [{ name: `${srcStem}_${plankopf.neutral ? "Anlage" : "Plankopf"}.pdf`, mime: "application/pdf", bytes: fertig }];
           break;

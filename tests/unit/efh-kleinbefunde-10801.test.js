@@ -2,13 +2,17 @@
 //  - 9c: dachSchnittLinie (gable 45° across the ridge = triangle, along it = horizontal line), schnittAchseQuerZumFirst,
 //    modellImSchnitt (rotation, identity for "x"), globaleTraufhoehe_m = totalHeight, the PDF section with the roof plate and the
 //    marks eaves / ridge, and WITHOUT a roof the PDF section and plan byte-identical to the state before 108-01 (golden
-//    fixtures/vektorplan-10801-vorher.json, written once from vektorPlan.js of fa945693); the IFC goldens stay as they are
+//    fixtures/vektorplan-10801-vorher.json, written once from vektorPlan.js of fa945693; 115-02: the three section entries were
+//    rewritten by fixtures/schnittGoldens-schreiben.mjs — only the layers "bemassung" and "kote" and the bbox changed, height chains
+//    and level marks now come from schnittMasse.js); the IFC goldens stay as they are
 //    (ifcGolden-10701.test.js) and the global roof of the IFC sits on the same eaves;
 //  - 4: eingangWirksam (four cases), the PDF plan without the entrance symbol when it is off;
 //  - 5: the footprint rule (empty, same hash, other hash, drawn → ask) and the building envelope in the model frame.
 // Review 108-01: the screen section (BimPlan2D, JSX) is rendered server-side through vite (helpers/jsxRender.mjs, no new package):
 // WITHOUT a roof it is byte-identical to the state before 108-01 (golden fixtures/schnitt-bild-10801-vorher.json, made with BimPlan2D.jsx of
-// fa945693), and with gable roof + parapet the parapet sits on the eaves (mark "OK Attika" = eaves + parapet, like the PDF section).
+// fa945693; 115-02: rewritten by fixtures/schnittGoldens-schreiben.mjs for the level marks and height chains of schnittMasse.js — the
+// case without marks and dimensions stayed byte-identical), and with gable roof + parapet the parapet sits on the eaves (mark
+// "OK Attika" = eaves + parapet, like the PDF section).
 // Also: eingangDesDatensatzes (the entrance in effect for the readers outside the studio) and istKachelFehler (map note "offline").
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -251,9 +255,9 @@ describe("108-01 Review: Bildschirm-Schnitt (BimPlan2D, serverseitig gerendert)"
     const dach = globalesDach(model, "sattel", 45);
     for (const achse of ["z", "x"]) {
       const svg = u.rendern(BimPlan2D, { model, mode: "schnitt", storeyHeight: 2.9, height: 520, dach, achse });
-      assert.match(svg, /OK Attika \+6\.50</, `${achse}: Kote der Attika auf 5,50 + 1,00`);
+      assert.match(svg, /OK Attika \+6,50</, `${achse}: Kote der Attika auf 5,50 + 1,00`);
       assert.doesNotMatch(svg, /OK Attika \+1[01]\./, `${achse}: keine Attika-Kote auf Firsthöhe`);
-      assert.match(svg, /data-kote="first"[^>]*>First \+10\.60</);
+      assert.match(svg, /data-kote="first"[^>]*>First \+10,60</);
       // the cut hull walls end at the eaves (y = Y(totalH)); each parapet block starts exactly there (y + height = top of the wall)
       const wandY = Number(/<rect[^>]*y="([-\d.e]+)"[^>]*data-schnittwand="0"/.exec(svg)?.[1]);
       const attiken = [...svg.matchAll(/<rect x="[-\d.e]+" y="([-\d.e]+)" width="[-\d.e]+" height="([-\d.e]+)" fill="url\(#hatch\)" stroke="#1e293b" stroke-width="0.6"\/?>/g)];

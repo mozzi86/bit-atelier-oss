@@ -282,18 +282,19 @@ describe("107-10 — massing_layer v6 (optionales Dach `dach`) und solidrelation
 
 describe("107-11 — werkstatt_layer v6 (optionale Felder `dachschraege_quelle`, `kniestock_m` am Wohnungstyp)", () => {
   it("Version 6, sechs Migrationen; ein v5-Blob ist inhaltlich ein gültiger v6-Blob", () => {
-    assert.equal(LAYER_VERSION.werkstatt_layer, 6);
-    assert.equal(MIGRATIONEN.werkstatt_layer.length, 6);
+    // 115-12 raised the layer to v7 (raumHand) — the 107-11 step 5 → 6 stays in the chain.
+    assert.equal(LAYER_VERSION.werkstatt_layer, 7);
+    assert.equal(MIGRATIONEN.werkstatt_layer.length, 7);
     const v5 = { v: 5, typ: "mfh", einheiten: [{ key: "2zi", dachschraege: { unter1m_m2: 3, zwischen1und2m_m2: 5 } }] };
     const r = migrateLayer("werkstatt_layer", v5);
     assert.equal(r.migriert, true);
-    assert.equal(r.wert.v, 6);
+    assert.equal(r.wert.v, 7);
     const { v, ...rest } = r.wert;
     const { v: _v5, ...alt } = v5;
     assert.deepEqual(rest, alt, "nichts umgeschrieben");
     assert.equal("dachschraege_quelle" in r.wert.einheiten[0], false, "fehlendes Feld bleibt fehlend (= Handeingabe)");
-    const v6 = { v: 6, typ: "mfh", einheiten: [{ key: "2zi", dachschraege_quelle: "geometrie", kniestock_m: 0.8 }] };
-    assert.equal(migrateLayer("werkstatt_layer", v6).wert, v6);
+    const v7 = { v: 7, typ: "mfh", einheiten: [{ key: "2zi", dachschraege_quelle: "geometrie", kniestock_m: 0.8 }] };
+    assert.equal(migrateLayer("werkstatt_layer", v7).wert, v7);
   });
   it("Register FACHLAYER-SCHEMA.md und Kopf von useFachlayer.js nennen v6 und die Felder", () => {
     const kopf = fs.readFileSync(path.join(REPO, "packages/nova-designer/src/lib/useFachlayer.js"), "utf8");
@@ -301,8 +302,33 @@ describe("107-11 — werkstatt_layer v6 (optionale Felder `dachschraege_quelle`,
     const registerPfad = path.join(REPO, ".planning/FACHLAYER-SCHEMA.md");
     if (fs.existsSync(registerPfad)) {
       const reg = fs.readFileSync(registerPfad, "utf8");
-      assert.ok(reg.includes("**v6** seit 107-11"));
+      assert.ok(reg.includes("v6 seit 107-11"));
       assert.ok(reg.includes("`dachschraege_quelle`") && reg.includes("`kniestock_m`"));
+    }
+  });
+});
+
+describe("115-12 — werkstatt_layer v7 (optionales Feld `raumHand`: von Hand gesetzte Räume)", () => {
+  it("Version 7, sieben Migrationen; ein v6-Blob ist inhaltlich ein gültiger v7-Blob, das Feld bleibt fehlend", () => {
+    assert.equal(LAYER_VERSION.werkstatt_layer, 7);
+    assert.equal(MIGRATIONEN.werkstatt_layer.length, 7);
+    const v6 = { v: 6, typ: "mfh", einheiten: [], raumGrenzen: { "0|a|b": 0.25 } };
+    const r = migrateLayer("werkstatt_layer", v6);
+    assert.equal(r.migriert, true);
+    assert.equal(r.wert.v, 7);
+    const { v, ...rest } = r.wert;
+    const { v: _v6, ...alt } = v6;
+    assert.deepEqual(rest, alt, "nichts umgeschrieben");
+    assert.equal("raumHand" in r.wert, false, "fehlendes Feld bleibt fehlend (= alle Räume folgen der Regel)");
+  });
+  it("Register FACHLAYER-SCHEMA.md und Kopf von useFachlayer.js nennen v7 und das Feld", () => {
+    const kopf = fs.readFileSync(path.join(REPO, "packages/nova-designer/src/lib/useFachlayer.js"), "utf8");
+    assert.ok(kopf.includes("raumHand"));
+    const registerPfad = path.join(REPO, ".planning/FACHLAYER-SCHEMA.md");
+    if (fs.existsSync(registerPfad)) {
+      const reg = fs.readFileSync(registerPfad, "utf8");
+      assert.ok(reg.includes("**v7** seit 115-12"));
+      assert.ok(reg.includes("`raumHand{}`"));
     }
   });
 });

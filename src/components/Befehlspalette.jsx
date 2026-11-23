@@ -8,22 +8,35 @@
 //
 // Why no cmdk: a dependency needs a decision. The overlay follows the house
 // pattern (@core/components/common/FormModal.jsx — plain fixed backdrop, no
-// dialog primitive), and the matching is a substring over normalised text; the
-// list is short enough that nothing cleverer earns its place.
+// dialog primitive).
+//
+// 105-28: besides navigation the palette finds RECORDS by full text — deadlines,
+// meeting minutes, bill-of-quantities positions and documents (src/lib/suche/
+// datensatzSuche.js, loaded lazily on open, rights-filtered) — and shows the hits
+// in result groups. 111-13: matching is the shared forgiving matcher
+// (@core/lib/lockereSuche.js: umlaut/ß spelling, case, word order, small typos);
+// ranking and grouping live in src/lib/suche/paletteTreffer.js. This component is
+// loaded lazily by Layout.jsx (it is no longer on the start path).
 //
 // In:  the navigation list (src/navigation.js), the projects and contacts from
-//      the API, the settings areas (src/lib/settings/bereiche.js, 80-01), plus a
-//      handful of actions. People and applications of the personnel area are
-//      deliberately NOT indexed: a name typed here would show up in the palette of
-//      whoever uses the device next (DS-07).
-// Out: navigates, switches the current project, or runs the action.
+//      the API, the settings areas (src/lib/settings/bereiche.js, 80-01), the
+//      records, plus a handful of actions. People and applications of the
+//      personnel area are deliberately NOT indexed: a name typed here would show
+//      up in the palette of whoever uses the device next (DS-07).
+// Out: navigates (switching the current project first when a record belongs to
+//      another one), switches the current project, or runs the action.
 
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Command, CornerDownLeft, Search } from 'lucide-react';
 import { bitApi } from '@core/api/bitApi';
 import { useProject } from '@core/lib/ProjectContext';
-import { useI18n } from '@core/lib/i18n';
+import { useI18n, englischErgaenzen } from '@core/lib/i18n';
+import { EN as EN_SUCHE } from '@core/lib/i18nTeile/suche-105.js';
+import { suchVorbereiten } from '@core/lib/lockereSuche.js';
+import { heuteLokal } from '@core/lib/kalender/datum.js';
+import { BUERO_CLOUD_FREIGABE } from '@core/lib/umgebung';
+import { rankeTreffer } from '@/lib/suche/paletteTreffer.js';
 import { createPageUrl } from '@core/utils';
 import {
   aktionenFuer, abonnieren, aktionenVersion, parseKuerzel,
@@ -35,25 +48,7 @@ import { personalZugang } from '@/lib/people/zugang';
 import { useZugriff } from '@core/lib/ZugriffContext.jsx';
 import { paletteEintraege as erlaubteModule } from '@/lib/zugriffFilter.js';
 
-/**
- * Lowercase, umlauts folded, accents stripped — so "prüf" finds "Prüf-Suite"
- * and "pruef" does too.
- * @param {string} s
- * @returns {string}
- */
-function normalisiere(s) {
-  return String(s || '')
-    .toLowerCase()
-    .replace(/ä/g, 'ae')
-    .replace(/ö/g, 'oe')
-    .replace(/ü/g, 'ue')
-    .replace(/ß/g, 'ss')
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
-}
-
-/** Maximum entries shown — beyond that the list stops being scannable. */
-const MAX = 12;
+englischErgaenzen(EN_SUCHE);
 
 /**
  * Human-readable chord, e.g. "mod+shift+p" → "Strg ⇧ P" (same glyph set as
@@ -76,11 +71,13 @@ export default function Befehlspalette({ offen, onSchliessen }) {
   const location = useLocation();
   const { t } = useI18n();
   // 82-02: the filtered project list of the context (role, project view) — no own list.
-  const { setProjectId, projects: projekte } = useProject();
+  const { setProjectId, projectId, projects: projekte } = useProject();
   const zugriff = useZugriff();
   const [suche, setSuche] = React.useState('');
   const [aktiv, setAktiv] = React.useState(0);
   const [kontakte, setKontakte] = React.useState([]);
+  // 105-28: record rows (deadlines, minutes, positions, documents); null while loading.
+  const [datensaetze, setDatensaetze] = React.useState(/** @type {import('@/lib/suche/datensatzSuche.js').Datensatz[]|null} */ (null));
   // 80-01: settings areas, loaded with the palette instead of with the shell — the
   // registry pulls the rule books (79 settings, HOAI tables) and the area files.
   const [einstellungsQuelle, setEinstellungsQuelle] = React.useState(
@@ -128,23 +125,46 @@ export default function Befehlspalette({ offen, onSchliessen }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offen]);
 
+  // 105-28: records, loaded lazily on open. Reloaded when the visible project list changes (it may still be loading
+  // when the palette opens right after start; rows are only kept for projects of that list).
+  const projektSchluessel = projekte.map((p) => p.id).join('|');
+  React.useEffect(() => {
+    if (!offen) return;
+    let lebt = true;
+    setDatensaetze(null);
+    import('@/lib/suche/datensatzSuche.js')
+      .then((m) => m.ladeDatensaetze(bitApi, {
+        zugriff, projekte, heute: heuteLokal(), t, datenquelle: DATENQUELLE, freigabe: BUERO_CLOUD_FREIGABE, rolle: user?.role ?? null,
+      }))
+      .then((zeilen) => { if (lebt) setDatensaetze(zeilen); })
+      .catch(() => { if (lebt) setDatensaetze([]); /* without records the rest stays searchable */ });
+    return () => {
+      lebt = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offen, projektSchluessel]);
+
   React.useEffect(() => {
     if (offen) setTimeout(() => eingabeRef.current?.focus(), 30);
   }, [offen]);
 
-  const eintraege = React.useMemo(() => {
-    /** @type {{art: string, aktionId?: string, titel: string, zusatz?: string, beschreibung?: string, stichworte?: string, kuerzel?: string, tun: () => void}[]} */
+  // Every candidate carries its result group (German i18n key) and its search text; rankeTreffer scores and groups.
+  const gruppen = React.useMemo(() => {
+    /** @type {{art: string, gruppe: string, aktionId?: string, titel: string, zusatz?: string, beschreibung?: string, kuerzel?: string, text: any, nurMitAnfrage?: boolean, tun: () => void}[]} */
     const alle = [];
+    const text = (/** @type {Array<string|undefined>} */ ...teile) => suchVorbereiten(teile.filter(Boolean).join(' '));
 
     // Verbs of the CURRENT view first (69-12): registered by the page itself,
     // one registration site per action — the palette only offers them.
     for (const a of aktionenFuer(location.pathname)) {
       alle.push({
         art: t('Aktion'),
+        gruppe: 'Aktionen',
         aktionId: a.id,
         titel: a.titel,
         beschreibung: a.beschreibung,
         kuerzel: a.kuerzel,
+        text: text(a.titel, a.beschreibung, t('Aktion')),
         tun: a.ausfuehren,
       });
     }
@@ -153,21 +173,34 @@ export default function Befehlspalette({ offen, onSchliessen }) {
     for (const n of erlaubteModule(navFlach, { personalZugang: zugang, zugriff })) {
       alle.push({
         art: t('Modul'),
+        gruppe: 'Module',
         titel: t(n.title),
         zusatz: t(n.gruppe),
+        // German title too, so a German word finds the module in the English UI as well.
+        text: text(t(n.title), n.title, t(n.gruppe), t('Modul')),
         tun: () => navigate(n.url),
       });
     }
+    // Generic jump actions stay navigation entries (they work on EVERY route).
+    // „Prüflauf starten" is the ModelCheck verb (registered there, 69-12) —
+    // the navigation twin is retitled so the palette never shows two entries
+    // with the same name on /ModelCheck.
+    alle.push(
+      { art: t('Modul'), gruppe: 'Module', titel: t('Zur Prüf-Suite'), text: text(t('Zur Prüf-Suite')), tun: () => navigate(createPageUrl('ModelCheck')) },
+      { art: t('Aktion'), gruppe: 'Aktionen', titel: t('Musterprojekt prüfen'), text: text(t('Musterprojekt prüfen')), tun: () => navigate(`${createPageUrl('ModelCheck')}?beispiel=1`) },
+    );
     // 80-01: "Einstellung: <area>" per visible, finished settings area.
     if (einstellungsQuelle) {
       const kontext = { datenquelle: DATENQUELLE, personalZugang: zugang, zugriff };
       for (const e of einstellungsQuelle.paletteEintraege(kontext)) {
         if (!einstellungsQuelle.bereit.has(e.key)) continue;
+        const titel = t('Einstellung') + ': ' + t(e.titel);
         alle.push({
           art: t('Einstellungen'),
-          titel: t('Einstellung') + ': ' + t(e.titel),
+          gruppe: 'Einstellungen',
+          titel,
           beschreibung: t(e.beschreibung),
-          stichworte: e.stichworte,
+          text: text(titel, t(e.beschreibung), e.stichworte),
           tun: () => navigate(e.ziel),
         });
       }
@@ -175,8 +208,10 @@ export default function Befehlspalette({ offen, onSchliessen }) {
     for (const p of projekte) {
       alle.push({
         art: t('Projekt'),
+        gruppe: 'Projekte',
         titel: p.name,
         zusatz: p.client || '',
+        text: text(p.name, p.client, t('Projekt')),
         tun: () => {
           setProjectId(p.id);
           navigate(createPageUrl('Projects'));
@@ -186,26 +221,34 @@ export default function Befehlspalette({ offen, onSchliessen }) {
     for (const k of kontakte) {
       alle.push({
         art: t('Kontakt'),
+        gruppe: 'Kontakte',
         titel: k.name,
         zusatz: k.company || k.role || '',
+        text: text(k.name, k.company, k.role, t('Kontakt')),
         tun: () => navigate(createPageUrl('AddressBook')),
       });
     }
-    // Generic jump actions stay navigation entries (they work on EVERY route).
-    // „Prüflauf starten" is the ModelCheck verb (registered there, 69-12) —
-    // the navigation twin is retitled so the palette never shows two entries
-    // with the same name on /ModelCheck.
-    alle.push(
-      { art: t('Modul'), titel: t('Zur Prüf-Suite'), tun: () => navigate(createPageUrl('ModelCheck')) },
-      { art: t('Aktion'), titel: t('Musterprojekt prüfen'), tun: () => navigate(`${createPageUrl('ModelCheck')}?beispiel=1`) },
-    );
+    // 105-28: records only for a typed query — an empty palette stays the short navigation list.
+    for (const d of datensaetze || []) {
+      alle.push({
+        art: t(d.gruppe),
+        gruppe: d.gruppe,
+        titel: d.titel,
+        zusatz: d.zusatz,
+        text: d.text,
+        nurMitAnfrage: true,
+        tun: () => {
+          if (d.project_id && d.project_id !== projectId) setProjectId(d.project_id);
+          navigate(d.ziel);
+        },
+      });
+    }
 
-    const q = normalisiere(suche);
-    if (!q) return alle.slice(0, MAX);
-    return alle
-      .filter((e) => normalisiere(`${e.titel} ${e.zusatz || ''} ${e.beschreibung || ''} ${e.stichworte || ''} ${e.art}`).includes(q))
-      .slice(0, MAX);
-  }, [suche, projekte, kontakte, navigate, setProjectId, t, location.pathname, version, zugang, zugriff, einstellungsQuelle]);
+    return rankeTreffer(alle, suche);
+  }, [suche, projekte, kontakte, datensaetze, navigate, setProjectId, projectId, t, location.pathname, version, zugang, zugriff, einstellungsQuelle]);
+
+  // Flat list in display order — the arrow keys walk through all groups.
+  const eintraege = React.useMemo(() => gruppen.flatMap((g) => g.eintraege), [gruppen]);
 
   React.useEffect(() => {
     if (aktiv >= eintraege.length) setAktiv(0);
@@ -255,50 +298,60 @@ export default function Befehlspalette({ offen, onSchliessen }) {
             value={suche}
             onChange={(e) => setSuche(e.target.value)}
             onKeyDown={taste}
-            placeholder={t('Modul, Projekt, Kontakt oder Aktion…')}
+            placeholder={t('Modul, Projekt, Frist, Protokoll, Position, Dokument …')}
             aria-label={t('Suche und Befehle')}
             className="flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-slate-400"
           />
         </div>
 
-        <ul className="max-h-80 overflow-auto py-1" role="listbox">
+        <ul className="max-h-[60vh] overflow-auto py-1" role="listbox" aria-label={t('Suche und Befehle')} data-testid="palette-liste">
           {eintraege.length === 0 && (
             <li className="px-4 py-6 text-center text-sm text-slate-400">{t('Nichts gefunden')}</li>
           )}
-          {eintraege.map((e, i) => (
-            <li key={`${e.art}-${e.titel}-${i}`} role="option" aria-selected={i === aktiv}>
-              <button
-                type="button"
-                onMouseEnter={() => setAktiv(i)}
-                onClick={() => ausfuehren(e)}
-                data-testid={e.aktionId ? `palette-aktion-${e.aktionId}` : undefined}
-                className={`flex w-full items-center gap-3 px-4 py-2 text-left text-sm transition-colors ${
-                  i === aktiv ? 'bg-slate-100 dark:bg-slate-800' : ''
-                }`}
-              >
-                <span className="w-20 shrink-0 text-[11px] text-slate-400">
-                  {e.art}
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block truncate text-slate-800 dark:text-slate-100">{e.titel}</span>
-                  {/* 69-12: description as second line — verbs need context */}
-                  {e.beschreibung && (
-                    <span className="block truncate text-xs text-slate-400">{e.beschreibung}</span>
-                  )}
-                </span>
-                {e.zusatz && (
-                  <span className="hidden sm:block max-w-[9rem] truncate text-xs text-slate-400">
-                    {e.zusatz}
-                  </span>
-                )}
-                {/* 69-12: shortcut on the right */}
-                {e.kuerzel && (
-                  <kbd className="shrink-0 rounded border border-slate-300 dark:border-slate-600 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-slate-300">
-                    {kuerzelAnzeige(e.kuerzel)}
-                  </kbd>
-                )}
-                {i === aktiv && <CornerDownLeft className="w-3.5 h-3.5 shrink-0 text-slate-400" />}
-              </button>
+          {gruppen.map((g) => (
+            <li key={g.gruppe} role="presentation" data-testid={`palette-gruppe-${g.gruppe}`}>
+              {/* 105-28: result group heading */}
+              <div className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground" aria-hidden="true">
+                {t(g.gruppe)}
+              </div>
+              <ul role="group" aria-label={t(g.gruppe)}>
+                {g.eintraege.map((e) => {
+                  const i = eintraege.indexOf(e);
+                  return (
+                    <li key={`${e.art}-${e.titel}-${i}`} role="option" aria-selected={i === aktiv}>
+                      <button
+                        type="button"
+                        onMouseEnter={() => setAktiv(i)}
+                        onClick={() => ausfuehren(e)}
+                        data-testid={e.aktionId ? `palette-aktion-${e.aktionId}` : 'palette-eintrag'}
+                        className={`flex w-full items-center gap-3 px-4 py-2 text-left text-sm transition-colors ${
+                          i === aktiv ? 'bg-slate-100 dark:bg-slate-800' : ''
+                        }`}
+                      >
+                        <span className="flex-1 min-w-0">
+                          <span className="block truncate text-slate-800 dark:text-slate-100">{e.titel}</span>
+                          {/* 69-12: description as second line — verbs need context */}
+                          {e.beschreibung && (
+                            <span className="block truncate text-xs text-slate-400">{e.beschreibung}</span>
+                          )}
+                        </span>
+                        {e.zusatz && (
+                          <span className="hidden sm:block max-w-[11rem] truncate text-xs text-slate-400">
+                            {e.zusatz}
+                          </span>
+                        )}
+                        {/* 69-12: shortcut on the right */}
+                        {e.kuerzel && (
+                          <kbd className="shrink-0 rounded border border-slate-300 dark:border-slate-600 px-1.5 py-0.5 text-[10px] text-slate-500 dark:text-slate-300">
+                            {kuerzelAnzeige(e.kuerzel)}
+                          </kbd>
+                        )}
+                        {i === aktiv && <CornerDownLeft className="w-3.5 h-3.5 shrink-0 text-slate-400" />}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             </li>
           ))}
         </ul>
@@ -307,6 +360,8 @@ export default function Befehlspalette({ offen, onSchliessen }) {
           <Command className="w-3 h-3" />
           {/* 69-12: the footer names the ? shortcut so the help is findable */}
           <span>{t('Pfeile zum Wählen · Enter zum Öffnen · Esc schließt · ? zeigt Kürzel')}</span>
+          {/* 105-28: the records arrive after the navigation — say so instead of a silent gap */}
+          {datensaetze === null && <span className="ml-auto text-muted-foreground" data-testid="palette-laedt">{t('Datensätze werden geladen…')}</span>}
         </div>
       </div>
     </div>

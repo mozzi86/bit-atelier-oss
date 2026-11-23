@@ -164,6 +164,10 @@ export async function plankopfAufPdf(bytes, o) {
       page.drawText(passend(font, sicher(font, z.wert), 7.5, spaltenW - 6), { x: x0 + 3, y: yOben - r.zeileH + 3, size: 7.5, font, color: schwarz });
     });
   }
+  // 105-19: only a missing /Lang (UI language) and /Title (the plan title of the block) are added to the user's file.
+  // W0-F6: dynamic import, so the entry's preload map does not name the helper's chunk.
+  const { pdfLibMetadaten, pdfSpracheAusUi } = await import("@core/lib/pdfMetadaten.js");
+  pdfLibMetadaten(doc, { titel: o.titel ?? o.zeilen.find((z) => z.label === "Planinhalt")?.wert ?? "", sprache: pdfSpracheAusUi(), nurErgaenzen: true });
   const out = await doc.save();
   const mm = (v) => Math.round((v / PT_JE_MM) * 10) / 10;
   return {

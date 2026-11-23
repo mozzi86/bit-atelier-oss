@@ -10,7 +10,8 @@
 import React from "react";
 import { useSearchParams } from "react-router-dom";
 import { useI18n } from "@core/lib/i18n";
-import { bitApi } from "@core/api/bitApi";
+import { useBriefkopf } from "@core/lib/useBriefkopf.js";
+import { eigenerBueroName } from "@core/lib/briefkopfBrief.js";
 import { useRegelWerte } from "@core/lib/useRegelWerte";
 import { heuteLokal } from "@core/lib/kalender/datum.js";
 import LoadingState from "@core/components/common/LoadingState";
@@ -50,16 +51,12 @@ export default function SucheReiter() {
   const [stelleFormularFuer, setStelleFormularFuer] = React.useState(/** @type {'neu'|object|null} */ (null));
   const [anzeigentextFuer, setAnzeigentextFuer] = React.useState(/** @type {object|null} */ (null));
   const [bewerbungFormularFuer, setBewerbungFormularFuer] = React.useState(/** @type {'neu'|object|null} */ (null));
-  const [briefkopf, setBriefkopf] = React.useState(/** @type {object|null} */ (null));
 
-  React.useEffect(() => {
-    let aktiv = true;
-    // Gleiche Quelle wie src/Layout.jsx/src/pages/Reports.jsx: Setting{key:"briefkopf"}.
-    /** @type {any} */ (bitApi).entities.Setting.filter({ key: "briefkopf" })
-      .then((zeilen) => { if (aktiv && zeilen[0]) setBriefkopf(zeilen[0].value || null); })
-      .catch(() => { if (aktiv) setBriefkopf(null); });
-    return () => { aktiv = false; };
-  }, []);
+  // Wave 1 (B-81-05/M-2): the one letterhead read path. The placeholder office
+  // name is cleared so job ads and rejection texts keep their own fallback
+  // ("unserem Büro") instead of naming "Architekturbüro".
+  const { briefkopf: briefkopfRoh } = useBriefkopf();
+  const briefkopf = React.useMemo(() => ({ ...briefkopfRoh, office: eigenerBueroName(briefkopfRoh) }), [briefkopfRoh]);
 
   // ?bewerbung=<id> (z. B. aus der Fristenleiste) öffnet die Bewerbung direkt
   // und springt ins Segment "Bewerbungen". Hängt auch an `laden`/`daten.Bewerbung`,

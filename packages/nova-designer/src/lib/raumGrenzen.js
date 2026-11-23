@@ -46,8 +46,13 @@ export function raumGrenzeSchluessel(level, a, b) {
   return `${Math.round(num(level))}|${x}|${y}`;
 }
 
-/** @param {any} z @returns {boolean} 4-point zone with right angles (axis-free check) */
-function istRechteckZone(z) {
+/**
+ * 4-point zone with right angles (axis-free check, so rotated footprints count too).
+ * Exported since 115-12 (raumBearbeiten.js edits the same rectangular rooms by hand).
+ * @param {any} z zone ({ points: [{x, z}] in m })
+ * @returns {boolean}
+ */
+export function istRechteckZone(z) {
   const p = Array.isArray(z?.points) ? z.points : null;
   if (!p || p.length !== 4) return false;
   for (let i = 0; i < 4; i++) {
@@ -184,12 +189,13 @@ export function rasterKlemmen(delta, minus, plus, raster = RAUMGRENZE_RASTER_M) 
 
 /**
  * Move a door so it keeps its world position on a wall whose start point moved; clamp it
- * into the new wall length (m).
+ * into the new wall length (m). Exported since 115-12 (hand-edited rooms keep their doors the same way).
  * @param {any} t door record { wand, u_m, breite_m, … }
- * @param {Array<{x:number,z:number}>} alt old points
- * @param {Array<{x:number,z:number}>} neu new points
+ * @param {Array<{x:number,z:number}>} alt old points (m)
+ * @param {Array<{x:number,z:number}>} neu new points (m)
+ * @returns {any} the same record when the wall did not move, else a copy with the new `u_m` (m)
  */
-function tuerNachziehen(t, alt, neu) {
+export function tuerNachziehen(t, alt, neu) {
   const i = Math.round(num(t?.wand, -1));
   if (i < 0 || i > 3) return t;
   const a0 = alt[i], a1 = alt[(i + 1) % 4], n0 = neu[i], n1 = neu[(i + 1) % 4];

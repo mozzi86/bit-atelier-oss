@@ -162,6 +162,9 @@ test("103 Gelände: Orientierung, Kamera über Gelände, Überhöhung, Wasserpeg
   await page.waitForTimeout(500); // shader with the flood tint compiled and drawn
 
   // HQ list in the flood tab: stored additively in complexData.hochwasser (the save goes to the stub).
+  // 115-03: the flood tab stays visible for a single-family house (user 16.11.2026); switching on "Alle Reiter zeigen" is harmless.
+  const alleReiter = page.getByTestId("designer-alle-reiter");
+  if ((await alleReiter.count()) > 0 && (await alleReiter.getAttribute("aria-pressed")) !== "true") await alleReiter.click();
   await page.getByRole("tab", { name: "Hochwasser" }).click();
   await expect(page.getByTestId("hq-liste")).toBeVisible();
   await expect(page.getByTestId("hq-pegel-0")).toHaveValue("310,2");

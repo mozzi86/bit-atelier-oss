@@ -109,9 +109,16 @@ export const LENGTH_UNITS = {
   cm: { factor: 100, decimals: 0, suffix: "cm" },
   mm: { factor: 1000, decimals: 0, suffix: "mm" },
 };
-// Meter -> formatierter String in der gewählten Einheit.
+/**
+ * Length in metres as text in the chosen unit, German number format (115-02: decimal comma — "2,75 m", never "2.75 m"; no
+ * thousands separator, so mm values stay "12000"). The one length formatter of plan and section texts.
+ * @param {number} meters length in metres
+ * @param {string} [unit] key of LENGTH_UNITS ("m" two decimals, "cm" / "mm" none); unknown → metres
+ * @param {boolean} [withSuffix] append the unit sign ("2,75 m"); false → the bare number ("2,75")
+ * @returns {string}
+ */
 export function fmtLen(meters, unit = "m", withSuffix = true) {
   const u = LENGTH_UNITS[unit] || LENGTH_UNITS.m;
-  const v = (meters * u.factor).toFixed(u.decimals);
+  const v = (meters * u.factor).toFixed(u.decimals).replace(".", ",");
   return withSuffix ? `${v} ${u.suffix}` : v;
 }

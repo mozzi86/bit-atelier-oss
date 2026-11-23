@@ -3,7 +3,8 @@
 Registers `ifc_run(unterbefehl, datei?, optionen?)` in the toolset `both`
 (user AND developer). The handler calls the standalone skill scripts
 IN-PROCESS (same run() functions the CLIs use) inside a thread (T-67-10:
-a 100 MB IFC must not block the service) and returns
+a 100 MB IFC must not block the service), one job at a time per process
+(harness.ifc_sperre, B-111-01-03), and returns
 {"markdown", "json", "hinweis", "ziel"?}.
 
 Standarddatei: the newest model/*.ifc of the ACTIVE project (plan truth #1).
@@ -23,7 +24,6 @@ strings are data, never commands.
 
 from __future__ import annotations
 
-import asyncio
 import importlib.util
 import json
 import sys
@@ -32,6 +32,7 @@ from typing import Any
 
 from harness.agent.context import DATA_NOT_INSTRUCTION
 from harness.config import HARNESS_DIR
+from harness.ifc_sperre import im_ifc_thread
 from harness.tools.registry import ToolContext, registry, tool_error, tool_ok
 from harness.tools.sandbox import resolve_in_sandbox
 
@@ -246,8 +247,9 @@ async def ifc_run(args: dict, ctx: ToolContext) -> str:
     if optionen.get("geometrie") or optionen.get("volumen"):
         warnungen.append("Geometrie-Fallback aktiv: Werte sind Mesh-Näherungen [ASSUMED]")
 
-    # T-67-10: scripts run in a worker thread, never on the event loop.
-    result = await asyncio.to_thread(_run_sync, unterbefehl, datei, optionen, datei2)
+    # T-67-10: scripts run in a worker thread, never on the event loop. B-111-01-03: under the process-wide
+    # IFC lock (ifcopenshell is not thread-safe; two sessions of one service may call ifc_run at once).
+    result = await im_ifc_thread(_run_sync, unterbefehl, datei, optionen, datei2)
 
     if "error" in result:
         return tool_error(result["error"])

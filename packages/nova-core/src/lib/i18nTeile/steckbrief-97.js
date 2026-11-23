@@ -85,6 +85,8 @@ export const EN = {
   "Mengen und Material — getrennt nach Status": "Quantities and material — separated by status",
   "Baufortschritt nach Bauabschnitt": "Progress by construction section",
   "Gewählte Brille je Planansicht im Gebäudemodell": "Chosen lens per plan view in the building model",
+  // 115-03: purpose text of the storage key bit.designer.alle-reiter (browserSpeicher.js — shown in the settings and the cookie policy)
+  "Schalter „Alle Reiter zeigen“ im Komplex-Designer": "Switch \"Show all tabs\" in the Complex Designer",
   // 97-06: checks against wrong planning
   "Prüfregeln gegen Fehlplanung — Hinweise, keine Sperre": "Checks against planning errors — hints, never a block",
   "keine Hinweise": "no hints",

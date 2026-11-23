@@ -25,15 +25,29 @@
 // in renovation lenses), the opening symbols on their own layer "oeffnung" (DXF A_OEFFNUNG; door swing, window and penetration
 // symbols switchable) and the material hatch. Without `ansicht` the output is byte-identical to before. The line group comes from
 // detailgradFuer (one level-of-detail function). vektorPlanPdf prints the note of a fallback to the bands (`ableitungsVermerk`).
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+// 115-04 (D-115-13): `blattDrehung` of planGrafik = sheet orientation of the floor plan output (0 | 90 | 180 | 270 degrees
+// counter-clockwise as seen, @core/lib/plan/planDrehung.js) — an OWN setting of the output, independent of the screen rotation. The
+// primitives are turned about the model origin, texts keep their anchor and stay upright, hatches keep 45° on the sheet, the AI marks
+// are framed in the sheet frame, and a north arrow (layer "nordpfeil") is added so a turned sheet says where north is. With 0 /
+// without it the output is byte-identical to before (no north arrow, no extra field). The section is never turned.
+// W-1118-21: `massketten` of planGrafik adds the dimension chains of the storey (planMassketten.js: openings, wall positions and
+// overall length per facade, clear room dimensions) on layer "bemassung", derived from the same walls, openings and rooms the sheet
+// draws; the result then carries `kettenPruefung` (pieces add up to the overall length as printed). plansatzPdf() puts several
+// sheets (floor plans, sections) into ONE PDF, each drawn by the same page routine as the single sheet. Without `massketten` the
+// output of planGrafik and vektorPlanPdf is byte-identical to before.
+import { PDFDocument, StandardFonts, rgb, degrees } from "pdf-lib";
 import { wandGeometrie, huellSchnittWaende, ugSchnittWaende, schnittErsetzt, modellImSchnitt } from "@core/lib/bauteil/referenz.js";
-import { dachSchnittLinie, GLOBAL_DACH_DICKE_M, umrissSpanneBeiZ } from "@core/lib/bauteil/dachGeometrie.js"; // 108-01: roof triangle in the section; 108-02: collar-beam floor
-import { deckenLage, geschossHoeheAusModell, geschosshoehe, elevationOf } from "@core/lib/bauteil/hoehen.js"; // 107-02: slab thickness and side from the slab (default 0.25 m standing on its plane)
+import { dachSchnittLinie, dachAnsichtImSchnitt, dachFalllinienImSchnitt, wandOberkanteUnterDach, GLOBAL_DACH_DICKE_M, umrissSpanneBeiZ } from "@core/lib/bauteil/dachGeometrie.js"; // 108-01: roof triangle in the section; 108-02: collar-beam floor
+import { deckenLage, geschosshoehe, elevationOf } from "@core/lib/bauteil/hoehen.js"; // 107-02: slab thickness and side from the slab (default 0.25 m standing on its plane)
 import { treppeBerechnen, treppenLoch, deckeUeber } from "@core/lib/bauteil/treppe.js"; // 108-06: stair symbol on the sheet
 import { treppeSymbol } from "@core/lib/plan/treppeSymbol.js";
+import { istUTreppe } from "@core/lib/bauteil/treppeU.js"; // 115-13: two-flight stair with landing
+import { treppeUPlan } from "@core/lib/plan/treppeUSymbol.js";
 import { gaubeBerechnen } from "@core/lib/bauteil/gauben.js"; // 108-13: dormer outline in the top storey
+import { vordachBerechnen } from "@core/lib/bauteil/vordach.js"; // W-1118-29: canopy outline in its storey
 import { tuerSymbol, tuerFelder } from "@core/lib/plan/tuerSymbol.js"; // 108-05: one door symbol for screen, PDF and DXF
 import { planDarstellung, schraffur45 } from "@core/lib/plan/brillen.js";
+import { profilFlaechen, profilAussen, ERDBAU_FARBE } from "@core/lib/massing/gelaendeEbenen.js"; // 108-10: cut and fill areas between two terrain profiles
 import { statusFarbe, STATUS_DARSTELLUNG } from "@core/lib/plan/statusDarstellung.js";
 import { bauteilGuid } from "@core/lib/bauteil/steckbrief.js";
 import { VERMERK_DRUCK, markenRahmen, modellstandMetadaten, modellstandText, vermerkZeilen } from "@core/lib/zeigen/planStand.js";
@@ -44,6 +58,11 @@ import { oeffnungsMasse, oeffnungsTyp, oeffnungMitte_m } from "@core/lib/bauteil
 import { globaleTraufhoehe_m } from "@core/lib/bauteil/ebenen.js"; // 108-02: the one eaves height
 import { regelfensterPasst, AUTO_WINDOW } from "./autoOpenings.js"; // 108-02: the one rule-window guard (basement, knee wall)
 import { baenderNachStruktur, darstellungsWerte, elementDarstellung, optionenFuer, schichtSichtbar, schnittGruppenNachStruktur, wandFunktionen, wandSchichtStreifen } from "@core/lib/plan/ansichtszustand.js";
+import { schnittMassInhalt, schnittMassLayout, koteText } from "./schnittMasse.js"; // 115-02: one layout of the section dimensions for screen and sheet
+import { normiereDrehung, drehePunkt, drehePunktZurueck, nordRichtung } from "@core/lib/plan/planDrehung.js"; // 115-04: sheet orientation
+import { planKetten, kettenElemente, kettenPruefung } from "./planMassketten.js"; // W-1118-21: dimension chains of the floor plan sheet
+
+export { koteText }; // 115-02: moved to schnittMasse.js (the screen section uses it too); still exported here for its readers
 
 /** 1 mm in PDF points. */
 const PT = 72 / 25.4;
@@ -62,6 +81,11 @@ const RAND = { links: 20, sonst: 10, kopfH: 46, kopfB: 180 };
 const KOPF_ZEILE_MM = 5;
 /** 106-11: gap between a drawn element and its AI mark, mm on paper [ASSUMED: clear of the poché and the cut line]. */
 const MARKE_ABSTAND_MM = 1.5;
+/**
+ * 115-04: north arrow of a turned sheet, mm on paper [ASSUMED: readable at arm's length, the proportions of the screen arrow
+ * (BimPlan2D NorthArrow 14 × 8 units)]: length tip → tail, half width, gap to the drawing, letter height (DIN 6776-1 series).
+ */
+const NORDPFEIL_MM = Object.freeze({ laenge: 8, halbBreite: 2.3, abstand: 6, schrift: 2.5 });
 
 /**
  * Line widths in mm on paper for a scale (ISO 128-23 line groups) — since 107-12 read from the one level-of-detail function
@@ -83,7 +107,12 @@ const POCHE = "#3f3f46";
 
 /**
  * Plan primitives in metres for one storey.
- * @param {{model: any, level: number, customWalls?: any[], customColumns?: any[], customSlabs?: any[], customRoofs?: any[], customZones?: any[], customWindows?: any[], envOpenings?: any[], brille?: any, huelleStatus?: string|null, massstab?: number, sw?: boolean, layerVis?: Record<string, boolean>|null, werkstattWaende?: any[]|null, kiMarken?: {guids: ReadonlyArray<string>, projektId?: string|number|null}|null, schichtFlaechen?: Map<string, {baender: Array<{schicht?: number, ringe: Array<Array<{x: number, z: number}>>}>}>|null, ansicht?: {strukturdarstellung?: string, optionen?: Partial<Record<string, boolean>>|null, regeln?: any[]|null}|null, eingang?: object|null, customStairs?: any[], gauben?: any[], dach?: any, geschosse?: any}} e
+ * @param {{model: any, level: number, customWalls?: any[], customColumns?: any[], customSlabs?: any[], customRoofs?: any[], customZones?: any[], customWindows?: any[], envOpenings?: any[], brille?: any, huelleStatus?: string|null, massstab?: number, sw?: boolean, layerVis?: Record<string, boolean>|null, werkstattWaende?: any[]|null, kiMarken?: {guids: ReadonlyArray<string>, projektId?: string|number|null}|null, schichtFlaechen?: Map<string, {baender: Array<{schicht?: number, ringe: Array<Array<{x: number, z: number}>>}>}>|null, ansicht?: {strukturdarstellung?: string, optionen?: Partial<Record<string, boolean>>|null, regeln?: any[]|null}|null, eingang?: object|null, customStairs?: any[], gauben?: any[], vordaecher?: any[], dach?: any, geschosse?: any, blattDrehung?: number, massketten?: boolean}} e
+ *   massketten (W-1118-21): true adds the dimension chains (layer "bemassung", switch "dimensions"); the result then carries
+ *   `kettenPruefung`. false / absent = the output as before
+ *   blattDrehung (115-04): sheet orientation in degrees counter-clockwise as seen (0 | 90 | 180 | 270, other values rounded to a
+ *   quarter turn) — the drawing is turned about the model origin, texts stay upright, a north arrow is added (layer "nordpfeil");
+ *   the result then carries `blattDrehung`. 0 / absent = the output as before (byte-identical, no such field)
  *   eingang (108-01): the effective automatic entrance of the studio or null when it is off (no door symbol); undefined = as before
  * layerVis: the plan's layer switches (BitBimStudio DEFAULT_LAYERS ids; missing = visible) — the
  * export prints what the screen shows (before 22.10.2026 a hidden layer was printed anyway).
@@ -100,11 +129,19 @@ const POCHE = "#3f3f46";
  * the selection, huellwandGuid), and a changed opening (customWindows / envOpenings, GUID like the change tools, oeffnungGuid)
  * marks its DRAWN host wall - openings themselves are not drawn on the sheet. Workshop walls have no GUID (the change tools cannot
  * target them) and are not marked; the note says "m von n markiert".
- * @returns {{elemente: Array<{art: 'poly', pts: Array<{x: number, z: number}>, fill: string|null, stroke: string, breite_mm: number, dash?: string, deckkraft?: number, offen?: boolean, ebene?: string, guid?: string} | {art: 'text', x: number, z: number, text: string, groesse_mm: number, ebene?: string, ausrichtung?: 'links'|'rechts', guid?: string, farbe?: string}>, bbox: {x0: number, z0: number, x1: number, z1: number}|null, markiert?: string[]}}
- *   markiert: GUIDs that got a mark on this sheet (106-11); farbe: text colour (hex), default dark grey.
+ * @returns {{elemente: Array<{art: 'poly', pts: Array<{x: number, z: number}>, fill: string|null, stroke: string, breite_mm: number, dash?: string, deckkraft?: number, offen?: boolean, ebene?: string, guid?: string} | {art: 'text', x: number, z: number, text: string, groesse_mm: number, ebene?: string, ausrichtung?: 'links'|'rechts', drehung_grad?: number, guid?: string, farbe?: string}>, bbox: {x0: number, z0: number, x1: number, z1: number}|null, markiert?: string[], blattDrehung?: number, kettenPruefung?: Array<{bezug: string, art: string, summe_m: number, gesamt_m: number, ok: boolean}>}}
+ *   markiert: GUIDs that got a mark on this sheet (106-11); farbe: text colour (hex), default dark grey; blattDrehung (115-04): the
+ *   sheet orientation the primitives are turned by, only present when it is not 0 (the DXF comment names it).
  */
-export function planGrafik({ model, level, customWalls = [], customColumns = [], customSlabs = [], customRoofs = [], customZones = [], customWindows = [], envOpenings = [], brille = null, huelleStatus = null, massstab = 100, sw = false, layerVis = null, werkstattWaende = null, kiMarken = null, schichtFlaechen = null, ansicht = null, eingang = undefined, customStairs = [], gauben = [], dach = null, geschosse = null }) {
+export function planGrafik({ model, level, customWalls = [], customColumns = [], customSlabs = [], customRoofs = [], customZones = [], customWindows = [], envOpenings = [], brille = null, huelleStatus = null, massstab = 100, sw = false, layerVis = null, werkstattWaende = null, kiMarken = null, schichtFlaechen = null, ansicht = null, eingang = undefined, customStairs = [], gauben = [], vordaecher = [], dach = null, geschosse = null, blattDrehung = 0, massketten = false }) {
   const lg = linienGruppe(massstab);
+  // 115-04: sheet orientation. Everything below is built in the MODEL frame as before and turned once at the end (one place);
+  // only the hatches are computed in the sheet frame (schraffur) so they keep 45° on the turned sheet.
+  const blatt = normiereDrehung(blattDrehung);
+  /** 45° hatch of a convex polygon as seen on the sheet: for a turned sheet hatched in the sheet frame and brought back into the model frame. */
+  const schraffur = (/** @type {Array<{x: number, z: number}>} */ pts, /** @type {number} */ abstand) => (blatt
+    ? schraffur45(pts.map((q) => drehePunkt(q, blatt)), abstand).map(([a, b]) => /** @type {[{x: number, z: number}, {x: number, z: number}]} */ ([drehePunktZurueck(a, blatt), drehePunktZurueck(b, blatt)]))
+    : schraffur45(pts, abstand));
   // 107-12: view state — structure display, options (opening symbols, hatches), graphic rules; all inert without `ansicht`
   const dg = detailgradFuer(massstab, brille);
   const sd = ansicht?.strukturdarstellung || "gesamt";
@@ -123,7 +160,7 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
     const lk = /** @type {any} */ (regeln && werte ? elementDarstellung(brille, { ...werte, status }, regeln, { sw, standard: { fill, stroke: "#18181b" } }) : planDarstellung(brille, status, { sw }));
     el.push({ art: "poly", pts, fill: lk?.leer ? null : lk ? lk.fill : fill, stroke: lk ? lk.stroke : "#18181b", breite_mm: lk?.breite_mm ?? (schnitt ? lg.schnitt : lg.ansicht), dash: lk?.dash, deckkraft: lk?.opacity ?? 1, ebene });
     // 97-04b: S/W new build — 45° hatch, 2 mm apart on paper [ASSUMED usual spacing]. 107-12: switchable (optionen.schraffurStatus).
-    if (lk?.schraffur && opt?.schraffurStatus !== false) for (const [p, q] of schraffur45(pts, (2 * massstab) / 1000)) el.push({ art: "poly", pts: [p, q], fill: null, stroke: "#18181b", breite_mm: lg.duenn, offen: true, ebene: "schraffur" });
+    if (lk?.schraffur && opt?.schraffurStatus !== false) for (const [p, q] of schraffur(pts, (2 * massstab) / 1000)) el.push({ art: "poly", pts: [p, q], fill: null, stroke: "#18181b", breite_mm: lg.duenn, offen: true, ebene: "schraffur" });
   };
   // 106-11: marks of unreleased AI changes - collected while drawing, drawn last (on top of everything)
   const markGuids = new Set((kiMarken?.guids || []).map(String));
@@ -159,6 +196,9 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
       if (!t?.start) continue;
       const lvl = Math.round(Number(t.level) || 0);
       if (lvl !== level && lvl !== level - 1) continue;
+      // 115-13: the two-flight stair — the same helper as the screen plan (BimPlan2D)
+      const u = istUTreppe(t) ? treppeUPlan(t, model, level, geschosse) : null;
+      if (u) { symbolTeile(u.teile); merke("customStairs", t, u.umriss); continue; }
       const erg = treppeBerechnen(t, geschosshoehe(lvl, geschosse));
       const decke = deckeUeber(model, lvl, geschosse);
       const loch = decke ? treppenLoch(t, erg, deckenLage(decke, geschosse, "huelle").unterkante_m - elevationOf(lvl, geschosse)) : null;
@@ -177,6 +217,16 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
       el.push({ art: "poly", pts: erg.frontLinie, fill: null, stroke: "#18181b", breite_mm: lg.ansicht, offen: true, ebene: "gaube" });
       if (erg.fenster) el.push({ art: "poly", pts: erg.fenster.punkte3d.slice(0, 2).map((p) => ({ x: p.x, z: p.z })), fill: null, stroke: "#18181b", breite_mm: lg.schnitt, offen: true, ebene: "gaube" });
       merke("gauben", g, erg.grundriss);
+    }
+  }
+  // W-1118-29: canopies in the plan of their storey — the plate outline dashed (it hangs above the section plane), ebene "vordach"
+  // (DXF A_VORDACH). Drawn with the hull ("shell"), independent of the roof.
+  if (zeige("shell") && Array.isArray(vordaecher) && vordaecher.length) {
+    for (const v of vordaecher) {
+      const erg = vordachBerechnen(v, model, geschosse);
+      if (!erg.ok || erg.level !== level) continue;
+      el.push({ art: "poly", pts: erg.grundriss, fill: null, stroke: "#18181b", breite_mm: lg.duenn, dash: "3 2", ebene: "vordach" });
+      merke("vordaecher", v, erg.grundriss);
     }
   }
   /**
@@ -227,11 +277,13 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
     for (const b of baenderNachStruktur(streifen, streifen.map((x) => x.funktion), sd, werte.tragend)) {
       poly(b.pts, status, { werte });
       // material hatch (DIN ISO 128-50, simplified to 45° lines 2 mm apart on paper [ASSUMED]); strips are convex four-point polygons
-      if (opt?.schraffurMaterial && b.hatch && b.hatch !== "none") for (const [p, q] of schraffur45(b.pts, (2 * massstab) / 1000)) el.push({ art: "poly", pts: [p, q], fill: null, stroke: "#18181b", breite_mm: lg.duenn, offen: true, ebene: "schraffur" });
+      if (opt?.schraffurMaterial && b.hatch && b.hatch !== "none") for (const [p, q] of schraffur(b.pts, (2 * massstab) / 1000)) el.push({ art: "poly", pts: [p, q], fill: null, stroke: "#18181b", breite_mm: lg.duenn, offen: true, ebene: "schraffur" });
     }
   };
   /** @type {Map<string, any>} 107-12: host wall records of this storey (opening symbols) */
   const wandJe = new Map();
+  /** @type {Map<string, Array<{mitte_u: number, breite: number}>>} W-1118-21: the openings DRAWN per wall (the chains measure these) */
+  const gezeichneteOeffnungen = new Map();
   if (zeige("shell")) for (const w of (model?.walls || []).filter((w) => w.level === level)) {
     const pts = wandPolygon(w);
     if (ansicht) wandMitAnsicht(w, `env:${w.level}:${w.edge}`, huelleStatus, darstellungsWerte({ ...w, huelle: true }, "wand", { tragend: true }));
@@ -280,6 +332,7 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
     const symbol = (/** @type {any} */ w, /** @type {number} */ mitte_u, /** @type {number} */ breite, /** @type {string} */ art, /** @type {string} */ k, /** @type {any} */ rec = null) => {
       const tiefe = sichtbareTiefe.get(k);
       if (tiefe === null) return; // wall hidden by the structure display: its openings go with it
+      if (massketten) gezeichneteOeffnungen.set(k, [...(gezeichneteOeffnungen.get(k) || []), { mitte_u, breite }]);
       const g = wandGeometrie(w);
       const len = Math.hypot(w.b.x - w.a.x, w.b.z - w.a.z) || 1;
       const dx = (w.b.x - w.a.x) / len, dz = (w.b.z - w.a.z) / len;
@@ -343,8 +396,37 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
       }
     }
   }
-  // one mark per element; 0.5 mm line with the dash pattern of "ungeprüft", the "?" right of the frame's top-right corner
   const k = massstab / 1000; // metres per mm on paper
+  // 115-04: the ONE turn of the sheet — every primitive drawn so far about the model origin (texts: the anchor only, they stay
+  // upright), and the outlines the AI marks frame, so the frames below are axis-parallel on the SHEET and the "?" sits right of
+  // their top-right corner there. New arrays: the element records of the caller (slab points …) are never touched.
+  if (blatt) {
+    for (const e of el) {
+      if (e.art === "poly") e.pts = e.pts.map((/** @type {{x: number, z: number}} */ q) => drehePunkt(q, blatt));
+      else { const q = drehePunkt({ x: e.x, z: e.z }, blatt); e.x = q.x; e.z = q.z; }
+    }
+    for (const m of marken) m.pts = m.pts.map((q) => drehePunkt(q, blatt));
+  }
+  // W-1118-21: dimension chains, measured in the model frame from what was drawn above and laid out in the sheet frame (so the
+  // numbers of a turned sheet read from below or from the right like every other one)
+  /** @type {Array<{x: number, z: number}>} */
+  let massAusdehnung = [];
+  /** @type {ReturnType<typeof kettenPruefung>|undefined} */
+  let pruefung;
+  if (massketten && zeige("dimensions")) {
+    const huell = zeige("shell") ? (model?.walls || []).filter((/** @type {any} */ w) => w.level === level) : [];
+    const fp = Array.isArray(model?.footprint) && model.footprint.length >= 3 ? model.footprint : null;
+    const zentrum = fp ? fp.reduce((/** @type {{x: number, z: number}} */ a, /** @type {{x: number, z: number}} */ q) => ({ x: a.x + q.x / fp.length, z: a.z + q.z / fp.length }), { x: 0, z: 0 }) : null;
+    const ketten = planKetten({ huellWaende: huell, oeffnungen: gezeichneteOeffnungen, waende: zeige("walls") ? auf(customWalls) : [],
+      raeume: zeige("zones") ? auf(customZones).map((/** @type {any} */ z) => ({ name: String(z.name || "Raum").replace(/ ·WT$/, ""), points: z.points })) : [], zentrum });
+    if (ketten.length) {
+      const m = kettenElemente(ketten, { massstab, linien: lg, abbild: blatt ? (q) => drehePunkt(q, blatt) : undefined, zentrum: zentrum || ketten[0].punkte[0] });
+      el.push(...m.elemente);
+      massAusdehnung = m.ausdehnung;
+    }
+    pruefung = kettenPruefung(ketten);
+  }
+  // one mark per element; 0.5 mm line with the dash pattern of "ungeprüft", the "?" right of the frame's top-right corner
   /** @type {string[]} */
   const markiert = [];
   for (const m of marken) {
@@ -354,7 +436,7 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
     el.push({ art: "poly", pts: r, fill: null, stroke: VERMERK_DRUCK.linie, breite_mm: 0.5, dash: VERMERK_DRUCK.strich, ebene: "ki_vermerk", guid: m.guid });
     el.push({ art: "text", x: r[1].x + 0.8 * k, z: r[1].z + 1.2 * k, text: VERMERK_DRUCK.zeichen, groesse_mm: 3.5, ausrichtung: "links", ebene: "ki_vermerk", guid: m.guid, farbe: VERMERK_DRUCK.linie });
   }
-  const pts = el.flatMap((e) => (e.art === "poly" ? e.pts : [{ x: e.x, z: e.z }]));
+  const pts = el.flatMap((e) => (e.art === "poly" ? e.pts : [{ x: e.x, z: e.z }])).concat(massAusdehnung);
   // Loop instead of Math.min(...): hatched plans can exceed the argument limit of a spread call.
   let bbox = null;
   for (const p of pts) {
@@ -366,14 +448,26 @@ export function planGrafik({ model, level, customWalls = [], customColumns = [],
       if (p.z > bbox.z1) bbox.z1 = p.z;
     }
   }
-  return { elemente: el, bbox, markiert };
-}
-
-/** German decimal with sign for level marks: 0 → "±0,00", 3 → "+3,00", -2.5 → "-2,50". */
-export function koteText(m) {
-  const r = Math.round(m * 100) / 100;
-  if (r === 0) return "±0,00";
-  return `${r > 0 ? "+" : "-"}${Math.abs(r).toFixed(2).replace(".", ",")}`;
+  if (!blatt || !bbox) return pruefung ? { elemente: el, bbox, markiert, kettenPruefung: pruefung } : { elemente: el, bbox, markiert };
+  // 115-04: north arrow of the turned sheet, right of the drawing at its top edge: outline arrow (no fill — a fill would become a
+  // poché SOLID in the DXF) pointing where north (−z of the model, the convention of the screen arrow) lies on the sheet, the
+  // letter "N" upright behind its tail. Layer "nordpfeil" (DXF A_NORDPFEIL). The bbox grows by it, so the sheet layout keeps it.
+  const n = nordRichtung(blatt), L = NORDPFEIL_MM.laenge * k, hb = NORDPFEIL_MM.halbBreite * k;
+  const mitte = { x: bbox.x1 + (NORDPFEIL_MM.abstand + NORDPFEIL_MM.laenge / 2) * k, z: bbox.z0 + (NORDPFEIL_MM.laenge / 2 + NORDPFEIL_MM.schrift) * k };
+  // arrow in its own frame (u along north, v across): tip, right barb, notch, left barb — the shape of the screen arrow
+  const pfeil = /** @type {Array<[number, number]>} */ ([[0.5, 0], [-0.5, 0.5], [-0.28, 0], [-0.5, -0.5]]).map(([u, v]) => ({ x: mitte.x + n.x * u * L - n.y * v * 2 * hb, z: mitte.z + n.y * u * L + n.x * v * 2 * hb }));
+  const nordpfeil = [
+    { art: "poly", pts: pfeil, fill: null, stroke: "#18181b", breite_mm: lg.ansicht, ebene: "nordpfeil" },
+    { art: "text", x: mitte.x - n.x * (L / 2 + NORDPFEIL_MM.schrift * k), z: mitte.z - n.y * (L / 2 + NORDPFEIL_MM.schrift * k), text: "N", groesse_mm: NORDPFEIL_MM.schrift, ebene: "nordpfeil" },
+  ];
+  el.push(...nordpfeil);
+  for (const q of [...pfeil, { x: nordpfeil[1].x - NORDPFEIL_MM.schrift * k, z: nordpfeil[1].z - NORDPFEIL_MM.schrift * k }, { x: nordpfeil[1].x + NORDPFEIL_MM.schrift * k, z: nordpfeil[1].z + NORDPFEIL_MM.schrift * k }]) {
+    if (q.x < bbox.x0) bbox.x0 = q.x;
+    if (q.z < bbox.z0) bbox.z0 = q.z;
+    if (q.x > bbox.x1) bbox.x1 = q.x;
+    if (q.z > bbox.z1) bbox.z1 = q.z;
+  }
+  return pruefung ? { elemente: el, bbox, markiert, blattDrehung: blatt, kettenPruefung: pruefung } : { elemente: el, bbox, markiert, blattDrehung: blatt };
 }
 
 /**
@@ -382,16 +476,21 @@ export function koteText(m) {
  * the back wall in elevation, plus level marks after DIN 1356-1 (filled triangle = carcass level
  * [ASSUMED: model elevations are structural levels], value ±0,00 / +3,00 m) and dimension lines. The
  * vertical axis is stored as z = -height so vektorPlanPdf (y down) draws it upright without a second path.
- * @param {{model: any, storeyHeight?: number, layerVis?: Record<string, boolean>|null, brille?: any, huelleStatus?: string|null, sw?: boolean, massstab?: number, schnittFlaechen?: Array<{schluessel: string, schicht?: number, ringe: Array<Array<{x: number, h: number}>>}>|null, ansicht?: {strukturdarstellung?: string}|null, dach?: any, achse?: "x"|"z"|null}} e
+ * 115-02: the level marks (left) and the height chains (right: detail, storeys, overall) come from schnittMasse.js — the same
+ * layout as the screen section, no text on another one; numbers of the vertical chains carry `drehung_grad: -90`.
+ * @param {{model: any, storeyHeight?: number, layerVis?: Record<string, boolean>|null, brille?: any, huelleStatus?: string|null, sw?: boolean, massstab?: number, schnittFlaechen?: Array<{schluessel: string, schicht?: number, ringe: Array<Array<{x: number, h: number}>>}>|null, ansicht?: {strukturdarstellung?: string}|null, dach?: any, achse?: "x"|"z"|null, gelaende?: {bestand?: Array<{s_m: number, h_m: number}>|null, neu?: Array<{s_m: number, h_m: number}>|null, annahme?: boolean}|null}} e
  *   dach (108-01): global roof form (dachGeometrie.globalesDach) — the cut roof plate on layer "dach" and the marks "Traufe" / "First"
  *   instead of "OK Dach"; achse (108-01): "z" = section B-B (model turned by referenz.modellImSchnitt), "x"/null = A-A as before.
  *   Without both the output is byte-identical to before.
+ *   gelaende (108-10): terrain profiles along this section line, `{bestand?, neu?: Array<{s_m, h_m}>, annahme?: boolean}` (m along the
+ *   line / m relative to ±0,00; annahme = the existing ground comes from the public elevation model) — see the ground line below.
+ *   Without it the flat line at ±0,00 stays, byte-identical.
  *   schnittFlaechen (107-09): cut layers of the intersected walls (x and height in m); with hull entries they replace the hull wall rectangles
  *   ansicht (107-12): structure display of the view filters the cut layers by function (whole hull rectangles are not split), null = as before
  * @returns {ReturnType<typeof planGrafik>}  markiert is always empty (106-11 review): the section marks no element, so the note
  *   on the sheet says "0 von n Bauteilen auf diesem Blatt markiert" instead of staying silent about it.
  */
-export function schnittGrafik({ model: modellRoh, storeyHeight = 3, layerVis = null, brille = null, huelleStatus = null, sw = false, massstab = 100, schnittFlaechen = null, ansicht = null, dach = null, achse = null }) {
+export function schnittGrafik({ model: modellRoh, storeyHeight = 3, layerVis = null, brille = null, huelleStatus = null, sw = false, massstab = 100, schnittFlaechen = null, ansicht = null, dach = null, achse = null, gelaende = null }) {
   const model = modellImSchnitt(modellRoh, achse); // 108-01: B-B turns the model, A-A is the model itself
   const lg = linienGruppe(massstab);
   const zeige = (/** @type {string} */ id) => !layerVis || layerVis[id] !== false;
@@ -418,8 +517,51 @@ export function schnittGrafik({ model: modellRoh, storeyHeight = 3, layerVis = n
     if (lk?.schraffur) for (const [p, q] of schraffur45(pts, 2 * k)) linie([p, q], lg.duenn, "schraffur");
   };
 
-  // Ground line 3 m beyond the building on both sides (Ansicht weight).
-  linie([{ x: x0 - 3, z: 0 }, { x: x1 + 3, z: 0 }], lg.ansicht, "gelaende");
+  // Ground line 3 m beyond the building on both sides (Ansicht weight). 108-10: with terrain profiles (gelaendeEbenen.gelaendeProfil
+  // along this section) the real ground replaces the flat line — existing ground dashed on layer "gelaende_bestand", new ground solid on
+  // "gelaende_neu", cut and fill between them marked (hatch one way = cut, the other way = fill; tinted unless black-and-white).
+  // Without a new ground the existing one IS the ground and is drawn solid. The ground the building stands in stops at the outer faces
+  // of the building (profilAussen); the existing ground under a new one runs through as the dashed line of the original terrain.
+  const glBestand = Array.isArray(gelaende?.bestand) && gelaende.bestand.length >= 2 ? gelaende.bestand : null;
+  const glNeu = Array.isArray(gelaende?.neu) && gelaende.neu.length >= 2 ? gelaende.neu : null;
+  if (!glBestand && !glNeu) linie([{ x: x0 - 3, z: 0 }, { x: x1 + 3, z: 0 }], lg.ansicht, "gelaende");
+  else {
+    const zug = (/** @type {Array<{s_m: number, h_m: number}>} */ pr) => pr.map((q) => ({ x: q.s_m, z: Z(q.h_m) }));
+    const aussen = (/** @type {Array<{s_m: number, h_m: number}>} */ pr) => profilAussen(pr, x0, x1);
+    if (glBestand && glNeu) {
+      const bTeile = aussen(glBestand), nTeile = aussen(glNeu);
+      for (const f of bTeile.flatMap((b, i) => (nTeile[i] ? profilFlaechen(b, nTeile[i]) : []))) {
+        const pts = zug(f.pts);
+        if (!sw) el.push({ art: "poly", pts, fill: f.art === "abtrag" ? ERDBAU_FARBE.abtrag : ERDBAU_FARBE.auftrag, stroke: "none", breite_mm: 0, deckkraft: 0.6, ebene: `erdbau_${f.art}` });
+        // cut: hatch rising to the right; fill: the mirrored hatch (mirror the area, hatch, mirror back)
+        const spiegel = (/** @type {{x: number, z: number}} */ q) => ({ x: -q.x, z: q.z });
+        const striche = f.art === "abtrag" ? schraffur45(pts, 2 * k) : schraffur45(pts.map(spiegel), 2 * k).map(([a, b]) => [spiegel(a), spiegel(b)]);
+        for (const [a, b] of striche) linie([a, b], lg.duenn, `erdbau_${f.art}`);
+      }
+    }
+    if (glBestand && glNeu) linie(zug(glBestand), lg.duenn, "gelaende_bestand", "4 2");
+    else if (glBestand) for (const teil of aussen(glBestand)) linie(zug(teil), lg.ansicht, "gelaende_bestand");
+    if (glNeu) for (const teil of aussen(glNeu)) linie(zug(teil), lg.ansicht, "gelaende_neu");
+    if (zeige("labels")) {
+      const marke = (/** @type {Array<{s_m: number, h_m: number}>} */ pr, /** @type {string} */ text, /** @type {number} */ versatz) => {
+        const q = pr[pr.length - 1];
+        el.push({ art: "text", x: q.s_m + 1 * k, z: Z(q.h_m) + versatz * k, text: `${text} ${koteText(q.h_m)}`, groesse_mm: 2.5, ausrichtung: "links", ebene: "kote" });
+      };
+      if (glBestand) marke(glBestand, glNeu ? "Gelände Bestand" : gelaende?.annahme ? "Gelände (Höhenmodell, Annahme)" : "Gelände", glNeu ? 3.2 : 0.9);
+      if (glNeu) marke(glNeu, "Gelände neu", glBestand ? -1.4 : 0.9);
+    }
+  }
+  // user finding 15.11.2026 ("im Schnitt ist das Dach nicht zu sehen"): the roof faces behind the cut in elevation — in a section
+  // along the ridge the cut roof plate is only a strip at the ridge, the roof itself is what one sees behind it. Drawn first (behind
+  // everything cut), thin outline, no fill.
+  const dachUntenFrueh = dach ? dachSchnittLinie(dach, achse === "z" ? "z" : "x", 0) : null;
+  if (dach && zeige("attika")) {
+    for (const ring of dachAnsichtImSchnitt(dach, achse === "z" ? "z" : "x")) {
+      el.push({ art: "poly", pts: ring.map((q) => ({ x: q.s_m, z: Z(q.h_m) })), fill: null, stroke: "#18181b", breite_mm: lg.ansicht, ebene: "dach" });
+      // rafter lines: the face reads as an inclined roof seen from inside, not as a wall or a flat roof
+      for (const [a, b] of dachFalllinienImSchnitt(ring)) linie([{ x: a.s_m, z: Z(a.h_m) }, { x: b.s_m, z: Z(b.h_m) }], lg.duenn, "dach");
+    }
+  }
   if (zeige("shell")) {
     for (const s of model.slabs || []) {
       const lage = deckenLage(s, undefined, "huelle");
@@ -436,7 +578,9 @@ export function schnittGrafik({ model: modellRoh, storeyHeight = 3, layerVis = n
     // below still test the unfiltered groups: a hidden layer leaves its gap, the whole rectangle never comes back.
     const vSichtbar = schnittGruppenNachStruktur(vSchnitt, model.walls, ansicht?.strukturdarstellung);
     for (const f of vSichtbar) for (const r of f.ringe) if (r.length >= 3) geschnitten(r.map((p) => ({ x: p.x, z: Z(p.h) })), String(f.schluessel).startsWith("env:") ? huelleStatus : null, "wand");
-    for (const s of schnittWaende) if (!schnittErsetzt(vSchnitt, s, false)) geschnitten(rechteck(s.von_m, s.bis_m, 0, wandOben), huelleStatus, "wand");
+    // a cut wall reaches up to the roof underside where the roof lies above it (gable wall in a section along the ridge); with a parapet the
+    // walls keep ending at the eaves, where the parapet stands (review 108-01)
+    for (const s of schnittWaende) if (!schnittErsetzt(vSchnitt, s, false)) geschnitten(rechteck(s.von_m, s.bis_m, 0, paraH > 0 ? wandOben : wandOberkanteUnterDach(dachUntenFrueh, s.von_m, s.bis_m, wandOben)), huelleStatus, "wand");
     // 107-13 (D-BK-20): basement walls from the lowest basement up to ±0.00 with their own thickness (bauteil/referenz.js); the walls
     // above ground keep their line from ±0.00 up. No ground subtraction (plan 107-10). Nothing is added without basements.
     // [ASSUMED] terrain = ±0.00 (assumption A4 of 107-13, the ground line above): the basement is fully below ground on every side.
@@ -467,24 +611,32 @@ export function schnittGrafik({ model: modellRoh, storeyHeight = 3, layerVis = n
       el.push({ art: "poly", pts: rechteck(cx - 0.7, cx + 0.7, st.elevation + 0.9, st.elevation + 2.3), fill: null, stroke: "#18181b", breite_mm: lg.ansicht, ebene: "oeffnung" });
     }
   }
-  // Level marks left of the building: reference line, filled triangle with its tip on the level, value.
-  if (zeige("labels")) {
-    const xs = x0 - 14 * k, b = 1.6 * k, h = 2.4 * k;
-    const kote = (hoehe, text) => {
-      // reference line from the triangle's tip to the building; the value sits left of the triangle, above the line
-      linie([{ x: xs, z: Z(hoehe) }, { x: x0, z: Z(hoehe) }], lg.duenn, "kote", "4 2");
-      el.push({ art: "poly", pts: [{ x: xs, z: Z(hoehe) }, { x: xs - b, z: Z(hoehe + h) }, { x: xs + b, z: Z(hoehe + h) }], fill: "#18181b", stroke: "#18181b", breite_mm: lg.duenn, ebene: "kote" });
-      el.push({ art: "text", x: xs - b - 1 * k, z: Z(hoehe + 1.6 * k), text, groesse_mm: 2.5, ausrichtung: "rechts", ebene: "kote" });
-    };
-    for (const st of model.storeys || []) kote(st.elevation, `${koteText(st.elevation)}  ${st.name || ""}`.trim());
-    if (dachUnten) {
-      // 108-01: a pitched roof has eaves and ridge; "OK Dach" at the eaves height was wrong for it
-      kote(dachUnten.traufe_m, `${koteText(dachUnten.traufe_m)}  Traufe`);
-      kote(dachUnten.first_m, `${koteText(dachUnten.first_m)}  First`);
-    } else kote(totalH, `${koteText(totalH)}  OK Dach`);
-    if (paraH > 0) kote(wandOben + paraH, `${koteText(wandOben + paraH)}  OK Attika`);
+  // 115-02: level marks and height chains from ONE layout (schnittMasse.js, shared with the screen section). Paper: drawing unit =
+  // mm, so jeM = mm per metre (skill rule ZEICH-02) and the text is 2,5 mm high.
+  const SCHRIFT_MM = 2.5;
+  const inhalt = schnittMassInhalt({ storeys: model.storeys || [], totalH_m: totalH, wandOben_m: wandOben, kniestock_m: knie, attika_m: paraH, dachLinie: dachUnten });
+  /** @type {Record<string, string>} */
+  const KOTE_NAME = { dach: "OK Dach", traufe: "Traufe", first: "First", attika: "OK Attika" };
+  const masse = schnittMassLayout({
+    ketten: zeige("dimensions") ? inhalt.ketten : [],
+    koten: zeige("labels") ? inhalt.koten.map((q) => ({ ...q, text: `${koteText(q.h_m)}  ${q.art === "geschoss" ? q.name || "" : KOTE_NAME[q.art]}`.trim() })) : [],
+    jeM: 1 / k, schrift: SCHRIFT_MM, namen: { kniestock: "Kniestock" },
+  });
+  // layout point (drawing units from the building edge, height in m) → metres; `seite` +1 = right of x1, -1 = left of x0
+  const massPunkt = (/** @type {import("./schnittMasse.js").MassPunkt} */ q, /** @type {1|-1} */ seite) => ({ x: (seite > 0 ? x1 : x0) + seite * q.dx * k, z: Z(q.h_m + q.dy * k) });
+  // layout text (point on the baseline) → text element (anchor = middle of the glyph height, a third of the font height above the baseline)
+  const massText = (/** @type {{text: string, p: import("./schnittMasse.js").MassPunkt, winkel?: number}} */ t, /** @type {1|-1} */ seite, /** @type {string} */ ebene) => {
+    const q = massPunkt(t.p, seite), d = (SCHRIFT_MM / 3) * k;
+    if (t.winkel === -90) return { art: "text", x: q.x - d, z: q.z, text: t.text, groesse_mm: SCHRIFT_MM, drehung_grad: -90, ebene };
+    return { art: "text", x: q.x, z: q.z - d, text: t.text, groesse_mm: SCHRIFT_MM, ausrichtung: seite > 0 ? "links" : "rechts", ebene };
+  };
+  // Level marks left of the building: reference line, filled triangle with its tip on the level, value (DIN 1356-1).
+  for (const q of masse.links.koten) {
+    linie([massPunkt(q.linie.a, -1), massPunkt(q.linie.b, -1)], lg.duenn, "kote", "4 2");
+    el.push({ art: "poly", pts: q.dreieck.map((d) => massPunkt(d, -1)), fill: "#18181b", stroke: "#18181b", breite_mm: lg.duenn, ebene: "kote" });
+    el.push(massText(q, -1, "kote"));
   }
-  // Dimension lines (DIN 406: oblique ticks): storey height on the right, building width below.
+  // Dimension lines (DIN 406: oblique ticks): height chains on the right (115-02), building width below.
   if (zeige("dimensions")) {
     const t = 1.2 * k;
     const masslinie = (a, b2, text, tx, tz, ausrichtung) => {
@@ -492,12 +644,10 @@ export function schnittGrafik({ model: modellRoh, storeyHeight = 3, layerVis = n
       for (const p of [a, b2]) linie([{ x: p.x - t, z: p.z + t }, { x: p.x + t, z: p.z - t }], lg.ansicht, "bemassung");
       el.push({ art: "text", x: tx, z: tz, text, groesse_mm: 2.5, ausrichtung, ebene: "bemassung" });
     };
-    const xr = x1 + 8 * k;
-    // 107-02 review fix: height of the ground floor from the model (as the level marks), not the uniform `storeyHeight` (differs with a storey table)
-    const egHoehe = geschossHoeheAusModell(model) || storeyHeight;
-    masslinie({ x: xr, z: Z(0) }, { x: xr, z: Z(egHoehe) }, `${egHoehe.toFixed(2).replace(".", ",")}`, xr + 2 * k, Z(egHoehe / 2), "links");
-    // 108-02: knee wall from the top of the structural slab under the top storey to the eaves
-    if (knie != null) masslinie({ x: xr, z: Z(wandOben - knie) }, { x: xr, z: Z(wandOben) }, `Kniestock ${knie.toFixed(2).replace(".", ",")}`, xr + 2 * k, Z(wandOben - knie / 2), "links");
+    // 115-02: storey heights from the storey levels of the model (107-02: never the uniform `storeyHeight`), knee wall (108-02: top of
+    // the structural slab under the top storey to the eaves) and parapet as detail pieces, overall heights outside — schnittMasse.js
+    for (const l of masse.rechts.linien) linie([massPunkt(l.a, 1), massPunkt(l.b, 1)], l.art === "strich" ? lg.ansicht : lg.duenn, "bemassung");
+    for (const tx of masse.rechts.texte) el.push(massText(tx, 1, "bemassung"));
     // 107-13: below the lowest basement (fusshoehe_m is negative, z points down here); 8 mm below ±0.00 without basements as before
     const zu = 8 * k - (Number(model.fusshoehe_m) || 0);
     masslinie({ x: x0, z: zu }, { x: x1, z: zu }, `${(x1 - x0).toFixed(2).replace(".", ",")}`, (x0 + x1) / 2, zu - 2.2 * k, undefined);
@@ -506,6 +656,8 @@ export function schnittGrafik({ model: modellRoh, storeyHeight = 3, layerVis = n
   const ausdehnung = (e) => {
     if (e.art === "poly") return e.pts;
     const w = String(e.text).length * 0.55 * e.groesse_mm * k;
+    // 115-02: turned text (-90°, vertical chains) — centred on its anchor along the chain, glyphs towards -x
+    if (e.drehung_grad) return [{ x: e.x - e.groesse_mm * k, z: e.z - w / 2 }, { x: e.x + (e.groesse_mm / 3) * k, z: e.z + w / 2 }];
     const xa = e.ausrichtung === "rechts" ? e.x - w : e.ausrichtung === "links" ? e.x : e.x - w / 2;
     return [{ x: xa, z: e.z - e.groesse_mm * k }, { x: xa + w, z: e.z }];
   };
@@ -540,26 +692,21 @@ export function blattLayout(bbox, massstab) {
 const farbe = (hex) => { const n = parseInt(String(hex).slice(1), 16); return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255); };
 
 /**
- * PDF with the plan at true scale and a title block.
- * 106-11: `modellstand` (planStand.js ModellStand) goes into the title block row "Modellstand", into the PDF keywords (machine
- * readable, read back by the plan list) and - when AI changes are unreleased or the state is unknown (null/undefined counts as
- * unknown) - into the dashed note box left of the title block. There is deliberately no option to print without the note.
+ * Draws ONE sheet (drawing at true scale, scale bar, title block, status legend, notes) as a new page of `doc` - the page routine of
+ * the single sheet (vektorPlanPdf) and of every sheet of a plan set (plansatzPdf, W-1118-21).
+ * @param {PDFDocument} doc
+ * @param {{font?: any, fett?: any}} schriften  fonts of the document; filled on the first sheet
  * @param {ReturnType<typeof planGrafik>} grafik
- * 107-12: `ableitungsVermerk` (text, e.g. RUECKFALL_VERMERK of ansichtszustand.js) is printed above the title block when walls of the
- * sheet come from the bands instead of the solid — a fallback is never silent; null/absent = nothing printed (byte-identical).
  * @param {{massstab: number, projekt?: string, planinhalt?: string, brille?: any, plannummer?: string, datum?: string, modellstand?: import("@core/lib/zeigen/planStand.js").ModellStand|null, ableitungsVermerk?: string|null}} kopf
- * @returns {Promise<{bytes: Uint8Array, format: string, vermerk: boolean}>}  vermerk: the sheet carries the note.
+ * @returns {Promise<{format: string, vermerk: boolean}>}
  */
-export async function vektorPlanPdf(grafik, { massstab, projekt = "", planinhalt = "", brille = null, plannummer = "", datum = "", modellstand = null, ableitungsVermerk = null }) {
+async function blattZeichnen(doc, schriften, grafik, { massstab, projekt = "", planinhalt = "", brille = null, plannummer = "", datum = "", modellstand = null, ableitungsVermerk = null }) {
   if (!grafik.bbox) throw new Error("Keine Zeichnung auf diesem Geschoss.");
   const lay = blattLayout(grafik.bbox, massstab);
-  const doc = await PDFDocument.create();
-  doc.setTitle(`${projekt} — ${planinhalt} 1:${massstab}`);
-  doc.setCreator("BIT-Atelier");
-  doc.setKeywords([modellstandMetadaten(modellstand)]);
   const page = doc.addPage([lay.breite_mm * PT, lay.hoehe_mm * PT]);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const fett = await doc.embedFont(StandardFonts.HelveticaBold);
+  // fonts are embedded once per document, after its first page (the order the single sheet always had)
+  if (!schriften.font) { schriften.font = await doc.embedFont(StandardFonts.Helvetica); schriften.fett = await doc.embedFont(StandardFonts.HelveticaBold); }
+  const font = schriften.font, fett = schriften.fett;
   const mm = (m) => (m * 1000) / massstab; // metres in the model → mm on paper
   // drawSvgPath draws with y pointing down from (x, y) — the plan's z axis points down on screen too.
   const ox = lay.ursprung_mm.x * PT, oy = (lay.hoehe_mm - lay.ursprung_mm.y) * PT;
@@ -581,7 +728,14 @@ export async function vektorPlanPdf(grafik, { massstab, projekt = "", planinhalt
       const breite = f.widthOfTextAtSize(txt, groesse);
       // ausrichtung (100-01, optional): "links" starts at the anchor, "rechts" ends there, default centred.
       const dx = e.ausrichtung === "links" ? 0 : e.ausrichtung === "rechts" ? breite : breite / 2;
-      page.drawText(txt, { x: ox + mm(e.x - x0) * PT - dx, y: oy - mm(e.z - z0) * PT - groesse / 3, size: groesse, font: f, color: e.farbe ? farbe(e.farbe) : rgb(0.2, 0.2, 0.22) });
+      const tx = ox + mm(e.x - x0) * PT, ty = oy - mm(e.z - z0) * PT, tf = e.farbe ? farbe(e.farbe) : rgb(0.2, 0.2, 0.22);
+      if (e.drehung_grad) {
+        // 115-02: turned text (numbers of vertical dimension chains). drehung_grad counts as on screen (y down: -90 reads bottom-to-top),
+        // the PDF page counts counter-clockwise with y up → -drehung_grad. Start of the baseline = anchor − (along the text) · dx
+        // − (glyph-up) · size/3, the same anchor rule as the unturned text below.
+        const w = (-e.drehung_grad * Math.PI) / 180, c = Math.cos(w), sn = Math.sin(w);
+        page.drawText(txt, { x: tx - c * dx + sn * (groesse / 3), y: ty - sn * dx - c * (groesse / 3), size: groesse, font: f, color: tf, rotate: degrees(-e.drehung_grad) });
+      } else page.drawText(txt, { x: tx - dx, y: ty - groesse / 3, size: groesse, font: f, color: tf });
     }
   }
   // Scale bar 5 m (true length on paper) under the drawing.
@@ -641,7 +795,63 @@ export async function vektorPlanPdf(grafik, { massstab, projekt = "", planinhalt
       page.drawText(kuerzen(winAnsi(z), font, 2.6 * PT, maxB), { x: tx, y: vy + vh - (15.5 + i * 4.6) * PT, size: 2.6 * PT, font, color: rgb(0.08, 0.08, 0.1) });
     });
   }
-  return { bytes: await doc.save(), format: lay.format, vermerk: !!vermerk };
+  return { format: lay.format, vermerk: !!vermerk };
+}
+
+/**
+ * PDF with the plan at true scale and a title block.
+ * 106-11: `modellstand` (planStand.js ModellStand) goes into the title block row "Modellstand", into the PDF keywords (machine
+ * readable, read back by the plan list) and - when AI changes are unreleased or the state is unknown (null/undefined counts as
+ * unknown) - into the dashed note box left of the title block. There is deliberately no option to print without the note.
+ * @param {ReturnType<typeof planGrafik>} grafik
+ * 107-12: `ableitungsVermerk` (text, e.g. RUECKFALL_VERMERK of ansichtszustand.js) is printed above the title block when walls of the
+ * sheet come from the bands instead of the solid — a fallback is never silent; null/absent = nothing printed (byte-identical).
+ * @param {{massstab: number, projekt?: string, planinhalt?: string, brille?: any, plannummer?: string, datum?: string, modellstand?: import("@core/lib/zeigen/planStand.js").ModellStand|null, ableitungsVermerk?: string|null}} kopf
+ * @returns {Promise<{bytes: Uint8Array, format: string, vermerk: boolean}>}  vermerk: the sheet carries the note.
+ */
+export async function vektorPlanPdf(grafik, { massstab, projekt = "", planinhalt = "", brille = null, plannummer = "", datum = "", modellstand = null, ableitungsVermerk = null }) {
+  if (!grafik.bbox) throw new Error("Keine Zeichnung auf diesem Geschoss.");
+  blattLayout(grafik.bbox, massstab); // throws before a document exists when the drawing does not fit
+  const doc = await PDFDocument.create();
+  // 105-19: /Lang (sheet text is German) and /Title shown in the viewer's title bar; same title text as before.
+  // W0-F6: dynamic import, so the entry's preload map does not name the helper's chunk.
+  const { pdfLibMetadaten } = await import("@core/lib/pdfMetadaten.js");
+  pdfLibMetadaten(doc, { titel: `${projekt} — ${planinhalt} 1:${massstab}`, betreff: projekt });
+  doc.setCreator("BIT-Atelier");
+  doc.setKeywords([modellstandMetadaten(modellstand)]);
+  const { format, vermerk } = await blattZeichnen(doc, {}, grafik, { massstab, projekt, planinhalt, brille, plannummer, datum, modellstand, ableitungsVermerk });
+  return { bytes: await doc.save(), format, vermerk };
+}
+
+/**
+ * W-1118-21: a plan set - several sheets (floor plan per storey, sections) in ONE PDF, every sheet at true scale on the smallest
+ * DIN format it fits on, drawn by the page routine of the single sheet. Sheets are numbered "01/n" unless they bring a number.
+ * @param {Array<{grafik: ReturnType<typeof planGrafik>, planinhalt: string, massstab: number, plannummer?: string, ableitungsVermerk?: string|null}>} blaetter
+ *   sheets without a drawing (bbox null) are left out
+ * @param {{projekt?: string, brille?: any, datum?: string, modellstand?: import("@core/lib/zeigen/planStand.js").ModellStand|null}} [kopf]
+ * @returns {Promise<{bytes: Uint8Array, blaetter: Array<{planinhalt: string, format: string, massstab: number}>, vermerk: boolean}>}
+ * @throws when no sheet carries a drawing, or one does not fit on A0 at its scale
+ */
+export async function plansatzPdf(blaetter, { projekt = "", brille = null, datum = "", modellstand = null } = {}) {
+  const mit = (Array.isArray(blaetter) ? blaetter : []).filter((b) => b?.grafik?.bbox);
+  if (!mit.length) throw new Error("Kein Blatt mit Zeichnung — der Plansatz ist leer.");
+  for (const b of mit) blattLayout(/** @type {any} */ (b.grafik.bbox), b.massstab);
+  const doc = await PDFDocument.create();
+  const { pdfLibMetadaten } = await import("@core/lib/pdfMetadaten.js");
+  pdfLibMetadaten(doc, { titel: `${projekt} — Plansatz 1:${mit[0].massstab}`, betreff: projekt });
+  doc.setCreator("BIT-Atelier");
+  doc.setKeywords([modellstandMetadaten(modellstand)]);
+  const schriften = {};
+  const fertig = [];
+  let vermerk = false;
+  for (let i = 0; i < mit.length; i += 1) {
+    const b = mit[i];
+    const r = await blattZeichnen(doc, schriften, b.grafik, { massstab: b.massstab, projekt, planinhalt: b.planinhalt, brille, datum, modellstand,
+      plannummer: b.plannummer || `${String(i + 1).padStart(2, "0")}/${String(mit.length).padStart(2, "0")}`, ableitungsVermerk: b.ableitungsVermerk ?? null });
+    fertig.push({ planinhalt: b.planinhalt, format: r.format, massstab: b.massstab });
+    vermerk = vermerk || r.vermerk;
+  }
+  return { bytes: await doc.save(), blaetter: fertig, vermerk };
 }
 
 /** Characters the standard PDF fonts can encode (WinAnsi = Windows-1252): Latin-1 plus the cp1252 extras. */
@@ -649,11 +859,12 @@ const WIN_ANSI_EXTRA = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—�
 
 /**
  * Text the standard PDF fonts can draw: characters outside Windows-1252 become "?" (pdf-lib throws on them; element names come
- * from people and agents and may hold anything).
+ * from people and agents and may hold anything); the minus sign U+2212 becomes an en dash.
  * @param {string} s @returns {string}
  */
 export function winAnsi(s) {
   return Array.from(String(s ?? "")).map((c) => {
+    if (c === "−") return "–"; // 115-02: the minus of level marks (koteText, U+2212) has no WinAnsi code; the en dash is as wide as a digit
     const n = c.codePointAt(0) ?? 0;
     // 0x20-0x7E ASCII, 0xA0-0xFF Latin-1; 0x80-0x9F are the cp1252 extras, reachable only through their own characters
     return (n >= 0x20 && n <= 0x7e) || (n >= 0xa0 && n <= 0xff) || WIN_ANSI_EXTRA.includes(c) ? c : "?";

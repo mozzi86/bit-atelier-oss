@@ -109,6 +109,16 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = async () => {
+    // 115-05c (§6.2): the unsaved model drafts of the person signing out leave this browser (other people's drafts stay);
+    // lazily loaded, the entry chunk carries none of it. A failure is logged, it never blocks the sign-out.
+    const wer = user?.id ?? user?.email ?? null;
+    void Promise.all([import('./entwurf/entwurfStand.js'), import('./entwurf/entwurfSpeicher.js')])
+      .then(async ([E, S]) => {
+        const id = wer ?? E.benutzerId();
+        E.benutzerVergessen();
+        await S.entwurfeDesBenutzersLoeschen(S.entwurfBrowserSpeicher(), String(id));
+      })
+      .catch((err) => console.error('Entwürfe beim Abmelden nicht gelöscht:', err));
     // Optimistic local clear — the UI must react even if signOut hiccups
     // (token already expired); bitApi.auth.logout reports errors itself.
     setUser(null);

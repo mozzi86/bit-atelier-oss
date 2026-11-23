@@ -4,7 +4,8 @@
 // the pointer-anchored navigation of kameraNavigation.js: orbit about the element under the pointer, pan with the
 // grabbed point under the pointer, wheel zoom towards the pointer, and the walk mode (W A S D). Touch (one finger
 // orbit, two fingers pinch/pan) stays with OrbitControls, which also keeps running for damping and for every caller
-// that sets `controls.target`.
+// that sets `controls.target`. Trackpad (115-01): the wheel events are read through radGeste.js — a pinch zooms towards
+// the pointer, a two-finger swipe pans, Shift + swipe orbits; the mouse wheel zooms as before.
 //
 // How it shares the canvas:
 // - the mouse buttons of OrbitControls are switched off (mouseButtons = −1), its touch handling is untouched;
@@ -30,12 +31,13 @@
 // Side effects: moves the camera and controls.target, switches controls.mouseButtons and (in walk mode)
 //      controls.enabled, asks for a pointer lock on the canvas, listens on window/document while walking.
 import {
-  mausGriff, kameraAchsen, zeigerStrahl, zeigerStrahlParallel, ankerPunkt, drehWinkel, umPunktDrehen, schiebeVersatz, radRasten,
-  zoomSchritt, zoomParallel,
+  mausGriff, kameraAchsen, zeigerStrahl, zeigerStrahlParallel, ankerPunkt, drehWinkel, umPunktDrehen, schiebeVersatz,
+  rastenAusFaktor, zoomSchritt, zoomParallel,
   blickWinkel, blickRichtung, umsehen, laufEingabe, laufSchritt, laufStufeSchalten, eingabeFokus,
   LAUF_STUFEN, LAUF_STUFE_VORGABE, LAUF_TASTEN,
 } from "./kameraNavigation.js";
 import { mittelklickZaehler } from "../mittelklick.js";
+import { radGestenLeser } from "../radGeste.js";
 
 /** @typedef {import("./kameraNavigation.js").Vek3} Vek3 */
 
@@ -288,6 +290,7 @@ export function kameraSteuerung({ kamera, element, controls, punktUnterZeiger, g
   // ---- wheel: zoom towards the pointer, or the speed level in walk mode ----------------------------------------------------
   /** @type {{x: number, y: number, t: number, punkt: Vek3}|null} */
   let radAnker = null;
+  const radLesen = radGestenLeser();
   const onRad = (/** @type {WheelEvent} */ e) => {
     if (e.target !== element) return;
     if (lauf) {
@@ -298,18 +301,42 @@ export function kameraSteuerung({ kamera, element, controls, punktUnterZeiger, g
     e.stopPropagation(); // OrbitControls must not zoom towards its target on top of this
     if (!frei()) return;
     e.preventDefault();
+    // 115-01: mouse wheel and pinch zoom, a two-finger swipe pans, [ASSUMED] Shift + swipe orbits (see radGeste.js)
+    const g = radLesen(e, { umschaltDreht: true });
+    if (g.art === "nichts") return;
     const jetzt = performance.now();
     if (!radAnker || radAnker.x !== e.clientX || radAnker.y !== e.clientY || jetzt - radAnker.t > RAD_ANKER_MS) {
       radAnker = { x: e.clientX, y: e.clientY, t: jetzt, punkt: ankerBei(e.clientX, e.clientY) };
     }
     radAnker.t = jetzt;
     const p = pos(), z = ziel();
+    if (g.art !== "zoom") {
+      // 115-01: a two-finger swipe moves the camera like a drag of the point under the pointer by (−dx, −dy) px — the
+      // picture follows the scroll direction of the system. Swipe = pan, Shift + swipe = orbit about that point.
+      const hoehePx = element.clientHeight;
+      if (g.art === "drehen") {
+        const w = drehWinkel(-g.dx, -g.dy, hoehePx);
+        const neu = umPunktDrehen({ position: p, ziel: z, punkt: radAnker.punkt, gier: w.gier, nick: w.nick });
+        setzen(neu.position, neu.ziel);
+        return;
+      }
+      const { vor, rechts, oben } = kameraAchsen(p, z);
+      const a = radAnker.punkt;
+      // depth as in a drag: parallel = the target distance (one pixel is the same length everywhere), else that of the anchor
+      const tiefe = parallel() ? Math.hypot(z[0] - p[0], z[1] - p[1], z[2] - p[2])
+        : (a[0] - p[0]) * vor[0] + (a[1] - p[1]) * vor[1] + (a[2] - p[2]) * vor[2];
+      const s = schiebeVersatz({ dxPx: -g.dx, dyPx: -g.dy, tiefe, fovGrad: fov(), hoehePx, rechts, oben });
+      setzen([p[0] + s[0], p[1] + s[1], p[2] + s[2]], [z[0] + s[0], z[1] + s[1], z[2] + s[2]]);
+      return;
+    }
+    // mouse wheel: notches as before; pinch: the notches that give its zoom factor
+    const rasten = g.quelle === "pinch" ? rastenAusFaktor(g.faktor) : g.rasten;
     if (parallel()) {
-      const neu = zoomParallel({ position: p, ziel: z, punkt: radAnker.punkt, rasten: radRasten(e.deltaY, e.deltaMode) });
+      const neu = zoomParallel({ position: p, ziel: z, punkt: radAnker.punkt, rasten });
       setzen(neu.position, neu.ziel);
       return;
     }
-    const v = zoomSchritt({ position: p, punkt: radAnker.punkt, rasten: radRasten(e.deltaY, e.deltaMode) });
+    const v = zoomSchritt({ position: p, punkt: radAnker.punkt, rasten });
     setzen([p[0] + v[0], p[1] + v[1], p[2] + v[2]], [z[0] + v[0], z[1] + v[1], z[2] + v[2]]);
   };
 

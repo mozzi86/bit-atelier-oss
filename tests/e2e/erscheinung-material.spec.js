@@ -1,6 +1,8 @@
 // Click path for catalogue appearance: wall surface, frame, glass, two floor finishes.
 // Own synthetic project. Assignments go through the inspector, then undo, redo and reload.
 import { test, expect } from "@playwright/test";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import { nurLocalhost } from "./fixtures/massing.js";
 
 const NAME = "E2E Erscheinung Material";
@@ -75,6 +77,7 @@ test.describe("Erscheinung aus dem Katalog", () => {
     await expect(wohnen).toHaveAttribute("data-belag", "estrich-parkett-15-cm");
     await expect(bad).toHaveAttribute("data-belag", "estrich-fliesen-15-cm");
 
+    await speichernUndWarten(page); // 115-05c (adapted): the floor coverings are a draft until "Speichern" (before: autosave)
     await expect.poll(async () => {
       const zeilen = await (await request.get(`/api/entities/BimModel?project_id=${id}`)).json();
       const badZeile = (zeilen[0]?.customZones || []).find((z) => z._idx === 4);

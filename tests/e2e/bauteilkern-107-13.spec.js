@@ -9,6 +9,8 @@
 // deleted at the end; the test house is not touched (its fixture still clears a left-over `untergeschosse` at the start of a run).
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -61,6 +63,7 @@ test.describe("107-13 Keller im Grundriss: Untergeschoss als Modellgeschoss", ()
       await page.waitForTimeout(2500);
       expect("untergeschosse" in (await gespeichert()), "Öffnen der Werkstatt schreibt das Feld nicht").toBe(false);
       await ugKnopf.click();
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).untergeschosse, { timeout: 20000, message: "Knopf speichert das Programmfeld" }).toBe(1);
       await expect(page.getByText("Hülle des UG").first()).toBeVisible({ timeout: 15000 });
       await expect(ugKnopf).toHaveCount(0);
@@ -73,10 +76,12 @@ test.describe("107-13 Keller im Grundriss: Untergeschoss als Modellgeschoss", ()
       await expect(page.locator("canvas:visible").first()).toBeVisible({ timeout: 60000 });
       await expect(page.getByTestId("untergeschosse")).toHaveValue("1");
       await page.getByTestId("untergeschosse").selectOption("0");
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).untergeschosse, { timeout: 20000, message: "0 gespeichert" }).toBe(0);
 
       // ---- one basement: stored as programme field, 3D hull wall of the basement between −3 and 0 m ----
       await page.getByTestId("untergeschosse").selectOption("1");
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).untergeschosse, { timeout: 20000, message: "Programmfeld gespeichert" }).toBe(1);
       await expect.poll(async () => Object.keys(await huellwaende3d(page)).filter((k) => k.startsWith("-1:")).length, { timeout: 20000 }).toBe(4);
       const ug3d = (await huellwaende3d(page))["-1:0"];
@@ -99,6 +104,7 @@ test.describe("107-13 Keller im Grundriss: Untergeschoss als Modellgeschoss", ()
       await page.keyboard.press("Escape");
       await expect.poll(async () => (await modellStand(page)).customWalls.length, { timeout: 15000 }).toBe(1);
       expect((await modellStand(page)).customWalls[0].level, "Wand auf Level −1").toBe(-1);
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => ((await gespeichert()).customWalls || []).map((w) => w.level), { timeout: 20000 }).toEqual([-1]);
       await page.screenshot({ path: path.join(ORDNER, "grundriss-ug.png") });
 
@@ -110,7 +116,7 @@ test.describe("107-13 Keller im Grundriss: Untergeschoss als Modellgeschoss", ()
       const egBox = await page.locator('[data-schnittwand="0"]').boundingBox();
       expect(ugBox && egBox && ugBox.y >= egBox.y + egBox.height - 1, "UG-Wand liegt unter der Wand ab ±0,00").toBe(true);
       await expect(page.locator("[data-gelaende-label]")).toBeVisible();
-      await expect(page.locator("svg text", { hasText: "1. UG · -3.00" })).toBeVisible();
+      await expect(page.locator("svg text", { hasText: "1. UG · −3,00" })).toBeVisible(); // 115-02: decimal comma, minus sign U+2212
       await page.screenshot({ path: path.join(ORDNER, "schnitt-ug.png") });
 
       // ---- IFC: a storey with a negative elevation, the drawn wall contained in it ----

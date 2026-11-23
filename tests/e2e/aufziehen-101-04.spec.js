@@ -3,6 +3,8 @@
 // gedrücktes Mausrad verschiebt sie. Eigenes Projekt, Aufräumen im finally.
 import { test, expect } from "./fixtures/base.js";
 import { nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 
 const NAME = "E2E Aufziehen 10104";
 
@@ -38,6 +40,7 @@ test("101-04 Baukörper aufziehen, Beschriftung Geschosse/BGF, Karte schwenkt nu
     await expect(page.getByTestId("sd-aufziehen")).toBeHidden();
     const nachLinks = /** @type {any} */ (await ecke.boundingBox());
     expect(Math.abs(nachLinks.x - vorher.x) + Math.abs(nachLinks.y - vorher.y)).toBeLessThan(2);
+    await speichernUndWarten(page); // 115-05c (adapted): the drawn building (site group) is a draft until "Speichern" (before: autosave)
     await expect.poll(async () => {
       const b = (await (await request.get(`/api/entities/BuildingComplex/${bc}`)).json()).buildings?.[0];
       return b ? `${b.floors}|${b.width !== 16 && b.width > 2}|${b.height !== 12 && b.height > 2}` : "keiner";

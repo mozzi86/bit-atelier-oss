@@ -17,6 +17,7 @@ export const EN = {
   "Mehrkosten": "Extra cost",
   "fällig": "due",
   "Datei öffnen": "Open file",
+  "Datei nicht verfügbar — bitte später erneut versuchen.": "File not available — please try again later.",
   "Ihr Projekt": "Your project",
   "Phase": "Phase",
   "Für Sie ist noch nichts freigegeben.": "Nothing has been released to you yet.",

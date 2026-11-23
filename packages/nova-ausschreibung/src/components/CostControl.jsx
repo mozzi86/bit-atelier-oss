@@ -7,6 +7,8 @@ import {
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { eur0, gp, bidUnitPrice, DIN276 } from "./avaUtils";
 import { useBuildingProgram } from "@core/lib/useBuildingProgram";
+import { useI18n, englischErgaenzen } from "@core/lib/i18n";
+import { EN as EN_KOSTEN_PAUSCHAL } from "@core/lib/i18nTeile/kosten-pauschal-kd09.js";
 import { benchmarkFor, korridorText } from "@ava/lib/priceReference";
 // 90-10: per-KG cost control with Excel export template and budget-increase request.
 import KostenJeKgKarte from "./KostenJeKgKarte";
@@ -16,6 +18,8 @@ import NachtragPruefpfadKarte from "./NachtragPruefpfadKarte";
 import KostenstaendeKarte from "./KostenstaendeKarte";
 import { kostenJeKg } from "@ava/lib/kostenJeKg";
 import { nachtragsSummen } from "@core/lib/nachtraege";
+
+englischErgaenzen(EN_KOSTEN_PAUSCHAL); // lazy part (KD-09): the assumption note of the model budget
 
 const DIN_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4", "#ec4899", "#84cc16"];
 
@@ -46,6 +50,7 @@ const BenchmarkCell = ({ bm }) => {
 // Kostenkontrolle: estimate (Kostenanschlag) vs award (Vergabe) vs billed (Abrechnung).
 export default function CostControl({ positions, tenders, bids, measurements, changeOrders, priceRefs = [] }) {
   const { costEstimate } = useBuildingProgram();
+  const { t } = useI18n();
   const awardedTenders = tenders.filter((t) => t.status === "awarded" && t.awarded_bid_id);
   const approvedCOs = (changeOrders || []).filter((c) => c.status === "approved");
   const coSum = approvedCOs.reduce((s, c) => s + (c.cost_impact || 0), 0);
@@ -112,6 +117,12 @@ export default function CostControl({ positions, tenders, bids, measurements, ch
           <span className={totEstimate > costEstimate.total ? "text-fehler font-medium" : "text-erfolg font-medium"}>
             {totEstimate > costEstimate.total ? "+" : ""}{(((totEstimate - costEstimate.total) / costEstimate.total) * 100).toFixed(1).replace(".", ",")} %
           </span>
+          {/* KD-09: the model budget is a flat estimate on assumed values (designer lib/pauschalKosten.js); older stores lack the field. */}
+          {Number(costEstimate.grundstuecksFaktor) > 0 && (
+            <span className="block mt-1" data-testid="kosten-annahme-ava">
+              {t("Pauschalschätzung mit Annahmen: Infrastruktur auf {f} × Grundfläche als Grundstück, Kostensätze als Richtwerte.").replace("{f}", String(costEstimate.grundstuecksFaktor))}
+            </span>
+          )}
         </div>
       )}
       <div className={`grid grid-cols-2 gap-3 ${approvedCOs.length > 0 ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>

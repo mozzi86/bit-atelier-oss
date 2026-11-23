@@ -41,12 +41,15 @@ const KLICK_PX = 4;
 /**
  * @param {{buildings: any[], mpp: number, onChange: (b: any[]) => void, aktiv: boolean,
  *   grenzeM?: P[]|null, baufelderM?: P[][], containerRef?: {current: HTMLElement|null},
- *   zusatzDichte?: {grundflaeche: number, bgf: number}|null, schluessel?: string|null}} opt
+ *   zusatzDichte?: {grundflaeche: number, bgf: number}|null, schluessel?: string|null,
+ *   verlauf?: {rueckgaengig: () => any, wiederholen: () => any, kannZurueck: boolean, kannVor: boolean}|null}} opt
  *   grenzeM = plot polygon in site metres, baufelderM = building envelopes in site metres,
  *   zusatzDichte = footprint/BGF (m²) of bars and perimeter blocks, counted into GRZ/GFZ (101-04),
  *   schluessel = id of the record being edited (site plan); a change clears undo/redo (F1, 102)
+ *   verlauf (115-05d) = the page's history of the site data ({rueckgaengig, wiederholen, kannZurueck, kannVor}); with it the hook
+ *   keeps no stack of its own — every change of the blocks is a step of that history, in one order with plot and envelopes
  */
-export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM = null, baufelderM = [], containerRef, zusatzDichte = null, schluessel = null }) {
+export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM = null, baufelderM = [], containerRef, zusatzDichte = null, schluessel = null, verlauf = null }) {
   const [auswahl, setAuswahl] = useState(/** @type {string[]} */ ([]));
   const [live, setLive] = useState(/** @type {any[]|null} */ (null));
   const [rahmen, setRahmen] = useState(/** @type {{a: P, b: P, sa: P, sb: P, modus: 'fenster'|'kreuzen'}|null} */ (null));
@@ -76,11 +79,13 @@ export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM =
 
   /** Every edit goes through here: one undo step, then up to the parent. */
   const commit = useCallback((/** @type {any[]} */ next) => {
-    undoRef.current = [...undoRef.current.slice(-(VERLAUF_MAX - 1)), buildings];
-    redoRef.current = [];
-    setVerlaufStand((n) => n + 1);
+    if (!verlauf) { // 115-05d: with the page history the change is recorded there (it observes the site data)
+      undoRef.current = [...undoRef.current.slice(-(VERLAUF_MAX - 1)), buildings];
+      redoRef.current = [];
+      setVerlaufStand((n) => n + 1);
+    }
     onChange(next);
-  }, [buildings, onChange]);
+  }, [buildings, onChange, verlauf]);
 
   /** Blocks (metres) → stored array, keeping unknown fields of existing records. */
   const speichern = useCallback((/** @type {any[]} */ neu) => {
@@ -89,19 +94,21 @@ export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM =
   }, [buildings, mpp]);
 
   const rueckgaengig = useCallback(() => {
+    if (verlauf) { verlauf.rueckgaengig(); return; }
     const prev = undoRef.current.pop();
     if (!prev) return;
     redoRef.current.push(buildings);
     setVerlaufStand((n) => n + 1);
     onChange(prev);
-  }, [buildings, onChange]);
+  }, [buildings, onChange, verlauf]);
   const wiederholen = useCallback(() => {
+    if (verlauf) { verlauf.wiederholen(); return; }
     const next = redoRef.current.pop();
     if (!next) return;
     undoRef.current.push(buildings);
     setVerlaufStand((n) => n + 1);
     onChange(next);
-  }, [buildings, onChange]);
+  }, [buildings, onChange, verlauf]);
 
   /** Snap targets for a moving selection: plot edges (0 / setback depth), envelopes, other blocks. */
   const fangZiele = useCallback((/** @type {string[]} */ ids) => {
@@ -323,7 +330,7 @@ export function useBlockBearbeitung({ buildings, mpp, onChange, aktiv, grenzeM =
     auswahl: gueltig, setAuswahl, anzeige, bloecke, pruefung, rahmen, fangZiel, winkel, griff,
     runter, griffRunter, bewegen, hoch, abbrechen, loeschen, commit, rueckgaengig, wiederholen,
     letzteKopie, eingabe, setEingabe, eingabeAnwenden, meldung, // 107-07
-    kannZurueck: undoRef.current.length > 0, kannVor: redoRef.current.length > 0,
+    kannZurueck: verlauf ? !!verlauf.kannZurueck : undoRef.current.length > 0, kannVor: verlauf ? !!verlauf.kannVor : redoRef.current.length > 0,
   };
 }
 

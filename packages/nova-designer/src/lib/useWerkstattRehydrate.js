@@ -77,6 +77,8 @@ export function werkstattErgebnisAusLayer(layer, s) {
     stufeJeWe: layer?.stufeJeWe && typeof layer.stufeJeWe === "object" ? layer.stufeJeWe : {},
     // 75-12: interior-wall offsets (same guard as the workshop).
     raumGrenzen: layer?.raumGrenzen && typeof layer.raumGrenzen === "object" ? layer.raumGrenzen : {},
+    // 115-12: rooms sized / moved by hand (same guard as the workshop).
+    raumHand: layer?.raumHand && typeof layer.raumHand === "object" ? layer.raumHand : {},
     // 86-04: building form + storeys per bar (same guard as the workshop).
     zerlegung: zerlegungsArt(layer?.zerlegung),
     geschosseJeRiegel: layer?.geschosseJeRiegel && typeof layer.geschosseJeRiegel === "object" ? layer.geschosseJeRiegel : {},
@@ -95,6 +97,7 @@ export function werkstattErgebnisAusLayer(layer, s) {
     tuerAufschlaege: cfg.tuerAufschlaege,
     stufeJeWe: cfg.stufeJeWe,
     raumGrenzen: cfg.raumGrenzen,
+    raumHand: cfg.raumHand,
     zerlegung: cfg.zerlegung,
     geschosseJeRiegel: cfg.geschosseJeRiegel,
     // 86-07: the drawn centre line comes with the building programme (store.achseM).

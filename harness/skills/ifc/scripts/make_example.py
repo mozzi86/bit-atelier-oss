@@ -637,6 +637,12 @@ def build(out_path: str | Path) -> dict[str, Any]:
         builder.normalize()
         builder.freeze_header(out_path.name)
         builder.file.write(str(out_path))
+    # ifcopenshell writes through a text-mode stream: CRLF on Windows, LF elsewhere. The committed
+    # model must be byte-identical on every platform (drift guard in tests/test_ifc_example.py), and
+    # `*.ifc -text` in .gitattributes stores the bytes as written — so normalise to LF here.
+    roh = out_path.read_bytes()
+    if b"\r\n" in roh:
+        out_path.write_bytes(roh.replace(b"\r\n", b"\n"))
 
     figures = builder.figures()
     figures["path"] = str(out_path)

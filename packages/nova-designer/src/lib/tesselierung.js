@@ -31,6 +31,8 @@ import {
 } from "./formGeometrie.js";
 // 75-12: interior walls moved in the focus (persisted offsets, applied after the room slicing).
 import { wendeRaumGrenzenAn, raumGrenzenFehlend } from "./raumGrenzen.js";
+// 115-12: rooms sized / moved by hand in the apartment planner (persisted per room, applied after the wall offsets).
+import { wendeRaumHandAn, raumHandFehlend } from "./raumBearbeiten.js";
 // 86-02: slanted remainders are added to the window rooms in front of them.
 import { schraegenZuschlagen, SCHRAEGE } from "./schraegen.js";
 // 86-06: veins from the skeleton of a free footprint (raster distance field, own code).
@@ -3405,6 +3407,13 @@ function riegelEingaben(o, k, weOff, typOff) {
       const a = weLokal(teile[1]), b = weLokal(teile[2]);
       return a === null || b === null ? null : `${teile[0]}|${a}|${b}`;
     }),
+    // 115-12: "<level>|<zone>" — the room name carries "(WE l-n)", renumbered like the wall keys above.
+    raumHand: schluessel(o.raumHand, (key) => {
+      const i = String(key).indexOf("|");
+      if (i < 0) return null;
+      const name = weLokal(String(key).slice(i + 1));
+      return name === null ? null : `${String(key).slice(0, i)}|${name}`;
+    }),
   };
 }
 
@@ -3565,6 +3574,8 @@ function tesseliereRiegel(o, zerl) {
   }
   // 75-12: interior-wall entries without a wall in ANY bar (each bar ran silently).
   if (o.raumzonen) for (const h of raumGrenzenFehlend(zonen, o.raumGrenzen)) hinweise.push(h);
+  // 115-12: the same for hand rooms — each bar only sees its own rooms, the missing ones are named once here.
+  if (o.raumzonen) for (const h of raumHandFehlend(zonen, o.raumHand)) hinweise.push(h);
   const rb = zerl.riegel[0];
   /** @type {any} */
   const out = {
@@ -3658,6 +3669,11 @@ function tesseliereKern(opts) {
     // 75-12: false in the bar path (86-03) — each bar sees all keys; missing walls are
     // reported once after merging (tesseliereRiegel), not once per bar.
     raumGrenzenFehlendMelden = true,
+    // 115-12: rooms sized / moved by hand { "<level>|<zoneName>": { versatzU_m, versatzV_m, laengeU_m, laengeV_m } }
+    // (werkstatt_layer.raumHand, set in the apartment planner; metres in the room's own frame, raumBearbeiten.js).
+    // Applied after the wall offsets; without entries byte-identical. The bar path reports missing rooms once
+    // after merging (same switch as the wall offsets: raumGrenzenFehlendMelden).
+    raumHand = null,
     // 75-13: finished-floor level of the top storey in m for the lift duty
     // (MBO §39 Abs. 4: OKF > 13 m). Default (storeys − 1) · 3,0 m [ASSUMED].
     okf_m = null,
@@ -4324,6 +4340,16 @@ function tesseliereKern(opts) {
     });
     if (rgErg.zonen !== zonen) zonen.splice(0, zonen.length, ...rgErg.zonen);
     hinweise.push(...rgErg.hinweise);
+  }
+
+  // --- 115-12: rooms sized / moved by hand in the apartment planner ----------------------
+  // "Hand locks rule" [ASSUMED, D-115-47]: a room with an entry keeps its typed size and its place relative to the
+  // corner the rule gives it, whatever the rules above produced; every later step (escape route, balconies, wall
+  // segments) sees the hand room. Overlaps with neighbours are a HINT only (the architect placed the room).
+  if (raumzonen && raumHand && typeof raumHand === "object" && Object.keys(raumHand).length) {
+    const rhErg = wendeRaumHandAn(zonen, raumHand, { fehlendMelden: raumGrenzenFehlendMelden !== false });
+    if (rhErg.zonen !== zonen) zonen.splice(0, zonen.length, ...rhErg.zonen);
+    hinweise.push(...rhErg.hinweise);
   }
 
   // --- 75-07/75-13 regeln.rettungsweg: WALKED line from the deepest point of the

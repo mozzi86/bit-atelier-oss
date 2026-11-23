@@ -91,7 +91,6 @@ export const EN = {
   "Gewerbebetrieb kraft Rechtsform, § 2 Abs. 2 GewStG": "Trade by legal form, § 2 (2) GewStG",
   "ESt-Vorauszahlungen über das Bürokonto": "Income tax prepayments from the office account",
   "Kontenrahmen": "Chart of accounts",
-  "Speichern": "Save",
   "Bitte ganze Tage von 0 bis 365 eingeben.": "Please enter whole days from 0 to 365.",
   "Bitte einen Prozentwert von 0 bis 100 eingeben.": "Please enter a percentage from 0 to 100.",
   "Das Muster braucht {nr3} oder {nr4}.": "The pattern needs {nr3} or {nr4}.",

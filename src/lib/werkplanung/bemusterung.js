@@ -252,8 +252,11 @@ export function istProjektMuster(b) {
  * @returns {Promise<{bytes: Uint8Array, dateiname: string, anzahl: number}>} anzahl = rows printed
  */
 export async function bemusterungsProtokollPdf({ projekt = null, muster, jetzt = new Date(), wohnung = null }) {
-  const { jsPDF } = await import("jspdf");
+  // W0-F6: the metadata helper is imported dynamically, so the entry's preload map does not name its chunk.
+  const [{ jsPDF }, { jsPdfMetadaten }] = await Promise.all([import("jspdf"), import("@core/lib/pdfMetadaten.js")]);
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  // 105-19: title = the heading; no buyer name in the metadata (privacy, see above)
+  jsPdfMetadaten(pdf, { titel: wohnung ? `Bemusterungsprotokoll Wohnung ${wohnung.nr || ""}`.trim() : "Bemusterungsprotokoll", betreff: projekt?.name || "" });
   const L = 15;
   let y = 18;
   pdf.setFont("helvetica", "bold"); pdf.setFontSize(14); pdf.text(wohnung ? `Bemusterungsprotokoll Wohnung ${wohnung.nr || ""}` : "Bemusterungsprotokoll", L, y); y += 7;

@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { geschossName } from "@core/lib/bauteil/ebenen.js";
+// W-1118-02 review R-3: the GUID the studio pins per room _idx (the same evidence the migration in ComplexDesigner uses)
+import { bauteilGuid } from "@core/lib/bauteil/steckbrief.js";
 import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/card";
 import { Button } from "@core/components/ui/button";
 import { Input } from "@core/components/ui/input";
@@ -19,9 +21,13 @@ import { useProject } from "@core/lib/ProjectContext";
 import { useI18n } from "@core/lib/i18n";
 import {
   moebelById, moebelChecks, kollisionsWarnungen, verschiebeItem,
-  zoneKey, moebelFuerZone, mitMoebelFuerZone, migriereMoeblierung, verwaisteKeys,
+  zoneKey, moebelFuerZone, mitMoebelFuerZone, moebelOhneRaum, ohneRaumZuweisen,
   setzeEigeneTypen, katalogMitEigenen,
 } from "@designer/lib/moebel";
+// W-1118-02: texts of the "Möbel ohne Raum" panel live in the lazy part of phase 115 (pattern raeume-107-11.js)
+import { englischErgaenzen } from "@core/lib/i18n";
+import { EN as EN_RAEUME_11512 } from "@core/lib/i18nTeile/raeume-115-12.js";
+englischErgaenzen(EN_RAEUME_11512);
 import { oeffnungenAmRaum } from "@designer/lib/raumOeffnungen";
 import { usePlanModel } from "@designer/lib/usePlanModel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@core/components/ui/tabs";
@@ -231,7 +237,7 @@ function RaumKarte({ zone, items, onItemsChange, plan, katalog }) {
 }
 
 // Innenausbau: Raum-Möblierung (Hauptsektion) + Raumkonzepte (kompakte Zweitsektion).
-// complexData.moeblierung = { [zoneKey]: [{id, typ, x, y, rot}] }  (Legacy level:name lesbar, s. moebel.js)
+// complexData.moeblierung = { [zoneKey]: [{id, typ, x, y, rot}] }  (keys guid:/id:/level:name, see moebel.js)
 // complexData.moebel_eigene = [{ id, name, b, t, kategorie, benutzerseite }]  (Phase 43)
 // complexData.interior_designs = [{ room, style, area, palette }]
 export default function InteriorDesigner({ complexData, onInteriorDesignsChange, onMoeblierungChange, onMoebelEigeneChange }) {
@@ -259,28 +265,54 @@ export default function InteriorDesigner({ complexData, onInteriorDesignsChange,
   const itemsFuer = useCallback((z) => moebelFuerZone(moeblierung, z), [moeblierung]);
   const schreibe = (z, items) => onMoeblierungChange?.(mitMoebelFuerZone(moeblierung, z, items));
 
-  // MOEBEL-04: Legacy-Einträge (level:name) auf den id-Schlüssel heben, sobald die Zonen ids
-  // tragen — läuft beim Öffnen des Reiters, also vor jedem späteren Rename. Idempotent.
-  useEffect(() => {
-    const { moeblierung: neu, verschoben } = migriereMoeblierung(moeblierung, zones);
-    if (verschoben > 0) onMoeblierungChange?.(neu);
-  }, [zones, moeblierung, onMoeblierungChange]);
-
-  // Verwaiste Möblierungen (Raum gelöscht oder vor Phase 43 umbenannt): zuweisen oder entfernen.
-  const verwaist = useMemo(() => verwaisteKeys(moeblierung, zones), [moeblierung, zones]);
-  const [zielKey, setZielKey] = useState({});
-  const verwaisteZuweisen = (key) => {
-    const ziel = zones.find((z) => zoneKey(z) === zielKey[key]);
-    if (!ziel) return;
-    const rest = { ...moeblierung };
-    const items = rest[key] || [];
-    delete rest[key];
-    onMoeblierungChange?.(mitMoebelFuerZone(rest, ziel, [...moebelFuerZone(rest, ziel), ...items]));
+  // W-1118-02: the migration on open (guid:/id:/legacy keys) runs in ComplexDesigner once both records are loaded — not here,
+  // so the readers of the other tabs see the moved keys too. This tab shows what is left: "Möbel ohne Raum" — entries no room
+  // shows (room deleted or rebuilt with a new GUID, or an id: entry that could not be assigned safely), with the reason and a
+  // proposal the person confirms. Nothing is assigned without a click.
+  // Review R-3: the same GUID evidence as the migration (ComplexDesigner) — the GUID the studio pins for a room record with this _idx.
+  const pid = project?.id || null;
+  const guidBeleg = useMemo(() => ({ guidAusIdx: (/** @type {number|string} */ idx) => bauteilGuid(pid, "customZones", { _idx: /** @type {any} */ (idx) }) }), [pid]);
+  const ohneRaum = useMemo(() => moebelOhneRaum(moeblierung, zones, guidBeleg), [moeblierung, zones, guidBeleg]);
+  const [zielKey, setZielKey] = useState(/** @type {Record<string, string>} */ ({}));
+  /** Target room of a row: the person's choice, else the proposal (only ever the row's own room, review R-1). @param {{key: string, vorschlag: string|null}} e */
+  const zielVon = (e) => zielKey[e.key] ?? e.vorschlag ?? "";
+  /** @param {Record<string, string>} zuordnung stored key → zoneKey of the target room */
+  const zuweisen = (zuordnung) => {
+    const neu = ohneRaumZuweisen(moeblierung, zones, zuordnung);
+    if (neu !== moeblierung) onMoeblierungChange?.(neu);
   };
-  const verwaisteEntfernen = (key) => {
+  // Review R-1: "Alle zuweisen" takes the rows whose target is the proposal — the row's OWN room (moebelOhneRaum never proposes a
+  // foreign one) — or a room the person picked in that row; a row without either stays.
+  const alleZuweisbar = ohneRaum.filter((e) => zielVon(e));
+  /** Review R-3: removing deletes the furniture for good (autosaved, no undo) — only after a confirmation. @param {{key: string, items: any[]}} e */
+  const verwaisteEntfernen = (e) => {
+    if (!window.confirm(t("{{n}} Möbel endgültig entfernen? Das lässt sich nicht rückgängig machen.").replace("{{n}}", String(e.items.length)))) return;
     const rest = { ...moeblierung };
-    delete rest[key];
+    delete rest[e.key];
     onMoeblierungChange?.(rest);
+  };
+  /** "Name (Geschoss)" of a room. @param {any} z */
+  const raumText = (z) => `${z?.name || t("Raum")} (${geschossLabel(z)})`;
+  /** Why a row has no room, in words. @param {import("@designer/lib/moebel").MoebelOhneRaum} e */
+  const grundText = (e) => {
+    if (e.grund === "mehrdeutig") return t("Lage nicht eindeutig — an dieser Stelle liegen mehrere Räume: {{raeume}}.").replace("{{raeume}}", e.kandidaten.map(raumText).join(", "));
+    if (e.grund === "belegt") return t("{{raum}} hat schon eigene Möbel.").replace("{{raum}}", raumText(e.raum));
+    const grund = e.grund === "ausserhalb"
+      ? (e.imRaum > 0 ? t("Nicht alle Möbel liegen in {{raum}}, dem Raum, dem sie bisher zugeordnet waren.") : t("Die Möbel liegen nicht in {{raum}}, dem Raum, dem sie bisher zugeordnet waren.")).replace("{{raum}}", raumText(e.raum))
+      : t("Den Raum gibt es nicht mehr.");
+    // review R-1: a room the furniture lies in is named, never preselected — the person picks it
+    return e.kandidaten.length ? `${grund} ${t("Sie liegen in {{raeume}}.").replace("{{raeume}}", e.kandidaten.map(raumText).join(", "))}` : grund;
+  };
+  /** Marker of an option in the room choice. @param {import("@designer/lib/moebel").MoebelOhneRaum} e @param {any} z */
+  const optionZusatz = (e, z) => {
+    const k = zoneKey(z);
+    if (k === e.vorschlag) return ` — ${t("Vorschlag")}`;
+    return e.kandidaten.some((kz) => zoneKey(kz) === k) ? ` — ${t("Möbel liegen hier")}` : "";
+  };
+  /** Up to three furniture names of a row ("Schreibtisch, Stuhl …"). @param {Array<any>} items */
+  const moebelNamen = (items) => {
+    const namen = [...new Set(items.map((it) => moebelById(it?.typ)?.name || it?.typ))];
+    return namen.slice(0, 3).join(", ") + (namen.length > 3 ? " …" : "");
   };
 
   const add = () =>
@@ -306,22 +338,36 @@ export default function InteriorDesigner({ complexData, onInteriorDesignsChange,
               <TabsTrigger value="raeume" data-testid="ia-tab-raeume">{t("Räume")} ({zones.length})</TabsTrigger>
               <TabsTrigger value="katalog" data-testid="ia-tab-katalog">{t("Katalog")}{eigene.length ? ` (${eigene.length})` : ""}</TabsTrigger>
             </TabsList>
-            {verwaist.length > 0 && (
+            {ohneRaum.length > 0 && (
               <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 space-y-1.5" data-testid="ia-verwaist">
-                <div className="flex items-center gap-1.5 text-xs font-medium text-amber-800">
-                  <AlertTriangle className="w-3.5 h-3.5" /> {t("Möblierung ohne Raum")} ({verwaist.length}) — {t("Raum gelöscht oder umbenannt; zuweisen oder entfernen")}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-amber-800">
+                  <AlertTriangle className="w-3.5 h-3.5" /> {t("Möbel ohne Raum")} ({ohneRaum.length})
+                  <span className="font-normal">— {t("Diese Möbel lassen sich keinem Raum sicher zuordnen. Raum wählen und zuweisen oder entfernen.")}</span>
+                  {alleZuweisbar.length > 1 && (
+                    <Button type="button" size="sm" variant="outline" className="h-6 ml-auto" data-testid="ia-ohne-raum-alle"
+                      onClick={() => zuweisen(Object.fromEntries(alleZuweisbar.map((e) => [e.key, zielVon(e)])))}>
+                      {t("Alle zuweisen")} ({alleZuweisbar.length})
+                    </Button>
+                  )}
                 </div>
-                {verwaist.map((key) => (
-                  <div key={key} className="flex flex-wrap items-center gap-2 text-xs text-amber-900">
-                    <span className="font-mono">{key}</span>
-                    <span>{(moeblierung[key] || []).length} {t("Möbel")}</span>
-                    <select className="rounded border border-amber-300 bg-white px-1 py-0.5 text-xs" value={zielKey[key] || ""}
-                      onChange={(e) => setZielKey({ ...zielKey, [key]: e.target.value })}>
+                {ohneRaum.map((e) => (
+                  <div key={e.key} className="flex flex-wrap items-center gap-2 text-xs text-amber-900" data-testid="ia-ohne-raum-eintrag" data-key={e.key} data-grund={e.grund} title={e.key}>
+                    <span className="font-medium">{e.items.length} {t("Möbel")}</span>
+                    <span>({moebelNamen(e.items)})</span>
+                    <span className="basis-full sm:basis-auto">{grundText(e)}</span>
+                    <select aria-label={t("Raum wählen …")} className="rounded border border-amber-300 bg-white px-1 py-0.5 text-xs" value={zielVon(e)}
+                      onChange={(ev) => setZielKey({ ...zielKey, [e.key]: ev.target.value })}>
                       <option value="">{t("Raum wählen …")}</option>
-                      {zones.map((z) => <option key={zoneKey(z)} value={zoneKey(z)}>{z.name} ({geschossLabel(z)})</option>)}
+                      {zones.map((z, i) => (
+                        <option key={`${zoneKey(z)}-${i}`} value={zoneKey(z)}>
+                          {raumText(z)}{optionZusatz(e, z)}
+                        </option>
+                      ))}
                     </select>
-                    <Button type="button" size="sm" variant="outline" className="h-6" disabled={!zielKey[key]} onClick={() => verwaisteZuweisen(key)}>{t("Zuweisen")}</Button>
-                    <Button type="button" size="sm" variant="outline" className="h-6 text-red-600" onClick={() => verwaisteEntfernen(key)}>{t("Entfernen")}</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-6" disabled={!zielVon(e)} data-testid="ia-ohne-raum-zuweisen"
+                      onClick={() => zuweisen({ [e.key]: zielVon(e) })}>{t("Zuweisen")}</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-6 text-red-600" data-testid="ia-ohne-raum-entfernen"
+                      onClick={() => verwaisteEntfernen(e)}>{t("Entfernen")}</Button>
                   </div>
                 ))}
               </div>

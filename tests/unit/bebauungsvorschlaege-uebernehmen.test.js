@@ -39,7 +39,8 @@ describe("86-05b — uebernehmeVorschlag", () => {
     assert.deepEqual(cfg.gesperrteGrenzen, []);
     for (const f of LAYOUT_FELDER.filter((k) => k !== "gesperrteGrenzen")) assert.deepEqual(cfg[f], {}, f);
     // 75-12: raumGrenzen joined LAYOUT_FELDER (none set in CFG → 0 dropped).
-    assert.deepEqual(verworfen, { gesamt: 8, gesperrteGrenzen: 2, anordnung: 1, grenzenPositionen: 1, tuerAufschlaege: 3, stufeJeWe: 1, raumGrenzen: 0, geschosseJeRiegel: 0 });
+    // 115-12: raumHand (rooms sized / moved by hand) joined too.
+    assert.deepEqual(verworfen, { gesamt: 8, gesperrteGrenzen: 2, anordnung: 1, grenzenPositionen: 1, tuerAufschlaege: 3, stufeJeWe: 1, raumGrenzen: 0, raumHand: 0, geschosseJeRiegel: 0 });
     assert.equal(cfg.einheiten, CFG.einheiten, "Mix bleibt");
     assert.equal(CFG.typ, "mittelflur", "Eingabe unverändert");
     assert.equal(CFG.gesperrteGrenzen.length, 2);
@@ -103,13 +104,13 @@ describe("86-05b — kartenDaten", () => {
 describe("86-05b — werkstatt_layer Schema v2", () => {
   it("Version 2 mit zwei Migrationen; v1-Blob ohne neue Felder bleibt inhaltlich gleich; Defaults tragen die neuen Felder", () => {
     // 75-12 raised the layer to v3 (raumGrenzen), 86-04 to v4 (zerlegung, geschosseJeRiegel),
-    // 75-10 to v5 (bewertungsGewichte), 107-11 to v6 (dachschraege_quelle, kniestock_m) — the 86-05b step 1 → 2 stays in the chain.
-    assert.equal(LAYER_VERSION.werkstatt_layer, 6);
-    assert.equal(MIGRATIONEN.werkstatt_layer.length, 6);
+    // 75-10 to v5 (bewertungsGewichte), 107-11 to v6 (dachschraege_quelle, kniestock_m), 115-12 to v7 (raumHand) — the 86-05b step 1 → 2 stays in the chain.
+    assert.equal(LAYER_VERSION.werkstatt_layer, 7);
+    assert.equal(MIGRATIONEN.werkstatt_layer.length, 7);
     const alt = { v: 1, typ: "mfh", einheiten: [], stufeJeWe: { a: "R" } };
     const r = migrateLayer("werkstatt_layer", alt);
     assert.equal(r.migriert, true);
-    assert.equal(r.wert.v, 6); // 75-12/86-04/75-10/107-11: the chain now runs on to v6 (identity steps)
+    assert.equal(r.wert.v, 7); // 75-12/86-04/75-10/107-11/115-12: the chain now runs on to v7 (identity steps)
     const { v, ...rest } = r.wert;
     assert.deepEqual(rest, { typ: "mfh", einheiten: [], stufeJeWe: { a: "R" } });
     assert.equal("gewaehlterVorschlag" in r.wert, false, "Feld fehlt → unverändert (Default füllt)");

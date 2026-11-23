@@ -4,6 +4,8 @@
 // nach dem Neuladen (je Ansicht im Browser gemerkt), das Modell ändert sich nicht. Konsole sauber.
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import { PDFDocument } from "pdf-lib";
 import fs from "node:fs";
 
@@ -79,6 +81,7 @@ test("97-03 Brillen-Leiste: Sicht je Status, ohne Status bleibt, Wahl bleibt", a
     await expect(page.getByText(/ist für 1:50 gedacht/)).toBeVisible();
     await page.getByTestId("brille-eingabe").click();
 
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     const m = await (await request.get(`/api/entities/BimModel/${modellId}`)).json();
     expect((m.customWalls || []).map((w) => w.status ?? null)).toEqual(["bestand", "neubau", null]);
     expect(warnungen, `Konsole: ${warnungen.join(" | ")}`).toEqual([]);

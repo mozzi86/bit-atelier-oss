@@ -11,8 +11,58 @@
 // on disk is not replaced by an empty database. Plain files from before
 // encryption are read and re-written encrypted once (migration, incl. .bak).
 import fs from 'fs';
+import path from 'path';
 import { KLARTEXT_CODEC, istVerschluesselt } from './ruheVerschluesselung.js';
 import { ersetzeAtomar } from './atomarErsetzen.js';
+
+/**
+ * B-111-02-01: fields the store sets itself. A caller's value for them is ignored by create / bulkCreate / the create branch
+ * of bulkUpsert, unless the caller names the explicit internal path (`kennungUebernehmen` / `zeitUebernehmen`, see create()).
+ */
+export const VERWALTUNGSFELDER = Object.freeze(['id', 'created_date', 'updated_date']);
+
+/**
+ * B-111-02-01: thrown by the explicit id path when the requested id is already taken in the collection (or repeated within one
+ * batch). Nothing is written. `status` is the HTTP status the routes answer with (409), `kennung` the refused id.
+ */
+export class KennungBelegtFehler extends Error {
+  /** @param {string} entity collection @param {string} kennung the refused id */
+  constructor(entity, kennung) {
+    super(`nicht übernommen: die id ${kennung} ist in ${entity} schon vergeben — nichts wurde angelegt`);
+    this.name = 'KennungBelegtFehler';
+    /** HTTP status of the refusal */
+    this.status = 409;
+    /** the refused id */
+    this.kennung = kennung;
+  }
+}
+
+/**
+ * 124-36: thrown when a collection of the loaded file is no list (object, text, number). The store does not guess and does
+ * not repair: nothing is read from that collection and nothing is written to it. `status` 500 = the data file needs a look,
+ * the request itself was fine.
+ */
+export class SammlungFormFehler extends Error {
+  /** @param {string} entity collection @param {string} form JS type found instead of a list */
+  constructor(entity, form) {
+    super(`Sammlung ${entity} ist keine Liste (gefunden: ${form}) — die Datendatei ist beschädigt, nichts wurde gelesen oder geschrieben`);
+    this.name = 'SammlungFormFehler';
+    /** HTTP status of the refusal */
+    this.status = 500;
+    /** the collection concerned */
+    this.sammlung = entity;
+  }
+}
+
+/**
+ * Options of create / bulkCreate (B-111-02-01).
+ * @typedef {object} AnlageOptionen
+ * @property {boolean} [kennungUebernehmen]  keep a non-empty string `id` of the data when it is still free in the collection
+ *   (else KennungBelegtFehler); for callers whose references hang on their own ids (import bundle, client-chosen idempotent ids,
+ *   recycle-bin restore). Default false: the store generates the id.
+ * @property {boolean} [zeitUebernehmen]  keep string `created_date` / `updated_date` of the data (restoring a record as it was);
+ *   server-internal only, never reachable from an HTTP query. Default false: both are "now".
+ */
 
 /**
  * @param {string} dbPath JSON file of the store
@@ -31,9 +81,17 @@ export function createDb(dbPath, { codec = KLARTEXT_CODEC } = {}) {
   function lies(pfad) {
     const text = fs.readFileSync(pfad, 'utf-8');
     const json = JSON.parse(codec.decode(text));
+    // 124-33: the root must be an object of collections. A list or a primitive is valid JSON but no database — loaded as one,
+    // every collection would be missing and the next save would write that list back (new records vanish silently).
+    if (json === null || typeof json !== 'object' || Array.isArray(json)) {
+      throw new Error(`${path.basename(pfad)}: Wurzel ist kein Objekt (keine Datenbank)`);
+    }
     if (codec.aktiv && !istVerschluesselt(text)) klartextGeladen = true;
     return json;
   }
+
+  /** 124-33: the main file exists but could not be read, the data came from the backup → the next save must not copy it over the backup. */
+  let hauptdateiKaputt = false;
 
   function readRaw() {
     // Hauptdatei lesen; bei korruptem JSON auf das letzte Backup zurückfallen.
@@ -45,12 +103,18 @@ export function createDb(dbPath, { codec = KLARTEXT_CODEC } = {}) {
       try {
         const fromBak = lies(BAK_PATH);
         console.warn('[db] db.json unlesbar — Backup db.json.bak geladen');
+        hauptdateiKaputt = fs.existsSync(DB_PATH);
         return fromBak;
       } catch (e2) {
         // 96-01: a decryption failure is not "no data" — lock instead of starting empty.
         const entschluesselung = [fehler, e2].find((x) => /Entschlüsseln|beschädigt/.test(String(x?.message)));
         if (entschluesselung) {
           gesperrt = `${DB_PATH}: ${entschluesselung.message}`;
+          console.error(`[db] GESPERRT — ${gesperrt} Es wird nichts geschrieben.`);
+        } else if (fs.existsSync(DB_PATH) || fs.existsSync(BAK_PATH)) {
+          // 124-33: files are there but neither is a database. That is not a first start: starting empty and saving would
+          // overwrite whatever could still be repaired by hand. Lock like an undecryptable file; nothing is written.
+          gesperrt = `${DB_PATH}: weder db.json noch db.json.bak ist lesbar (${String(fehler?.message || fehler)})`;
           console.error(`[db] GESPERRT — ${gesperrt} Es wird nichts geschrieben.`);
         }
         return {};
@@ -69,6 +133,34 @@ export function createDb(dbPath, { codec = KLARTEXT_CODEC } = {}) {
   let persistTimer = null;
   let persistPending = false;
 
+  /** 124-40: below this size (bytes) the main file is looked at before it replaces the backup; a real database is larger. */
+  const KLEIN_BYTE = 4096;
+
+  /**
+   * 124-40: an EMPTY main file (no record in any collection) must not replace a backup that still holds records. That
+   * state does not come from normal use (the backup is always the previous save) but from a file emptied outside the app
+   * — a sync tool, a failed restore. Before the usual copy the full backup is kept aside as `db.json.bak.vor-leer`
+   * (numbered when that name is taken); nothing is deleted. Only stats are read unless the main file is tiny, so the
+   * check costs nothing on a normal save. Best effort: an unreadable file means "do not interfere".
+   */
+  function volleSicherungAufheben() {
+    try {
+      const haupt = fs.statSync(DB_PATH).size;
+      if (haupt > KLEIN_BYTE || fs.statSync(BAK_PATH).size <= haupt) return;
+      /** @param {string} pfad @returns {number} records over all collections of that file */
+      const saetze = (pfad) => {
+        const j = JSON.parse(codec.decode(fs.readFileSync(pfad, 'utf-8')));
+        if (j === null || typeof j !== 'object' || Array.isArray(j)) return 0;
+        return Object.values(j).reduce((n, c) => n + (Array.isArray(c) ? c.length : 0), 0);
+      };
+      if (saetze(DB_PATH) > 0 || saetze(BAK_PATH) === 0) return;
+      let ziel = BAK_PATH + '.vor-leer';
+      for (let i = 2; fs.existsSync(ziel); i += 1) ziel = `${BAK_PATH}.vor-leer-${i}`;
+      fs.copyFileSync(BAK_PATH, ziel);
+      console.warn(`[db] db.json ist leer, die Sicherung enthält Daten — Sicherung aufgehoben als ${path.basename(ziel)}`);
+    } catch { /* best effort — never block a save */ }
+  }
+
   function persistNow() {
     // Robustes Schreiben: erst Backup der intakten Datei, dann atomar ersetzen.
     // Fehler dürfen den Server nicht abwerfen (Daten bleiben im Speicher erhalten).
@@ -83,11 +175,19 @@ export function createDb(dbPath, { codec = KLARTEXT_CODEC } = {}) {
     }
     try {
       try {
-        if (fs.existsSync(DB_PATH)) fs.copyFileSync(DB_PATH, BAK_PATH);
+        if (hauptdateiKaputt) {
+          // 124-33: the main file is the broken one and the backup is the only good copy — never copy broken over good.
+          // The broken file is kept beside the database for a manual look instead of being overwritten.
+          if (fs.existsSync(DB_PATH)) fs.copyFileSync(DB_PATH, DB_PATH + '.kaputt');
+        } else if (fs.existsSync(DB_PATH)) {
+          volleSicherungAufheben();
+          fs.copyFileSync(DB_PATH, BAK_PATH);
+        }
       } catch { /* Backup best-effort */ }
       const tmp = DB_PATH + '.tmp';
       fs.writeFileSync(tmp, codec.encode(JSON.stringify(cache, null, 2)), 'utf-8');
       ersetzeAtomar(tmp, DB_PATH); // retries short Windows / sync-tool locks
+      hauptdateiKaputt = false; // the main file is whole again; from now on it is backed up as usual
     } catch (e) {
       console.error('[db] Persist fehlgeschlagen (Daten bleiben im Speicher):', e?.message || e);
     }
@@ -147,10 +247,46 @@ export function createDb(dbPath, { codec = KLARTEXT_CODEC } = {}) {
     );
   }
 
+  /**
+   * Builds a new record from caller data (B-111-02-01): the managed fields come from the store unless the options say otherwise.
+   * @param {Record<string, any>} data @param {string} now ISO time @param {AnlageOptionen} opt @returns {Record<string, any>}
+   */
+  function neuerSatz(data, now, opt) {
+    const { id: gewuenscht, created_date: erstellt, updated_date: geaendert, ...rest } = data && typeof data === 'object' ? data : {};
+    const zeit = opt.zeitUebernehmen === true;
+    return {
+      id: opt.kennungUebernehmen === true && typeof gewuenscht === 'string' && gewuenscht !== '' ? gewuenscht : id(),
+      created_date: zeit && typeof erstellt === 'string' ? erstellt : now,
+      updated_date: zeit && typeof geaendert === 'string' ? geaendert : now,
+      ...rest,
+    };
+  }
+
+  /**
+   * Refuses (throws) when one of the records would take an id that is taken in the collection or repeated in the batch.
+   * @param {string} entity @param {Record<string, any>[]} saetze records built by neuerSatz @param {Record<string, any>[]} col
+   */
+  function kennungenPruefen(entity, saetze, col) {
+    const vergeben = new Set(col.map((r) => r?.id));
+    for (const s of saetze) {
+      if (vergeben.has(s.id)) throw new KennungBelegtFehler(entity, String(s.id));
+      vergeben.add(s.id);
+    }
+  }
+
+  /**
+   * The list of records of a collection; a missing one (also `null`) is created empty.
+   * 124-36: a collection that exists but is no list (an object, text, a number — only possible through a file edited or
+   * damaged outside the app) is refused with a clear error. It is never replaced by an empty list: that would write the
+   * loss to disk with the next save.
+   * @param {string} name collection (entity) name @returns {Record<string, any>[]}
+   */
   function collection(name) {
-    if (!cache[name]) {
+    if (cache[name] == null) {
       cache[name] = [];
       persist();
+    } else if (!Array.isArray(cache[name])) {
+      throw new SammlungFormFehler(name, typeof cache[name]);
     }
     return cache[name];
   }
@@ -195,33 +331,36 @@ export function createDb(dbPath, { codec = KLARTEXT_CODEC } = {}) {
     },
 
     get(entity, recordId) {
-      return collection(entity).find((r) => r.id === recordId) || null;
+      return collection(entity).find((r) => r?.id === recordId) || null;
     },
 
-    create(entity, data) {
+    /**
+     * Creates one record. B-111-02-01: `id`, `created_date`, `updated_date` of `data` are ignored - the store sets them - unless
+     * `opt` names the explicit path (see AnlageOptionen).
+     * @param {string} entity @param {Record<string, any>} data @param {AnlageOptionen} [opt]
+     * @returns {Record<string, any>} the stored record
+     * @throws {KennungBelegtFehler} explicit id path and the id is taken (nothing written)
+     */
+    create(entity, data, opt = {}) {
       const now = new Date().toISOString();
-      const record = {
-        id: id(),
-        created_date: now,
-        updated_date: now,
-        ...data,
-      };
-      collection(entity).push(record);
+      const record = neuerSatz(data, now, opt);
+      const col = collection(entity);
+      if (opt.kennungUebernehmen === true) kennungenPruefen(entity, [record], col);
+      col.push(record);
       persist();
       return record;
     },
 
     // Viele Datensätze, GENAU EIN Schreibvorgang (G19). API-kompatibel additiv.
-    bulkCreate(entity, records) {
+    // B-111-02-01: same rule as create(); on the explicit id path the WHOLE batch is checked first and refused as a whole.
+    /** @param {string} entity @param {Record<string, any>[]} records @param {AnlageOptionen} [opt] @returns {Record<string, any>[]} */
+    bulkCreate(entity, records, opt = {}) {
       const liste = Array.isArray(records) ? records : [];
       const col = collection(entity);
       const now = new Date().toISOString();
-      const angelegt = [];
-      for (const data of liste) {
-        const record = { id: id(), created_date: now, updated_date: now, ...data };
-        col.push(record);
-        angelegt.push(record);
-      }
+      const angelegt = liste.map((data) => neuerSatz(data, now, opt));
+      if (opt.kennungUebernehmen === true) kennungenPruefen(entity, angelegt, col);
+      col.push(...angelegt);
       // Ein einziger Schreibvorgang am Ende — nicht einer je Datensatz.
       persistNow();
       return angelegt;
@@ -245,7 +384,9 @@ export function createDb(dbPath, { codec = KLARTEXT_CODEC } = {}) {
           col[pos] = { ...col[pos], ...data, id: col[pos].id, updated_date: now };
           updated += 1;
         } else {
-          const record = { id: id(), created_date: now, updated_date: now, ...data };
+          // B-111-02-01: a new record keeps its id only when the id IS the key (upsert by id: it was just looked up and is free);
+          // with another key a sent id could duplicate an existing record, so the store generates one. Dates: always now.
+          const record = neuerSatz(data, now, { kennungUebernehmen: key === 'id' });
           col.push(record);
           if (k !== undefined) index.set(k, col.length - 1);
           created.push(record);
@@ -263,7 +404,7 @@ export function createDb(dbPath, { codec = KLARTEXT_CODEC } = {}) {
 
     update(entity, recordId, data) {
       const col = collection(entity);
-      const idx = col.findIndex((r) => r.id === recordId);
+      const idx = col.findIndex((r) => r?.id === recordId);
       if (idx === -1) return null;
       col[idx] = {
         ...col[idx],
@@ -277,7 +418,7 @@ export function createDb(dbPath, { codec = KLARTEXT_CODEC } = {}) {
 
     remove(entity, recordId) {
       const col = collection(entity);
-      const idx = col.findIndex((r) => r.id === recordId);
+      const idx = col.findIndex((r) => r?.id === recordId);
       if (idx === -1) return false;
       col.splice(idx, 1);
       persist();

@@ -7,8 +7,8 @@
 // In:  snapshots (any JSON-serialisable value).
 // Out: new stack objects (never mutated) + the snapshot to restore.
 
-/** Maximum remembered steps [ASSUMED] - enough for a drawing session, bounded memory. */
-export const UNDO_MAX = 50;
+/** Maximum remembered steps: 99 (decision D-115-12, plan 115-05d C-1) - for every editor that uses this stack. */
+export const UNDO_MAX = 99;
 
 /**
  * Creates an empty stack.

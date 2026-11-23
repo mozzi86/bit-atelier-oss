@@ -26,13 +26,16 @@ import { werkstattBauteile } from "./werkstattBauteile.js";
 import { aufbauById, aufbauVon } from "./bauteil/aufbauten.js";
 import { oeffnungsGroesse, kniestockGeometrie, createBuildingModel } from "./buildingModel.js";
 import { treppeBerechnen, mitTreppenLoechern } from "./bauteil/treppe.js"; // 108-06: stair quantities, slab area minus the derived openings
+import { istUTreppe, treppeUBerechnen, treppeUMengen } from "./bauteil/treppeU.js"; // 115-13: two-flight stair with landing
 import { gaubeBerechnen } from "./bauteil/gauben.js"; // 108-13: dormer quantities
+import { vordachBerechnen } from "./bauteil/vordach.js"; // W-1118-29: canopy quantities
 import { globalesDach } from "./bauteil/dachGeometrie.js";
 import { huellProfile, giebelZuschlag_m2 } from "./bauteil/giebel.js"; // 108-03: gable area above the knee wall
 import { deckenUmriss } from "./bauteil/deckenRand.js"; // 108-03 follow-up: slab outline inset by the envelope insulation
 import { attributeVon, istAbgeleitet } from "./bauteil/attribute.js";
 import { wandHoehe, stuetzenHoehe, geschosshoehe, gesamtHoehe, geschosseAus, oberkanteFolgtGeschoss, raumHoehe, elevationOf } from "./bauteil/hoehen.js";
 import { untergeschosseAnzahl } from "./bauteil/ebenen.js";
+import { erdmassenZwischen } from "./massing/gelaendeEbenen.js"; // 108-10: earthworks between existing and new ground
 
 // Defensive, nicht-negative, endliche Zahl.
 const num = (x) => Math.max(0, Number(x) || 0);
@@ -280,6 +283,8 @@ export function kgFromKind(kind) {
     zone: "390",
     stair: "351", // 108-06: steckbrief.js "treppe" (KG 351 Deckenkonstruktionen incl. stairs)
     dormer: "361", // 108-13: roof construction
+    canopy: "339", // W-1118-29: [ASSUMED] DIN 276 KG 339 "Sonstiges zur KG 330" — a canopy hangs on the outer wall; some offices book it under 369
+    earthwork: "310", // 108-10: DIN 276 KG 310 Baugrube / Erdbau
   };
   return map[kind] || "390";
 }
@@ -299,6 +304,8 @@ export function gewerkFromKind(kind) {
     zone: "Ausbau",
     stair: "Rohbau", // 108-06
     dormer: "Dach", // 108-13
+    canopy: "Fassade", // W-1118-29
+    earthwork: "Erdarbeiten", // 108-10
   };
   return map[kind] || "Rohbau";
 }
@@ -549,6 +556,15 @@ export function classifiedElements(bimModel, building, optionen = {}) {
   // 108-06: stairs — one piece each (KG 351), length = run, area = run × width (the flight plan area)
   arr(m.customStairs).forEach((t, i) => {
     if (!t?.start) return;
+    // 115-13: a two-flight stair is one piece too — area/length = both flights (width × horizontal length, the reading of the straight
+    // flight); the landing is its own line "stair-<n>-podest" (KG 351, area = landing plan area, volume = landing plate) with count 0:
+    // it is part of the same stair, so a piece position "Treppe" counts the stair once (115-13 review 20.11., finding 5)
+    if (istUTreppe(t)) {
+      const mg = treppeUMengen(treppeUBerechnen(t, geschosshoehe(num(t?.level) || 0, gq)));
+      els.push(normalizeElement(t, `stair-${t?._idx ?? i}`, "stair", { area: mg.laufFlaeche_m2, volume: 0, length: mg.laufLaenge_m, count: 1 }));
+      els.push(normalizeElement(t, `stair-${t?._idx ?? i}-podest`, "stair", { area: mg.podestFlaeche_m2, volume: mg.podestVolumen_m3, length: 0, count: 0 }));
+      return;
+    }
     const erg = treppeBerechnen(t, geschosshoehe(num(t?.level) || 0, gq));
     const b = Math.max(0.1, num(t?.breite_m) || 1);
     els.push(normalizeElement(t, `stair-${t?._idx ?? i}`, "stair", { area: erg.laufLaenge_m * b, volume: 0, length: erg.laufLaenge_m, count: 1 }));
@@ -570,6 +586,16 @@ export function classifiedElements(bimModel, building, optionen = {}) {
     });
   }
 
+  // W-1118-29: canopies — one piece each, area = the plate in plan, length = its width along the wall. The box comes from
+  // vordach.js, the same one the 3D view and the plan draw.
+  if (arr(m.vordaecher).length) {
+    const fp = Array.isArray(m.footprintM) && m.footprintM.length >= 3 ? m.footprintM : null;
+    arr(m.vordaecher).forEach((v, i) => {
+      const erg = fp ? vordachBerechnen(v, { footprint: fp }, gq) : null;
+      els.push(normalizeElement(v, `vordach-${v?._idx ?? i}`, "canopy", { area: erg && erg.ok ? erg.flaeche_m2 : 0, volume: 0, length: erg && erg.ok ? erg.breite_m : 0, count: 1 }));
+    });
+  }
+
   arr(m.customRoofs).forEach((r, i) => {
     const area = num(polygonArea(r?.points));
     els.push(
@@ -581,6 +607,21 @@ export function classifiedElements(bimModel, building, optionen = {}) {
       }),
     );
   });
+
+  // 108-10: earthworks (DIN 276 KG 310) — cut and fill between the existing ground KEPT in the Massing sandbox (massing_layer.gelaendeBestand)
+  // and the modelled new ground (massing_layer.gelaende), node-area method of gelaendeEbenen.erdmassenZwischen; both rasters are in the
+  // same site frame. Only with a kept existing ground: the public elevation model is not in the record and too coarse for quantities.
+  // Ids "erdbau-abtrag" / "erdbau-auftrag" are derived (attribute table may override); status "neubau" [ASSUMED: planned earthworks are new
+  // construction work]. Without both rasters the list is byte-identical to before.
+  {
+    const ml = m.massing_layer;
+    const erd = ml && ml.gelaendeBestand && ml.gelaende ? erdmassenZwischen(ml.gelaendeBestand, ml.gelaende) : null;
+    if (erd) {
+      for (const [art, v] of /** @type {Array<[string, number]>} */ ([["abtrag", erd.abtrag_m3], ["auftrag", erd.auftrag_m3]])) {
+        if (v > 0) els.push(normalizeElement({ status: "neubau" }, `erdbau-${art}`, "earthwork", { area: 0, volume: v, length: 0, count: 1 }));
+      }
+    }
+  }
 
   // Hüllen-Fallback ADDITIV (HI-03): synthHull darf nicht komplett entfallen, sobald ein
   // einziges Custom-Element (Fenster, Zone, Innenwand …) existiert — sonst springen alle

@@ -19,6 +19,7 @@
 // In:  contracts (79 Honorarvertrag), amendments, invoices, the rule reader.
 // Out: records and amounts.
 
+import { HONORAR_BRIEF_VERSION } from "@core/lib/brief/vorlagenVersion.js";
 import { honorarVertrag } from "@core/lib/hoai/honorar.js";
 import { NACHTRAG_STATUS, statusErlaubt } from "./vertragsdaten.js";
 
@@ -89,6 +90,8 @@ export function betragAusBerechnung(berechnung, vertrag, wert = () => null, opti
 /**
  * Status change of an amendment: entwurf → angeboten → beauftragt | abgelehnt;
  * commissioned and rejected are final. Commissioning stamps beauftragt_am.
+ * Phase 115: leaving the draft state stamps the letter template version (`vorlage_version`) the amendment letter is
+ * written with, so its PDF keeps wording and order later; amendments offered before the stamp existed count as version 1.
  * @param {Record<string, any>} nachtrag
  * @param {string} ziel
  * @param {{heuteIso: string}} kontext
@@ -96,7 +99,8 @@ export function betragAusBerechnung(berechnung, vertrag, wert = () => null, opti
  */
 export function nachtragStatusWechsel(nachtrag, ziel, { heuteIso }) {
   if (!statusErlaubt(NACHTRAG_STATUS, nachtrag?.status || "entwurf", ziel)) return { ok: false, fehler: "uebergang" };
-  return { ok: true, nachtrag: { ...nachtrag, status: ziel, ...(ziel === "beauftragt" ? { beauftragt_am: heuteIso } : {}) } };
+  const stempel = (nachtrag?.status || "entwurf") === "entwurf" ? { vorlage_version: HONORAR_BRIEF_VERSION.honorarnachtrag } : {};
+  return { ok: true, nachtrag: { ...nachtrag, status: ziel, ...stempel, ...(ziel === "beauftragt" ? { beauftragt_am: heuteIso } : {}) } };
 }
 
 /**

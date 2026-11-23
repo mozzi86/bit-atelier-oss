@@ -11,7 +11,7 @@ import path from 'node:path';
 
 import {
   BAUHERR_ARTEN, BAUHERR_EIGENE, BAUHERR_FELDER, BAUHERR_LESEN, BAUHERR_QUELLEN, VERBOTEN,
-  bauherrDateiname, bereinigen, freigabeZeile, freigebbar, fuerBauherrSichtbar, kgVerdichten, kostenAusLv, letzteEntscheidungen,
+  bauherrDateiname, bereinigen, freigabeZeile, freigebbar, freigegebenerHinweis, fuerBauherrSichtbar, kgVerdichten, kostenAusLv, lesbarerDateiname, letzteEntscheidungen,
   portalAufbereiten, projektionAus, rueckmeldungPruefen,
 } from '@core/lib/bauherrProjektion';
 import { BAUHERR_VORSCHAU_ID, ermittleZugriff } from '@core/lib/zugriffErmitteln.js';
@@ -21,6 +21,8 @@ import { SOLL } from '../../scripts/grants-pruefen.mjs';
 const WURZEL = path.resolve(import.meta.dirname, '..', '..');
 const SQL = fs.readFileSync(path.join(WURZEL, 'supabase/migrations/0016_bauherr.sql'), 'utf8');
 const RUECK = fs.readFileSync(path.join(WURZEL, 'supabase/rueckweg/0016_down.sql'), 'utf8');
+// W-1118-22: 0018 redefines bauherr_felder / bauherr_quellen / records_bauherr and adds a catalogue row — the newest definition counts
+const SQL18 = fs.readFileSync(path.join(WURZEL, 'supabase/migrations/0018_bauherr_moeblierung.sql'), 'utf8');
 
 /**
  * `when 'X' then array['a','b']` lines of one SQL function body.
@@ -28,10 +30,12 @@ const RUECK = fs.readFileSync(path.join(WURZEL, 'supabase/rueckweg/0016_down.sql
  * @returns {Record<string, string[]>}
  */
 function whenListen(funktion) {
-  const start = SQL.indexOf(`create function public.${funktion}(`);
+  const neu = SQL18.indexOf(`create or replace function public.${funktion}(`);
+  const quelle = neu >= 0 ? SQL18 : SQL;
+  const start = neu >= 0 ? neu : SQL.indexOf(`create function public.${funktion}(`);
   assert.ok(start >= 0, `${funktion} fehlt in 0016`);
-  const ende = SQL.indexOf('$$;', start);
-  const koerper = SQL.slice(start, ende);
+  const ende = quelle.indexOf('$$;', start);
+  const koerper = quelle.slice(start, ende);
   /** @type {Record<string, string[]>} */
   const aus = {};
   for (const m of koerper.matchAll(/when '([A-Za-z.]+)'\s+then array\[([^\]]*)\]/g)) {
@@ -52,7 +56,7 @@ describe('0016 ↔ bauherrProjektion — eine Whitelist', () => {
     for (const [art, q] of Object.entries(BAUHERR_QUELLEN)) assert.deepEqual(sql[art], [...q], art);
   });
   it('jede Portal-Art hat eine Katalogzeile mit Zielrolle bauherr; schreibbar genau die eigenen', () => {
-    const zeilen = [...SQL.matchAll(/\('(Bauherr[A-Za-z]+)',\s*'projekt',\s*(true|false),\s*(true|false),\s*'[^']*',\s*'([a-z]+)',\s*(true|false)\)/g)];
+    const zeilen = [...(SQL + SQL18).matchAll(/\('(Bauherr[A-Za-z]+)',\s*'projekt',\s*(true|false),\s*(true|false),\s*'[^']*',\s*'([a-z]+)',\s*(true|false)\)/g)];
     const katalog = Object.fromEntries(zeilen.map((m) => [m[1], { sichtbar: m[2] === 'true', modell: m[3] === 'true', ziel: m[4], schreibbar: m[5] === 'true' }]));
     assert.deepEqual(Object.keys(katalog).sort(), [...BAUHERR_LESEN].sort());
     for (const [e, k] of Object.entries(katalog)) {
@@ -388,5 +392,48 @@ describe('Dateien und Edge-Regeln', () => {
     assert.deepEqual(mitgliedschaftFuerExterne('bauherr'), {
       role: 'bauherr', stufe: 'free', can_edit_model: false, can_export_ifc: false, can_view_audit_reports: false, can_submit_bid: false,
     });
+  });
+});
+
+describe('Office note field starts with the live note (22.11.2026)', () => {
+  it('returns the note of the released project row', () => {
+    const zeilen = [{ freigegeben: true, hinweis: 'Willkommen! Hier finden Sie den Entwurf.' }];
+    assert.equal(freigegebenerHinweis(zeilen), 'Willkommen! Hier finden Sie den Entwurf.');
+  });
+  it('ignores withdrawn rows and empty notes', () => {
+    assert.equal(freigegebenerHinweis([{ freigegeben: false, hinweis: 'alt' }]), '');
+    assert.equal(freigegebenerHinweis([{ freigegeben: true, hinweis: '   ' }, { freigegeben: true }]), '');
+  });
+  it('is empty without rows', () => {
+    assert.equal(freigegebenerHinweis(undefined), '');
+    assert.equal(freigegebenerHinweis([]), '');
+  });
+});
+
+describe('Client downloads carry the readable title (22.11.2026)', () => {
+  it('keeps umlauts, dashes and spaces of the title', () => {
+    assert.equal(
+      lesbarerDateiname('Exposé – Entwurf vom 22.11.2026.pdf', 'mws7ojmml0aiyu-Expose_Entwurf_vom_22.11.2026.pdf'),
+      'Exposé – Entwurf vom 22.11.2026.pdf',
+    );
+    assert.equal(
+      lesbarerDateiname('Pläne 1:50 mit Maßen (Vorentwurf).pdf', 'mws7oq5tnm6hd6-Plane_1_50_mit_Ma_en_Vorentwurf_.pdf'),
+      'Pläne 1 50 mit Maßen (Vorentwurf).pdf',
+    );
+  });
+  it('appends the extension of the stored file when the title has none', () => {
+    assert.equal(lesbarerDateiname('Grundriss EG', 'abc-Grundriss_EG.pdf'), 'Grundriss EG.pdf');
+  });
+  it('replaces characters file systems refuse and trims trailing dots', () => {
+    assert.equal(lesbarerDateiname('a/b\\c?d*e"f<g>h|i.', 'x.pdf'), 'a b c d e f g h i.pdf');
+  });
+  it('falls back to the stored name without its id prefix', () => {
+    assert.equal(lesbarerDateiname('', 'mws7ojmml0aiyu-Expose.pdf'), 'Expose.pdf');
+    assert.equal(lesbarerDateiname(undefined, undefined), 'Datei');
+  });
+  it('keeps long titles to 180 characters plus extension', () => {
+    const n = lesbarerDateiname('A'.repeat(300) + '.pdf', 'x.pdf');
+    assert.equal(n.length, 184);
+    assert.ok(n.endsWith('.pdf'));
   });
 });

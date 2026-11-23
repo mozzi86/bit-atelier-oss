@@ -9,6 +9,15 @@
 // turns exactly that value into "" so it never reappears on a report, without
 // touching anything the office actually typed itself.
 //
+// Wave 1 (B-81-05 / BEFUNDE-82 M-2): the letter core's former second module
+// (lib/brief/briefkopf.js of 79-03, with its own copy of the defaults and a
+// different empty-field rule) is gone. One module, one set of defaults, one
+// normalisation for the editor, the sidebar, reports, letters, dunning letters
+// and fee PDFs. The letter-side helpers built on it (eigenerBueroName,
+// briefkopfZeilen, briefkopfFuerBrief) live in briefkopfBrief.js — only because
+// this module sits in the entry chunk (sidebar), which is at its size budget;
+// they hold no defaults or rules of their own.
+//
 // In:  a raw stored Setting value (or undefined while nothing is saved yet).
 // Out: BRIEFKOPF_SCHLUESSEL, DEFAULT_BRIEFKOPF, ALTER_STANDARD_UNTERTITEL,
 //      normalisiereBriefkopf.

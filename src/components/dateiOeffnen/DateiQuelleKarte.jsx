@@ -11,6 +11,8 @@
 //      loaded lazily), else the local server's adapter. Out: the card, or null when nothing is linked.
 //      data-testids datei-quelle, datei-quelle-pfad, datei-zurueckschreiben, datei-quelle-status,
 //      datei-quelle-fehler, datei-konflikt-dialog, datei-konflikt-ueberschreiben/-kopie/-abbrechen.
+// R-BUERO-1: under a restricted role ("Ansicht als" a non-owner) the adapter answers
+// konflikt "eingeschraenkt": the dialog then offers only the copy, never "Überschreiben".
 
 import React from "react";
 import { FileUp } from "lucide-react";
@@ -18,6 +20,10 @@ import { useI18n } from "@core/lib/i18n";
 import { SERVERLOS } from "@core/lib/umgebung";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@core/components/ui/dialog";
 import { quelleAdapter } from "@/lib/dateiOeffnenServer.js";
+import { englischErgaenzen } from "@core/lib/i18n";
+import { EN } from "@core/lib/i18nTeile/buero-nachgang-w1.js";
+
+englischErgaenzen(EN);
 
 /**
  * @param {{huelle?: boolean}} props
@@ -29,7 +35,7 @@ export default function DateiQuelleKarte({ huelle = false }) {
   const [quelle, setQuelle] = React.useState(/** @type {any} */ (null));
   const [status, setStatus] = React.useState("");
   const [fehler, setFehler] = React.useState(/** @type {string|null} */ (null));
-  const [konflikt, setKonflikt] = React.useState(/** @type {"geaendert"|"fehlt"|null} */ (null));
+  const [konflikt, setKonflikt] = React.useState(/** @type {"geaendert"|"fehlt"|"eingeschraenkt"|null} */ (null));
   const [laeuft, setLaeuft] = React.useState(false);
 
   React.useEffect(() => {
@@ -86,9 +92,11 @@ export default function DateiQuelleKarte({ huelle = false }) {
 
       <Dialog open={!!konflikt} onOpenChange={(o) => { if (!o) setKonflikt(null); }}>
         <DialogContent showCloseButton={false} className="max-w-md p-5" data-testid="datei-konflikt-dialog">
-          <DialogTitle className="text-base mb-1">{t("Datei geändert")}</DialogTitle>
+          <DialogTitle className="text-base mb-1">{konflikt === "eingeschraenkt" ? t("Nur als Kopie speichern") : t("Datei geändert")}</DialogTitle>
           <DialogDescription className="mb-4">
-            {konflikt === "fehlt" ? t("Die Datei ist nicht mehr vorhanden.") : t("Die Datei wurde seit dem Öffnen geändert.")}
+            {konflikt === "eingeschraenkt"
+              ? t("Mit eingeschränkter Ansicht wird die verknüpfte Projektdatei nicht überschrieben. Speichern Sie eine Kopie daneben.")
+              : konflikt === "fehlt" ? t("Die Datei ist nicht mehr vorhanden.") : t("Die Datei wurde seit dem Öffnen geändert.")}
           </DialogDescription>
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" onClick={() => setKonflikt(null)} data-testid="datei-konflikt-abbrechen"
@@ -99,10 +107,12 @@ export default function DateiQuelleKarte({ huelle = false }) {
               className="px-3 py-2 rounded-lg border border-border text-foreground text-sm font-medium hover:bg-muted">
               {t("Als Kopie speichern")}
             </button>
-            <button type="button" onClick={() => speichern("ueberschreiben")} data-testid="datei-konflikt-ueberschreiben"
-              className="px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700">
-              {t("Überschreiben")}
-            </button>
+            {konflikt !== "eingeschraenkt" && (
+              <button type="button" onClick={() => speichern("ueberschreiben")} data-testid="datei-konflikt-ueberschreiben"
+                className="px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700">
+                {t("Überschreiben")}
+              </button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

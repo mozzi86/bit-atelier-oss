@@ -11,6 +11,8 @@
 //     with a gable roof draws its roof. Console clean.
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): solid relations and the roof switch are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -84,6 +86,10 @@ test.describe("107-10 Bauteil-Operationen, Dach-Lib, Untergeschoss", () => {
       const wahl = page.getByTestId("seo-dach-wahl");
       await expect(wahl).toBeVisible({ timeout: 20000 });
       await wahl.selectOption({ label: "Dach 1" });
+      // 115-05c (adapted): the relation is a draft change - nothing stored before "Speichern" (before: written by the layer autosave)
+      await page.waitForTimeout(2000);
+      expect((await gespeichert())?.solidrelationen_layer?.relationen?.length ?? 0, "nothing written before Speichern").toBe(0);
+      await speichernUndWarten(page);
       // the relation is stored (target unchanged, operator = the roof, operation abzug_nach_oben, aktiv)
       await expect.poll(async () => (await gespeichert())?.solidrelationen_layer?.relationen?.length ?? 0, { timeout: 20000 }).toBe(1);
       const rel = (await gespeichert()).solidrelationen_layer.relationen[0];
@@ -146,6 +152,7 @@ test.describe("107-10 Bauteil-Operationen, Dach-Lib, Untergeschoss", () => {
       // ---- review 107-10: the global roof form goes into the IFC only with the switch (field dachform_ifc, stored once used) ----
       await page.locator('select[aria-label="Dachform"]:not([data-testid])').selectOption("sattel");
       await page.getByTestId("dach-ifc").check();
+      await speichernUndWarten(page); // 115-05c (adapted)
       await expect.poll(async () => (await gespeichert())?.dachform_ifc, { timeout: 20000 }).toBe(true);
       await page.locator('select[aria-label="Dachform"]:not([data-testid])').selectOption("flach");
       await page.getByRole("button", { name: "Ansicht 3D" }).click();
@@ -153,6 +160,7 @@ test.describe("107-10 Bauteil-Operationen, Dach-Lib, Untergeschoss", () => {
       // ---- remove: aktiv false, the relation stays stored, the wall is unchanged again (6.0 m) ----
       expect((await befehl(page, "auswahl-guid", { guid: giebelGuid })).ok).toBe(true);
       await page.getByTestId("seo-entfernen").click();
+      await speichernUndWarten(page); // 115-05c (adapted)
       await expect.poll(async () => (await gespeichert())?.solidrelationen_layer?.relationen?.[0]?.aktiv, { timeout: 20000 }).toBe(false);
       await expect.poll(async () => Math.round(((await huellwaende3d(page))["1:1"]?.max?.[1] ?? 0) * 1000) / 1000, { timeout: 30000 }).toBe(6);
       expect(warnungen, `Konsole: ${warnungen.join(" | ")}`).toEqual([]);

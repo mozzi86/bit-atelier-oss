@@ -23,7 +23,9 @@
 //      focus reaches it through the onRaumGrenzenChange callback; 86-04: zerlegung
 //      "auto"|"rand" (86-07 "achse", 86-06 "skelett") + geschosseJeRiegel { "<k>": n }; 75-10:
 //      bewertungsGewichte { "<dimension>": weight } via the proposals panel callback; 107-11 (v6):
-//      per unit type optional dachschraege_quelle "geometrie"|"hand" + kniestock_m — all
+//      per unit type optional dachschraege_quelle "geometrie"|"hand" + kniestock_m; 115-12 (v7):
+//      raumHand { "<level>|<zoneName>": { versatzU_m, versatzV_m, laengeU_m, laengeV_m } } — rooms
+//      sized / moved by hand in the apartment planner (raumBearbeiten.js) — all
 //      written by the workshop) ·
 //      netz_layer (TgaNetzEditor, Phase 41: knoten/kanten des TGA-Netzes je Gewerk,
 //      mengen — Phase 63 erweitert dasselbe Feld additiv, kein zweites Leitungsmodell) ·
@@ -73,6 +75,8 @@
 //      cutHeight, brille, sw, strukturdarstellung, optionen, regeln, ki_vermerk }], ebenen: [{ id, visible, locked, farbe?, linientyp?,
 //      drucken? }], kombinationen: {} } — saved views (parameters only, never geometry, D-BK-08a); ONE writer: the BIM studio;
 //      schema in @core/lib/plan/ansichtszustand.js; the lens choice in localStorage stays only the last used value).
+//      expose_layer (W-1118-28: { dach, kamin, aussentreppen[], umfeld{…}, blicke[] } — what the exposé picture needs beyond the
+//      building elements; read by lib/exposeSzene.js through the stored record, no editor yet, written by import today).
 //      Neue Layer hier ergänzen — UND in @core/lib/fachlayerSchema.js (LAYER_VERSION), in
 //      @core/lib/abgleich/modellAbgleich.js (FELD_NAMEN, deutscher Name für die Konfliktkarte; Test in
 //      fachlayerSchema.test.js) und .planning/FACHLAYER-SCHEMA.md (87-07: jeder Layer trägt `v` + `updatedAt`; Migration
@@ -91,9 +95,28 @@
 //      eines Raums verwaist die Einträge, Namenskollision im selben Geschoss
 //      teilt einen Key.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadBimModel, saveBimModel, aufFremdenStand } from "@core/lib/useBimModelSync";
+import { loadBimModel, saveBimModel, bimModelNachschreiben, aufFremdenStand, feldGesperrt } from "@core/lib/useBimModelSync";
 import { gleichWert } from "@core/lib/abgleich/dreiWege";
 import { pendingNachSave } from "@designer/lib/fachlayerPending";
+import { nachschreibenMitHinweis } from "@designer/lib/nachschreibenHinweis.js";
+// 115-05b (E-5): the note of a refused flush is the studio's text; its English lives in the lazy part of the stand protection
+import { EN as EN_STANDSCHUTZ } from "@core/lib/i18nTeile/standschutz-115-05.js";
+
+/** The note when a pending layer change could not be written (same text and key as the BIM studio's flush). */
+const NICHT_GESCHRIEBEN_HINWEIS = "Letzte Änderung am Modell nicht gespeichert — es wurde inzwischen an anderer Stelle geändert.";
+
+/**
+ * 115-05b (E-5): tells the person that a pending layer change was not written (toast, the studio's text). The flush runs when the
+ * editor unmounts, so no hook is at hand: the language is the one the I18nProvider put on <html lang> (i18n.jsx), the English text
+ * comes from the same part file the provider uses, and the toast module is loaded at the call (this hook is also imported by
+ * unit tests that run without a DOM and without JSX).
+ * @returns {void}
+ */
+export function nachschreibenAbgelehntMelden() {
+  const englisch = typeof document !== "undefined" && document.documentElement?.lang === "en";
+  const text = englisch ? (EN_STANDSCHUTZ[NICHT_GESCHRIEBEN_HINWEIS] ?? NICHT_GESCHRIEBEN_HINWEIS) : NICHT_GESCHRIEBEN_HINWEIS;
+  import("sonner").then(({ toast }) => toast.warning(text)).catch(() => console.warn(`[Fachlayer] ${text}`));
+}
 
 /** @param {any} x @returns {any} a layer without its schema stamp `v` (updatedAt is ignored by gleichWert anyway) */
 const ohneStempel = (x) => (x && typeof x === "object" && !Array.isArray(x) ? { ...x, v: undefined } : x);
@@ -103,13 +126,25 @@ const ohneStempel = (x) => (x && typeof x === "object" && !Array.isArray(x) ? { 
  * @param projectId Projekt (null → nur lokaler State mit defaultValue)
  * @param feld      exklusives BimModel-Top-Level-Feld dieses Layers
  * @param defaultValue Startwert, solange nichts gespeichert ist
+ * @param {{entwurf?: boolean}} [opt] 115-05c (D-115-12): entwurf = the layer is a DRAFT field of the building model (solid
+ *   relations): no autosave and no flush - each change is reported to the draft (entwurfStand.js), "Speichern" writes it, an unsaved
+ *   draft comes back after a reload (three ways against a newer stored state, a field both changed gets its card)
  * @returns [state, setState] — wie useState; Speichern läuft debounced (1,2 s),
- *          ungespeicherte Änderungen werden bei Unmount/Projektwechsel geflusht.
+ *          ungespeicherte Änderungen werden bei Unmount/Projektwechsel geflusht (ohne `entwurf`).
  */
-export function useFachlayer(projectId, feld, defaultValue) {
+export function useFachlayer(projectId, feld, defaultValue, opt = {}) {
+  const entwurf = opt.entwurf === true;
+  // 115-05c: the project whose draft of this layer was put back after the load (only then a change is reported)
+  const entwurfBereitRef = useRef(/** @type {string|null} */ (null));
+  const [entwurfTick, setEntwurfTick] = useState(0);
   const defaultRef = useRef(defaultValue); // Objekt-Defaults nicht als Dep (neue Identität je Render)
   const [state, setState] = useState(defaultValue);
   const loadingRef = useRef(false);
+  /** 115-05b (E-5): flush of a pending change; a refused ({geschrieben: false}) or failed write is said in a toast. @param {{pid: string, feld: string, state: any}} pend */
+  const nachschreibenRef = useRef((/** @type {{pid: string, feld: string, state: any}} */ pend) => {
+    // 115-05b part 2: the one shared way of telling a refused / failed flush (unit test nachschreibenHinweis-11505b)
+    void nachschreibenMitHinweis(bimModelNachschreiben, pend.pid, { [pend.feld]: pend.state }, nachschreibenAbgelehntMelden);
+  });
   const lastSaved = useRef(JSON.stringify(defaultValue));
   // Letzter noch nicht gespeicherter Stand (pid/feld eingefroren) — wird bei
   // Unmount und Projektwechsel geflusht, damit der 1,2-s-Debounce Eingaben
@@ -154,10 +189,12 @@ export function useFachlayer(projectId, feld, defaultValue) {
     // Ungespeicherten Stand des VORHERIGEN Projekts flushen (pid ist im Ref
     // eingefroren — schreibt nie ins neue Projekt).
     const pend = pendingRef.current;
-    if (pend && pend.pid !== projectId) {
+    entwurfBereitRef.current = null;
+    if (pend && pend.pid !== projectId && !entwurf) {
       pendingRef.current = null;
       if (pend.sig !== lastSaved.current) {
-        saveBimModel(pend.pid, { [pend.feld]: pend.state }).catch(() => {});
+        // 115-05a (A-3): on the left project's own base, without moving the one-project cache back to it (a stale base is refused)
+        nachschreibenRef.current(pend);
       }
     }
     if (!projectId) {
@@ -181,6 +218,16 @@ export function useFachlayer(projectId, feld, defaultValue) {
         // Eingaben während des Ladens sind blockiert (setUser) — der geladene
         // Stand kann bedenkenlos übernommen werden.
         setState(val);
+        if (entwurf) {
+          // 115-05c: an unsaved draft of this layer goes on top (entwurfStand.felderEinspielen), then changes are reported
+          const E = await import("@core/lib/entwurf/entwurfStand.js");
+          const st = await E.starten(projectId);
+          if (cancelled) return;
+          E.felderEinspielen({ pid: projectId, entwurf: st.entwurf, gespeichert: m, felder: [feld], quelle: "layer",
+            setzen: (w) => { stateRef.current = w[feld] ?? defaultRef.current; setState(w[feld] ?? defaultRef.current); } });
+          entwurfBereitRef.current = projectId;
+          setEntwurfTick((n) => n + 1);
+        }
       } catch {
         /* offline: Default/letzter Stand bleibt; Speichern versucht es später */
       } finally {
@@ -195,6 +242,17 @@ export function useFachlayer(projectId, feld, defaultValue) {
   // Debounced zurückschreiben — nur bei echter Änderung.
   useEffect(() => {
     if (!projectId || loadingRef.current) return undefined;
+    if (entwurf) {
+      // 115-05c: report to the draft instead of writing
+      if (entwurfBereitRef.current !== projectId) return undefined;
+      const pid = projectId;
+      const basis = JSON.parse(lastSaved.current);
+      void Promise.all([import("@core/lib/entwurf/entwurfStand.js"), loadBimModel(pid).catch(() => null)]).then(([E, rec]) => {
+        E.melden(pid, "bim", { stand: rec ? { id: rec.id ?? null, updated_date: rec.updated_date ?? null } : null,
+          basis: { [feld]: ohneStempel(basis) }, werte: { [feld]: ohneStempel(state) }, felder: [feld] });
+      });
+      return undefined;
+    }
     const sig = JSON.stringify(state);
     if (sig === lastSaved.current) return undefined;
     pendingRef.current = { pid: projectId, feld, state, sig };
@@ -210,14 +268,43 @@ export function useFachlayer(projectId, feld, defaultValue) {
       }
     }, 1200);
     return () => clearTimeout(t);
-  }, [projectId, feld, state]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `entwurf` is fixed per call site
+  }, [projectId, feld, state, entwurfTick]);
+
+  // 115-05c: the layer's part of "Speichern" and "Verwerfen"
+  useEffect(() => {
+    if (!entwurf || !projectId) return undefined;
+    const pid = projectId;
+    /** @type {Array<() => void>} */ let ab = [];
+    let weg = false;
+    void import("@core/lib/entwurf/entwurfStand.js").then((E) => {
+      if (weg) return;
+      ab = [
+        E.speichererSetzen(pid, `layer:${feld}`, async () => {
+          const jetzt = stateRef.current;
+          const sig = JSON.stringify(jetzt);
+          if (gleichWert(ohneStempel(jetzt), ohneStempel(JSON.parse(lastSaved.current)))) return "leer";
+          if (feldGesperrt(pid, feld)) return "konflikt";
+          await saveBimModel(pid, { [feld]: jetzt });
+          lastSaved.current = sig;
+          const rec = await loadBimModel(pid).catch(() => null);
+          E.melden(pid, "bim", { stand: rec ? { id: rec.id ?? null, updated_date: rec.updated_date ?? null } : null,
+            basis: { [feld]: ohneStempel(jetzt) }, werte: { [feld]: ohneStempel(jetzt) }, felder: [feld] });
+          return "ok";
+        }),
+        E.zuruecksetzerSetzen(pid, `layer:${feld}`, () => { const alt = JSON.parse(lastSaved.current); stateRef.current = alt; setState(alt); }),
+      ];
+    });
+    return () => { weg = true; ab.forEach((f) => f()); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `entwurf` is fixed per call site
+  }, [projectId, feld]);
 
   // Flush-on-Unmount: läuft der Debounce beim Tab-Wechsel noch, wäre die
   // Eingabe sonst weg (Radix-Tabs unmounten den Reiter komplett).
   useEffect(() => () => {
     const pend = pendingRef.current;
-    if (pend && pend.sig !== lastSaved.current) {
-      saveBimModel(pend.pid, { [pend.feld]: pend.state }).catch(() => {});
+    if (pend && pend.sig !== lastSaved.current && !entwurf) {
+      nachschreibenRef.current(pend); // 115-05a: same as saveBimModel for the open project; 115-05b: a refusal is said
     }
   }, []);
 

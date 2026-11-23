@@ -24,22 +24,54 @@
 // Phase 82 (82-05): a page `fussLinks` (office line) is drawn bottom left; the
 // protocol variant needs nothing here (briefLayout puts the distribution list
 // into the body lines and leaves the address field empty).
+// Phase 115 (user finding 15.11.2026): a page's `zeilenNach` — the closing block of a
+// letter with an amount table — is drawn below the table; pages without it are drawn as before.
+
+/**
+ * Content language of every letter (German text), BCP 47. Same value as PDF_SPRACHE_STANDARD in ../pdfMetadaten.js, kept
+ * here because that helper is only imported dynamically (W0-F6: a static import put its chunk into the entry's preload
+ * map); tests/unit/pdfMetadaten-nachgang.test.js checks that both stay equal.
+ */
+const BRIEF_SPRACHE = "de-DE";
+
+/**
+ * The `fixiert` option of a letter in a given layout/template version (105-19 follow-up): letters of a version that
+ * carries the document language get `sprache` (German content → BRIEF_SPRACHE, "de-DE"); older versions keep `fixiert`
+ * as it was, so a letter fixed before is rebuilt byte for byte.
+ * @param {{erstelltAm: string, dateiId: string}|null|undefined} fixiert erstelltAm: ISO timestamp; dateiId: 32 hex
+ * @param {boolean} mitSprache true when the letter's version is at least the first one with /Lang
+ * @returns {{erstelltAm: string, dateiId: string, sprache?: string}|null}
+ */
+export function fixiertFuerVersion(fixiert, mitSprache) {
+  if (!fixiert) return null;
+  return mitSprache ? { ...fixiert, sprache: BRIEF_SPRACHE } : fixiert;
+}
 
 /**
  * @param {ReturnType<import("./briefLayout.js").briefLayout>} layout
- * @param {{fixiert?: {erstelltAm: string, dateiId: string}|null}} [optionen]
- *   fixiert.erstelltAm: ISO timestamp; fixiert.dateiId: 32 hex characters
+ * @param {{fixiert?: {erstelltAm: string, dateiId: string, sprache?: string}|null}} [optionen]
+ *   fixiert.erstelltAm: ISO timestamp; fixiert.dateiId: 32 hex characters; fixiert.sprache: BCP 47 tag written as
+ *   /Lang (with DisplayDocTitle) — only for letters fixed with a version that carries it, see above
  * @returns {Promise<Uint8Array>}
  */
 export async function erzeugeBriefPdf(layout, { fixiert = null } = {}) {
-  const { jsPDF } = await import("jspdf");
+  // W0-F6: the metadata helper is imported dynamically, so the entry's preload map does not name its chunk.
+  const [{ jsPDF }, { jsPdfMetadaten }] = await Promise.all([import("jspdf"), import("../pdfMetadaten.js")]);
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const D = layout.din5008;
   const rechtsX = layout.a4.w - D.randRechts;
   if (fixiert) {
     pdf.setCreationDate(new Date(fixiert.erstelltAm));
     pdf.setFileId(String(fixiert.dateiId).toUpperCase());
-    pdf.setDocumentProperties({ title: layout.betreff, creator: "BIT-Atelier" });
+    // 105-19: a fixed letter is re-rendered and must give the bytes of its stored SHA-256. So /Lang and DisplayDocTitle
+    // come with a version: the caller passes `fixiert.sprache` only for letters fixed with a version that has them
+    // (correspondence LAYOUT_VERSION >= 2, fee letters template version >= 3); without it the metadata stay exactly
+    // as before (title + creator, no /Lang) — tests/unit/briefSchluss.test.js "PDF byte-identisch".
+    if (fixiert.sprache) jsPdfMetadaten(pdf, { titel: layout.betreff, sprache: fixiert.sprache });
+    else pdf.setDocumentProperties({ title: layout.betreff, creator: "BIT-Atelier" });
+  } else {
+    // 105-19: /Lang and /Title for every letter that is not fixed.
+    jsPdfMetadaten(pdf, { titel: layout.betreff });
   }
 
   layout.seiten.forEach((seite, i) => {
@@ -102,6 +134,15 @@ export async function erzeugeBriefPdf(layout, { fixiert = null } = {}) {
       }
       for (const zeile of seite.tabelle.zeilen) {
         pdf.text(zeile.join("   "), rechtsX, y, { align: "right" });
+        y += layout.zeilenHoeheMm;
+      }
+    }
+    if (seite.zeilenNach?.length) {
+      // 115: the closing block (closing text, greeting, draft note) below the table, one blank line apart from what
+      // this page already carries — briefLayout counted exactly this blank line into the page budget.
+      if (seite.zeilen.length || seite.tabelle) y += layout.zeilenHoeheMm;
+      for (const zeile of seite.zeilenNach) {
+        pdf.text(zeile, D.randLinks, y);
         y += layout.zeilenHoeheMm;
       }
     }

@@ -59,11 +59,30 @@ import { zisternenRechteck } from "@designer/lib/regenwassernutzung";
 import { dachgeschossDach, dachschraegenJeRaum, KNIESTOCK_STANDARD_M, DACHFORM_NAMEN } from "@designer/lib/dachschraegenAnteile";
 import { EN as EN_RAEUME_10711 } from "@core/lib/i18nTeile/raeume-107-11.js";
 import { EN as EN_EFH_108 } from "@core/lib/i18nTeile/efh-108.js"; // 108-02: lazy part of phase 108
+// 115-12 (D-115-47): rooms selected, sized and moved in the storey plan — pure geometry, selection layer, info panel,
+// the shared snap switches of the drawing surfaces (F3 object snap, F9 grid) and the lazy English part of this plan.
+import {
+  raumHandSchluessel, istBearbeitbar, raumGeometrie, raumMasse, minMasse, raumUmgebung, groesseAendern, verschieben,
+  masseSetzen, rahmenSchritt, eintragAus, raumHandSetzen, punkteAus, RAUM_HAND_RASTER_M, RAUM_HAND_FANG_M,
+} from "@designer/lib/raumBearbeiten";
+import { useFangEinstellungen } from "@core/lib/fangEinstellungen.js";
+import RaumGriffe from "./RaumGriffe";
+import RaumInfo from "./RaumInfo";
+import { EN as EN_RAEUME_11512 } from "@core/lib/i18nTeile/raeume-115-12.js";
 
 englischErgaenzen(EN_RAEUME_10711);
 englischErgaenzen(EN_EFH_108); // 108-02: knee wall from the building model
+englischErgaenzen(EN_RAEUME_11512);
 
 const de1 = (n) => (Number(n) || 0).toLocaleString("de-DE", { maximumFractionDigits: 1 });
+/** 115-12: metres / m² with two decimals and decimal comma (room sizes). @param {number} n */
+const de2 = (n) => (Number(n) || 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** 115-12: two taps on the same room within this time open the unit's focus view, ms [ASSUMED: usual double-click time]. */
+const DOPPELTIPP_MS = 400;
+/** 115-12: capture distance of the edge snap on screen, px [ASSUMED 10 px, the same order as the plan's object snap]; never more than RAUM_HAND_FANG_M. */
+const RAUM_FANG_PX = 10;
+/** 115-12: plan ink of the hand marker (sheet colour — the plan sheet stays light in dark mode). */
+const PLAN_TINTE = "#0f172a";
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 
 // "offen" ergänzen (SP_STATUS-Muster aus SchallschutzPlanner) — "fail" wird nie gerendert.
@@ -178,6 +197,8 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
     stufeJeWe: layer?.stufeJeWe && typeof layer.stufeJeWe === "object" ? layer.stufeJeWe : {},
     // Migrations-Guard 75-12: interior-wall offsets, plain object.
     raumGrenzen: layer?.raumGrenzen && typeof layer.raumGrenzen === "object" ? layer.raumGrenzen : {},
+    // Migrations-Guard 115-12: rooms sized / moved by hand, plain object (older layers: none).
+    raumHand: layer?.raumHand && typeof layer.raumHand === "object" ? layer.raumHand : {},
     // Migrations-Guard 86-04: building form + storeys per bar.
     zerlegung: zerlegungsArt(layer?.zerlegung),
     geschosseJeRiegel: layer?.geschosseJeRiegel && typeof layer.geschosseJeRiegel === "object" ? layer.geschosseJeRiegel : {},
@@ -216,6 +237,8 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
       stufeJeWe: cfg.stufeJeWe,
       // 75-12: interior walls moved in the focus (offsets per wall, m).
       raumGrenzen: cfg.raumGrenzen,
+      // 115-12: rooms sized / moved by hand in the plan (hand locks rule).
+      raumHand: cfg.raumHand,
       // 86-04: perimeter block + own storey count per bar.
       zerlegung: cfg.zerlegung,
       geschosseJeRiegel: cfg.geschosseJeRiegel,
@@ -226,7 +249,7 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
       // 86-05b: bar minimum of the applied proposal (default 120 → byte-identical to before).
       riegelMinFlaeche_m2: cfg.riegelMinFlaeche_m2,
     }),
-    [store.footprintM, store.storeys, store.storeyHeight, store.geschosse, cfg.typ, cfg.einheiten, cfg.gesperrteGrenzen, cfg.anordnung, cfg.grenzenPositionen, cfg.regeln, cfg.nordwinkel, cfg.tuerAufschlaege, cfg.stufeJeWe, cfg.raumGrenzen, cfg.zerlegung, cfg.geschosseJeRiegel, store.achseM, cfg.riegelMinFlaeche_m2]
+    [store.footprintM, store.storeys, store.storeyHeight, store.geschosse, cfg.typ, cfg.einheiten, cfg.gesperrteGrenzen, cfg.anordnung, cfg.grenzenPositionen, cfg.regeln, cfg.nordwinkel, cfg.tuerAufschlaege, cfg.stufeJeWe, cfg.raumGrenzen, cfg.raumHand, cfg.zerlegung, cfg.geschosseJeRiegel, store.achseM, cfg.riegelMinFlaeche_m2]
   );
   // 89-02: workshop components (live from the result, not only after "apply") of the shown storey.
   const bauteileAlle = useMemo(() => werkstattBauteile(ergebnis.zonen, { storeyHeight: store.storeyHeight, geschosse: store.geschosse }), [ergebnis.zonen, store.storeyHeight, store.geschosse]); // 107-02: wall height per storey with a storey table
@@ -682,8 +705,104 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
   const anordnungZuruecksetzen = () => setCfg({ anordnung: {}, grenzenPositionen: {} });
   const hatManuell = Object.keys(cfg.anordnung || {}).length > 0 || Object.keys(cfg.grenzenPositionen || {}).length > 0;
   const toMetersRef = useRef(null); // the overlay's converter, set on every render
-  const { startDrag } = useSvgDrag({
+
+  // --- 115-12 (D-115-47): rooms selected, sized and moved in the storey plan -------------------
+  // Selection = key "<level>|<zone name>" (survives every regeneration). The geometry is pure (raumBearbeiten.js);
+  // a drag only moves a PREVIEW, the layer is written once at the end (the tessellation re-reads raumHand and the plan
+  // redraws from data). Snap switches are the shared ones of the drawing surfaces (object snap, grid); Alt = free.
+  const fang = useFangEinstellungen();
+  const [raumWahl, setRaumWahl] = useState(/** @type {string|null} */ (null));
+  const [raumVorschau, setRaumVorschau] = useState(/** @type {{key: string, rechteck: {a0: number, a1: number, c0: number, c1: number}, fang: {a: number|null, c: number|null}}|null} */ (null));
+  const raumVorschauRef = useRef(/** @type {any} */ (null)); // the drag end reads the last preview before React re-renders
+  const [raumMeldung, setRaumMeldung] = useState(/** @type {string|null} */ (null));
+  const rawMetersRef = useRef(/** @type {any} */ (null)); // overlay converter without the 0,25 m grid
+  const pxJeMRef = useRef(40); // screen px per metre of the plan (overlay), for the capture distance
+  const raumElRef = useRef(/** @type {any} */ (null));
+  const raumFokusWunsch = useRef(false); // focus the room after a selection by pointer (arrow keys work at once)
+  const letzterTipp = useRef({ key: "", t: 0 });
+  const raumGewaehlt = useMemo(() => {
+    if (!raumWahl) return null;
+    const zone = ergebnis.zonen.find((z) => z.we && (z.level ?? 0) === lvl && raumHandSchluessel(z.level ?? 0, z.name) === raumWahl);
+    if (!zone) return null;
+    const geo = istBearbeitbar(zone) ? raumGeometrie(zone) : null;
+    return { key: raumWahl, zone, geo, umgebung: geo ? raumUmgebung(ergebnis.zonen, zone) : null, min: geo ? minMasse(zone) : null, masse: geo ? raumMasse(zone) : null };
+  }, [raumWahl, ergebnis.zonen, lvl]);
+  /** Rooms of the shown storey for the picker (balconies are not rooms). */
+  const raumListe = useMemo(
+    () => ergebnis.zonen
+      .filter((z) => z.we && (z.level ?? 0) === lvl && z.raumart !== "balkon" && Array.isArray(z.points) && z.points.length >= 3)
+      .map((z) => ({ key: raumHandSchluessel(z.level ?? 0, z.name), label: `${kurzRaumname(z.name)} · ${z.we}` })),
+    [ergebnis.zonen, lvl]
+  );
+  useEffect(() => {
+    if (!raumFokusWunsch.current || !raumGewaehlt) return;
+    raumFokusWunsch.current = false;
+    raumElRef.current?.focus?.({ preventScroll: true });
+  }, [raumGewaehlt]);
+  /** Snap / clamp options of the selected room (capture distance from the plan scale, switches from the shared snap settings). */
+  const raumOptionen = (extra = {}) => ({
+    grenzen: raumGewaehlt?.umgebung?.grenzen, linien: raumGewaehlt?.umgebung?.linien, min: raumGewaehlt?.min || undefined,
+    raster_m: RAUM_HAND_RASTER_M, fang_m: Math.min(RAUM_HAND_FANG_M, RAUM_FANG_PX / Math.max(1, pxJeMRef.current)),
+    kantenfang: fang.objektfang, raster: fang.raster, ...extra,
+  });
+  /** The ONE write path of a hand room: entry set, or removed when the rectangle is the rule rectangle again. */
+  const raumSchreiben = (key, rechteck, regel) => setCfg({ raumHand: raumHandSetzen(cfg.raumHand, key, eintragAus(rechteck, regel)) });
+  const raumZuruecksetzen = () => {
+    if (raumWahl) setCfg({ raumHand: raumHandSetzen(cfg.raumHand, raumWahl, null) });
+    setRaumMeldung(null);
+  };
+  const raumWaehlen = (key, mitFokus = false) => {
+    setRaumWahl(key);
+    setRaumMeldung(null);
+    raumFokusWunsch.current = !!key && mitFokus;
+  };
+  /** Typed width / depth in m ("Breite" = the sheet-horizontal side, mapped to the room's own axes). */
+  const raumMasseTippen = ({ breite_m, tiefe_m }) => {
+    const g = raumGewaehlt;
+    if (!g?.geo || !g.masse) return;
+    const breiteIstU = g.masse.breiteAchse === "u";
+    const r = masseSetzen(g.geo.rechteck, { u_m: breiteIstU ? breite_m : tiefe_m, v_m: breiteIstU ? tiefe_m : breite_m }, raumOptionen());
+    setRaumMeldung(r.geklemmt.u || r.geklemmt.v ? t("Maß angepasst: Mindestmaß 1,20 m (bzw. Türbreite) und Wohnungsumriss begrenzen den Raum.") : null);
+    raumSchreiben(g.key, r.rechteck, g.geo.regel);
+  };
+  /** One grid step on the sheet (arrow key or step button): dx / dz ∈ {−1, 0, 1}, z down. */
+  const raumSchritt = (dx, dz) => {
+    const g = raumGewaehlt;
+    if (!g?.geo) return;
+    const r = verschieben(g.geo.rechteck, rahmenSchritt(g.geo.rahmen, { x: dx, z: dz }, RAUM_HAND_RASTER_M), raumOptionen({ alt: true }));
+    setRaumMeldung(null);
+    raumSchreiben(g.key, r.rechteck, g.geo.regel);
+  };
+  /** @param {string} key @returns {boolean} second tap on the same room within DOPPELTIPP_MS */
+  const doppelTipp = (key) => {
+    const jetzt = Date.now();
+    const doppel = letzterTipp.current.key === key && jetzt - letzterTipp.current.t < DOPPELTIPP_MS;
+    letzterTipp.current = doppel ? { key: "", t: 0 } : { key, t: jetzt };
+    return doppel;
+  };
+
+  const { startDrag, cancelDrag, isDragging } = useSvgDrag({
+    // 115-12: live preview of a room drag (handle = resize, body = move); nothing is written before the release.
+    onDrag: (d, e, { moved }) => {
+      if (d.kind !== "raum" || !moved || !rawMetersRef.current) return;
+      const p = rawMetersRef.current(e);
+      if (!p) return;
+      const dx = p.x - d.start.x, dz = p.z - d.start.z;
+      const delta = { da: dx * d.rahmen.u.x + dz * d.rahmen.u.z, dc: dx * d.rahmen.v.x + dz * d.rahmen.v.z };
+      const o = { ...d.optionen, alt: e.altKey === true };
+      const r = d.seiten ? groesseAendern(d.rechteck, d.seiten, delta, o) : verschieben(d.rechteck, delta, o);
+      const v = { key: d.key, rechteck: r.rechteck, fang: r.fang };
+      raumVorschauRef.current = v;
+      setRaumVorschau(v);
+    },
     onDragEnd: (d, e, { cancelled }) => {
+      if (d.kind === "raum") {
+        const v = raumVorschauRef.current;
+        raumVorschauRef.current = null;
+        setRaumVorschau(null);
+        if (!cancelled && v && v.key === d.key) { setRaumMeldung(null); raumSchreiben(d.key, v.rechteck, d.regel); }
+        return;
+      }
       if (cancelled || !toMetersRef.current) return;
       const p = toMetersRef.current(e);
       if (!p) return;
@@ -696,8 +815,16 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
       }
     },
     onTap: (d) => {
-      if (d.kind === "we") fokusOeffnen(d.we);
-      else if (d.kind === "grenze") {
+      // 115-12: a tap selects the ROOM (it used to open the unit); the second tap on the same room opens the unit's
+      // focus view, as does the button in the room info.
+      if (d.kind === "raum") {
+        raumVorschauRef.current = null;
+        setRaumVorschau(null);
+        if (!d.seiten && doppelTipp(d.key)) fokusOeffnen(d.we);
+      } else if (d.kind === "we") {
+        if (doppelTipp(d.key)) fokusOeffnen(d.we);
+        else raumWaehlen(d.key, true);
+      } else if (d.kind === "grenze") {
         if (d.grenze.verschoben) grenzeFreigeben(d.grenze.id);
         else toggleSperre(d.grenze.id);
       }
@@ -722,6 +849,32 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
     setFokusWe(we);
   };
   const fokusSchliessen = () => setFokusWe(null);
+  // 115-12: keys of the selected room (the room body has the focus): arrow keys = one grid step, Esc = cancel the
+  // running drag or drop the selection. Other keys pass (Tab leaves the plan as usual).
+  const raumTaste = (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isDragging()) cancelDrag(); else raumWaehlen(null);
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const richtung = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (!richtung) return;
+    e.preventDefault(); // no page scroll while a room is nudged
+    e.stopPropagation();
+    raumSchritt(richtung[0], richtung[1]);
+  };
+  /** Pointer down on the selected room: body (seiten = null → move) or a handle (seiten → resize). */
+  const raumZugStart = (e, seiten) => {
+    const g = raumGewaehlt;
+    if (e.button !== 0 || !g?.geo || !rawMetersRef.current) return;
+    const start = rawMetersRef.current(e);
+    if (!start) return;
+    e.stopPropagation(); // left button is ours, the plan must not pan (same rule as the unit drag)
+    raumElRef.current?.focus?.({ preventScroll: true });
+    startDrag(e, { kind: "raum", key: g.key, we: g.zone.we, seiten, start, rechteck: g.geo.rechteck, rahmen: g.geo.rahmen, regel: g.geo.regel, optionen: raumOptionen() });
+  };
   // 75-05 (MS-05): Deep-Link ?we=<key> aus dem Massing-Studio (Doppelklick auf ein WE-Label) öffnet
   // den Fokus dieser WE. Der Parameter wird danach in EINEM setSearchParams entfernt (Stolperstein
   // 20.09.: zwei Aufrufe im selben Render überschreiben sich). Unbekannte WE → Klartext, kein Fallback.
@@ -754,6 +907,24 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
     // verfügbare Variante, begründet im Plan 61-05 Task 3).
     window.dispatchEvent(new CustomEvent("werkstatt:goto-innenausbau"));
   };
+
+  // 115-12: figures of the selected room for the info panel (live while a handle is dragged).
+  const raumInfo = raumGewaehlt ? (() => {
+    const { key, zone, geo, masse } = raumGewaehlt;
+    const vor = geo && raumVorschau && raumVorschau.key === key ? raumVorschau.rechteck : null;
+    let breite = masse?.breite_m, tiefe = masse?.tiefe_m;
+    if (vor && masse) {
+      const lu = vor.a1 - vor.a0, lv = vor.c1 - vor.c0;
+      breite = masse.breiteAchse === "u" ? lu : lv;
+      tiefe = masse.breiteAchse === "u" ? lv : lu;
+    }
+    return {
+      key, name: kurzRaumname(zone.name), we: String(zone.we), art: RAUM_ARTEN.find((a) => a.id === zone.art)?.label,
+      editierbar: !!geo && cfg.angewendet, breite_m: breite, tiefe_m: tiefe,
+      flaeche_m2: geo && breite != null && tiefe != null ? breite * tiefe : num(zone.flaeche_m2, polygonAreaM(zone.points)),
+      hand: !!zone.hand || !!cfg.raumHand?.[key], regelBreite_m: masse?.regelBreite_m, regelTiefe_m: masse?.regelTiefe_m,
+    };
+  })() : null;
 
   return (
     <div className="space-y-4">
@@ -1390,10 +1561,14 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
-                  {t("Grundriss")} ({lvl === 0 ? t("EG") : `${lvl}. ${t("OG")}`}) — {t("Klick auf eine WE öffnet die Fokusansicht")}
+                  {t("Grundriss")} ({lvl === 0 ? t("EG") : `${lvl}. ${t("OG")}`}) — {t("Klick wählt einen Raum · Doppelklick öffnet die Wohnung")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
+                {/* 115-12 (D-115-06): plan left, info of the selected room right — the column is always there, so the
+                    plan keeps its size when a room is selected (D-115-41); below xl the info sits under the plan. */}
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_15rem]">
+                <div className="min-w-0">
                 <BimPlan2D
                   model={plan.model}
                   mode="grundriss"
@@ -1409,8 +1584,10 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                   unit={plan.unit}
                   height={planHoehe}
                   fuellen
-                  overlay={({ X, Z, SCALE, level: overlayLevel, toMeters, px: pxOv }) => {
+                  overlay={({ X, Z, SCALE, level: overlayLevel, toMeters, rawMeters, px: pxOv, pxJeM: pxJeMOv, sicht }) => {
                     toMetersRef.current = toMeters;
+                    rawMetersRef.current = rawMeters; // 115-12: room drags work on the raw point (own snap chain)
+                    if (pxJeMOv > 0) pxJeMRef.current = pxJeMOv;
                     const beschriftungen = zones.filter((z) => z.we && (z.level ?? 0) === overlayLevel);
                     const grenzen = grenzenImLevel.filter((g) => g.level === overlayLevel);
                     // 75-07: Wandstärken als Darstellung (D-P75-06) — Strichstärke in
@@ -1433,8 +1610,29 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                     // 75-17: lift shafts with the usual plan symbol (diagonal cross) and a label.
                     const aufzuege = ergebnis.zonen.filter((z) => z.raumart === "aufzug" && z.level === overlayLevel && Array.isArray(z.points) && z.points.length >= 3);
                     const bildPx = (n) => (pxOv ? pxOv(n) : n); // screen px → viewBox units
+                    // 115-12: the selected room (live preview while dragging), its snap lines and the hand markers.
+                    const gew = raumGewaehlt && (raumGewaehlt.zone.level ?? 0) === overlayLevel ? raumGewaehlt : null;
+                    const vorschau = gew && raumVorschau && raumVorschau.key === gew.key ? raumVorschau : null;
+                    const gewPunkte = gew ? (vorschau && gew.geo ? punkteAus(gew.geo.rahmen, vorschau.rechteck) : gew.zone.points) : null;
+                    const gewRechteck = gew?.geo ? (vorschau ? vorschau.rechteck : gew.geo.rechteck) : null;
+                    /** @type {Array<[{x: number, z: number}, {x: number, z: number}]>} */
+                    const fangLinien = [];
+                    if (gew?.geo && gew.umgebung && vorschau) {
+                      const { o, u, v } = gew.geo.rahmen, gr = gew.umgebung.grenzen;
+                      const P = (a, c) => ({ x: o.x + u.x * a + v.x * c, z: o.z + u.z * a + v.z * c });
+                      if (vorschau.fang.a !== null) fangLinien.push([P(vorschau.fang.a, gr.c0), P(vorschau.fang.a, gr.c1)]);
+                      if (vorschau.fang.c !== null) fangLinien.push([P(gr.a0, vorschau.fang.c), P(gr.a1, vorschau.fang.c)]);
+                    }
+                    let gewMass = "";
+                    if (gew?.masse && gewRechteck) {
+                      const lu = gewRechteck.a1 - gewRechteck.a0, lv = gewRechteck.c1 - gewRechteck.c0;
+                      gewMass = `${de2(gew.masse.breiteAchse === "u" ? lu : lv)} × ${de2(gew.masse.breiteAchse === "u" ? lv : lu)} m`;
+                    }
+                    const handRaeume = ergebnis.zonen.filter((z) => z.hand && (z.level ?? 0) === overlayLevel && Array.isArray(z.points) && z.points.length >= 3);
                     return (
                       <g>
+                        {/* 115-12: a click beside the rooms drops the selection (the rect lies under every overlay element and does not stop the event, so the plan's own pan / zoom is untouched) */}
+                        {gew && sicht && <rect x={sicht.x} y={sicht.y} width={sicht.w} height={sicht.h} fill="transparent" onClick={() => raumWaehlen(null)} data-testid="wt-raum-abwahl" />}
                         <defs>
                           <pattern id="wt-balkon-schraffur" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
                             <line x1="0" y1="0" x2="0" y2="6" stroke="#0369a1" strokeWidth="0.6" />
@@ -1549,7 +1747,8 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                                 // stop it here or the plan pans instead of the unit moving.
                                 if (e.button !== 0) return;
                                 e.stopPropagation();
-                                startDrag(e, { kind: "we", we: z.we });
+                                // 115-12: the payload carries the room key — a tap selects this room, a drag still swaps the unit
+                                startDrag(e, { kind: "we", we: z.we, key: raumHandSchluessel(z.level ?? 0, z.name) });
                               }}
                             />
                           );
@@ -1604,15 +1803,53 @@ export default function WohnungsWerkstatt({ moeblierung, moebelEigene, onMoeblie
                             </g>
                           );
                         })}
+                        {/* 115-12: hand markers — a small ink square in the first corner of every room sized / moved by hand
+                            (form + legend word below the plan, no colour). */}
+                        {handRaeume.map((z) => {
+                          const cx = z.points.reduce((m, q) => m + X(q.x), 0) / z.points.length, cy = z.points.reduce((m, q) => m + Z(q.z), 0) / z.points.length;
+                          const ex = X(z.points[0].x), ey = Z(z.points[0].z), l = Math.hypot(cx - ex, cy - ey) || 1;
+                          const m = bildPx(5), ab = bildPx(9);
+                          return <rect key={`hand-${z.name}`} x={ex + ((cx - ex) / l) * ab - m / 2} y={ey + ((cy - ey) / l) * ab - m / 2} width={m} height={m}
+                            fill={PLAN_TINTE} pointerEvents="none" data-testid="wt-raum-handmarke" data-raum={z.name} />;
+                        })}
+                        {gew && gewPunkte && (
+                          <RaumGriffe
+                            punkte={gewPunkte} X={X} Z={Z} px={bildPx} editierbar={!!gew.geo && cfg.angewendet}
+                            regelPunkte={gew.geo && (gew.zone.hand || vorschau) ? punkteAus(gew.geo.rahmen, { a0: 0, a1: gew.geo.regel.u_m, c0: 0, c1: gew.geo.regel.v_m }) : null}
+                            fangLinien={fangLinien} massText={gewMass}
+                            name={`${t("Raum")} ${kurzRaumname(gew.zone.name)}, ${gew.zone.we}${gewMass ? `, ${gewMass}` : ""}${gew.geo ? ` — ${t("Pfeiltasten verschieben, Esc hebt die Auswahl auf")}` : ""}`}
+                            griffTitel={t("Ziehen ändert die Größe")}
+                            onKoerperDown={(e) => raumZugStart(e, null)} onGriffDown={raumZugStart} onTaste={raumTaste} elRef={raumElRef}
+                          />
+                        )}
                       </g>
                     );
                   }}
                 />
+                </div>
+                <RaumInfo
+                  bereit={cfg.angewendet && raumListe.length > 0}
+                  raeume={cfg.angewendet ? raumListe : []}
+                  raum={raumInfo}
+                  meldung={raumMeldung}
+                  schritt_m={RAUM_HAND_RASTER_M}
+                  maxHoehe={planHoehe}
+                  onWahl={(key) => raumWaehlen(key)}
+                  onMasse={raumMasseTippen}
+                  onSchritt={raumSchritt}
+                  onZuruecksetzen={raumZuruecksetzen}
+                  onWohnungOeffnen={() => raumGewaehlt && fokusOeffnen(raumGewaehlt.zone.we)}
+                />
+                </div>
                 <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
                   <span className="font-semibold text-slate-600">{t("Knautschzonen — hier atmet das Puzzle")}</span>
                   <span><Unlock className="inline w-3 h-3 mr-0.5" />{t("flexibel (Klick sperrt)")}</span>
                   <span><Lock className="inline w-3 h-3 mr-0.5 text-red-600" />{t("gesperrt (bleibt beim nächsten Lauf stehen)")}</span>
                   <span>📌 {t("Grenze ziehen = von Hand setzen · WE auf Nachbar ziehen = tauschen")}</span>
+                  {/* 115-12: legend of the hand marker (form + word) */}
+                  {Object.keys(cfg.raumHand || {}).length > 0 && (
+                    <span data-testid="wt-raum-legende"><span className="mr-1 inline-block h-1.5 w-1.5 bg-foreground align-middle" aria-hidden="true" />{t("von Hand gesetzter Raum (bleibt beim Neu-Erzeugen stehen)")}</span>
+                  )}
                   {grenzenImLevel.length > 0 && <span>{grenzenImLevel.length} {t("Grenzen im Geschoss")}</span>}
                   {hatManuell && (
                     <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={anordnungZuruecksetzen} data-testid="wt-anordnung-reset">

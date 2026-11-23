@@ -7,6 +7,8 @@
 // (auto-save), so each step is also proved against the stored record, not only against the screen.
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -119,6 +121,7 @@ test.describe("106-03 Änderungs-Werkzeuge: Vorschlag, Prüfung, Vorschau, Best�
       const schritt = page.getByTestId("aenderung-schritt").first();
       await expect(schritt).toContainText("F90");
       await expect(schritt).toHaveAttribute("data-herkunft", "text");
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).customWalls.find((w) => w._idx === 1).feuerwiderstand, { timeout: 20000 }).toBe("F90");
       // the origin stays on the stored element (review fix: it survives a reload), and the data sheet panel shows the value
       expect((await gespeichert()).customWalls.find((w) => w._idx === 1).geaendert_durch).toMatchObject({ herkunft: "text" });
@@ -127,6 +130,7 @@ test.describe("106-03 Änderungs-Werkzeuge: Vorschlag, Prüfung, Vorschau, Best�
       const z1 = await befehl(page, "rueckgaengig");
       expect(z1.ok, JSON.stringify(z1)).toBe(true);
       await expect.poll(async () => (await befehl(page, "auswahl-lesen")).result.bauteile[0].steckbrief.feuerwiderstand).toBeNull();
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).customWalls.find((w) => w._idx === 1).feuerwiderstand ?? null, { timeout: 20000 }).toBeNull();
       expect((await gespeichert()).customWalls.find((w) => w._idx === 1).geaendert_durch ?? null, "die Marke geht mit dem Schritt zurück").toBeNull();
       await expect(page.getByTestId("aenderung-schritt").first()).toHaveAttribute("data-zurueckgenommen", "ja");
@@ -150,6 +154,7 @@ test.describe("106-03 Änderungs-Werkzeuge: Vorschlag, Prüfung, Vorschau, Best�
       expect(best.result.herkunft).toBe("sprache");
       await expect.poll(async () => (await modellStand(page)).customWalls.find((w) => w._idx === 1).a.x).toBe(14.5);
       expect((await modellStand(page)).customWalls.find((w) => w._idx === 1).b.x).toBe(26.5);
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).customWalls.find((w) => w._idx === 1).a.x, { timeout: 20000 }).toBe(14.5);
       expect((await vorschauen(page))).toEqual([]);
       const verlauf = (await befehl(page, "vorschlaege")).result.verlauf;
@@ -157,6 +162,7 @@ test.describe("106-03 Änderungs-Werkzeuge: Vorschlag, Prüfung, Vorschau, Best�
       // back with the button of exactly this step
       await page.getByTestId("aenderung-schritt").filter({ hasText: "0,5 m" }).getByTestId("aenderung-zurueck").click();
       await expect.poll(async () => (await modellStand(page)).customWalls.find((w) => w._idx === 1).a.x).toBe(14);
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).customWalls.find((w) => w._idx === 1).a.x, { timeout: 20000 }).toBe(14);
 
       // ============================================================ 3. split wall 3 at its middle: new GUIDs, openings assigned
@@ -185,6 +191,7 @@ test.describe("106-03 Änderungs-Werkzeuge: Vorschlag, Prüfung, Vorschau, Best�
       const nachModell = (await befehl(page, "modell", { klasse: "IfcWall" })).result;
       expect(nachModell.bauteile.some((b) => b.guid === GC), "die alte GUID gibt es nicht mehr").toBe(false);
       expect(nachModell.bauteile.some((b) => b.guid === teilA.guid) && nachModell.bauteile.some((b) => b.guid === teilB.guid)).toBe(true);
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).customWalls.length, { timeout: 20000 }).toBe(4);
       // undo the split: one wall again, the openings back where they were
       expect((await befehl(page, "rueckgaengig")).ok).toBe(true);
@@ -192,6 +199,7 @@ test.describe("106-03 Änderungs-Werkzeuge: Vorschlag, Prüfung, Vorschau, Best�
       const zurueck = await modellStand(page);
       expect(zurueck.customWalls.find((w) => w._idx === 3).b.x).toBe(26);
       expect(zurueck.customWindows.find((o) => o._idx === 5)).toMatchObject({ wallIdx: 3, u: 9 });
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).customWalls.length, { timeout: 20000 }).toBe(3);
 
       // ============================================================ 4. blocked: demolishing a load-bearing wall without a note

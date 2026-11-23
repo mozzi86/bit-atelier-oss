@@ -2,14 +2,16 @@
 // the WinAnsi/CP1252 encoder and the DIN 5008 layout model. No jsPDF here —
 // briefPdf.js (the drawing) only runs in the browser (headless proof b-03).
 //
-// In:  packages/nova-core/src/lib/brief/{winAnsi,briefLayout,briefkopf}.js,
+// In:  packages/nova-core/src/lib/brief/{winAnsi,briefLayout}.js,
+//      (letterhead lines since wave 1: @core/lib/briefkopf.js),
 //      src/lib/accounting/mahnPdf.js#mahnBrief. Out: assertions only.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ersetzeNichtWinAnsi, istWinAnsi, kodiereCp1252 } from "@core/lib/brief/winAnsi.js";
 import { briefLayout, DIN5008 } from "@core/lib/brief/briefLayout.js";
-import { briefkopfAus, briefkopfZeilen } from "@core/lib/brief/briefkopf.js";
+import { normalisiereBriefkopf } from "@core/lib/briefkopf.js";
+import { briefkopfZeilen } from "@core/lib/briefkopfBrief.js";
 import { mahnBrief } from "@/lib/accounting/mahnPdf.js";
 import { formatEuro } from "@/lib/accounting/geld.js";
 
@@ -76,11 +78,11 @@ test("briefLayout: die Beitrags-Tabelle bleibt bei der letzten Seite, solange si
   assert.equal(l.seiten[0].tabelle.zeilen.length, 2);
 });
 
-test("briefkopfAus/briefkopfZeilen: Standardwerte ohne gespeichertes Setting, eigene Werte übernommen", () => {
-  assert.equal(briefkopfAus(null).office, "Architekturbüro");
+test("normalisiereBriefkopf/briefkopfZeilen: Standardwerte ohne gespeichertes Setting, eigene Werte übernommen", () => {
+  assert.equal(normalisiereBriefkopf(null).office, "Architekturbüro");
   assert.deepEqual(briefkopfZeilen(null), ["Architekturbüro"]);
-  const eigen = { office: "Testbüro", address: "Musterstraße 1\n90402 Nürnberg" };
-  assert.deepEqual(briefkopfZeilen(eigen), ["Testbüro", "Musterstraße 1", "90402 Nürnberg"]);
+  const eigen = { office: "Testbüro", address: "Musterstraße 1\n12345 Musterstadt" };
+  assert.deepEqual(briefkopfZeilen(eigen), ["Testbüro", "Musterstraße 1", "12345 Musterstadt"]);
 });
 
 test("mahnBrief: Eingabe für briefLayout aus mahnTextFelder-Feldern", () => {

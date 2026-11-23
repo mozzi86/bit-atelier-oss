@@ -113,7 +113,7 @@ export async function speichereAbwesenheit(obj, { api } = {}) {
       const { id, ...rest } = obj;
       return await c.update(id, rest);
     }
-    return await c.create(obj);
+    return await c.create(obj, { kennungUebernehmen: true }); // B-111-02-01: keep the record's own id
   } catch (fehler) {
     throw new Error(`Abwesenheit konnte nicht gespeichert werden: ${text(fehler)}`);
   }
@@ -161,7 +161,7 @@ export async function saeBeispielAbwesenheiten(liste, { api } = {}) {
   let n = 0;
   for (const a of liste || []) {
     if (vorhanden.has(a.id)) continue;
-    await c.create(a);
+    await c.create(a, { kennungUebernehmen: true }); // B-111-02-01: sample ids decide what exists already
     n += 1;
   }
   return n;

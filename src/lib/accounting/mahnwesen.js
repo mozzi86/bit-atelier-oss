@@ -17,7 +17,7 @@
 //      table model. No entity access, no clock reads.
 
 import { parseTag, plusTage, tageZwischen } from "@core/lib/kalender/datum.js";
-import { briefkopfZeilen } from "@core/lib/brief/briefkopf.js";
+import { briefkopfFuerBrief, briefkopfZeilen } from "@core/lib/briefkopfBrief.js";
 import { GESETZ, BUERO_STANDARD, alsRegeln, basiszinsAm, saetzeZum, veralteteWerte } from "./einstellungen.js";
 import { faelligAm, rechnungsStatus, offenerBetragCent } from "./grundlagen.js";
 import { euroZuCent, centZuEuro, rundeCent, formatEuro } from "./geld.js";
@@ -288,12 +288,28 @@ function tagFuerBrief(iso) {
 }
 
 /**
+ * Sender lines of a dunning letter. Wave 1 (B-81-05/M-2, W1-BUERO-F2): the office
+ * name is the one the invoice of the same claim names as its seller (letterhead >
+ * legacy Setting{key:"buchhaltung"}.value.buero.name), through the same function the
+ * correspondence letters use (@core/lib/briefkopf.js briefkopfFuerBrief). With neither
+ * source set the placeholder stays (a letter needs a sender line).
+ * @param {Record<string, any>|null|undefined} briefkopf raw or normalised letterhead
+ * @param {Record<string, any>|null|undefined} einst accounting settings
+ * @returns {string[]} sender lines
+ */
+function absenderZeilen(briefkopf, einst) {
+  return briefkopfZeilen(briefkopfFuerBrief(briefkopf, einst?.buero?.name));
+}
+
+/**
  * Betreff/Anrede/text paragraphs and the amount table of one dunning letter,
  * ready for mahnPdf.mahnBrief(). Level 1 is a plain reminder (no amount
  * beyond the invoice itself has accrued yet by convention — interest and the
  * flat fee, once they exist, are still named so the recipient is not
  * surprised later); levels 2 and 3 name the current total. Level 3 announces
  * the judicial dunning procedure (Mahnbescheid), no further notice promised.
+ * `schlussAb` (phase 115, user finding 15.11.2026) names where the closing part of `absaetze` starts — the deadline
+ * sentence and the greeting: the letter prints the amount table BEFORE it (mahnPdf.mahnBrief), no longer after the greeting.
  * @param {Record<string, any>} rechnung Ausgangsrechnung
  * @param {number} stufe 1 | 2 | 3
  * @param {{
@@ -302,7 +318,7 @@ function tagFuerBrief(iso) {
  * }} ctx heute: letter date; frist: overridable new deadline (default: faelligeMahnstufe's)
  * @param {(schluessel: string) => string} t
  * @returns {{
- *   betreff: string, anrede: string, absaetze: string[],
+ *   betreff: string, anrede: string, absaetze: string[], schlussAb: number,
  *   tabelle: {kopf: string[], zeilen: string[][]},
  *   absenderZeilen: string[], empfaengerZeilen: string[], datum: string,
  *   offenCent: number, zinsenCent: number, pauschaleCent: number, summeCent: number,
@@ -359,6 +375,8 @@ export function mahnTextFelder(rechnung, stufe, ctx, t) {
         .replace("{frist}", fristText),
     ];
   }
+  // 115: the last sentence of every level sets the deadline — it and the greeting follow the amount table.
+  const schlussAb = absaetze.length - 1;
   absaetze.push(t("Mit freundlichen Grüßen"));
 
   /** @type {string[][]} */
@@ -374,8 +392,9 @@ export function mahnTextFelder(rechnung, stufe, ctx, t) {
     betreff,
     anrede,
     absaetze,
+    schlussAb,
     tabelle: { kopf: [], zeilen: tabellenZeilen },
-    absenderZeilen: briefkopfZeilen(ctx.briefkopf),
+    absenderZeilen: absenderZeilen(ctx.briefkopf, ctx.einst),
     empfaengerZeilen,
     datum: tagFuerBrief(ctx.heute),
     offenCent,

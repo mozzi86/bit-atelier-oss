@@ -59,7 +59,6 @@ export const EN = {
   "Es sind bereits Vorkommen erfasst — nur deaktivieren.": "Occurrences are already recorded — deactivate only.",
   "Fahrzeug": "Vehicle",
   "Fahrzeug (optional)": "Vehicle (optional)",
-  "Gespeichert": "Saved",
   "Halbjährlich": "Half-yearly",
   "Herunterladen": "Download",
   "Inaktiv": "Inactive",

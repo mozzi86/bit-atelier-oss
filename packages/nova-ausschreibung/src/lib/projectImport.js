@@ -279,10 +279,13 @@ export function stapeln(liste, groesse = STAPEL) {
  * @param {{bulkCreate: (entity, records) => Promise<any>,
  *          createOne: (entity, record) => Promise<any>,
  *          putBlob: (id, json) => Promise<any>,
+ *          vorhandeneIds?: (entity: string) => Promise<Iterable<string>>,
  *          onProgress?: (text: string, anteil: number) => void}} io
+ *   `vorhandeneIds` (optional): ids already stored in a catalog entity; such catalog rows are skipped (Review R1).
  * @param {{bestaetigt?: boolean, projektId?: string|null}} [opt]
- * @returns {Promise<{ok: boolean, abgebrochen: boolean, geschrieben: object,
+ * @returns {Promise<{ok: boolean, abgebrochen: boolean, geschrieben: object, uebersprungen?: object,
  *                    fehler: string[], projektId: string|null, bericht: object}>}
+ *   `geschrieben` / `uebersprungen`: record counts per entity (written / catalog rows skipped because the id existed).
  */
 export async function applyBundle(bundle, io, opt = {}) {
   const bericht = validateBundle(bundle);
@@ -303,6 +306,8 @@ export async function applyBundle(bundle, io, opt = {}) {
 
   const fortschritt = typeof io.onProgress === "function" ? io.onProgress : () => {};
   const geschrieben = {};
+  /** Review R1: catalog rows not written because their id was already stored, per entity (count). */
+  const uebersprungen = {};
   const fehler = [];
   let projektId = opt.projektId ?? null;
   let schritt = 0;
@@ -317,8 +322,14 @@ export async function applyBundle(bundle, io, opt = {}) {
     // 1. Kataloge (büroweit, ohne project_id) — alles andere verweist darauf.
     melde("Kataloge…");
     for (const [entity, zeilen] of Object.entries(bundle.kataloge)) {
+      // Review R1: catalogs are office-wide, so a second bundle from the same source repeats their ids. Rows whose id is
+      // already stored are skipped (kept as they are, never overwritten) instead of refusing the whole import with 409.
+      const vorhanden = typeof io.vorhandeneIds === "function" ? new Set(await io.vorhandeneIds(entity)) : new Set();
+      const neu = arr(zeilen).filter((z) => !(z && typeof z.id === "string" && vorhanden.has(z.id)));
+      const weg = arr(zeilen).length - neu.length;
+      if (weg) uebersprungen[entity] = (uebersprungen[entity] || 0) + weg;
       let n = 0;
-      for (const stapel of stapeln(arr(zeilen))) {
+      for (const stapel of stapeln(neu)) {
         await io.bulkCreate(entity, stapel);
         n += stapel.length;
       }
@@ -397,12 +408,12 @@ export async function applyBundle(bundle, io, opt = {}) {
     melde("Modell-Lücken…");
     await schreibe("luecken", mitProjekt(bundle.luecken));
 
-    return { ok: true, abgebrochen: false, geschrieben, fehler, projektId, bericht };
+    return { ok: true, abgebrochen: false, geschrieben, uebersprungen, fehler, projektId, bericht };
   } catch (err) {
     // ABBRUCH MIT BERICHT statt stillem Teilzustand: der Aufrufer erfährt genau,
     // was schon in der DB steht, damit er es gezielt entfernen kann.
     fehler.push(String(err?.message || err));
-    return { ok: false, abgebrochen: true, geschrieben, fehler, projektId, bericht };
+    return { ok: false, abgebrochen: true, geschrieben, uebersprungen, fehler, projektId, bericht };
   }
 
   async function schreibe(abschnitt, rows) {
@@ -438,8 +449,17 @@ export function httpIo(basis = "/api", { onProgress = null } = {}) {
   return {
     // Der Bulk-Endpunkt braucht das Suffix `/bulk` — ohne trifft man die normale
     // Create-Route und schreibt EINEN Satz statt 500.
-    bulkCreate: (entity, records) => senden(`/entities/${entity}/bulk`, "POST", { records }),
+    // B-111-02-01: bundle ids are references (filter_ref → AvaFilter id), so the bulk path keeps them explicitly; a second
+    // import of the same bundle into the same database is refused (409, abort with report) instead of doubling ids.
+    bulkCreate: (entity, records) => senden(`/entities/${entity}/bulk?kennung=uebernehmen`, "POST", { records }),
     createOne: (entity, record) => senden(`/entities/${entity}`, "POST", record),
+    // Review R1: ids already stored in a (catalog) entity - the import skips those catalog rows instead of a 409.
+    vorhandeneIds: async (entity) => {
+      const res = await fetch(`${basis}/entities/${entity}`);
+      if (!res.ok) throw new Error(`GET /entities/${entity} → HTTP ${res.status}`);
+      const zeilen = await res.json();
+      return (Array.isArray(zeilen) ? zeilen : []).map((z) => z?.id).filter((id) => typeof id === "string");
+    },
     // 57-02 (key_link projectImport.js:437): Blobs laufen über bitApi.blobs —
     // EINE Datenschicht statt eines eigenen /blobs-fetch. Im Express-Weg ist das
     // derselbe PUT /api/blobs/:id (bitApi nutzt API_BASE=/api), im Cloud-Weg

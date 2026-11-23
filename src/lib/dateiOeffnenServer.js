@@ -6,6 +6,7 @@
 // Out: two adapters with the shape DateiOeffnenEmpfang.jsx / DateiQuelleKarte.jsx expect —
 //      importAdapter (load / replace / copy / cancel) and quelleAdapter (linked file / save back).
 
+import { exportEinschraenkungKoerper } from "@core/api/exportSicht.js";
 import { anzahlenVon, kopieOptionen } from "./dateiOeffnen.js";
 
 /**
@@ -72,7 +73,7 @@ export function importAdapter(token) {
  * Linked-source adapter of the local edition.
  * @returns {{
  *   quelle: () => Promise<{name: string, pfad: string, importiertAm?: string, gespeichertAm?: string|null, vorhanden: boolean}|null>,
- *   zurueck: (entscheidung?: "ueberschreiben"|"kopie") => Promise<{ok?: boolean, pfad?: string, kopie?: boolean, konflikt?: "geaendert"|"fehlt"}>,
+ *   zurueck: (entscheidung?: "ueberschreiben"|"kopie") => Promise<{ok?: boolean, pfad?: string, kopie?: boolean, konflikt?: "geaendert"|"fehlt"|"eingeschraenkt"}>,
  * }}
  */
 export function quelleAdapter() {
@@ -83,7 +84,10 @@ export function quelleAdapter() {
     },
     async zurueck(entscheidung) {
       // A changed or missing file is an ordinary answer ({ok: false, konflikt}), not an HTTP error.
-      return json(await senden("/api/datei/zurueckschreiben", "POST", entscheidung ? { entscheidung } : {}));
+      // Wave 1 (BEFUNDE-82 H-2, W1-BUERO-F1): the save-back follows the active role's restriction too
+      // (projects and office areas); before the access is loaded this throws (ExportGesperrtFehler).
+      const ansicht = await exportEinschraenkungKoerper();
+      return json(await senden("/api/datei/zurueckschreiben", "POST", { ...(entscheidung ? { entscheidung } : {}), ...ansicht }));
     },
   };
 }

@@ -6,6 +6,8 @@
 // state with the way to a building; no built-in letterhead subtitle.
 import { seitenWurzel } from "@core/lib/utils";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useTabParam } from "@core/lib/useTabParam";
+
 import { Link } from "react-router-dom";
 import { bitApi } from "@core/api/bitApi";
 import { motion } from "framer-motion";
@@ -47,6 +49,9 @@ const REPORT_TYPES = [
 // bitApi.entities is typed as {} for tsc (entities are created at runtime).
 const entities = () => /** @type {any} */ (bitApi.entities);
 
+/** Tab keys of the page (the TabsTrigger values) — module level, as useTabParam requires. */
+const BERICHTE_REITER = Object.freeze(["report", "drawings", "docs", "protokolle"]);
+
 export default function Reports() {
   const { projectId, project } = useProject();
   // 82-05: protocol as a letter with distribution list — only with the correspondence right
@@ -62,7 +67,8 @@ export default function Reports() {
   const [includeDrawings, setIncludeDrawings] = useState(true);
   const [period, setPeriod] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState("report");
+  // 105-28: the tab lives in ?tab= so the palette can jump to minutes (?tab=protokolle) and documents (?tab=docs).
+  const [tab, setTab] = useTabParam(BERICHTE_REITER, "report");
   const [drawing, setDrawing] = useState("plan");
   // 82-02: only documents the role may see (Document.bereich: personnel, accounting, correspondence, fee PDFs).
   const [rohDocs, setDocs] = useState([]);

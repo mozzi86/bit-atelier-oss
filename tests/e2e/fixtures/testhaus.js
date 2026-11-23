@@ -17,6 +17,10 @@ export const TESTHAUS = {
   storeyHeight: 3,
   unit: "m",
 };
+/** 100-07: fields of the test house project (testhausAnlegen and scripts/e2e-testdaten-reset.mjs create it alike). */
+export const TESTHAUS_PROJEKT = Object.freeze({ name: PROJEKT_NAME, status: "planning", building_area: 500, description: "E2E-Testprojekt (87-01/87-03): 70 × 16 m, 4 Geschosse" });
+/** 100-07: the committed record of the test house (layers included), relative to the repository root. */
+export const TESTHAUS_FIXTURE = "tests/e2e/fixtures/testhaus-record.json";
 /** Where global-setup stores the start-of-run record (layers included). */
 export const SOLL_DATEI = path.resolve("test-results/testhaus-soll.json");
 
@@ -55,11 +59,11 @@ export function footprintAbweichung(a, b) {
  * Idempotent: whatever exists is kept.
  */
 export async function testhausAnlegen(request) {
-  const fixture = JSON.parse(fs.readFileSync(path.resolve("tests/e2e/fixtures/testhaus-record.json"), "utf8"));
+  const fixture = JSON.parse(fs.readFileSync(path.resolve(TESTHAUS_FIXTURE), "utf8"));
   const p = await request.get(`${API}/Project?name=${encodeURIComponent(PROJEKT_NAME)}`);
   let projekt = (p.ok() ? await p.json() : []).find?.((x) => x?.name === PROJEKT_NAME);
   if (!projekt) {
-    const r = await request.post(`${API}/Project`, { data: { name: PROJEKT_NAME, status: "planning", building_area: 500, description: "E2E-Testprojekt (87-01/87-03): 70 × 16 m, 4 Geschosse" } });
+    const r = await request.post(`${API}/Project`, { data: { ...TESTHAUS_PROJEKT } });
     if (!r.ok()) throw new Error(`Testhaus: Projekt anlegen ${r.status()} ${await r.text()}`);
     projekt = await r.json();
     console.log(`[testhaus] Projekt „${PROJEKT_NAME}“ angelegt (${projekt.id})`);

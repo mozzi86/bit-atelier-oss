@@ -74,18 +74,21 @@ export function veralteterStand(gespeichert, body) {
 
 /**
  * 106-09 (part of 105-20): the strict form of the check above. The client names the `updated_date` of the record it
- * built its write on (query `?stand=<ISO>`); when the stored record is newer, somebody else wrote in between and the
+ * built its write on (query `?stand=<ISO>`); when the stored record is another state, somebody else wrote in between and the
  * write must NOT happen - the route answers 409 with the stored record, the client compares both versions and either
  * merges (different fields / elements) or shows the conflict to the person. An unreadable or missing stand says
  * nothing (false), so callers without the query keep the old behaviour (last write wins, hint header).
+ * Review 115-05b part 2 (finding 2): INEQUALITY, not "newer" - a file import ("ersetzen", dateiOeffnenRouter db._reset) or a
+ * restore keeps the OLDER updated_date of its state; a stale tab whose base was a newer state got a 200 before and wrote its whole
+ * element lists over the import (D-115-50). Demo and cloud compare on inequality as well.
  * @param {{updated_date?: string}|null} gespeichert stored record
- * @param {unknown} stand ISO timestamp from the query
- * @returns {boolean} true = the stored record is newer than the client's base
+ * @param {unknown} stand ISO timestamp from the query (the updated_date of the record the client built on, sent back verbatim)
+ * @returns {boolean} true = the stored record is another state than the client's base
  */
 export function standVeraltet(gespeichert, stand) {
   if (typeof stand !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(stand)) return false;
   if (typeof gespeichert?.updated_date !== 'string') return false;
-  return stand < gespeichert.updated_date;
+  return stand !== gespeichert.updated_date;
 }
 
 /** Text of the 409 answer of a strict write on an outdated base (106-09). */
@@ -111,6 +114,50 @@ export function personImBrowser(req) {
   if (seite) return seite === 'same-origin';
   if (!h.origin || !h.host) return false;
   try { return new URL(String(h.origin)).host === String(h.host); } catch { return false; }
+}
+
+/**
+ * B-111-02-01: the query value of the explicit id path of POST /entities/:entity(/bulk) and POST /personal/:entity
+ * (`?kennung=uebernehmen`). Without it the store generates id, created_date and updated_date and ignores the body's values.
+ */
+export const KENNUNG_UEBERNEHMEN = 'uebernehmen';
+
+/**
+ * B-111-02-01: create options of a request - only the id may be taken over from a client, never the dates (they feed the
+ * stand comparison of 106-09).
+ * @param {{query?: Record<string, any>}} req @returns {{kennungUebernehmen: boolean}}
+ */
+export function anlageOptionen(req) {
+  return { kennungUebernehmen: req?.query?.kennung === KENNUNG_UEBERNEHMEN };
+}
+
+/** Entities whose sent-but-ignored id was already reported once (keeps the server log short). */
+const verworfenGemeldet = new Set();
+
+/**
+ * B-111-02-01: notes in the server log (once per entity) that a client sent an id on the generic create path - such a caller
+ * may rely on its own id and then needs the explicit path (?kennung=uebernehmen).
+ * @param {string} entity @param {unknown[]} saetze request records @param {{kennungUebernehmen: boolean}} opt
+ */
+export function verworfeneKennungMelden(entity, saetze, opt) {
+  if (opt.kennungUebernehmen || verworfenGemeldet.has(entity)) return;
+  if (!saetze.some((s) => s && typeof s === 'object' && /** @type {any} */ (s).id != null)) return;
+  verworfenGemeldet.add(entity);
+  console.warn(`[db] ${entity}: mitgeschickte id ignoriert (B-111-02-01) — eigene ids nur mit ?kennung=${KENNUNG_UEBERNEHMEN}`);
+}
+
+/**
+ * Runs a create and answers 409 when the explicit id path finds the id taken (B-111-02-01).
+ * @param {import('express').Response} res @param {() => void} fn @returns {void}
+ */
+export function mitKennungsPruefung(res, fn) {
+  try {
+    fn();
+  } catch (err) {
+    const e = /** @type {any} */ (err);
+    if (e?.name === 'KennungBelegtFehler') { res.status(409).json({ error: e.message, kennung: e.kennung, uebernommen: false }); return; }
+    throw err;
+  }
 }
 
 /** 106-10: refusal of a write by a program on the change log or the command library (D-IM-04: a person releases, never an agent). */
@@ -194,6 +241,67 @@ export function bildFreigabeAusSpeicher(db, pid, o = {}) {
   return { ...f, projekt, einst };
 }
 
+/**
+ * 115-05b (E-3): entities with exactly one record per project (project_id). The generic create refuses a second one (409).
+ * BimModel is not listed: its one write path (useBimModelSync) loads before it creates; [ASSUMED] two tabs creating the first
+ * BimModel of a project at the same moment stay possible there (open point of 115-05b).
+ * 115-05b part 2: the bulk paths (POST/PUT /entities/:entity/bulk) refuse a second record too (zweiterDatensatzProjekte); the
+ * cloud store checks the single create (supabaseDb.js, same list).
+ */
+export const EIN_DATENSATZ_JE_PROJEKT = Object.freeze(['BuildingComplex']);
+
+/** Error text of a refused second create (the client merges, the person does not see it). */
+export const EIN_DATENSATZ_TEXT = 'Für dieses Projekt gibt es diesen Datensatz schon — er wurde nicht doppelt angelegt.';
+
+/**
+ * The newest of several records (largest updated_date, ISO strings compare as text); null for none.
+ * @param {any[]} rows @returns {any|null}
+ */
+export function neuesterDatensatz(rows) {
+  let best = null;
+  for (const r of Array.isArray(rows) ? rows : []) if (r && (!best || String(r.updated_date ?? '') > String(best.updated_date ?? ''))) best = r;
+  return best;
+}
+
+/**
+ * 115-05b part 2 (E-3 on the bulk paths): the projects a bulk write would give a SECOND record of an entity in
+ * EIN_DATENSATZ_JE_PROJEKT - a record that is created (bulk create: every record; bulk upsert: a record whose key matches no
+ * stored record) for a project that already has one, or two created records of one project in the batch. Pure, reads the db only.
+ * @param {{filter: (entity: string, q: Record<string, any>) => any[], list: (entity: string) => any[]}} db
+ * @param {string} entity @param {any[]} records the bulk body
+ * @param {string|null} key upsert key (null = bulk create, every record is created)
+ * @returns {string[]} the refused project ids (empty = the write may go through)
+ */
+export function zweiterDatensatzProjekte(db, entity, records, key) {
+  if (!EIN_DATENSATZ_JE_PROJEKT.includes(entity)) return [];
+  const gespeichert = key ? db.list(entity) : [];
+  /** @type {Set<string>} */ const neu = new Set();
+  /** @type {Set<string>} */ const verweigert = new Set();
+  for (const rec of records) {
+    const pid = rec?.project_id;
+    if (pid == null) continue;
+    const wirdAktualisiert = key != null && rec?.[key] !== undefined && gespeichert.some((r) => r?.[key] === rec[key]);
+    if (wirdAktualisiert) continue;
+    const p = String(pid);
+    if (neu.has(p) || db.filter(entity, { project_id: pid }).length) verweigert.add(p);
+    neu.add(p);
+  }
+  return [...verweigert];
+}
+
+/**
+ * 115-05b part 2: answers 409 when a bulk write would create a second record of a project (zweiterDatensatzProjekte) - the shape
+ * of the single create's refusal, plus `projekte`; nothing of the batch is written.
+ * @param {any} res @param {any} db @param {string} entity @param {string[]} projekte refused project ids
+ * @returns {boolean} true = answered (refused)
+ */
+function zweiterDatensatzAbweisen(res, db, entity, projekte) {
+  if (!projekte.length) return false;
+  const gespeichert = neuesterDatensatz(db.filter(entity, { project_id: projekte[0] }));
+  res.status(409).json({ error: EIN_DATENSATZ_TEXT, konflikt: true, vorhanden: true, projekte, gespeichert });
+  return true;
+}
+
 export function entitiesRouter(db) {
   const r = express.Router();
 
@@ -249,11 +357,17 @@ export function entitiesRouter(db) {
     if (!Array.isArray(records)) {
       return res.status(400).json({ error: 'Body braucht { records: [...] }' });
     }
+    // 115-05b part 2 (E-3): one record per project also here (before anything is changed in the batch)
+    if (zweiterDatensatzAbweisen(res, db, req.params.entity, zweiterDatensatzProjekte(db, req.params.entity, records, null))) return;
     const person = personImBrowser(req), verworfen = /** @type {string[]} */ ([]);
     records.forEach((rec) => projektFelderSchuetzen(req.params.entity, rec, person, verworfen));
-    geschuetztMelden(res, verworfen, person);
-    const angelegt = db.bulkCreate(req.params.entity, records);
-    res.status(201).json({ created: angelegt.length, ids: angelegt.map((r2) => r2.id) });
+    const opt = anlageOptionen(req);
+    verworfeneKennungMelden(req.params.entity, records, opt);
+    mitKennungsPruefung(res, () => {
+      const angelegt = db.bulkCreate(req.params.entity, records, opt);
+      geschuetztMelden(res, verworfen, person);
+      res.status(201).json({ created: angelegt.length, ids: angelegt.map((r2) => r2.id) });
+    });
   });
 
   r.put('/entities/:entity/bulk', (req, res) => {
@@ -261,10 +375,12 @@ export function entitiesRouter(db) {
     if (!Array.isArray(records)) {
       return res.status(400).json({ error: 'Body braucht { records: [...] }' });
     }
+    const key = req.body?.key || 'id';
+    // 115-05b part 2 (E-3): a record this upsert would CREATE must not be a second one of its project
+    if (zweiterDatensatzAbweisen(res, db, req.params.entity, zweiterDatensatzProjekte(db, req.params.entity, records, key))) return;
     const person = personImBrowser(req), verworfen = /** @type {string[]} */ ([]);
     records.forEach((rec) => projektFelderSchuetzen(req.params.entity, rec, person, verworfen));
     geschuetztMelden(res, verworfen, person);
-    const key = req.body?.key || 'id';
     const { updated, created } = db.bulkUpsert(req.params.entity, records, key);
     res.json({ updated, created: created.length, ids: created.map((r2) => r2.id) });
   });
@@ -301,10 +417,21 @@ export function entitiesRouter(db) {
   });
 
   r.post('/entities/:entity', (req, res) => {
+    // 115-05b (E-3): one record per project for these entities - two tabs of a project without one both created one before. A
+    // second create answers like an outdated PUT (409 with the stored record, the newest when old data holds duplicates), so the
+    // client's three-way merge takes it over and writes its own fields on it; nothing is created and nothing deleted.
+    if (EIN_DATENSATZ_JE_PROJEKT.includes(req.params.entity) && req.body?.project_id != null) {
+      const vorhanden = neuesterDatensatz(db.filter(req.params.entity, { project_id: req.body.project_id }));
+      if (vorhanden) return res.status(409).json({ error: EIN_DATENSATZ_TEXT, konflikt: true, vorhanden: true, gespeichert: vorhanden });
+    }
     const person = personImBrowser(req), verworfen = /** @type {string[]} */ ([]);
-    const record = db.create(req.params.entity, projektFelderSchuetzen(req.params.entity, req.body || {}, person, verworfen));
-    geschuetztMelden(res, verworfen, person);
-    res.status(201).json(record);
+    const opt = anlageOptionen(req);
+    verworfeneKennungMelden(req.params.entity, [req.body], opt);
+    mitKennungsPruefung(res, () => {
+      const record = db.create(req.params.entity, projektFelderSchuetzen(req.params.entity, req.body || {}, person, verworfen), opt);
+      geschuetztMelden(res, verworfen, person);
+      res.status(201).json(record);
+    });
   });
 
   r.put('/entities/:entity/:id', (req, res) => {

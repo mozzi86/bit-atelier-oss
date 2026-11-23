@@ -4,6 +4,8 @@
 // Eigenes Projekt mit geschätztem Startquadrat, Aufräumen im finally.
 import { test, expect } from "./fixtures/base.js";
 import { nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 
 const NAME = "E2E Grundstueck 10102";
 
@@ -36,6 +38,7 @@ test("101-02 Grundstück: Schätzung unsichtbar, zeichnen → gezeichnet, dann E
     const cx = k.x + k.width / 2, cy = Math.min(k.y + k.height / 2, (page.viewportSize()?.height ?? 720) - 140);
     for (const [dx, dy] of [[-90, -60], [90, -60], [90, 60], [-90, 60]]) { await page.mouse.click(cx + dx, cy + dy); await page.waitForTimeout(150); }
     await page.getByRole("button", { name: "Polygon schließen" }).click();
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(async () => {
       const r = await (await request.get(`/api/entities/BuildingComplex/${bc}`)).json();
       return `${r.site_parcel?.assumed}|${r.site_parcel?.source}|${r.site_parcel?.points?.length}`;
@@ -51,6 +54,7 @@ test("101-02 Grundstück: Schätzung unsichtbar, zeichnen → gezeichnet, dann E
     await page.mouse.down();
     await page.mouse.move(b.x + b.width / 2 - 30, b.y + b.height / 2 - 20, { steps: 8 });
     await page.mouse.up();
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(async () => JSON.stringify((await (await request.get(`/api/entities/BuildingComplex/${bc}`)).json()).site_parcel.points) !== vorher, { timeout: 20000 }).toBe(true);
   } finally {
     await request.delete(`/api/entities/BuildingComplex/${bc}`);

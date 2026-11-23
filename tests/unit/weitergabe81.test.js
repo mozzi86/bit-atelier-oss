@@ -17,6 +17,11 @@ import { BUCHHALTUNG_ENTITAETEN, SETTING_KEY } from "@/lib/accounting/datenmodel
 import { ZEIT_HONORAR_ENTITAETEN, ZEIT_HONORAR_SETTING_KEY, ZEIT_HONORAR_SETTING_KEYS } from "@/lib/zeitHonorar/entitaeten.js";
 import { PERSONAL_EXPORT_BEREICH } from "@/lib/people/exportBereich.js";
 import { englischePaareAlle } from "./helpers/woerterbuch.mjs";
+import { setzeExportZugriff } from "@core/api/exportSicht.js";
+
+// W1-BUERO-F1: exports are refused until an access is registered; these tests cover the area
+// options themselves, without a rights system ("frei").
+setzeExportZugriff(null);
 
 /** In-memory storage adapter (shape of tests/unit/demoDb.test.js). */
 function speicherAttrappe(start = {}) {

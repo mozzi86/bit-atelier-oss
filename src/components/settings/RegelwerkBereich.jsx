@@ -23,7 +23,8 @@
 
 import React from "react";
 import { Scale } from "lucide-react";
-import { useI18n } from "@core/lib/i18n";
+import { useI18n, englischErgaenzen } from "@core/lib/i18n";
+import { EN as EN_KALENDER_LAENDER } from "@core/lib/i18nTeile/kalender-laender-w1.js";
 import { bitApi } from "@core/api/bitApi";
 import { EINSTELLUNG_EREIGNIS } from "@core/lib/einstellungen.js";
 import { heuteLokal, overridesAus, regelWerteAus, tabellenZeilen } from "@core/lib/regelwerk.js";
@@ -31,6 +32,8 @@ import { gruppeZuruecksetzen, setzeRegel, zuruecksetzen } from "@core/lib/useReg
 import RegelwerkTabelle from "@core/components/regelwerk/RegelwerkTabelle.jsx";
 import { REGELWERKE, regelNachId, sichtbareRegelwerke } from "@/lib/settings/regelwerke.js";
 import { veralteteWerte, wirksameEinstellungen } from "@/lib/accounting/einstellungen.js";
+
+englischErgaenzen(EN_KALENDER_LAENDER); // lazy part: names of the 16 federal states (rule kalender.bundesland)
 
 /** Ready since 80-07. */
 export const BEREIT = true;

@@ -36,7 +36,7 @@ export async function ladeBezugDaten(api, bezug, { heute, briefkopf, kontakte, p
       const lauf = (rechnung.mahnungen || []).filter((/** @type {any} */ m) => Number(m?.stufe) === stufe).pop();
       const f = mahnTextFelder(rechnung, stufe, { heute, einst, briefkopf, vertrag: vertraege.find((v) => v.id === rechnung.honorarvertrag_id) || null, ...(lauf?.frist ? { frist: lauf.frist } : {}) }, t);
       const b = mahnBrief(f);
-      return { betreff: b.betreff || "", absaetze: b.absaetze || [], tabelle: /** @type {any} */ (b.tabelle), offenCent: f.offenCent, zinsenCent: f.zinsenCent, pauschaleCent: f.pauschaleCent, summeCent: f.summeCent };
+      return { betreff: b.betreff || "", absaetze: b.absaetze || [], schluss: b.schluss || [], tabelle: /** @type {any} */ (b.tabelle), offenCent: f.offenCent, zinsenCent: f.zinsenCent, pauschaleCent: f.pauschaleCent, summeCent: f.summeCent };
     };
   } else if (bezug && ["honorarangebot", "honorarvertrag", "honorarnachtrag"].includes(bezug.typ)) {
     const zh = await ladeZeitHonorar(api, { entitaeten: ["Honorarangebot", "Honorarvertrag", "Honorarnachtrag"] });
@@ -58,7 +58,7 @@ export async function ladeBezugDaten(api, bezug, { heute, briefkopf, kontakte, p
 /**
  * A new draft from a template and a reference: placeholders filled from the
  * reference's context (missing required ones as visible [[fehlt: …]] marks),
- * the dunning text from 79, recipient snapshot, project and area.
+ * the dunning text from 79 (115: with its closing text after the amount table as `schluss`), recipient snapshot, project and area.
  * @param {Record<string, any>} vorlage template (with office version applied)
  * @param {{typ: string, id: string, stufe?: number}|null} bezug
  * @param {import("@core/lib/brief/schreiben.js").KontextDaten} daten
@@ -91,6 +91,8 @@ export function neuerEntwurf(vorlage, bezug, daten, { projectId = null } = {}) {
       felder: k.daten,
       bezug: bezug ? { typ: bezug.typ, id: bezug.id, ...(bezug.stufe ? { stufe: bezug.stufe } : {}) } : null,
       tabelle: k.tabelle,
+      // 115: only a letter with an amount table and a closing text carries the field (older letters never have it).
+      ...(k.schluss ? { schluss: k.schluss } : {}),
       ...(vorlage.variante ? { variante: vorlage.variante, verteiler: [] } : {}),
       richtwert: Boolean(vorlage.richtwert),
     },

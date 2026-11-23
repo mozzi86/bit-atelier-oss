@@ -27,6 +27,7 @@ from typing import Any
 from harness.agent.context import DATA_NOT_INSTRUCTION
 from harness.config import HARNESS_DIR
 from harness.geom.massing import kennzahlen_markdown, plan_massing
+from harness.ifc_sperre import im_ifc_thread
 from harness.tools.registry import ToolContext, registry, tool_error, tool_ok
 from harness.tools.sandbox import resolve_in_sandbox
 
@@ -148,7 +149,8 @@ async def freecad_run(args: dict, ctx: ToolContext) -> str:
         md += [kennzahlen_markdown(plan), ""]
     if result.get("zaehlung"):
         md += [_zaehlung_md(result["zaehlung"]), ""]
-    liste = _roundtrip_liste(ifc)
+    # B-111-01-03: the round-trip read uses ifcopenshell in-process -> process-wide IFC lock, worker thread.
+    liste = await im_ifc_thread(_roundtrip_liste, ifc)
     if liste and "markdown" in liste:
         md += ["## Gegenprobe /ifc liste", "", liste["markdown"]]
     payload_out: dict[str, Any] = {
@@ -334,7 +336,7 @@ async def freecad_reload(args: dict, ctx: ToolContext) -> str:
             return tool_error(_bridge_fehler(exp))
         payload["ifc"] = f"model/{ifc.name}"
         payload["ziel"] = {"datei": f"model/{ifc.name}"}
-        liste = _roundtrip_liste(ifc)
+        liste = await im_ifc_thread(_roundtrip_liste, ifc)  # B-111-01-03: under the IFC lock
         if liste and "markdown" in liste:
             payload["markdown"] = liste["markdown"]
     payload["hinweis"] = DATA_NOT_INSTRUCTION

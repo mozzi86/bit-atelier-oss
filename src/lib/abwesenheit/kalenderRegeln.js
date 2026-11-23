@@ -1,5 +1,5 @@
 // Calendar settings of the office (phase 82, E-16) as rules of the rule core
-// (80-01): federal state, the two Bavarian local holidays, Christmas Eve / New
+// (80-01): federal state (all 16 since wave 1 / B-81-04), the two Bavarian local holidays, Christmas Eve / New
 // Year's Eve, how many people may be absent at once, and the working-day
 // pattern of part-time contracts.
 //
@@ -11,11 +11,13 @@
 // stays the calculation basis (E-16) and is only compared (feiertagsAbgleich),
 // never overwritten silently.
 //
-// In:  the calendar core. Out: KALENDER_STAND, KALENDER_REGELN, KALENDER_REGELWERK,
-//      kalenderEinstellung, feiertagsAbgleich.
+// In:  the state codes and the standard setting of the calendar core. Out: KALENDER_STAND, BUNDESLAND_NAMEN,
+//      KALENDER_REGELN, KALENDER_REGELWERK, kalenderEinstellung. (feiertagsAbgleich moved to ./feiertagsAbgleich.js in
+//      wave 1 / B-81-04 so that the holiday tables stay out of the entry chunk.)
 
-import { feiertage, KALENDER_STANDARD } from "@core/lib/kalender/feiertage.js";
-import { wochentag } from "@core/lib/kalender/datum.js";
+// Codes and standard only, not the holiday tables: this module is part of the
+// entry chunk (regelwerke.js); feiertagsAbgleich lives in ./feiertagsAbgleich.js.
+import { BUNDESLAENDER, KALENDER_STANDARD } from "@core/lib/kalender/bundeslaender.js";
 
 /** Date the values below were set ('YYYY-MM-DD'). */
 export const KALENDER_STAND = "2026-01-01";
@@ -45,7 +47,20 @@ function regel({ id, wert, quelle, ...rest }) {
   return /** @type {any} */ ({ ...rest, id: `kalender.${id}`, art: "buero", editierbar: true, werte: [{ ab: KALENDER_STAND, wert, quelle }], stand: KALENDER_STAND, quelle });
 }
 
-const QUELLE_BY = "BayFTG Art. 1; Gemeindeliste Bayerisches Landesamt für Statistik — Status Nürnberg prüfen";
+const QUELLE_BY = "BayFTG Art. 1; Gemeindeliste Bayerisches Landesamt für Statistik — Status der Bürogemeinde prüfen";
+
+/** Source of the state choice: the holiday laws of the 16 states (table in @core/lib/kalender/feiertage.js). */
+const QUELLE_LAENDER = "Feiertagsgesetze der Länder (Stand 2026; Abgleich mit den Gesetzestexten offen)";
+
+/**
+ * German display names of the federal states (i18n keys), codes of BUNDESLAENDER.
+ * @type {Readonly<Record<string, string>>}
+ */
+export const BUNDESLAND_NAMEN = Object.freeze({
+  BW: "Baden-Württemberg", BY: "Bayern", BE: "Berlin", BB: "Brandenburg", HB: "Bremen", HH: "Hamburg",
+  HE: "Hessen", MV: "Mecklenburg-Vorpommern", NI: "Niedersachsen", NW: "Nordrhein-Westfalen", RP: "Rheinland-Pfalz",
+  SL: "Saarland", SN: "Sachsen", ST: "Sachsen-Anhalt", SH: "Schleswig-Holstein", TH: "Thüringen",
+});
 
 /**
  * The rules of the group "Kalender & Abwesenheiten".
@@ -53,8 +68,8 @@ const QUELLE_BY = "BayFTG Art. 1; Gemeindeliste Bayerisches Landesamt für Stati
  */
 export const KALENDER_REGELN = tiefGefroren([
   regel({ id: "bundesland", label: "Bundesland der Feiertage", einheit: "Land", typ: "auswahl", wert: KALENDER_STANDARD.bundesland, abschnitt: A_FEIERTAGE,
-    quelle: QUELLE_BY, optionen: [{ wert: "BY", label: "Bayern" }],
-    assumed: "Bayern als Bürositz; andere Länder kennt der Kalender-Kern noch nicht" }),
+    quelle: QUELLE_LAENDER, optionen: BUNDESLAENDER.map((wert) => ({ wert, label: BUNDESLAND_NAMEN[wert] })),
+    assumed: "Bayern als Bürositz; Fronleichnam in einzelnen Gemeinden Sachsens und Thüringens ist nicht enthalten (keine Gemeinde im Kalender)" }),
   regel({ id: "mariae_himmelfahrt", label: "Mariä Himmelfahrt (15.08.) ist Feiertag", einheit: "ja/nein", typ: "ja_nein", wert: KALENDER_STANDARD.mariae_himmelfahrt, abschnitt: A_FEIERTAGE,
     quelle: QUELLE_BY, assumed: "Nur in Gemeinden mit überwiegend katholischer Bevölkerung — für den Bürositz prüfen" }),
   regel({ id: "augsburger_friedensfest", label: "Augsburger Friedensfest (08.08.) ist Feiertag", einheit: "ja/nein", typ: "ja_nein", wert: KALENDER_STANDARD.augsburger_friedensfest, abschnitt: A_FEIERTAGE,
@@ -95,21 +110,4 @@ export function kalenderEinstellung(wert) {
     mariae_himmelfahrt: lies("kalender.mariae_himmelfahrt", KALENDER_STANDARD.mariae_himmelfahrt) === true,
     augsburger_friedensfest: lies("kalender.augsburger_friedensfest", KALENDER_STANDARD.augsburger_friedensfest) === true,
   };
-}
-
-/**
- * Compares the calendar with the calculation basis zeit_honorar.feiertage (81).
- * A difference is a hint (warn) — the basis is never overwritten.
- * @param {number} jahr
- * @param {{bundesland: string, mariae_himmelfahrt: boolean, augsburger_friedensfest: boolean}} einst
- * @param {number} kalkulationTage value of zeit_honorar.feiertage (days per year)
- * @returns {{kalender: number, anWochentagen: number, kalkulation: number, abweichend: boolean}} days
- */
-export function feiertagsAbgleich(jahr, einst, kalkulationTage) {
-  const liste = feiertage(jahr, einst);
-  const anWochentagen = liste.filter((f) => {
-    const w = wochentag(f.datum);
-    return typeof w === "number" && w >= 1 && w <= 5;
-  }).length;
-  return { kalender: liste.length, anWochentagen, kalkulation: Number(kalkulationTage) || 0, abweichend: liste.length !== Number(kalkulationTage) };
 }

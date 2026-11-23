@@ -21,12 +21,14 @@
 import { demoDbAuslesen, demoDbErsetzen, letzteSicherungSetzen } from './demoDb.js';
 // 93-10: the pure half (format, parser, area filter, merges) lives in projektDateiFormat.js so the
 // local server can validate double-clicked files with the same parser. Re-exported here unchanged.
-import { DATEI_ENDUNG, serialisiereProjekt, entferneBereiche, vorschau, parseProjektDatei } from './projektDateiFormat.js';
+import { DATEI_ENDUNG, serialisiereProjekt, entferneBereiche, wendeEinschraenkungAn, vorschau, parseProjektDatei } from './projektDateiFormat.js';
+import { exportEinschraenkung } from './exportSicht.js';
 
 export {
   SCHEMA, DATEI_ENDUNG, serialisiereProjekt, entferneBereiche, vorschau, parseProjektDatei,
-  mitBehaltenem, projekteIn, vorhandeneProjekte, kopieAnfuegen,
+  mitBehaltenem, projekteIn, vorhandeneProjekte, kopieAnfuegen, nurSichtbareProjekte, wendeEinschraenkungAn,
 } from './projektDateiFormat.js';
+export { setzeExportZugriff, setzeExportBereichsRechner, exportEinschraenkung, ExportGesperrtFehler } from './exportSicht.js';
 
 /**
  * Packs the current demo state into a Blob.
@@ -35,14 +37,26 @@ export {
  * area must not carry the office's own books even filtered, only left out.
  * Called with no options this is byte-compatible with every file written
  * before this plan.
+ * Wave 1 (BEFUNDE-82 H-2, W1-BUERO-F1): the restriction registered by the access
+ * context (exportSicht.js) always applies — only the role's projects and their
+ * records, and no office area the role may not export completely, go into the
+ * file, whoever calls this; before the access is loaded the export is refused
+ * (ExportGesperrtFehler). A file filtered that way is a handover
+ * (`art: "weitergabe"`), never a backup: it must not stamp letzteSicherung.
  * @param {string} [projektname]
- * @param {{ohne?: string[], ohneSettingKeys?: string[], ohneDokumentBereiche?: string[], art?: "sicherung"|"weitergabe", bereiche?: string[]}} [optionen]
+ * @param {{ohne?: string[], ohneSettingKeys?: string[], ohneDokumentBereiche?: string[], art?: "sicherung"|"weitergabe", bereiche?: string[], notsicherung?: boolean}} [optionen]
+ *   notsicherung: the error card's emergency backup (R-BUERO-2, see exportSicht.exportEinschraenkung)
  * @returns {Promise<{blob: Blob, dateiname: string, obj: object}>}
  */
-export async function projektAlsBlob(projektname, { ohne = [], ohneSettingKeys = [], ohneDokumentBereiche = [], art, bereiche } = {}) {
+export async function projektAlsBlob(projektname, { ohne = [], ohneSettingKeys = [], ohneDokumentBereiche = [], art, bereiche, notsicherung = false } = {}) {
+  // Asked BEFORE reading the data: while the access is not loaded this throws (deny until loaded).
+  // R-BUERO-2: `notsicherung` (error card only) still writes after a FAILED rights load (exportSicht.js).
+  const e = await exportEinschraenkung({ notsicherung });
   const volleDaten = await demoDbAuslesen();
-  const daten = entferneBereiche(volleDaten, ohne, ohneSettingKeys, ohneDokumentBereiche);
-  const obj = serialisiereProjekt(daten, projektname, { art, bereiche });
+  const daten = wendeEinschraenkungAn(entferneBereiche(volleDaten, ohne, ohneSettingKeys, ohneDokumentBereiche), e);
+  // A hidden area is not in the file, so the file must not name it in `bereiche` either.
+  const dateiBereiche = e && Array.isArray(bereiche) ? bereiche.filter((k) => !e.bereiche.includes(k)) : bereiche;
+  const obj = serialisiereProjekt(daten, projektname, { art: e ? 'weitergabe' : art, bereiche: dateiBereiche });
   const text = JSON.stringify(obj);
   const tag = new Date().toISOString().slice(0, 10);
   const sicher = (obj.projektname || 'projekt').replace(/[^\p{L}\p{N}_-]+/gu, '-').slice(0, 60);
@@ -65,7 +79,7 @@ export async function projektAlsBlob(projektname, { ohne = [], ohneSettingKeys =
  * it must not stamp letzteSicherung, or the backup nudge would fall silent
  * after a handover file that never actually saved the office's own books.
  * @param {string} [projektname]
- * @param {{ohne?: string[], ohneSettingKeys?: string[], art?: "sicherung"|"weitergabe", bereiche?: string[]}} [optionen]
+ * @param {{ohne?: string[], ohneSettingKeys?: string[], art?: "sicherung"|"weitergabe", bereiche?: string[], notsicherung?: boolean}} [optionen]
  * @returns {Promise<string>} the file name that was offered
  */
 export async function exportProjekt(projektname, optionen = {}) {
@@ -107,10 +121,21 @@ export async function leseProjektDatei(datei) {
  * omits keeps its local data instead of being wiped).
  * 69-13: returns demoDbErsetzen's report ({schnappschuss, schnappschussFehler})
  * so the caller can surface a failed automatic snapshot honestly.
+ * R-BUERO-3: under a restricted role the snapshot is mandatory (throws, nothing replaced, when it fails).
  * @param {object} obj result of leseProjektDatei().obj
  * @param {{behalte?: string[], behalteSettingKeys?: string[], behalteDokumentBereiche?: string[]}} [optionen]
  * @returns {Promise<{schnappschuss: object|null, schnappschussFehler: string|null}>}
  */
 export async function uebernehmeProjekt(obj, { behalte = [], behalteSettingKeys = [], behalteDokumentBereiche = [] } = {}) {
-  return demoDbErsetzen(obj.daten, 'vor Import', { behalte, behalteSettingKeys, behalteDokumentBereiche });
+  // R-BUERO-3: a restricted role's "vorher sichern" file is only a handover (its own projects), but this
+  // import replaces EVERYTHING — so for that role the full internal snapshot ('vor Import' in the ring)
+  // must succeed, or nothing is replaced. Rights not loaded (exportEinschraenkung throws) counts as
+  // restricted. The owner keeps the old behaviour (a failed snapshot is reported, the import goes on).
+  let schnappschussPflicht;
+  try {
+    schnappschussPflicht = !!(await exportEinschraenkung());
+  } catch {
+    schnappschussPflicht = true;
+  }
+  return demoDbErsetzen(obj.daten, 'vor Import', { behalte, behalteSettingKeys, behalteDokumentBereiche, schnappschussPflicht });
 }

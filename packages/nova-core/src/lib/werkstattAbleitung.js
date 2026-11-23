@@ -23,7 +23,7 @@
 //      name with " ·WT", we, raumart, tueren …). Pure parts are node-testable.
 import { useEffect, useMemo, useState } from "react";
 import { useBuildingProgram } from "@core/lib/useBuildingProgram";
-import { loadBimModel, aufBimModelAenderung, storeGehoertZu } from "@core/lib/useBimModelSync";
+import { bimModelLesen, aufBimModelAenderung, storeGehoertZu } from "@core/lib/useBimModelSync";
 import { istWerkstattZone } from "@core/lib/werkstattBauteile";
 
 /** Record fields the derivation reads — a saved patch touching one of them re-derives. */
@@ -125,7 +125,7 @@ export function useWerkstattZonen(projectId) {
     let abgebrochen = false;
     let signatur = null;
     const rechne = async () => {
-      const m = await loadBimModel(projectId);
+      const m = await bimModelLesen(projectId); // 115-05c: with the page's unsaved draft on top (reader overlay)
       const sig = ableitungsSignatur(m);
       if (abgebrochen || sig === signatur) return;
       signatur = sig;

@@ -3,7 +3,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 import crypto from "node:crypto";
-import { bytesZuDataUrl, dateiname, festschreibenUndAblegen, postbuchLoeschbar, posteingangSpeichern, SCAN_MAX_BYTES, versendetMarkieren } from "@/lib/schriftverkehr/aktionen.js";
+import { bytesZuDataUrl, dateiname, festschreibenUndAblegen, postbuchLoeschbar, posteingangSpeichern, SCAN_MAX_BYTES, schreibenPdf, versendetMarkieren } from "@/lib/schriftverkehr/aktionen.js";
+import { dateiIdAus, LAYOUT_VERSION } from "@core/lib/brief/schreiben.js";
+import { PDFDocument, PDFName } from "pdf-lib";
 
 /** In-memory API with get/list/filter/create/update/delete per entity; get of an unknown id is a 404. */
 function fakeApi(start = {}) {
@@ -117,4 +119,17 @@ test("Posteingang: nächste PE-Nummer, Scan in 09_Schriftverkehr/Eingang; zu gro
 
 test("Dateiname ohne Sonderzeichen", () => {
   assert.equal(dateiname({ datum: "2026-09-28", betreff: "Ihr Schreiben vom 21.09.2026 – Rückfrage/Fassade" }), "Schreiben_2026-09-28_Ihr_Schreiben_vom_21_09_2026_Ruckfrage_Fassade.pdf");
+});
+
+// 105-19 review W1: the stamp festschreibenUndAblegen writes must be the layout version the PDF was built with. If they
+// drift apart, re-rendering a fixed letter (Correspondence page "PDF", no stored document) no longer reproduces the
+// stored SHA-256 — this round trip is exactly that re-render.
+test("Festschreiben: layout_version = LAYOUT_VERSION, Neu-Erzeugen ergibt genau pdf_sha256 (mit /Lang)", async () => {
+  const { api } = fakeApi({ Postbucheintrag: PB });
+  const r = await festschreibenUndAblegen(api, ENTWURF, KTX);
+  assert.equal(r.schreiben.layout_version, LAYOUT_VERSION);
+  const { bytes } = await schreibenPdf(r.schreiben, { briefkopf: BK, fixiert: { erstelltAm: r.schreiben.festgeschrieben_am, dateiId: await dateiIdAus(r.schreiben.id) } });
+  assert.equal(crypto.createHash("sha256").update(bytes).digest("hex"), r.schreiben.pdf_sha256);
+  const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+  assert.ok(doc.catalog.lookup(PDFName.of("Lang")), "a letter fixed now carries /Lang");
 });

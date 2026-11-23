@@ -33,7 +33,9 @@ async function text(bytes) {
 }
 
 test("HONORAR_BRIEFE: drei Bauer mit Version", () => {
-  for (const k of ["honorarangebot", "auftragsbestaetigung", "honorarnachtrag"]) assert.equal(HONORAR_BRIEFE[k].version, 1, k);
+  // 115: version 2 — amount table before closing text and greeting (tests/unit/briefSchluss.test.js).
+  // 105-19 follow-up: version 3 — wording of 2, the fixed PDF also carries /Lang (tests/unit/pdfMetadaten-nachgang.test.js).
+  for (const k of ["honorarangebot", "auftragsbestaetigung", "honorarnachtrag"]) assert.equal(HONORAR_BRIEFE[k].version, 3, k);
 });
 
 test("Auftragsbestätigung: Inhalt, § 15, Zahlungsziel mit Quelle, Termine, Haftung; Hash reproduzierbar", async () => {
@@ -51,10 +53,11 @@ test("Auftragsbestätigung: Inhalt, § 15, Zahlungsziel mit Quelle, Termine, Haf
 test("Verbraucher: Hinweis § 650r BGB; Zahlungsziel aus 79s Kette mit Quelle", () => {
   const v = { ...VERTRAG, bauherr_art: "verbraucher", zahlungsziel_tage: undefined };
   const e = bestaetigungEingabe(v, KONTEXT);
-  assert.ok(e.absaetze.some((a) => a.includes("§ 650r BGB")));
+  // 115: the hint belongs to the closing text after the amount table.
+  assert.ok(e.schluss.some((a) => a.includes("§ 650r BGB")));
   assert.deepEqual(zahlungszielMitQuelle(v, { einst: { zahlungsziel_tage: 21 } }), { tage: 21, quelle: "Bürostandard" });
   assert.deepEqual(zahlungszielMitQuelle(v, { einst: { zahlungsziel_je_bauherr: { "bauherr b": 30 } }, projekt: { client: "Bauherr B" } }), { tage: 30, quelle: "vereinbart je Bauherr" });
-  for (const s of [e.betreff, ...e.absaetze, ...e.tabelle.zeilen.flat()]) assert.equal(ersetzeNichtWinAnsi(s).ersetzt, 0, s);
+  for (const s of [e.betreff, ...e.absaetze, ...e.schluss, ...e.tabelle.zeilen.flat()]) assert.equal(ersetzeNichtWinAnsi(s).ersetzt, 0, s);
 });
 
 test("Honorarnachtrag-Brief: Nummer, Betrag, Vertragsbezug", async () => {

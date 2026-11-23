@@ -7,6 +7,8 @@
 // the test hook window.__bitZeigen.bimAenderung.waende3d(), the IFC placement from the downloaded text.
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -273,6 +275,7 @@ test.describe("107-01 Hülle: Bezug der Hülle (huelle_bezug)", () => {
         expect((await befehl(page, "auswahl-guid", { guid: huellwand.guid })).ok).toBe(true);
         await expect(wahl).toBeVisible({ timeout: 15000 });
         await wahl.selectOption(wert);
+        await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
         await expect.poll(async () => (await gespeichert()).huelle_bezug, { timeout: 20000 }).toBe(wert);
       };
 

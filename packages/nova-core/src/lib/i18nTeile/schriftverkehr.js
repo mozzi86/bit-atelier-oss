@@ -32,6 +32,8 @@ export const EN = {
   "Betreff": "Subject",
   "Text": "Text",
   "Anlagen (durch Komma getrennt)": "Enclosures (comma separated)",
+  "Schlusstext (nach der Betragstabelle)": "Closing text (after the amount table)",
+  "Betragstabelle": "Amount table",
   "{n} Zeichen ersetzt": "{n} characters replaced",
   "Pflichtangaben fehlen: {liste}": "Required data missing: {liste}",
   "aus eingefrorenem Text neu erzeugt — nicht byte-identisch mit dem Original": "rebuilt from the frozen text — not byte-identical with the original",

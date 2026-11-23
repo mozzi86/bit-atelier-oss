@@ -1,16 +1,22 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { oeffnungsMasse, oeffnungsTyp, oeffnungMitte_m } from "@core/lib/bauteil/oeffnungen.js";
 import { wandGeometrie, wandDicke_m, huellSchnittWaende, ugSchnittWaende, schnittErsetzt, modellImSchnitt } from "@core/lib/bauteil/referenz.js"; // 107-01: the one reference-line derivation; 108-01: section B-B
-import { dachSchnittLinie, GLOBAL_DACH_DICKE_M, umrissSpanneBeiZ } from "@core/lib/bauteil/dachGeometrie.js"; // 108-01: roof triangle in the section; 108-02: collar-beam floor
+import { dachSchnittLinie, dachAnsichtImSchnitt, dachFalllinienImSchnitt, wandOberkanteUnterDach, GLOBAL_DACH_DICKE_M, umrissSpanneBeiZ } from "@core/lib/bauteil/dachGeometrie.js"; // 108-01: roof triangle in the section; 108-02: collar-beam floor
 import { planEbene, globaleTraufhoehe_m } from "@core/lib/bauteil/ebenen.js"; // 107-13: storey levels incl. basements; 108-02: eaves
 import { useI18n, englischErgaenzen } from "@core/lib/i18n";
 import { EN as EN_EFH_108 } from "@core/lib/i18nTeile/efh-108.js"; // 108-01: lazy part (section marks)
-import { deckenLage, geschossHoeheAusModell, geschosshoehe, elevationOf } from "@core/lib/bauteil/hoehen.js"; // 107-02: the one slab thickness/side (was the literal 0.25)
+import { profilFlaechen, profilAussen, ERDBAU_FARBE } from "@core/lib/massing/gelaendeEbenen.js"; // 108-10: terrain lines of the section
+import { EN as EN_RAEUME_10711 } from "@core/lib/i18nTeile/raeume-107-11.js"; // 115-02: lazy part (label "Kniestock" of the section chain)
+import { deckenLage, geschosshoehe, elevationOf } from "@core/lib/bauteil/hoehen.js"; // 107-02: the one slab thickness/side (was the literal 0.25)
 import { treppeBerechnen, treppenLoch, deckeUeber } from "@core/lib/bauteil/treppe.js"; // 108-06: stair symbol
 import { treppeSymbol } from "@core/lib/plan/treppeSymbol.js";
+import { istUTreppe } from "@core/lib/bauteil/treppeU.js"; // 115-13: two-flight stair with landing
+import { treppeUPlan } from "@core/lib/plan/treppeUSymbol.js";
 import { gaubeBerechnen } from "@core/lib/bauteil/gauben.js"; // 108-13: dormer outline in the top storey
+import { vordachBerechnen } from "@core/lib/bauteil/vordach.js"; // W-1118-29: canopy outline in its storey
 import { tuerSymbol, tuerFelder } from "@core/lib/plan/tuerSymbol.js"; // 108-05: ONE door symbol (DIN 1356-1) for screen, PDF and DXF
 import { innenSeiteVon } from "@core/lib/bauteil/grundrissBearbeiten.js"; // 108-05 inside rule, one place for plan symbol and door tool
+import { drehRahmen, drehePunkt, drehePunktZurueck, normiereDrehung, textWinkelImRahmen, nordpfeilWinkel, nordRichtung } from "@core/lib/plan/planDrehung.js"; // 115-04: plan turned in 90° steps (display only)
 
 /**
  * 108-05: SVG of a door symbol (leaf + swing polyline) in the plan. `P(u, q)` maps wall coordinates (u along the wall from the opening
@@ -47,10 +53,12 @@ import { kurzRaumname, labelKollision } from "@designer/lib/massstab";
 // 75-09 Task 2: fixed-scale mode — ONE scale convention with the iso camera
 // (1:50 = pxJeMeter(50) ≈ 75.59 CSS px/m). isoKamera stays import-free.
 import { planZoomFuerMassstab } from "@designer/lib/isoKamera";
-import { seiteVon } from "@designer/lib/masskette"; // 75-15: architectural dimension chains
+import { seiteVon, formatMeter } from "@designer/lib/masskette"; // 75-15: architectural dimension chains
+import { schnittMassInhalt, schnittMassLayout, koteText } from "@designer/lib/schnittMasse"; // 115-02: one layout of the section dimensions (screen = PDF)
 import { regelfensterPasst, AUTO_WINDOW } from "@designer/lib/autoOpenings"; // 108-02: the one rule-window guard (basement, knee wall)
 import Masskette from "./Masskette";
 englischErgaenzen(EN_EFH_108);
+englischErgaenzen(EN_RAEUME_10711);
 
 // 75-09: max zoom in fixed-scale mode. [ASSUMED] 48 — with the default view
 // (maxZoom 12) even 1:50 on large sites would clamp before reaching the scale;
@@ -139,33 +147,35 @@ function polyHit(pts, r, crossing) {
  * 97-04b: material hatches after DIN ISO 128-50 / DIN 1356-1 [ASSUMED mapping of the catalogue's
  * hatch keys]: concrete = 45° lines with dots, brick = dense 45° lines, block (sand-lime) = 45°
  * lines, insulation = zigzag band, wood = crossing diagonals. Size in plan units (≈ 2 mm on paper).
- * @param {{groesse: number}} props
+ * 115-04: `drehung` (plan turned, degrees counter-clockwise as seen) — the patterns are used inside the turned drawing, so they are
+ * turned back by the same angle and the hatch keeps its direction on the screen (45° rising to the right); 0 = the markup as before.
+ * @param {{groesse: number, drehung?: number}} props
  */
-function MaterialSchraffuren({ groesse }) {
+function MaterialSchraffuren({ groesse, drehung = 0 }) {
   const g = Math.max(1.5, groesse);
   const linie = { stroke: "#27272a", strokeWidth: Math.max(0.25, g / 14) };
   return (
     <defs>
-      <pattern id="iso-concrete" width={g} height={g} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <pattern id="iso-concrete" width={g} height={g} patternUnits="userSpaceOnUse" patternTransform={`rotate(${45 + drehung})`}>
         <line x1="0" y1="0" x2="0" y2={g} {...linie} /><circle cx={g * 0.55} cy={g * 0.4} r={g / 16} fill="#27272a" />
       </pattern>
-      <pattern id="iso-brick" width={g / 2} height={g / 2} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <pattern id="iso-brick" width={g / 2} height={g / 2} patternUnits="userSpaceOnUse" patternTransform={`rotate(${45 + drehung})`}>
         <line x1="0" y1="0" x2="0" y2={g / 2} {...linie} />
       </pattern>
-      <pattern id="iso-block" width={g} height={g} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <pattern id="iso-block" width={g} height={g} patternUnits="userSpaceOnUse" patternTransform={`rotate(${45 + drehung})`}>
         <line x1="0" y1="0" x2="0" y2={g} {...linie} />
       </pattern>
-      <pattern id="iso-insul" width={g} height={g / 2} patternUnits="userSpaceOnUse">
+      <pattern id="iso-insul" width={g} height={g / 2} patternUnits="userSpaceOnUse" patternTransform={drehung ? `rotate(${drehung})` : undefined}>
         <polyline points={`0,0 ${g / 4},${g / 2} ${g / 2},0 ${(3 * g) / 4},${g / 2} ${g},0`} fill="none" {...linie} />
       </pattern>
-      <pattern id="iso-wood" width={g} height={g} patternUnits="userSpaceOnUse">
+      <pattern id="iso-wood" width={g} height={g} patternUnits="userSpaceOnUse" patternTransform={drehung ? `rotate(${drehung})` : undefined}>
         <line x1="0" y1="0" x2={g} y2={g} {...linie} /><line x1={g} y1="0" x2="0" y2={g} {...linie} />
       </pattern>
     </defs>
   );
 }
 
-function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, overlay, overlayBounds, maxSvgH = 460, readOnly = false, massstab = null, fuellen = false, brille = null, huelleStatus = null, sw = false, werkstattWaende = null, schichtFlaechen = null, ansicht = null, detailMassstab = null, eingang = undefined, baufeldUmriss = null, baufeldMittig = false, customStairs = null, gauben = null, geschosse = null, dach = null }) {
+function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, overlay, overlayBounds, maxSvgH = 460, readOnly = false, massstab = null, fuellen = false, brille = null, huelleStatus = null, sw = false, werkstattWaende = null, schichtFlaechen = null, ansicht = null, detailMassstab = null, eingang = undefined, baufeldUmriss = null, baufeldMittig = false, customStairs = null, gauben = null, vordaecher = null, geschosse = null, dach = null, drehung = 0 }) {
   const { t } = useI18n(); // 108-01: label "Baufeld"
   // 97-04: look of an element with renovation status under the chosen lens (null = today's look).
   const look = (status) => planDarstellung(brille, status, { sw });
@@ -222,10 +232,26 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
   const bb = bbFestRef.current || bboxXZ(all.length >= 3 ? all : fp);
   const PAD = 4;
   const wM = bb.maxX - bb.minX, hM = bb.maxZ - bb.minZ;
-  const SCALE = Math.min(620 / (wM + PAD * 2), 360 / (hM + PAD * 2));
-  const W = (wM + PAD * 2) * SCALE, H = (hM + PAD * 2) * SCALE;
+  // 115-04 (D-115-13): the plan turned in 90° steps, DISPLAY ONLY. This is the ONE place of the transformation model ↔ screen:
+  //  - everything is still drawn in the model frame through X()/Z() (walls, symbols, grips, hit areas, dimension chains, overlays),
+  //    inside ONE group that carries `dreh.transform`;
+  //  - the viewport (viewBox, pan, zoom, trackpad) works on the TURNED frame W × H, so a swipe to the right moves the drawing to
+  //    the right in every rotation;
+  //  - the pointer comes back through `dreh.zurueck` in rawMeters — snap, grips and tools read model metres as before, the model
+  //    itself is never turned.
+  // Texts are turned back about their own point (`aufrecht`, textWinkelImRahmen), the north arrow turns with the drawing.
+  // `quer` = quarter turn: the fit box (620 × 360 units) then holds the drawing with width and height swapped.
+  const gedreht = normiereDrehung(drehung); // 0 | 90 | 180 | 270, degrees counter-clockwise as seen
+  const quer = gedreht === 90 || gedreht === 270;
+  const SCALE = quer ? Math.min(620 / (hM + PAD * 2), 360 / (wM + PAD * 2)) : Math.min(620 / (wM + PAD * 2), 360 / (hM + PAD * 2));
+  const dreh = drehRahmen(gedreht, (wM + PAD * 2) * SCALE, (hM + PAD * 2) * SCALE);
+  const W = dreh.breite, H = dreh.hoehe; // size of the turned frame, viewBox units (for 0 the old W and H)
   const X = (x) => (x - bb.minX + PAD) * SCALE;
   const Z = (z) => (z - bb.minZ + PAD) * SCALE;
+  /** 115-04: SVG transform that keeps a text horizontal in the turned drawing — turned back about its base point (viewBox units of the model frame); undefined for 0. */
+  const aufrecht = (/** @type {number} */ xu, /** @type {number} */ yu) => (gedreht ? `rotate(${gedreht} ${xu} ${yu})` : undefined);
+  /** 115-04: a model-frame point (viewBox units) where the reader sees it — the turned frame the viewport works on. */
+  const imBild = (/** @type {number} */ xu, /** @type {number} */ yu) => dreh.hin(xu, yu);
 
   const walls = model.walls.filter((w) => w.level === level);
   const space = model.spaces.find((s) => s.level === level);
@@ -271,7 +297,8 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
 
   // Bildschirm-Pixel -> Meter (roh, ohne Snap).
   const rawMeters = (e) => {
-    const loc = vp.clientToLocal(e); if (!loc) return null;
+    const lokal = vp.clientToLocal(e); if (!lokal) return null;
+    const loc = dreh.zurueck(lokal.x, lokal.y); // 115-04: turned frame → model frame (identity for 0)
     return { x: loc.x / SCALE - PAD + bb.minX, z: loc.y / SCALE - PAD + bb.minZ };
   };
   // Bildschirm-Pixel -> Meter (mit 0,25 m-Raster-Snap).
@@ -286,7 +313,8 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
     if (!focus?.nonce) return;
     if (focus.reset || !focus.bbox) { vp.resetView(); return; }
     const b = focus.bbox;
-    vp.zoomToBBox({ x0: X(b.minX), x1: X(b.maxX), y0: Z(b.minZ), y1: Z(b.maxZ) }, 30);
+    const e0 = imBild(X(b.minX), Z(b.minZ)), e1 = imBild(X(b.maxX), Z(b.maxZ)); // 115-04: the box where the reader sees it
+    vp.zoomToBBox({ x0: e0.x, x1: e1.x, y0: e0.y, y1: e1.y }, 30);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus?.nonce]);
 
@@ -301,11 +329,21 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
     if (!massstab || !massstabBereit) return;
     const b = focus?.bbox;
     const zentrum = b
-      ? { x: (X(b.minX) + X(b.maxX)) / 2, y: (Z(b.minZ) + Z(b.maxZ)) / 2 }
+      ? imBild((X(b.minX) + X(b.maxX)) / 2, (Z(b.minZ) + Z(b.maxZ)) / 2)
       : { x: W / 2, y: H / 2 };
     vp.zoomZentriert(planZoomFuerMassstab(massstab, SCALE, s0), zentrum);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [massstab, focus?.nonce, massstabBereit]);
+
+  // 115-04: after a turn the sheet has another shape (width and height swap, new fit) — the old pan / zoom would show an arbitrary
+  // corner, so the whole drawing is fitted again. Not on mount (the first render keeps the hook's start view).
+  const drehAltRef = useRef(gedreht);
+  useEffect(() => {
+    if (drehAltRef.current === gedreht) return;
+    drehAltRef.current = gedreht;
+    vp.resetView();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gedreht]);
 
   const dragRef = useRef(null);
   const startDrag = (e, d) => {
@@ -320,7 +358,8 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
   // Markierungsrahmen auswerten → Liste betroffener Custom-Elemente (umschließend vs. berührend).
   const finalizeMarquee = (m, additiv = false) => {
     const r = { minX: Math.min(m.sx, m.cx), maxX: Math.max(m.sx, m.cx), minZ: Math.min(m.sz, m.cz), maxZ: Math.max(m.sz, m.cz) };
-    const crossing = m.cx < m.sx; // von rechts nach links gezogen = berührend (crossing), sonst umschließend
+    // von rechts nach links gezogen = berührend (crossing), sonst umschließend — 115-04: "left" is what the reader sees
+    const crossing = gedreht ? imBild(X(m.cx), Z(m.cz)).x < imBild(X(m.sx), Z(m.sz)).x : m.cx < m.sx;
     const list = [];
     customWalls.forEach((w) => { const hit = crossing ? segRect(w.a, w.b, r) : (ptInRect(w.a, r) && ptInRect(w.b, r)); if (hit) list.push({ type: "wall", index: w._idx }); });
     customCols.forEach((c) => { if (ptInRect({ x: c.x, z: c.z }, r)) list.push({ type: "column", index: c._idx }); });
@@ -441,7 +480,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         <Masskette
           key={`mk${wi}`} punkte={punkte} seite={seiteVon(punkte, { x: cx, z: cz })} offsetM={0.7}
           X={X} Z={Z} px={px} SCALE={SCALE} format={massFormat} farbe="#475569" schriftPx={9}
-          daten={{ "data-plan-mass": String(wi) }}
+          daten={{ "data-plan-mass": String(wi) }} drehung={gedreht}
         />,
       );
     });
@@ -450,8 +489,10 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
       const mx = (w.a.x + w.b.x) / 2, mz = (w.a.z + w.b.z) / 2;
       const ang = screenAngle(w.a, w.b);
       // screen-fixed like the room labels (75-11 px()): a fixed viewBox size grew with the zoom (user finding 08.11.)
-      const tx = X(mx), ty = Z(mz) - px(3);
-      els.push(<text key={`cwl${i}`} x={tx} y={ty} textAnchor="middle" fontSize={px(9)} fill="#0f766e" transform={`rotate(${ang} ${tx} ${ty})`} style={{ pointerEvents: "none" }}>{fmtLen(len, unit, false)}</text>);
+      // 115-04: in a turned plan the anchor still sits 3 px above the wall middle AS SEEN, and the angle is the readable one
+      const hoch = gedreht ? dreh.vektorZurueck(0, -px(3)) : null;
+      const tx = hoch ? X(mx) + hoch.x : X(mx), ty = hoch ? Z(mz) + hoch.y : Z(mz) - px(3);
+      els.push(<text key={`cwl${i}`} x={tx} y={ty} textAnchor="middle" fontSize={px(9)} fill="#0f766e" transform={`rotate(${gedreht ? textWinkelImRahmen(ang, gedreht) : ang} ${tx} ${ty})`} style={{ pointerEvents: "none" }}>{fmtLen(len, unit, false)}</text>);
     });
     return els;
   };
@@ -460,13 +501,17 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
     <div className="relative w-full flex items-center justify-center">
     {/* 75-16: fill mode — fixed SVG height, the viewBox takes the box aspect (usePlanViewport fuellen). */}
     <svg ref={svgRef} data-testid="bim-plan" viewBox={vp.viewBox} className="w-full" style={fuellen ? { height: maxSvgH, cursor } : { maxHeight: maxSvgH, cursor }}
-      /* review 107-07: plan frame for tests and agents — local unit = (metre − x0|z0) × skala (the inverse of rawMeters) */
-      data-plan-skala={SCALE} data-plan-x0={bb.minX - PAD} data-plan-z0={bb.minZ - PAD}
+      /* review 107-07: plan frame for tests and agents — local unit = (metre − x0|z0) × skala (the inverse of rawMeters).
+         115-04: in a turned plan that is the frame INSIDE the turned group; data-plan-drehung (90 | 180 | 270, absent = 0) names the rotation */
+      data-plan-skala={SCALE} data-plan-x0={bb.minX - PAD} data-plan-z0={bb.minZ - PAD} data-plan-drehung={gedreht || undefined}
       onMouseDown={handleDown} onClickCapture={(e) => { if (zugKlickSperre.current) { zugKlickSperre.current = false; e.stopPropagation(); } }} onClick={handleClick} onMouseMove={handleMove} onDoubleClick={handleDbl} onMouseUp={endDrag} onMouseLeave={endDrag}>
       {fuellen
         ? <rect x={vp.sicht.x} y={vp.sicht.y} width={vp.sicht.w} height={vp.sicht.h} fill="#f8fafc" />
         : <rect x="0" y="0" width={W} height={H} fill="#f8fafc" />}
-      {schichtTiefe && <MaterialSchraffuren groesse={(2 * (brille?.massstab || 50) / 1000) * SCALE} />}
+      {schichtTiefe && <MaterialSchraffuren groesse={(2 * (brille?.massstab || 50) / 1000) * SCALE} drehung={gedreht} />}
+      {/* 115-04: the ONE group of the turned drawing — everything inside is drawn in the model frame; without a rotation it is a
+          fragment (no extra element, the markup stays as before). Scale bar and north arrow stay outside (sheet furniture). */}
+      <PlanDrehGruppe transform={dreh.transform} grad={gedreht}>
 
       {/* ---- Räume/Zonen (Polygon-Füllung + Name + Fläche) ----
           75-11 Task 4 (MSB-5/MSB-12): labels in SCREEN PIXELS via px() (was
@@ -495,7 +540,8 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           const cxm = k.z.points.reduce((s, p) => s + p.x, 0) / k.z.points.length;
           const czm = k.z.points.reduce((s, p) => s + p.z, 0) / k.z.points.length;
           const zeilen = [kurzRaumname(k.z.name), `${Math.round(k.area).toLocaleString("de-DE")} m²`];
-          const sx = (X(cxm) - vp.sicht.x) * bildPxProU, sy = (Z(czm) - vp.sicht.y) * bildPxProU;
+          const ort = imBild(X(cxm), Z(czm)); // 115-04: where the reader sees the label (the boxes are upright on the screen)
+          const sx = (ort.x - vp.sicht.x) * bildPxProU, sy = (ort.y - vp.sicht.y) * bildPxProU;
           // 87-01: the box must cover the RENDERED text, not an ideal one — bold 11 px
           // runs ≈ 0,7 px per character, and the block hangs from the baseline at sy:
           // ascent of line 1 above, line 2 (dy 13) plus its descent below. The old
@@ -519,7 +565,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
             <g key={`zone${k.i}`} onClick={onClick} data-zone={z._idx} data-belag={z.belag || undefined} style={{ cursor: edit?.tool === "arrow" ? "pointer" : "inherit" }}>
               <path d={d} fill={sel ? "#7dd3fc" : "#bae6fd"} fillOpacity={sel ? 0.55 : 0.35} stroke={sel ? "#0284c7" : "#38bdf8"} strokeWidth={sel ? "1.2" : "0.6"} />
               {show("labels") && sichtbar.has(k.i) && (
-                <text data-plan-label x={X(cxm)} y={Z(czm)} textAnchor="middle" fontSize={px(fontPx)} fontWeight="600" className="fill-sky-800" style={{ pointerEvents: "none" }}>
+                <text data-plan-label x={X(cxm)} y={Z(czm)} textAnchor="middle" fontSize={px(fontPx)} fontWeight="600" className="fill-sky-800" transform={aufrecht(X(cxm), Z(czm))} style={{ pointerEvents: "none" }}>
                   {kurzRaumname(z.name)}
                   <tspan x={X(cxm)} dy={px(13)} fontSize={px(9)} fontWeight="400" className="fill-sky-600">{`${Math.round(k.area).toLocaleString("de-DE")} m²`}</tspan>
                 </text>
@@ -557,10 +603,13 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         if (!t?.start) return null;
         const lvl = Math.round(Number(t.level) || 0);
         if (lvl !== level && lvl !== level - 1) return null;
-        const erg = treppeBerechnen(t, geschosshoehe(lvl, geschosse));
-        const decke = deckeUeber(model, lvl, geschosse);
-        const loch = decke ? treppenLoch(t, erg, deckenLage(decke, geschosse, "huelle").unterkante_m - elevationOf(lvl, geschosse)) : null;
-        const teile = treppeSymbol(erg, lvl === level ? { ansicht: "unten" } : { ansicht: "oben", loch: loch?.points || null });
+        // 115-13: the two-flight stair draws from its own helper (same primitives, also used by the PDF/DXF plan)
+        const u = istUTreppe(t) ? treppeUPlan(t, model, level, geschosse) : null;
+        const erg = u ? null : treppeBerechnen(t, geschosshoehe(lvl, geschosse));
+        const decke = erg ? deckeUeber(model, lvl, geschosse) : null;
+        const loch = erg && decke ? treppenLoch(t, erg, deckenLage(decke, geschosse, "huelle").unterkante_m - elevationOf(lvl, geschosse)) : null;
+        const teile = u ? u.teile : treppeSymbol(/** @type {any} */ (erg), lvl === level ? { ansicht: "unten" } : { ansicht: "oben", loch: loch?.points || null });
+        const umriss = u ? u.umriss : /** @type {any} */ (erg).umriss;
         const sel = edit?.selected?.type === "stair" && edit.selected.index === t._idx;
         const farbe = sel ? "#0f766e" : "#334155";
         const onClick = (e) => { if (edit?.tool === "arrow" && edit.onPick) { e.stopPropagation(); edit.onPick({ type: "stair", index: t._idx }, e.shiftKey); } };
@@ -568,7 +617,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         return (
           <g key={`stair${i}`} data-treppe={t._idx} onClick={onClick} style={{ cursor: edit?.tool === "arrow" ? "pointer" : "inherit" }}>
             {/* hit area: the flight outline, filled faintly so a click lands */}
-            <path d={erg.umriss.map((p, k) => `${k ? "L" : "M"}${P(p)}`).join(" ") + " Z"} fill={sel ? "#99f6e4" : "#e2e8f0"} fillOpacity={sel ? 0.5 : 0.25} stroke="none" />
+            <path d={umriss.map((p, k) => `${k ? "L" : "M"}${P(p)}`).join(" ") + " Z"} fill={sel ? "#99f6e4" : "#e2e8f0"} fillOpacity={sel ? 0.5 : 0.25} stroke="none" />
             {teile.map((s, k) => {
               const sw1 = s.gewicht === "ansicht" ? 0.9 : 0.5;
               const dash = s.strich === "gestrichelt" ? "3 2" : undefined;
@@ -582,7 +631,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
               }
               if (s.art === "text") {
                 const w = Number(s.winkel_grad) || 0; const wk = w > 90 || w < -90 ? w + 180 : w;
-                return <text key={k} x={X(s.pts[0].x)} y={Z(s.pts[0].z)} fontSize={px(10)} fill={farbe} textAnchor="middle" dominantBaseline="middle" transform={`rotate(${-wk} ${X(s.pts[0].x)} ${Z(s.pts[0].z)})`} style={{ pointerEvents: "none" }}>{s.text}</text>;
+                return <text key={k} x={X(s.pts[0].x)} y={Z(s.pts[0].z)} fontSize={px(10)} fill={farbe} textAnchor="middle" dominantBaseline="middle" transform={`rotate(${gedreht ? textWinkelImRahmen(-wk, gedreht) : -wk} ${X(s.pts[0].x)} ${Z(s.pts[0].z)})`} style={{ pointerEvents: "none" }}>{s.text}</text>;
               }
               return null;
             })}
@@ -602,6 +651,18 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
             <path d={erg.grundriss.map((p, k) => `${k ? "L" : "M"}${P(p)}`).join(" ") + " Z"} fill={sel ? "#fed7aa" : "#fef3c7"} fillOpacity={sel ? 0.5 : 0.3} stroke={farbe} strokeWidth={0.6} strokeDasharray="3 2" />
             <line x1={X(erg.frontLinie[0].x)} y1={Z(erg.frontLinie[0].z)} x2={X(erg.frontLinie[1].x)} y2={Z(erg.frontLinie[1].z)} stroke={farbe} strokeWidth={1.2} />
             {erg.fenster && <line x1={X(erg.fenster.punkte3d[0].x)} y1={Z(erg.fenster.punkte3d[0].z)} x2={X(erg.fenster.punkte3d[1].x)} y2={Z(erg.fenster.punkte3d[1].z)} stroke="#1d4ed8" strokeWidth={2} />}
+          </g>
+        );
+      })}
+      {/* ---- W-1118-29: Vordächer im Geschoss — Plattenumriss gestrichelt (hängt über der Schnittebene), anklickbar ---- */}
+      {show("shell") && (vordaecher || []).map((v, i) => {
+        const erg = vordachBerechnen(v, model, geschosse);
+        if (!erg.ok || erg.level !== level) return null;
+        const sel = edit?.selected?.type === "vordach" && edit.selected.index === v._idx;
+        const onClick = (e) => { if (edit?.tool === "arrow" && edit.onPick) { e.stopPropagation(); edit.onPick({ type: "vordach", index: v._idx }, e.shiftKey); } };
+        return (
+          <g key={`vordach${i}`} data-vordach={v._idx} onClick={onClick} style={{ cursor: edit?.tool === "arrow" ? "pointer" : "inherit" }}>
+            <path d={erg.grundriss.map((p, k) => `${k ? "L" : "M"}${X(p.x)},${Z(p.z)}`).join(" ") + " Z"} fill={sel ? "#bae6fd" : "#e0f2fe"} fillOpacity={sel ? 0.6 : 0.35} stroke={sel ? "#0369a1" : "#0c4a6e"} strokeWidth={0.6} strokeDasharray="3 2" />
           </g>
         );
       })}
@@ -696,7 +757,15 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
       {baufeld && (
         <g style={{ pointerEvents: "none" }} data-baufeld-umriss>
           <path d={baufeld.map((p, i) => `${i ? "L" : "M"}${X(p.x)},${Z(p.z)}`).join(" ") + " Z"} fill="none" className="stroke-warnung" strokeWidth="1" strokeDasharray="6 4" />
-          <text x={X(Math.min(...baufeld.map((p) => p.x)))} y={Z(Math.min(...baufeld.map((p) => p.z))) - px(4)} fontSize={px(10)} className="fill-warnung">{baufeldMittig ? t("Baufeld (mittig, ohne Lagebezug)") : t("Baufeld")}</text>
+          {/* 115-04: in a turned plan the label sits above the corner the reader sees top-left, upright (for 0 the corner min x / min z as before) */}
+          {gedreht
+            ? (() => {
+              const xs = baufeld.map((p) => p.x), zs = baufeld.map((p) => p.z);
+              const e0 = imBild(X(Math.min(...xs)), Z(Math.min(...zs))), e1 = imBild(X(Math.max(...xs)), Z(Math.max(...zs)));
+              const ecke = dreh.zurueck(Math.min(e0.x, e1.x), Math.min(e0.y, e1.y));
+              return <text x={ecke.x} y={ecke.y - px(4)} fontSize={px(10)} className="fill-warnung" transform={aufrecht(ecke.x, ecke.y)}>{baufeldMittig ? t("Baufeld (mittig, ohne Lagebezug)") : t("Baufeld")}</text>;
+            })()
+            : <text x={X(Math.min(...baufeld.map((p) => p.x)))} y={Z(Math.min(...baufeld.map((p) => p.z))) - px(4)} fontSize={px(10)} className="fill-warnung">{baufeldMittig ? t("Baufeld (mittig, ohne Lagebezug)") : t("Baufeld")}</text>}
         </g>
       )}
       {/* Eingangstür (EG) — 108-01: `eingang` null = the automatic entrance is off (D-EFH-04), undefined = as before. Position and
@@ -764,7 +833,8 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
         if (!lk?.schraffur || opt?.schraffurStatus === false) return null;
         const abst = (2 * (brille?.massstab || 100)) / 1000;
         return <g key={`sch${w._idx}`} style={{ pointerEvents: "none" }} data-schraffur={w._idx}>
-          {schraffur45(wallRectXZ(w), abst).map(([p, q], k) => <line key={k} x1={X(p.x)} y1={Z(p.z)} x2={X(q.x)} y2={Z(q.z)} stroke="#18181b" strokeWidth="0.4" />)}
+          {/* 115-04: hatched in the frame the reader sees and brought back, so the hatch keeps 45° in a turned plan */}
+          {(gedreht ? schraffur45(wallRectXZ(w).map((q) => drehePunkt(q, gedreht)), abst).map(([p, q]) => [drehePunktZurueck(p, gedreht), drehePunktZurueck(q, gedreht)]) : schraffur45(wallRectXZ(w), abst)).map(([p, q], k) => <line key={k} x1={X(p.x)} y1={Z(p.z)} x2={X(q.x)} y2={Z(q.z)} stroke="#18181b" strokeWidth="0.4" />)}
         </g>;
       })}
 
@@ -918,7 +988,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           {hover && draft.length > 0 && (() => {
             const a = draft[draft.length - 1];
             const len = Math.hypot(hover.x - a.x, hover.z - a.z);
-            return <text x={X((a.x + hover.x) / 2)} y={Z((a.z + hover.z) / 2) - px(4)} textAnchor="middle" fontSize={px(9)} className="fill-teal-700">{len.toFixed(2)} m</text>;
+            return <text x={X((a.x + hover.x) / 2)} y={Z((a.z + hover.z) / 2) - px(4)} textAnchor="middle" fontSize={px(9)} className="fill-teal-700" transform={aufrecht(X((a.x + hover.x) / 2), Z((a.z + hover.z) / 2))}>{fmtLen(len, unit)}</text>;
           })()}
         </g>
       )}
@@ -935,7 +1005,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
           rooms already describe the storey, so the storey label yields. */}
       {show("labels") && space
         && !(show("zones") && (customZones || []).some((z) => z.level === level && z.points && z.points.length >= 3)) && (
-        <text data-plan-label x={X(cx)} y={Z(cz)} textAnchor="middle" className="fill-slate-700" fontSize={px(11)} fontWeight="600" style={{ pointerEvents: "none" }}>
+        <text data-plan-label x={X(cx)} y={Z(cz)} textAnchor="middle" className="fill-slate-700" fontSize={px(11)} fontWeight="600" transform={aufrecht(X(cx), Z(cz))} style={{ pointerEvents: "none" }}>
           {kurzRaumname(space.name)}
           <tspan x={X(cx)} dy={px(13)} fontSize={px(9)} className="fill-slate-400" fontWeight="400">{`${Math.round(areaM2).toLocaleString("de-DE")} m²`}</tspan>
         </text>
@@ -963,7 +1033,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
       {marquee && (() => {
         const x = Math.min(X(marquee.x0), X(marquee.x1)), y = Math.min(Z(marquee.z0), Z(marquee.z1));
         const w = Math.abs(X(marquee.x1) - X(marquee.x0)), h = Math.abs(Z(marquee.z1) - Z(marquee.z0));
-        const crossing = marquee.x1 < marquee.x0;
+        const crossing = gedreht ? imBild(X(marquee.x1), Z(marquee.z1)).x < imBild(X(marquee.x0), Z(marquee.z0)).x : marquee.x1 < marquee.x0; // 115-04: as seen
         return <rect x={x} y={y} width={w} height={h} fill={crossing ? "#22c55e" : "#0ea5e9"} fillOpacity="0.12" stroke={crossing ? "#16a34a" : "#0284c7"} strokeWidth="1" strokeDasharray={crossing ? "4 3" : undefined} style={{ pointerEvents: "none" }} />;
       })()}
       {/* ---- Fachlayer-Overlay (Phase 34, PW-01): Render-Prop mit LIVE-Transformatoren.
@@ -979,11 +1049,16 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
             // sicht = aktueller ViewBox-Ausschnitt in viewBox-Einheiten.
             px: vp.pxBild, pxJeM: bildschirmPxJeM, massstab,
             sicht: vp.sicht,
+            // 115-04 (additive): the overlay is drawn inside the turned drawing. drehung = degrees counter-clockwise as seen (0 = not
+            // turned); aufrecht(x, y) = SVG transform that keeps a text / symbol horizontal about its base point (viewBox units),
+            // undefined for 0. Geometry needs nothing — it turns with the plan. `sicht` stays the frame the reader sees.
+            drehung: gedreht, aufrecht,
           })}
         </g>
       )}
+      </PlanDrehGruppe>
       <ScaleBar x={12} y={H - 14} scale={SCALE} />
-      <NorthArrow x={W - 26} y={26} />
+      <NorthArrow x={W - 26} y={26} drehung={gedreht} />
     </svg>
       {/* Live-Koordinaten unter dem Cursor */}
       <div className="absolute bottom-2 left-2 rounded bg-white/90 border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600 font-mono pointer-events-none select-none">
@@ -1001,7 +1076,7 @@ function Grundriss({ model, level, edit, layerVis, envOpenings, customZones, cus
 }
 
 // =====================  SCHNITT (z = 0)  ===================================
-function Schnitt({ model: modellRoh, storeyHeight, layerVis, unit = "m", maxSvgH = 460, brille = null, huelleStatus = null, sw = false, schnittFlaechen = null, ansicht = null, dach = null, achse = null }) {
+function Schnitt({ model: modellRoh, storeyHeight, layerVis, unit = "m", maxSvgH = 460, brille = null, huelleStatus = null, sw = false, schnittFlaechen = null, ansicht = null, dach = null, achse = null, gelaende = null }) {
   // 97-04b: the cut hull walls take the status look of the lens (null = today's hatch).
   const lk = planDarstellung(brille, huelleStatus, { sw });
   const { t } = useI18n();
@@ -1011,6 +1086,11 @@ function Schnitt({ model: modellRoh, storeyHeight, layerVis, unit = "m", maxSvgH
   const model = modellImSchnitt(modellRoh, achse);
   const dachUnten = dach ? dachSchnittLinie(dach, achse === "z" ? "z" : "x", 0) : null;
   const dachOben = dachUnten ? dachSchnittLinie(dach, achse === "z" ? "z" : "x", 0, { dicke_m: GLOBAL_DACH_DICKE_M }) : null;
+  // user finding 15.11.2026 ("im Schnitt ist das Dach nicht zu sehen"): the roof faces behind the cut in elevation (a section along the
+  // ridge shows only a strip of the cut plate), and a cut wall reaches up to the roof underside where the roof lies above it (gable wall)
+  const dachAnsicht = dach ? dachAnsichtImSchnitt(dach, achse === "z" ? "z" : "x") : [];
+  // (with a parapet the walls keep ending at the eaves, where the parapet stands — review 108-01)
+  const wandOK = (/** @type {{von_m: number, bis_m: number}} */ w) => (show("attika") && (model.parapetHeight || 0) > 0 ? globaleTraufhoehe_m(model) : wandOberkanteUnterDach(dachUnten, w.von_m, w.bis_m, globaleTraufhoehe_m(model)));
   const L = layerVis || {};
   const show = (id) => L[id] !== false;
   const fp = model.footprint;
@@ -1030,17 +1110,55 @@ function Schnitt({ model: modellRoh, storeyHeight, layerVis, unit = "m", maxSvgH
   const PAD = 4;
   // 107-13 (D-BK-20): depth of the basements below ±0.00 in m (0 without basements = every value below exactly as before)
   const untiefe = Math.max(0, -(Number(model.fusshoehe_m) || 0));
-  const SCALE = Math.min(620 / (wM + PAD * 2), 360 / (topH + untiefe + PAD * 2));
-  const W = (wM + PAD * 2) * SCALE, H = (topH + untiefe + PAD * 3) * SCALE;
-  const X = (x) => (x - bb.minX + PAD) * SCALE;
-  const Y = (y) => H - (PAD + untiefe) * SCALE - y * SCALE;
+  // 108-10: terrain profiles along this section (existing ground dashed, new ground solid, cut and fill marked — the rule of the PDF
+  // section, vektorPlan.schnittGrafik). The drawing reaches down to the lowest terrain point; without profiles everything is as before.
+  const glBestand = Array.isArray(gelaende?.bestand) && gelaende.bestand.length >= 2 ? gelaende.bestand : null;
+  const glNeu = Array.isArray(gelaende?.neu) && gelaende.neu.length >= 2 ? gelaende.neu : null;
+  const glTief = Math.max(0, ...[...(glBestand || []), ...(glNeu || [])].map((q) => -q.h_m));
+  const unten = Math.max(untiefe, glTief);
+  // labels of the terrain lines: at the left end of each line, baseline `unter` px below it (the existing ground under a new one
+  // one line lower) — the level marks keep clear of these bands (schnittMassLayout `gesperrt`)
+  /** @type {Array<{art: "bestand"|"neu", h_m: number, s_m: number, unter: number, text: string}>} */
+  const glLabel = [
+    ...(glNeu ? [{ art: /** @type {"neu"} */ ("neu"), h_m: glNeu[0].h_m, s_m: glNeu[0].s_m, unter: 11, text: t("Gelände neu") }] : []),
+    ...(glBestand ? [{ art: /** @type {"bestand"} */ ("bestand"), h_m: glBestand[0].h_m, s_m: glBestand[0].s_m, unter: glNeu ? 22 : 11,
+      text: glNeu ? t("Gelände Bestand") : gelaende?.annahme ? t("Gelände (Höhenmodell, Annahme)") : t("Gelände") }] : []),
+  ];
+  const SCALE = Math.min(620 / (wM + PAD * 2), 360 / (topH + unten + PAD * 2));
+  // 115-02 (W-1115-05): level marks (left) and height chains (right) from ONE layout shared with the PDF section (schnittMasse.js) —
+  // no text on another one. Drawing unit = viewBox px, so jeM = SCALE; numbers follow the `unit` prop like the floor plan chains
+  // (metres: two decimals, comma, no unit sign).
+  const massZahl = unit && unit !== "m" ? (/** @type {number} */ m) => fmtLen(m, unit, false) : formatMeter;
+  /** @type {Record<string, string>} */
+  const koteName = { dach: "OK Dach", traufe: t("Traufe"), first: t("First"), attika: "OK Attika" };
+  const massInhalt = schnittMassInhalt({ storeys: model.storeys, totalH_m: totalH, wandOben_m: wandOben, kniestock_m: knie, attika_m: paraH, dachLinie: dachUnten });
+  const masse = schnittMassLayout({
+    ketten: show("dimensions") ? massInhalt.ketten : [],
+    koten: show("labels") ? massInhalt.koten.map((k) => ({ ...k, text: k.art === "geschoss" ? `${k.name} · ${koteText(k.h_m)}` : `${koteName[k.art]} ${koteText(k.h_m)}` })) : [],
+    jeM: SCALE, schrift: SCHNITT_SCHRIFT_PX, format: massZahl, namen: { kniestock: t("Kniestock") },
+    // the ground label "Gelände ±0,00" (107-13, below: baseline 11 px under ±0,00, 9 px text) stands in the column of the marks
+    // 108-10: with terrain profiles the terrain labels stand there instead (below their line at its left end, see glLabel)
+    gesperrt: !show("labels") ? [] : glLabel.length
+      ? glLabel.map((l) => ({ h_m: l.h_m, von: -(l.unter + 0.2 * SCHNITT_SCHRIFT_PX), bis: -(l.unter - 0.8 * SCHNITT_SCHRIFT_PX) }))
+      : untiefe > 0 ? [{ h_m: 0, von: -(11 + 0.2 * SCHNITT_SCHRIFT_PX), bis: -(11 - 0.8 * SCHNITT_SCHRIFT_PX) }] : [],
+  });
+  // 115-02: the margins grow beyond PAD (m) where the marks, the chains or the width chain above the scale bar need more room (tall or
+  // narrow buildings: PAD · SCALE gets small); with enough room every coordinate is the one before
+  const padL = Math.max(PAD, (masse.links.breite + SCHNITT_RAND_PX) / SCALE), padR = Math.max(PAD, (masse.rechts.breite + SCHNITT_RAND_PX) / SCALE);
+  const padU = Math.max(PAD, SCHNITT_UNTEN_PX / SCALE);
+  const W = (wM + (padL + padR)) * SCALE, H = (topH + unten + (PAD * 2 + padU)) * SCALE;
+  const X = (x) => (x - bb.minX + padL) * SCALE;
+  const Y = (y) => H - (padU + unten) * SCALE - y * SCALE;
+  const glPfad = (/** @type {Array<{s_m: number, h_m: number}>} */ pr) => pr.map((q, i) => `${i ? "L" : "M"}${X(q.s_m)},${Y(q.h_m)}`).join(" ");
+  // the ground the building stands in: the new one, else the existing one — drawn outside the building only (it stops at the outer
+  // faces); the existing ground under a new one runs through as the dashed line of the original terrain
+  const glMassgebend = glNeu || glBestand;
+  const glAussen = (/** @type {Array<{s_m: number, h_m: number}>|null} */ pr) => profilAussen(pr, bb.minX, bb.maxX);
+  const glBestandAussen = glAussen(glBestand), glNeuAussen = glAussen(glNeu);
   // 107-13: cut basement walls from ±0.00 down to the lowest basement (build-up of the basement walls, bauteil/referenz.js)
   const ugWaende = ugSchnittWaende(model);
   // 107-01: cut side walls from the one derivation of @core (follows the hull reference line `huelle_bezug`)
   const sideWalls = huellSchnittWaende(model);
-  // 107-02 review fix: the storey dimension is the real height of the ground floor (level marks come from the same model),
-  // not the one number `storeyHeight`, which differs as soon as a storey table has another height for the ground floor
-  const egHoehe = geschossHoeheAusModell(model) || storeyHeight;
   // 107-09: with the switch "Wände verschneiden" the cut hull walls with a build-up come per layer from the solid (or the bands); the
   // rectangle of a wall is left out only where layers replace it (review 107-09: same side, above / below ground — the rule of the PDF
   // section, vektorPlan.schnittErsetzt). Without hull entries everything stays as before.
@@ -1052,8 +1170,36 @@ function Schnitt({ model: modellRoh, storeyHeight, layerVis, unit = "m", maxSvgH
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: maxSvgH }}>
       <rect x="0" y="0" width={W} height={H} fill="#f8fafc" />
-      <line x1="0" y1={Y(0)} x2={W} y2={Y(0)} stroke="#94a3b8" strokeWidth="1.5" />
-      <rect x="0" y={Y(0)} width={W} height={H - Y(0)} fill="#eef2f4" />
+      {!glMassgebend && <line x1="0" y1={Y(0)} x2={W} y2={Y(0)} stroke="#94a3b8" strokeWidth="1.5" />}
+      {!glMassgebend && <rect x="0" y={Y(0)} width={W} height={H - Y(0)} fill="#eef2f4" />}
+      {glMassgebend && (
+        <g data-testid="schnitt-gelaende">
+          {/* earth below the ground the building stands in */}
+          {(glNeu ? glNeuAussen : glBestandAussen).map((teil, i) => (
+            <path key={`erde${i}`} d={`${glPfad(teil)} L${X(teil[teil.length - 1].s_m)},${H} L${X(teil[0].s_m)},${H} Z`} fill="#eef2f4" />
+          ))}
+          {glBestand && glNeu && glBestandAussen.flatMap((b, i) => (glNeuAussen[i] ? profilFlaechen(b, glNeuAussen[i]) : [])).map((f, i) => (
+            <path key={`ef${i}`} d={`${glPfad(f.pts)} Z`} fill={sw ? "none" : ERDBAU_FARBE[f.art]} fillOpacity="0.7" stroke="#64748b" strokeWidth="0.3" strokeDasharray={f.art === "abtrag" ? "1 1.5" : undefined} data-erdbau={f.art} />
+          ))}
+          {glBestand && glNeu && <path d={glPfad(glBestand)} fill="none" stroke="#64748b" strokeWidth="1" strokeDasharray="5 3" data-gelaende="bestand" />}
+          {glBestand && !glNeu && glBestandAussen.map((teil, i) => <path key={`gb${i}`} d={glPfad(teil)} fill="none" stroke="#334155" strokeWidth="1.5" data-gelaende="bestand" />)}
+          {glNeu && glNeuAussen.map((teil, i) => <path key={`gn${i}`} d={glPfad(teil)} fill="none" stroke="#334155" strokeWidth="1.5" data-gelaende="neu" />)}
+          {show("labels") && glLabel.map((l) => (
+            <text key={l.art} x={X(l.s_m) + 2} y={Y(l.h_m) + l.unter} fontSize="9" className="fill-muted-foreground" data-gelaende-label={l.art}>{l.text}</text>
+          ))}
+        </g>
+      )}
+      {show("attika") && dachAnsicht.map((ring, i) => (
+        <g key={`da${i}`} data-dachansicht={achse === "z" ? "z" : "x"}>
+          <path d={ring.map((q, k) => `${k ? "L" : "M"}${X(q.s_m)},${Y(q.h_m)}`).join(" ") + " Z"} fill="#f1f5f9" stroke="#64748b" strokeWidth="0.8" />
+          {/* rafter lines: the face reads as an inclined roof seen from inside, not as a wall or a flat roof */}
+          {dachFalllinienImSchnitt(ring).map(([a, b], k) => <line key={k} x1={X(a.s_m)} y1={Y(a.h_m)} x2={X(b.s_m)} y2={Y(b.h_m)} stroke="#94a3b8" strokeWidth="0.5" />)}
+          {show("labels") && (
+            <text x={X((Math.min(...ring.map((q) => q.s_m)) + Math.max(...ring.map((q) => q.s_m))) / 2)} y={Y((Math.min(...ring.map((q) => q.h_m)) + Math.max(...ring.map((q) => q.h_m))) / 2) + 3}
+              textAnchor="middle" fontSize="9" className="fill-muted-foreground" stroke="#f1f5f9" strokeWidth="3" paintOrder="stroke" data-dachansicht-text>{t("Dachfläche in Ansicht")}</text>
+          )}
+        </g>
+      ))}
       {show("shell") && model.slabs.map((s, i) => {
         const lage = deckenLage(s, undefined, "huelle");
         // 108-02: the collar-beam floor is clipped to the roof — drawn only where its outline crosses the section line
@@ -1068,7 +1214,7 @@ function Schnitt({ model: modellRoh, storeyHeight, layerVis, unit = "m", maxSvgH
           fill={lk ? (lk.leer ? "none" : lk.fill) : f.color || "url(#hatch)"} stroke={lk ? lk.stroke : "#1e293b"} strokeWidth="0.4" data-schnittschicht={`${f.schluessel}:${f.schicht}`} data-verschneidung={f.quelle} />
       ))}
       {show("shell") && sideWalls.map((sw, i) => schnittErsetzt(vSchnitt, sw, false) ? null : (
-        <rect key={`sw${i}`} x={X(sw.von_m)} y={Y(wandOben)} width={sw.dicke_m * SCALE} height={wandOben * SCALE} fill={lk ? (lk.leer ? "none" : lk.fill) : "url(#hatch)"} stroke={lk ? lk.stroke : "#1e293b"} strokeWidth={lk ? lk.strokeWidth : "0.6"} strokeDasharray={lk?.dash} opacity={lk?.opacity} data-schnittwand={i} data-status={huelleStatus || undefined} />
+        <rect key={`sw${i}`} x={X(sw.von_m)} y={Y(wandOK(sw))} width={sw.dicke_m * SCALE} height={wandOK(sw) * SCALE} fill={lk ? (lk.leer ? "none" : lk.fill) : "url(#hatch)"} stroke={lk ? lk.stroke : "#1e293b"} strokeWidth={lk ? lk.strokeWidth : "0.6"} strokeDasharray={lk?.dash} opacity={lk?.opacity} data-schnittwand={i} data-status={huelleStatus || undefined} />
       ))}
       {show("shell") && ugWaende.map((uw, i) => schnittErsetzt(vSchnitt, uw, true) ? null : (
         <rect key={`ugw${i}`} x={X(uw.von_m)} y={Y(uw.oben_m)} width={uw.dicke_m * SCALE} height={(uw.oben_m - uw.unten_m) * SCALE} fill={lk ? (lk.leer ? "none" : lk.fill) : "url(#hatch)"} stroke={lk ? lk.stroke : "#1e293b"} strokeWidth={lk ? lk.strokeWidth : "0.6"} strokeDasharray={lk?.dash} opacity={lk?.opacity} data-schnittwand={`ug${i}`} data-unterirdisch="1" data-status={huelleStatus || undefined} />
@@ -1081,7 +1227,7 @@ function Schnitt({ model: modellRoh, storeyHeight, layerVis, unit = "m", maxSvgH
       )}
       {/* 107-13 [ASSUMED] terrain = ±0.00 (assumption A4): the basement counts as fully below ground on every side; way to the real
           value: the terrain profile from the height grid (gelaende.js hoeheAn) with plan 107-10. Named once there are basements below it */}
-      {show("labels") && untiefe > 0 && <text x={X(bb.minX) - 10} y={Y(0) + 11} textAnchor="end" fontSize="9" className="fill-muted-foreground" data-gelaende-label>{t("Gelände ±0,00")}</text>}
+      {show("labels") && untiefe > 0 && !glMassgebend && <text x={X(bb.minX) - 10} y={Y(0) + 11} textAnchor="end" fontSize="9" className="fill-muted-foreground" data-gelaende-label>{t("Gelände ±0,00")}</text>}
       {/* Attika (Brüstung) auf dem Dach */}
       {paraH > 0 && sideWalls.map((sw, i) => (
         <rect key={`pa${i}`} x={X(sw.von_m)} y={Y(attikaOK)} width={sw.dicke_m * SCALE} height={paraH * SCALE} fill="url(#hatch)" stroke="#1e293b" strokeWidth="0.6" />
@@ -1097,23 +1243,35 @@ function Schnitt({ model: modellRoh, storeyHeight, layerVis, unit = "m", maxSvgH
         });
       })}
       {show("labels") && model.storeys.map((st) => (
-        <g key={`lvl${st.level}`}>
-          <line x1={X(bb.minX) - 6} y1={Y(st.elevation)} x2={X(bb.maxX)} y2={Y(st.elevation)} stroke="#cbd5e1" strokeWidth="0.5" strokeDasharray="3 3" />
-          <text x={X(bb.minX) - 10} y={Y(st.elevation) - 3} textAnchor="end" fontSize="9" className="fill-slate-500">{st.name} · {st.elevation >= 0 ? "+" : ""}{st.elevation.toFixed(2)}</text>
-        </g>
+        <line key={`lvl${st.level}`} x1={X(bb.minX) - 6} y1={Y(st.elevation)} x2={X(bb.maxX)} y2={Y(st.elevation)} stroke="#cbd5e1" strokeWidth="0.5" strokeDasharray="3 3" />
       ))}
-      {show("labels") && !dachUnten && <text x={X(bb.minX) - 10} y={Y(totalH) - 3} textAnchor="end" fontSize="9" className="fill-slate-600" fontWeight="600">OK Dach +{totalH.toFixed(2)}</text>}
-      {/* 108-01: with a pitched roof the marks are eaves and ridge (the old "OK Dach" was the eaves of a pitched roof) */}
-      {show("labels") && dachUnten && <>
-        <text x={X(bb.minX) - 10} y={Y(dachUnten.traufe_m) - 3} textAnchor="end" fontSize="9" className="fill-foreground" fontWeight="600" data-kote="traufe">{t("Traufe")} +{dachUnten.traufe_m.toFixed(2)}</text>
-        <text x={X(bb.minX) - 10} y={Y(dachUnten.first_m) - 3} textAnchor="end" fontSize="9" className="fill-foreground" fontWeight="600" data-kote="first">{t("First")} +{dachUnten.first_m.toFixed(2)}</text>
-      </>}
-      {show("labels") && paraH > 0 && <text x={X(bb.minX) - 10} y={Y(attikaOK) - 3} textAnchor="end" fontSize="9" className="fill-slate-600" fontWeight="600">OK Attika +{attikaOK.toFixed(2)}</text>}
+      {/* 115-02: level marks in one column (DIN 1356-1: triangle with its tip on the level, value with sign and decimal comma); a mark
+          too close to the one above hangs below its level, one without a free place is left out (schnittMasse.js). 108-01: a pitched
+          roof has the marks eaves and ridge instead of "OK Dach" */}
+      {masse.links.koten.map((k, i) => {
+        const q = (/** @type {{dx: number, h_m: number, dy: number}} */ p) => `${X(bb.minX) - p.dx},${Y(p.h_m) - p.dy}`;
+        return (
+          <g key={`kote${i}`} className={k.art === "geschoss" ? "fill-muted-foreground" : "fill-foreground"} style={{ pointerEvents: "none" }}>
+            <line x1={X(bb.minX) - k.linie.a.dx} y1={Y(k.h_m)} x2={X(bb.minX) - k.linie.b.dx} y2={Y(k.h_m)} stroke="#94a3b8" strokeWidth="0.5" />
+            <path d={`M${q(k.dreieck[0])} L${q(k.dreieck[1])} L${q(k.dreieck[2])} Z`} />
+            <text x={X(bb.minX) - k.p.dx} y={Y(k.p.h_m) - k.p.dy} textAnchor="end" fontSize={SCHNITT_SCHRIFT_PX} fontWeight={k.art === "geschoss" ? undefined : "600"} data-kote={k.art}>{k.text}</text>
+          </g>
+        );
+      })}
       {show("dimensions") && <>
-        <DimLine x1={X(bb.maxX) + 16} y1={Y(0)} x2={X(bb.maxX) + 16} y2={Y(egHoehe)} vertical label={fmtLen(egHoehe, unit)} />
-        {/* 108-02: knee wall = top of the structural slab under the top storey up to the eaves */}
-        {knie != null && <g data-kote="kniestock"><DimLine x1={X(bb.maxX) + 16} y1={Y(wandOben - knie)} x2={X(bb.maxX) + 16} y2={Y(wandOben)} vertical label={t("Kniestock {{wert}}").replace("{{wert}}", fmtLen(knie, unit))} /></g>}
-        <DimLine x1={X(bb.minX)} y1={Y(-untiefe) + 22} x2={X(bb.maxX)} y2={Y(-untiefe) + 22} label={fmtLen(wM, unit)} />
+        {/* 115-02: height chains right of the building, from the inside out: detail (108-02 knee wall = top of the structural slab under
+            the top storey up to the eaves; parapet), storey heights, overall heights. Numbers above the line; a piece too short for
+            its number carries it beside the chain with a leader; the name "Kniestock" is its own text */}
+        <g stroke={MASS_STIL.stroke} strokeWidth="0.8" className={MASS_STIL.klasse} style={{ pointerEvents: "none" }} data-schnittmasse>
+          {masse.rechts.linien.map((l, i) => (
+            <line key={`ml${i}`} x1={X(bb.maxX) + l.a.dx} y1={Y(l.a.h_m) - l.a.dy} x2={X(bb.maxX) + l.b.dx} y2={Y(l.b.h_m) - l.b.dy} strokeWidth={l.art === "hilf" || l.art === "hinweis" ? "0.4" : undefined} />
+          ))}
+          {masse.rechts.texte.map((tx, i) => {
+            const x = X(bb.maxX) + tx.p.dx, y = Y(tx.p.h_m) - tx.p.dy;
+            return <text key={`mt${i}`} x={x} y={y} textAnchor={tx.winkel ? "middle" : "start"} fontSize={SCHNITT_SCHRIFT_PX} stroke="none" transform={tx.winkel ? `rotate(${tx.winkel} ${x} ${y})` : undefined} data-kote={tx.name}>{tx.text}</text>;
+          })}
+        </g>
+        <DimLine x1={X(bb.minX)} y1={Y(-untiefe) + 22} x2={X(bb.maxX)} y2={Y(-untiefe) + 22} label={massZahl(wM)} />
       </>}
       <ScaleBar x={12} y={H - 10} scale={SCALE} />
       <defs>
@@ -1127,11 +1285,23 @@ function Schnitt({ model: modellRoh, storeyHeight, layerVis, unit = "m", maxSvgH
 }
 
 // ---- Bemaßungslinie / Maßstab / Nordpfeil ---------------------------------
+/** 115-02: line colour and text class of the section's dimension lines — one place for DimLine and the height chains. */
+const MASS_STIL = { stroke: "#0f766e", klasse: "fill-teal-700" };
+/** 115-02: text height of the section's marks and dimensions in viewBox px (the size DimLine always had). */
+const SCHNITT_SCHRIFT_PX = 9;
+/** 115-02: clear margin outside the level marks / height chains of the section in viewBox px [ASSUMED: a little air to the frame]. */
+const SCHNITT_RAND_PX = 6;
+/**
+ * 115-02: smallest margin below the lowest level of the section in viewBox px: width chain 22 px below it, then the scale bar with its
+ * text (H − 23 … H − 7) — 48 px keep the two apart [ASSUMED from those sizes].
+ */
+const SCHNITT_UNTEN_PX = 48;
+
 /** @param {{x1: number, y1: number, x2: number, y2: number, label: string, vertical?: boolean}} props viewBox units */
 function DimLine({ x1, y1, x2, y2, label, vertical }) {
   const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
   return (
-    <g stroke="#0f766e" strokeWidth="0.8" className="fill-teal-700" style={{ pointerEvents: "none" }}>
+    <g stroke={MASS_STIL.stroke} strokeWidth="0.8" className={MASS_STIL.klasse} style={{ pointerEvents: "none" }}>
       <line x1={x1} y1={y1} x2={x2} y2={y2} />
       <line x1={x1 - (vertical ? 4 : 0)} y1={y1 - (vertical ? 0 : 4)} x2={x1 + (vertical ? 4 : 0)} y2={y1 + (vertical ? 0 : 4)} />
       <line x1={x2 - (vertical ? 4 : 0)} y1={y2 - (vertical ? 0 : 4)} x2={x2 + (vertical ? 4 : 0)} y2={y2 + (vertical ? 0 : 4)} />
@@ -1164,13 +1334,31 @@ function Handle({ x, y, square, onDown, onDouble }) {
     : <circle cx={x} cy={y} r="4.5" {...common} />;
 }
 
-function NorthArrow({ x, y }) {
+/**
+ * North arrow of the floor plan. 115-04: it turns with the plan (`drehung`, degrees counter-clockwise as seen; north is up on the
+ * unturned plan), the letter "N" stays upright and sits behind the arrow's tail. With 0 the markup is the one before 115-04.
+ * @param {{x: number, y: number, drehung?: number}} props x, y: centre in viewBox units of the sheet frame
+ */
+function NorthArrow({ x, y, drehung = 0 }) {
+  const w = nordpfeilWinkel(drehung), r = nordRichtung(drehung);
+  // letter: 11 units behind the centre against the arrow direction, baseline 3 units lower (for 0: x, y + 14 as before)
   return (
-    <g style={{ pointerEvents: "none" }}>
-      <path d={`M${x},${y - 10} L${x + 4},${y + 4} L${x},${y + 1} L${x - 4},${y + 4} Z`} fill="#0f172a" />
-      <text x={x} y={y + 14} textAnchor="middle" fontSize="8" className="fill-slate-500">N</text>
+    <g style={{ pointerEvents: "none" }} data-nordpfeil-winkel={w || undefined}>
+      <path d={`M${x},${y - 10} L${x + 4},${y + 4} L${x},${y + 1} L${x - 4},${y + 4} Z`} fill="#0f172a" transform={w ? `rotate(${w} ${x} ${y})` : undefined} />
+      <text x={x - r.x * 11} y={y - r.y * 11 + 3} textAnchor="middle" fontSize="8" className="fill-slate-500">N</text>
     </g>
   );
+}
+
+/**
+ * 115-04: the group of the turned floor plan — an SVG group with the frame transform, or a plain fragment when the plan is not
+ * turned (so the markup without a rotation has no extra element).
+ * @param {{transform?: string, grad: number, children?: import("react").ReactNode}} props transform: SVG matrix of drehRahmen;
+ *   grad: rotation in degrees counter-clockwise as seen
+ */
+function PlanDrehGruppe({ transform, grad, children }) {
+  if (!grad) return <>{children}</>;
+  return <g transform={transform} data-plan-drehgruppe={grad}>{children}</g>;
 }
 
 /**
@@ -1195,6 +1383,7 @@ function NorthArrow({ x, y }) {
  * @property {Array<object>} [customRoofs]
  * @property {Array<object>|null} [customStairs]  108-06: stairs (symbol in this storey and the one above)
  * @property {Array<object>|null} [gauben]        108-13: dormers (outline in the top storey)
+ * @property {Array<object>|null} [vordaecher]    W-1118-29: canopies (outline in their storey)
  * @property {any} [geschosse]                     storey table for the stair heights
  * @property {string} [unit] Längeneinheit (m | cm | mm)
  * @property {boolean} [fuellen] 75-16: viewBox folgt der Fläche (Füllmodus)
@@ -1210,6 +1399,9 @@ function NorthArrow({ x, y }) {
  * @property {any} [dach] 108-01: global roof form (globalesDach of dachGeometrie.js) — the section draws the cut roof plate and the
  *   eaves / ridge marks; null = the section as before
  * @property {"x"|"z"|null} [achse] 108-01: section axis, "x" = A-A (line z = 0, as before), "z" = B-B (line x = 0)
+ * @property {{bestand?: Array<{s_m: number, h_m: number}>|null, neu?: Array<{s_m: number, h_m: number}>|null, annahme?: boolean}|null} [gelaendeSchnitt]
+ *   108-10: terrain profiles along the section line (m along the line, m relative to ±0,00) — existing ground dashed, new ground solid;
+ *   annahme = the existing ground comes from the public elevation model. Without it the flat ground line at ±0,00 as before.
  * @property {object|null} [eingang] 108-01: the effective automatic entrance (autoOpenings.entranceOpening) or null when it is off
  *   (D-EFH-04); undefined = drawn as before
  * @property {Array<{x: number, z: number}>|null} [baufeldUmriss] 108-01: building envelope of the site planning in model metres,
@@ -1219,6 +1411,9 @@ function NorthArrow({ x, y }) {
  * @property {number|null} [massstab] 75-09: Maßstabs-Nenner (z. B. 50 für 1:50);
  *   null/undefined = kein Maßstabsmodus (Bestandsverhalten byte-gleich)
  * @property {{customWalls?: Array<object>, customColumns?: Array<object>, customWindows?: Array<object>}} [elements]
+ * @property {number} [drehung] 115-04: rotation of the FLOOR PLAN on the screen in degrees counter-clockwise as seen (0 | 90 | 180 |
+ *   270; other values are rounded to a quarter turn) — display only, the model and every reported point stay in model metres; the
+ *   section is never turned. 0 / absent = the plan as before
  */
 
 /**
@@ -1272,7 +1467,7 @@ function NorthArrow({ x, y }) {
  * darunter; interaktive Overlay-Elemente (z.B. Sketch-Handles) dürfen Events
  * bewusst behalten.
  */
-export default function BimPlan2D({ model, mode, level = 0, storeyHeight = 3, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, readOnly = false, overlay, overlayBounds, height = 520, elements, massstab = null, fuellen = false, brille = null, huelleStatus = null, sw = false, werkstattWaende = null, schichtFlaechen = null, schnittFlaechen = null, ansicht = null, detailMassstab = null, dach = null, achse = null, eingang = undefined, baufeldUmriss = null, baufeldMittig = false, customStairs = null, gauben = null, geschosse = null }) {
+export default function BimPlan2D({ model, mode, level = 0, storeyHeight = 3, edit, layerVis, envOpenings, customZones, customSlabs, customRoofs, unit = "m", focus, readOnly = false, overlay, overlayBounds, height = 520, elements, massstab = null, fuellen = false, brille = null, huelleStatus = null, sw = false, werkstattWaende = null, schichtFlaechen = null, schnittFlaechen = null, ansicht = null, detailMassstab = null, dach = null, achse = null, gelaendeSchnitt = null, eingang = undefined, baufeldUmriss = null, baufeldMittig = false, customStairs = null, gauben = null, vordaecher = null, geschosse = null, drehung = 0 }) {
   // 107-13: clamped between the lowest (basement) and the highest storey of the model; the old clamp only bounded the top by the
   // list LENGTH, which is wrong once basements are appended to the list. A model WITHOUT basements keeps the old behaviour for a
   // negative level (planEbene: no clamp downwards) - callers such as WohnungsFokus pass the level of a cellar zone (−1) and draw its
@@ -1289,8 +1484,8 @@ export default function BimPlan2D({ model, mode, level = 0, storeyHeight = 3, ed
   return (
     <div className="w-full bg-slate-50 flex items-center justify-center overflow-hidden" style={{ height }} data-bim-plan2d>
       {mode === "schnitt"
-        ? <Schnitt model={model} storeyHeight={storeyHeight} layerVis={layerVis} unit={unit} maxSvgH={maxSvgH} brille={brille} huelleStatus={huelleStatus} sw={sw} schnittFlaechen={schnittFlaechen} ansicht={ansicht} dach={dach} achse={achse} />
-        : <Grundriss model={model} level={lvl} edit={editEff} layerVis={layerVis} envOpenings={envOpenings} customZones={customZones} customSlabs={customSlabs} customRoofs={customRoofs} unit={unit} focus={focus} overlay={overlay} overlayBounds={overlayBounds} maxSvgH={maxSvgH} readOnly={readOnly} massstab={massstab} fuellen={fuellen} brille={brille} huelleStatus={huelleStatus} sw={sw} werkstattWaende={werkstattWaende} schichtFlaechen={schichtFlaechen} ansicht={ansicht} detailMassstab={detailMassstab} eingang={eingang} baufeldUmriss={baufeldUmriss} baufeldMittig={baufeldMittig} customStairs={customStairs} gauben={gauben} geschosse={geschosse} dach={dach} />}
+        ? <Schnitt model={model} storeyHeight={storeyHeight} layerVis={layerVis} unit={unit} maxSvgH={maxSvgH} brille={brille} huelleStatus={huelleStatus} sw={sw} schnittFlaechen={schnittFlaechen} ansicht={ansicht} dach={dach} achse={achse} gelaende={gelaendeSchnitt} />
+        : <Grundriss model={model} level={lvl} edit={editEff} layerVis={layerVis} envOpenings={envOpenings} customZones={customZones} customSlabs={customSlabs} customRoofs={customRoofs} unit={unit} focus={focus} overlay={overlay} overlayBounds={overlayBounds} maxSvgH={maxSvgH} readOnly={readOnly} massstab={massstab} fuellen={fuellen} brille={brille} huelleStatus={huelleStatus} sw={sw} werkstattWaende={werkstattWaende} schichtFlaechen={schichtFlaechen} ansicht={ansicht} detailMassstab={detailMassstab} eingang={eingang} baufeldUmriss={baufeldUmriss} baufeldMittig={baufeldMittig} customStairs={customStairs} gauben={gauben} vordaecher={vordaecher} geschosse={geschosse} dach={dach} drehung={drehung} />}
     </div>
   );
 }

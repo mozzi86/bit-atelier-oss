@@ -29,6 +29,14 @@ import { mitgliedschaftAuswerten } from '../lib/rollen.js';
 // 89-07 (D-BW-05): in the hosted edition the Supabase row is the truth and every BimModel layer
 // merges last-write-wins on its updatedAt — a late write of an older layer never wins.
 import { layerLww } from '../lib/speicherWahrheit.js';
+// 115-05b part 2: the 409 shape of a strict write on another stored state, shared with the serverless store (demoDb.js)
+import { standKonflikt } from './sammlungKern.js';
+
+/**
+ * 115-05b part 2 (E-3): entities with exactly one record per project - the same list as the express route
+ * (packages/nova-core/server/routes.js EIN_DATENSATZ_JE_PROJEKT; the client bundle must not import the server module).
+ */
+const EIN_DATENSATZ_JE_PROJEKT = Object.freeze(['BuildingComplex']);
 
 /** Plain-text message for every auth failure — users must know why nothing saved. */
 const AUTH_MELDUNG = 'Anmeldung abgelaufen — bitte neu anmelden';
@@ -146,7 +154,7 @@ function sortAnwenden(q, sortStr) {
  *   filter: (query?: object, sort?: string) => Promise<object[]>,
  *   get: (id: string) => Promise<object>,
  *   create: (data: object) => Promise<object>,
- *   update: (id: string, data: object) => Promise<object>,
+ *   update: (id: string, data: object, opts?: {stand?: string|null}) => Promise<object>,
  *   delete: (id: string) => Promise<{ success: true }> }}
  */
 export function entityClientSupabase(name) {
@@ -189,6 +197,21 @@ export function entityClientSupabase(name) {
 
     async create(datensatz) {
       const org = await authSupabase.aktuelleOrgId();
+      // 115-05b part 2 (E-3): one record per project for these entities - a second create answers like the express route (409
+      // with the stored record, the newest when old data holds duplicates), so the designer's three-way merge takes it over.
+      // [ASSUMED] read-then-insert leaves a race between two creates at the same moment; closing it needs a partial unique index
+      // on (org_id, entity, data->>'project_id') in a migration - open point, no cloud environment to run it in.
+      const pid = /** @type {any} */ (datensatz)?.project_id;
+      if (EIN_DATENSATZ_JE_PROJEKT.includes(name) && pid != null) {
+        const vorhandene = await this.filter({ project_id: pid });
+        let neuester = null;
+        for (const r of vorhandene) if (!neuester || String(r.updated_date ?? '') > String(neuester.updated_date ?? '')) neuester = r;
+        if (neuester) {
+          const err = standKonflikt(neuester);
+          Object.assign(err.data, { vorhanden: true });
+          throw err;
+        }
+      }
       const { data: user } = await supabaseClient().auth.getUser();
       // RLS insert-policy enforces created_by = auth.uid() (57-01/0002) —
       // set here so the policy sees the caller, not null.
@@ -205,12 +228,16 @@ export function entityClientSupabase(name) {
       return datensatzAusZeile(data);
     },
 
-    async update(id, datensatz) {
+    async update(id, datensatz, opts) {
       // Merge semantics like db.js update (shallow merge, id immutable):
       // read the row, merge the payload into the jsonb, write back. A single
       // `jsonb ||` RPC was considered (57-02 <interfaces>) and deferred until
       // a measurement shows the extra round trip hurts.
       const vorhandene = await this.get(id); // throws 404 like Express
+      // 115-05b part 2 (D-115-50 happened online): `opts.stand` = the updated_date the write builds on. Another stored state
+      // (inequality, not "older") is refused with the express route's 409 shape {status: 409, data: {gespeichert}}.
+      const stand = opts?.stand || null;
+      if (stand && String(vorhandene.updated_date ?? '') !== String(stand)) throw standKonflikt(vorhandene);
       // 89-07: BimModel layers last-write-wins per layer (layerLww); other entities and the
       // non-layer fields keep the flat merge.
       const gemergt = name === 'BimModel'
@@ -218,14 +245,28 @@ export function entityClientSupabase(name) {
         : { ...vorhandene, ...datensatz, id };
       // updated_date is set by the DB trigger (57-01/0001) — never from here.
       const { id: _i, created_date: _c, updated_date: _u, ...nurData } = gemergt;
-      const { data, error } = await supabaseClient()
+      let q = supabaseClient()
         .from('records')
         .update({ data: nurData })
         .eq('id', id)
-        .eq('entity', name)
-        .select(SPALTEN)
-        .single();
-      if (error) wirf(error, `update ${name}/${id}`);
+        .eq('entity', name);
+      // the race between the read above and this write: only the row still in the state the merge was built on is updated
+      if (stand) q = q.eq('updated_date', vorhandene.updated_date);
+      const { data, error } = await q.select(SPALTEN).single();
+      if (error) {
+        // 0 rows (PostgREST PGRST116 of .single()): another writer was faster - the row as it is now, in the 409 shape.
+        // Review 115-05b part 2 (finding 3): the row-level rules match 0 rows as well when the caller may read but not write
+        // (0011_policies_records.sql: no owner/planner, siegel_id set, no can_edit_model). Only a row read again in ANOTHER state is
+        // a conflict; the same state means nobody wrote in between - the write was refused by the rules: their 403, so the real
+        // cause reaches the person (before: a 409 equal to the own stand, the merge found nothing and ended in "changed elsewhere").
+        // [ASSUMED] derived from the policies and a client stand-in only - not verified against a real cloud.
+        if (stand && String(error.code || '') === 'PGRST116') {
+          const jetzt = await this.get(id);
+          if (String(jetzt.updated_date ?? '') !== String(vorhandene.updated_date ?? '')) throw standKonflikt(jetzt);
+          throw new ApiFehler(`${REGEL_MELDUNG} (update ${name}/${id}: ${error.message || error.code})`, 403, String(error.code));
+        }
+        wirf(error, `update ${name}/${id}`);
+      }
       return datensatzAusZeile(data);
     },
 

@@ -16,6 +16,8 @@
 // Not proved here (no device): the real microphone permission prompt and the real faster-whisper model - see 106-05-SUMMARY.
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -218,6 +220,7 @@ test.describe("106-05 Sprache am Modell: Drücken und Sprechen, erst Grammatik, 
       await expect(page.getByTestId("aenderung-vorschau")).toHaveCount(0);
       await expect.poll(feuer).toBe("F90");
       await expect(page.getByTestId("aenderung-schritt").first()).toHaveAttribute("data-herkunft", "sprache");
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).customWalls.find((w) => w._idx === 1).feuerwiderstand, { timeout: 20000 }).toBe("F90");
 
       // ============================================================ 2. typed: the same road, origin "text"; "nein" discards

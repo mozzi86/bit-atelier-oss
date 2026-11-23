@@ -85,7 +85,7 @@ export async function speichereKostensatz(obj, { api } = {}) {
       const { id, ...rest } = obj;
       return await c.update(id, rest);
     }
-    return await c.create(obj);
+    return await c.create(obj, { kennungUebernehmen: true }); // B-111-02-01: keep the record's own id
   } catch (fehler) {
     throw new Error(`Kostensatz konnte nicht gespeichert werden: ${text(fehler)}`);
   }

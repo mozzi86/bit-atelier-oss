@@ -5,6 +5,11 @@
 // every 5 minutes, and at once when the role changes ("Ansicht als"). A load
 // error shows no badge and is reported in plain text in the console.
 //
+// The deadline sources (quellenRegistry.js) load on demand inside the effect
+// (wave 1 / B-81-04): the hook sits in the layout, i.e. in the entry chunk, and a
+// static import pulled the sources with the tax deadlines and the holiday
+// tables of all 16 states onto the start path. The badge is async anyway.
+//
 // In:  nothing (contexts). Out: useFaelligZaehler() → number|null.
 
 import { useEffect, useRef, useState } from "react";
@@ -15,7 +20,6 @@ import { DATENQUELLE } from "@core/lib/umgebung";
 import { useZugriff } from "@core/lib/ZugriffContext.jsx";
 import { useRegelWerte } from "@core/lib/useRegelWerte";
 import { REGELWERKE } from "@/lib/settings/regelwerke.js";
-import { ladeTermine } from "@/lib/termine/quellenRegistry.js";
 import { filterNachZugriff, zaehleFaellige } from "@/lib/termine/termineAnsicht.js";
 
 /** Minimum pause between two loads triggered by window focus, ms. */
@@ -42,6 +46,7 @@ export function useFaelligZaehler() {
       if (!zugriff.darf("fristen")) { setAnzahl(null); return; }
       try {
         const heute = heuteLokal();
+        const { ladeTermine } = await import("@/lib/termine/quellenRegistry.js");
         const { termine } = await ladeTermine(bitApi, { von: /** @type {string} */ (plusTage(heute, -365)), bis: /** @type {string} */ (plusTage(heute, 1)), heute, regelWert: (/** @type {string} */ id) => wert(id), datenquelle: DATENQUELLE, rolle: user?.role ?? null, zugriff });
         if (aktiv) setAnzahl(zaehleFaellige(filterNachZugriff(termine, zugriff), heute));
       } catch (e) {

@@ -32,16 +32,19 @@ import { seitenWurzel } from '@core/lib/utils';
 import { DATENQUELLE } from '@core/lib/umgebung';
 import { inhaltLaden } from '@core/lib/speicherOrt';
 import {
-  BAUHERR_ARTEN, BAUHERR_LABELS, bauherrDateiname, freigebbar, kgVerdichten, kostenAusLv, portalAufbereiten, projektionAus,
+  BAUHERR_ARTEN, BAUHERR_LABELS, bauherrDateiname, freigebbar, freigegebenerHinweis, kgVerdichten, kostenAusLv, portalAufbereiten, projektionAus,
 } from '@core/lib/bauherrProjektion';
 import { kostenJeKg } from '@ava/lib/kostenJeKg';
+import { moeblierungProjektion, vorschlagLesen, vorschlagPruefen } from '@core/lib/bauherrMoeblierung';
+import { moebelById, moebelFuerZone, setzeEigeneTypen, zoneKey } from '@designer/lib/moebel';
+import { moeblierungUebernehmen } from '../lib/bauherr/moeblierungUebernehmen';
 import { ROLLEN as BETEILIGTEN_ROLLEN } from '@/lib/people/beteiligte';
 import BauherrAnsicht from '../components/bauherr/BauherrAnsicht';
 
 const CLOUD = DATENQUELLE === 'supabase';
 
 /** Kinds where the office may ask the client for a decision (D-BH-05). */
-const MIT_ENTSCHEIDUNG = Object.freeze(['BauherrPlan', 'BauherrDokument', 'BauherrBemusterung']);
+const MIT_ENTSCHEIDUNG = Object.freeze(['BauherrPlan', 'BauherrDokument', 'BauherrBemusterung', 'BauherrMoeblierung']);
 
 /**
  * @typedef {{ schluessel: string, art: string, entity: string, quelle: Record<string, any>,
@@ -76,6 +79,8 @@ function kandidatenBilden(projekt, q) {
   for (const t of q.Termin || []) dazu('BauherrTermin', 'Termin', t, t.titel || 'Termin');
   // 110-05: the building model goes out as a 3D view of its hull (GLB, built on release).
   for (const m of q.BimModel || []) dazu('BauherrModell', 'BimModel', m, 'Gebäudemodell (3D-Ansicht)');
+  // W-1118-22: the furnished rooms, for the client to move furniture in (a proposal, never the model)
+  for (const c of q.BuildingComplex || []) dazu('BauherrMoeblierung', 'BuildingComplex', c, 'Möblierung der Räume');
   for (const p of q.Plan || []) dazu('BauherrPlan', 'Plan', p, `${p.nr || ''} ${p.titel || ''}`.trim(), p.datei_ref ? dokNachId.get(p.datei_ref) || null : null);
   for (const d of q.Document || []) {
     if (istBild(d)) dazu('BauherrFoto', 'Document', d, d.name || 'Foto', d);
@@ -123,12 +128,12 @@ export default function Bauherrenzugang() {
     setFehler('');
     try {
       const f = { project_id: projektId };
-      const [plan, dok, ks, st, te, bem, sw, ar, kon, lv, ten, bid, mea, bim] = await Promise.all([
+      const [plan, dok, ks, st, te, bem, sw, ar, kon, lv, ten, bid, mea, bim, komplex] = await Promise.all([
         bitApi.entities.Plan.filter(f), bitApi.entities.Document.filter(f), bitApi.entities.KostenStand.filter(f),
         bitApi.entities.ScheduleTask.filter(f), bitApi.entities.Termin.filter(f), bitApi.entities.Bemusterung.filter(f),
         bitApi.entities.Sonderwunsch.filter(f), bitApi.entities.Ausgangsrechnung.filter(f), bitApi.entities.Contact.list(),
         bitApi.entities.LVPosition.filter(f), bitApi.entities.Tender.filter(f), bitApi.entities.Bid.list(), bitApi.entities.Measurement.filter(f),
-        bitApi.entities.BimModel.filter(f),
+        bitApi.entities.BimModel.filter(f), bitApi.entities.BuildingComplex.filter(f),
       ]);
       // Existing releases: the office reads the client kinds like any project row (both data paths).
       // Loaded BEFORE the candidates are shown (06.11.2026): setting the candidates first and the
@@ -144,11 +149,16 @@ export default function Bauherrenzugang() {
       }
       setBestand(b);
       setAuswahl(vor);
+      // The live note, like the live ticks: a release rewrites BauherrProjekt with the field's text,
+      // so an empty field after a reload would remove the note from the portal (22.11.2026).
+      setHinweis(freigegebenerHinweis(b.BauherrProjekt));
       setQuellen({
         Plan: plan, Document: dok, KostenStand: ks, ScheduleTask: st, Termin: te, Bemusterung: bem, Sonderwunsch: sw,
         Ausgangsrechnung: ar, Contact: kon, LVPosition: lv, Tender: ten, Bid: bid, Measurement: mea,
         // One record per project: the first row, as loadBimModel (useBimModelSync) reads it.
         BimModel: (bim || []).slice(0, 1),
+        // the newest design record, as the designer reads it (komplexDatensatzWaehlen)
+        BuildingComplex: [...(komplex || [])].sort((a, b) => String(b.updated_date || '').localeCompare(String(a.updated_date || ''))).slice(0, 1),
       });
     } catch (e) {
       setFehler(String(/** @type {any} */ (e)?.message || e));
@@ -176,6 +186,18 @@ export default function Bauherrenzugang() {
     });
   }, [quellen]);
 
+  // W-1118-22: rooms of the building model and their furniture as the client will see them. Model rooms only (BimModel.customZones);
+  // rooms generated from the space programme have no record of their own and are not released.
+  const moeblierung = useMemo(() => {
+    const modell = quellen?.BimModel?.[0], komplex = quellen?.BuildingComplex?.[0];
+    if (!modell || !komplex) return null;
+    setzeEigeneTypen(komplex.moebel_eigene || []); // the project's own furniture types, so their sizes are known
+    const namen = new Map((Array.isArray(modell.geschosse) ? modell.geschosse : []).map((/** @type {any} */ g) => [Number(g.level), String(g.name || '')]));
+    const raeume = (Array.isArray(modell.customZones) ? modell.customZones : []).map((/** @type {any} */ z) => ({ ...z, id: z._idx }));
+    return moeblierungProjektion({ raeume, moeblierung: komplex.moeblierung, schluessel: zoneKey, moebelVon: (r) => moebelFuerZone(komplex.moeblierung, r), typ: moebelById,
+      geschossName: (l) => namen.get(l) || (l === 0 ? 'EG' : l < 0 ? `${-l}. UG` : `${l}. OG`) });
+  }, [quellen]);
+
   const rollenLabel = useCallback((/** @type {string} */ id) => BETEILIGTEN_ROLLEN.find((r) => r.id === id)?.label || id, []);
 
   /** @param {Kandidat} k @returns {Record<string, unknown>|null} */
@@ -187,10 +209,11 @@ export default function Bauherrenzugang() {
       gruppen: k.art === 'BauherrKosten' ? gruppen : undefined,
       kontakte: quellen?.Contact || [],
       rollenLabel,
+      moeblierung: k.art === 'BauherrMoeblierung' ? moeblierung : undefined,
     });
     if (p && k.dateiQuelle) p.datei = bauherrDateiname(k.dateiQuelle.name || 'datei.pdf');
     return p;
-  }, [auswahl, hinweis, gruppen, quellen, rollenLabel]);
+  }, [auswahl, hinweis, gruppen, quellen, rollenLabel, moeblierung]);
 
   // A plan that is not released internally goes out only WITH a decision request
   // (freigebbar, D-BH-05): the box "Entscheidung anfragen" is then forced on.
@@ -263,6 +286,18 @@ export default function Bauherrenzugang() {
     ? `${t('Einladung zu Ihrem Projekt im BIT-Atelier')}${project?.name ? ` „${project.name}“` : ''}: ${link}`
     : '';
 
+  // W-1118-22: a furniture proposal of the client, checked against the furnishing that was released to them. Taking it over
+  // writes ONLY centre and rotation of furniture that still stands in the model, on the strict stand of a fresh read.
+  /** @param {Record<string, any>} r feedback row of art moeblierung */
+  const vorschlagVon = (r) => vorschlagPruefen((bestand.BauherrMoeblierung || []).find((z) => z.id === r.bezug_id) || null, vorschlagLesen(r.vorschlag));
+  /** @param {Record<string, any>} r */
+  const vorschlagUebernehmen = (r) => ausfuehren(async () => {
+    const p = vorschlagVon(r);
+    if (!p.ok || !projektId) throw new Error(t(p.grund || 'Der Vorschlag ist nicht lesbar.'));
+    const e = await moeblierungUebernehmen({ api: bitApi.entities.BuildingComplex, projektId, aenderungen: p.gueltig });
+    return `${e.uebernommen} ${t('Möbel aus dem Vorschlag übernommen.')}${e.uebersprungen.length ? ` ${e.uebersprungen.length} ${t('gibt es im Modell nicht mehr.')}` : ''} ${t('Die Freigabe der Möblierung jetzt erneuern, damit der Bauherr den neuen Stand sieht.')}`;
+  });
+
   /** @param {string} id */
   const beantworten = (id) => ausfuehren(async () => {
     await bauherrAntworten(id, antwort[id] || '');
@@ -324,7 +359,7 @@ export default function Bauherrenzugang() {
                             <label className="flex items-center gap-1 text-xs text-muted-foreground">
                               <input type="checkbox" disabled={busy || (mussEntscheiden(k) && Boolean(auswahl[k.schluessel]?.an))} checked={Boolean(auswahl[k.schluessel]?.entscheidung)}
                                 onChange={(e) => setzen(k.schluessel, { entscheidung: e.target.checked, an: e.target.checked || Boolean(auswahl[k.schluessel]?.an) })} />
-                              {t('Entscheidung anfragen')}
+                              {art === 'BauherrMoeblierung' ? t('Vorschlag anfragen (Bauherr darf Möbel rücken)') : t('Entscheidung anfragen')}
                             </label>
                           )}
                           {k.grund && <span className="text-xs text-muted-foreground">— {t(k.grund)}</span>}
@@ -407,6 +442,25 @@ export default function Bauherrenzugang() {
                       <li key={r.id} className={`rounded ${flaecheRuhe} p-2`}>
                         <p><strong>{t(r.art)}</strong>{r.bezug_entity ? ` · ${t(BAUHERR_LABELS[/** @type {keyof typeof BAUHERR_LABELS} */ (r.bezug_entity)] || r.bezug_entity)}` : ''}{r.option ? ` · ${t('Option')} ${r.option}` : ''} · {String(r.zeitpunkt || '').slice(0, 10)}</p>
                         {r.text && <p>{r.text}</p>}
+                        {r.art === 'moeblierung' && (() => {
+                          const p = vorschlagVon(r);
+                          return (
+                            <div className="mt-1 space-y-1" data-testid="bz-moebel-vorschlag">
+                              <p className="text-xs text-muted-foreground">
+                                {p.gueltig.length} {t('Möbel verschoben oder gedreht')}{p.abgelehnt.length ? ` · ${p.abgelehnt.length} ${t('nicht zulässig')}` : ''}{p.ueberlappungen ? ` · ${p.ueberlappungen} ${t('Überlappung(en)')}` : ''}
+                                {!p.ok && p.grund ? ` — ${t(p.grund)}` : ''}
+                              </p>
+                              <ul className="text-xs">
+                                {p.gueltig.map(([rk, id, x, y, rot]) => {
+                                  const m = p.moebel.find((q) => q.raum === rk && q.id === id);
+                                  return <li key={`${rk}:${id}`}>{m?.name || id}: {x.toFixed(2).replace('.', ',')} / {y.toFixed(2).replace('.', ',')} m, {rot}°</li>;
+                                })}
+                              </ul>
+                              <button type="button" className={`rounded-md ${flaecheKnopfLeise} px-2 py-1 text-xs disabled:opacity-50`} disabled={busy || !p.ok}
+                                onClick={() => vorschlagUebernehmen(r)} data-testid="bz-moebel-uebernehmen">{t('Ins Modell übernehmen')}</button>
+                            </div>
+                          );
+                        })()}
                         {(r.art === 'frage' || r.art === 'kommentar') && (
                           <div className="mt-1 flex gap-2">
                             <label htmlFor={`bz-antwort-${r.id}`} className="sr-only">{t('Antwort')}</label>

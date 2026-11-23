@@ -11,6 +11,8 @@
 // GUID der übernommenen Stütze an; (6) „Übernahme zurücknehmen“ entfernt sie wieder.
 // Eigenes Projekt, Aufräumen im finally, Konsole sauber.
 import { test, expect } from "./fixtures/base.js";
+// 115-05c (D-115-12): "Als Bauteil übernehmen" is a draft change of the building model until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -143,6 +145,10 @@ test("107-08 Box → Bauteil: Typ automatisch und rücknehmbar, Stütze überneh
     // take over: a column with quelle_koerper in the BIM record, the button turns into "Übernahme zurücknehmen"
     await page.getByTestId("mm-als-bauteil").click();
     await expect(page.getByTestId("mm-uebernahme-zurueck")).toBeVisible();
+    // 115-05c (adapted): nothing written before "Speichern" (before: a strict direct write)
+    await page.waitForTimeout(2000);
+    expect(((await gespeichert()).customColumns || []).length, "nothing written before Speichern").toBe(0);
+    await speichernUndWarten(page);
     await expect.poll(async () => ((await gespeichert()).customColumns || []).filter((/** @type {any} */ c) => c.quelle_koerper === stuetze.id).length, { timeout: 20000 }).toBe(1);
 
     // Ctrl copy, then "*3" → three copies, none of them carries the stored guid
@@ -198,6 +204,7 @@ test("107-08 Box → Bauteil: Typ automatisch und rücknehmbar, Stütze überneh
     await expect(page.getByTestId("mm-uebernahme-zurueck")).toBeVisible();
     await page.getByTestId("mm-uebernahme-zurueck").click();
     await expect(page.getByTestId("mm-als-bauteil")).toBeVisible();
+    await speichernUndWarten(page); // 115-05c (adapted)
     await expect.poll(async () => ((await gespeichert()).customColumns || []).length, { timeout: 20000 }).toBe(0);
     await expect(page.getByTestId("mm-koerper")).toHaveCount(6);
 

@@ -24,4 +24,7 @@ export const EN = {
     "Freehand with a pen: pressure sets the line width, the eraser removes whole strokes (also the pen's eraser button).",
   "Die Skizze ist größer als 256 KB — sie liegt im Datensatz des Projekts. Alte Striche radieren oder aufteilen.":
     "The sketch is larger than 256 KB — it lives in the project record. Erase old strokes or split it.",
+  // 15.11.2026: tracing underlays (floor plan per storey, section) behind the sketch
+  "Transparenzpause": "Tracing underlay",
+  "aus": "off",
 };

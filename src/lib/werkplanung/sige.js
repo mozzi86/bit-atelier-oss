@@ -142,8 +142,10 @@ export function anhangIWert(s, key) {
  * @returns {Promise<{bytes: Uint8Array, dateiname: string, offen: number}>} offen = empty fields
  */
 export async function vorankuendigungPdf({ s, projektName = "", jetzt = new Date() }) {
-  const { jsPDF } = await import("jspdf");
+  // W0-F6: the metadata helper is imported dynamically, so the entry's preload map does not name its chunk.
+  const [{ jsPDF }, { jsPdfMetadaten }] = await Promise.all([import("jspdf"), import("@core/lib/pdfMetadaten.js")]);
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  jsPdfMetadaten(pdf, { titel: `Vorankündigung nach BaustellV ${projektName || ""} (Entwurf)`.replace(/\s+/g, " "), betreff: projektName || "" }); // 105-19
   const L = 20, B = 170;
   pdf.setFontSize(60); pdf.setTextColor(238); pdf.text("ENTWURF", 105, 160, { align: "center", angle: 35 }); pdf.setTextColor(0);
   let y = 22;

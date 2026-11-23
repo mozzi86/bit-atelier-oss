@@ -17,6 +17,8 @@
 // 107-12: opening symbols of a saved view (planGrafik `ebene: "oeffnung"`) land on the additive layer A_OEFFNUNG — outlines only, the
 // white cut of the PDF never becomes a poché SOLID; a fallback of the walls to the bands is written as visible text on A_PLANKOPF
 // ("Wände aus Bändern abgeleitet, Solid nicht verfügbar") plus a comment line. Without them the output is unchanged.
+// 115-04: a floor plan with a sheet orientation (planGrafik `blattDrehung` ≠ 0) arrives already turned; its north arrow lands on the
+// additive layer A_NORDPFEIL and a comment line says that the coordinates are sheet coordinates (turned about the model origin).
 // In:  complexData (site plan) or planGrafik() output (floor plan), scale, project name, model state.
 // Out: {ebenen, elemente, linientypen, kommentar} for dxfR12(); dxfDatei() → text + bytes.
 // Pure module: no DOM, no React, node-testable.
@@ -68,9 +70,13 @@ const GRUNDRISS_EBENE = /** @type {Readonly<Record<string, string>>} */ (Object.
   wand: "A_WAND", stuetze: "A_STUETZE", decke: "A_DECKE", dach: "A_DACH", schraffur: "A_SCHRAFFUR", raum_text: "A_RAUM_TEXT",
   ki_vermerk: "A_KI_VERMERK", oeffnung: "A_OEFFNUNG",
   treppe: "A_TREPPE", gaube: "A_GAUBE", // 108-06 / 108-13: stair symbol, dormer outline (additive layers)
+  vordach: "A_VORDACH", // W-1118-29: canopy outline
+  nordpfeil: "A_NORDPFEIL", // 115-04: north arrow of a turned sheet (only present with a sheet orientation ≠ 0)
+  // 108-10: terrain lines of a section — existing ground (dashed) and new ground, with the earthworks marks between them
+  gelaende_bestand: "A_GELAENDE_BESTAND", gelaende_neu: "A_GELAENDE_NEU", erdbau_abtrag: "A_ERDBAU_ABTRAG", erdbau_auftrag: "A_ERDBAU_AUFTRAG",
 }));
 /** Line types of the floor plan layers (the screen shows slabs dashed, roofs dash-dot; 106-11: AI marks dashed). */
-const GRUNDRISS_LINIENTYP = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({ A_DECKE: "STRICH", A_DACH: "STRICHPUNKT", A_KI_VERMERK: "STRICH", A_GAUBE: "STRICH" }));
+const GRUNDRISS_LINIENTYP = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({ A_DECKE: "STRICH", A_DACH: "STRICHPUNKT", A_KI_VERMERK: "STRICH", A_GAUBE: "STRICH", A_GELAENDE_BESTAND: "STRICH" }));
 /** 106-11: layer of the visible model state line under the drawing. */
 const PLANKOPF_EBENE = "A_PLANKOPF";
 
@@ -169,7 +175,9 @@ export function lageplanDxfDaten(complexData, { massstab = 500, projekt = "", t 
  * state line under the drawing (layer A_PLANKOPF) and - when AI changes are unreleased or the state is unknown - the note above
  * the drawing (layer A_KI_VERMERK). Left out entirely (undefined) the function stays the pure translation of 104-06 (the comment
  * then says "nicht ermittelt"); the BIM studio always passes it.
- * @param {{elemente: any[], bbox: any, markiert?: string[]}} grafik output of planGrafik(), metres (x, z down)
+ * 115-04: a turned sheet (`grafik.blattDrehung`, degrees counter-clockwise as seen) is written as it is drawn; one more comment line
+ * names the rotation, because the coordinates are then no model coordinates. Without it the output is unchanged.
+ * @param {{elemente: any[], bbox: any, markiert?: string[], blattDrehung?: number}} grafik output of planGrafik(), metres (x, z down)
  * @param {{massstab?: number, geschoss?: string, projekt?: string, modellstand?: import("@core/lib/zeigen/planStand.js").ModellStand|null, ableitungsVermerk?: string|null}} [opt]
  *   scale denominator (default 1:100), storey name, project name, model state; ableitungsVermerk (107-12): note of a fallback to the
  *   bands, written under the drawing (A_PLANKOPF) and as a comment line, null = none
@@ -197,7 +205,9 @@ export function grundrissDxfDaten(grafik, { massstab = 100, geschoss = "", proje
     } else if (e?.art === "text" && e.text) {
       merke(eb, 0.25);
       el.push({ art: "text", ebene: eb, x: Number(e.x), y: -Number(e.z), hoehe: ((Number(e.groesse_mm) || TEXT_MM) * massstab) / 1000, text: String(e.text),
-        ...(e.ausrichtung === "links" ? { ausrichtung: /** @type {"links"} */ ("links") } : {}) });
+        ...(e.ausrichtung === "links" ? { ausrichtung: /** @type {"links"} */ ("links") } : {}),
+        // 115-02: turned text (numbers of vertical dimension chains): screen angle (y down) → DXF angle (y up, counter-clockwise)
+        ...(Number(e.drehung_grad) ? { drehung_grad: -Number(e.drehung_grad) } : {}) });
     }
   }
   // 106-11: visible model state and note (only when the caller handed a state, see above)
@@ -236,6 +246,8 @@ export function grundrissDxfDaten(grafik, { massstab = 100, geschoss = "", proje
   ];
   if (vermerk) kommentar.push(ascii(`ACHTUNG: ${vermerkZeilen(modellstand)?.titel ?? ""} - Vermerk und Markierung auf Ebene A_KI_VERMERK`));
   if (ableitungsVermerk) kommentar.push(ascii(`ACHTUNG: ${ableitungsVermerk}`));
+  // 115-04: sheet orientation — the second line above ("y = -z des Modells") holds for the unturned drawing only
+  if (Number(grafik?.blattDrehung)) kommentar.push(`Blattausrichtung: Zeichnung um ${Number(grafik.blattDrehung)} Grad gegen den Uhrzeigersinn um den Modellursprung gedreht - Blattkoordinaten, Nord siehe A_NORDPFEIL`);
   return { ebenen, elemente: el, linientypen: linientypenFuer(massstab), kommentar, leer: el.length === 0, vermerk };
 }
 

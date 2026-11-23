@@ -22,6 +22,20 @@ export function pdfMassstab(hoehePx) {
 }
 
 /**
+ * Title and language of a rasterised element (105-19): the pages are app views written in the UI language (t()), so
+ * /Lang is the active UI language unless the caller names the content's language.
+ * @param {string} filename download file name
+ * @param {{titel?: string, sprache?: string}} [opt] titel: default = the file name without ".pdf";
+ *   sprache: BCP 47 tag of the content; default = UI language (pdfSpracheAusUi)
+ * @returns {Promise<{titel: string, sprache: string}>} async because the helper module is imported dynamically (W0-F6:
+ *   a static import put its chunk into the entry's preload map)
+ */
+export async function elementPdfMetadaten(filename, { titel = "", sprache = "" } = {}) {
+  const { pdfSpracheAusUi, pdfTitelAusDateiname } = await import("@core/lib/pdfMetadaten");
+  return { titel: titel || pdfTitelAusDateiname(filename), sprache: sprache || pdfSpracheAusUi() };
+}
+
+/**
  * Ein DOM-Element als mehrseitiges A4-PDF exportieren.
  *
  * Ablage (26.08.2026): Wird `ablage` übergeben, wird der Export zusätzlich in der
@@ -44,14 +58,19 @@ export function pdfMassstab(hoehePx) {
  * @param {string} filename
  * @param {{orientation?: "portrait"|"landscape",
  *          ablage?: {projectId: string, typ?: string, reiter?: string, notiz?: string},
- *          alsBytes?: boolean}} [opt]
+ *          alsBytes?: boolean, titel?: string, sprache?: string}} [opt]
+ *   titel (105-19): document title; default = the file name without ".pdf" (underscores as spaces);
+ *   sprache (105-19): BCP 47 tag of the content; default = the active UI language (elementPdfMetadaten)
  * @returns {Promise<{abgelegt: boolean, pfad?: Array<string>, grund?: string, bytes?: Uint8Array}|undefined>}
  */
-export async function exportElementToPdf(el, filename, { orientation = "portrait", ablage, alsBytes = false } = {}) {
+export async function exportElementToPdf(el, filename, { orientation = "portrait", ablage, alsBytes = false, titel = "", sprache = "" } = {}) {
   if (!el) return;
   const canvas = await html2canvas(el, { scale: pdfMassstab(el.scrollHeight), backgroundColor: "#ffffff", useCORS: true, logging: false });
   const img = canvas.toDataURL("image/jpeg", 0.92);
   const pdf = new jsPDF({ orientation, unit: "mm", format: "a4" });
+  // 105-19: /Lang and /Title. The rasterised pages are app views in the UI language (translated with t()).
+  const { jsPdfMetadaten } = await import("@core/lib/pdfMetadaten"); // W0-F6: dynamic, see elementPdfMetadaten
+  jsPdfMetadaten(pdf, await elementPdfMetadaten(filename, { titel, sprache }));
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const imgW = pageW;

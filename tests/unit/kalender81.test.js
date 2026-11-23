@@ -34,8 +34,8 @@ test("feiertage: Bayern mit 15.8. = 13 Tage, ohne = 12, enthält die Bundesliste
   assert.ok(!istFeiertag("2026-01-07", by));
   // Augsburg only when switched on.
   assert.ok(feiertage(2026, { augsburger_friedensfest: true }).some((f) => f.datum === "2026-08-08"));
-  // Another state: nation-wide only (not implemented yet).
-  assert.equal(feiertage(2026, { bundesland: "NW" }).length, 9);
+  // Another state (wave 1, B-81-04): NW adds Corpus Christi and All Saints; full table in kalender-laender-w1.test.js.
+  assert.equal(feiertage(2026, { bundesland: "NW" }).length, 11);
   // Sorted by date.
   const daten = by.map((f) => f.datum);
   assert.deepEqual([...daten].sort(), daten);

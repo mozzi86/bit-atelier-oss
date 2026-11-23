@@ -18,19 +18,18 @@ speech profile never sees these tools (its registry is the MCP bridge's, see har
 In:  JSON arguments (lengths in metres), ToolContext (project folder, sandbox roots).
 Out: JSON strings via tool_ok / tool_error; German messages; read results carry the data-not-instruction note.
 IFC building and checking run in a worker thread (a check of a big file must not block the service), one at a
-time per process (`_IFC_SPERRE`: ifcopenshell is not thread-safe).
+time per process (`harness.ifc_sperre`, shared with ifc_run: ifcopenshell is not thread-safe).
 """
 
 from __future__ import annotations
 
-import asyncio
 import re
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from harness.agent.context import DATA_NOT_INSTRUCTION
+from harness.ifc_sperre import IFC_SPERRE, im_ifc_thread
 from harness.tools.ifc import _neueste_modelldatei, _viewer_link, _ziel
 from harness.tools.registry import ToolContext, registry, tool_error, tool_ok
 from harness.tools.sandbox import resolve_in_sandbox
@@ -52,16 +51,14 @@ _ARTEN_BIBLIOTHEK = ("material", "typen", "muster")
 #: the process (later IFC work failed with AttributeError in ifcopenshell.api; found by the test suite,
 #: 08.11.). It also makes "choose a free name + write" atomic, so parallel calls never share a file. Several
 #: chat sessions of one harness service can call tools at the same time; within one session the loop is
-#: sequential anyway.
-_IFC_SPERRE = threading.Lock()
+#: sequential anyway. B-111-01-03: this is the process-wide lock of harness.ifc_sperre, shared with ifc_run
+#: and the FreeCAD round-trip check (name kept for existing references).
+_IFC_SPERRE = IFC_SPERRE
 
 
 async def _im_thread(fn, *args):
-    """Run `fn(*args)` in a worker thread while holding `_IFC_SPERRE` (keeps the event loop free)."""
-    def gesperrt():
-        with _IFC_SPERRE:
-            return fn(*args)
-    return await asyncio.to_thread(gesperrt)
+    """Run `fn(*args)` in a worker thread while holding the process-wide IFC lock (keeps the event loop free)."""
+    return await im_ifc_thread(fn, *args)
 
 
 class EingabeFehler(ValueError):

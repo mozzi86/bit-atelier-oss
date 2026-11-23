@@ -3,6 +3,8 @@
 // wird der Riegel automatisch gespeichert (complexData.riegel). Eigene Projekte, Aufräumen im finally.
 import { test, expect } from "./fixtures/base.js";
 import { nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 
 const NAME = "E2E Riegel 10104";
 const NAME_KARTE = "E2E Riegel 10104 Karte";
@@ -83,6 +85,7 @@ test("101-04 Riegel auf der Karte: drei Punkte + Enter speichert complexData.rie
     const cx = k.x + k.width / 2, cy = Math.min(k.y + k.height / 2, (page.viewportSize()?.height ?? 720) - 120);
     for (const [dx, dy] of [[-80, -40], [40, -40], [40, 40]]) { await page.mouse.click(cx + dx, cy + dy); await page.waitForTimeout(150); }
     await page.keyboard.press("Enter");
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(async () => {
       const r = (await (await request.get(`/api/entities/BuildingComplex/${bc}`)).json()).riegel?.[0];
       return r ? `${r.punkte.length}|${r.geschlossen}|${r.opt?.geschosse}` : "keiner";

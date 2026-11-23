@@ -148,3 +148,7 @@ abnahme-daten/
 
 # 104-04: local agent control token (written at server start, never commit)
 steuerung.token
+
+# 117-01: build output and local corpus results of the Rust workspace (rust/probe has its own ignore).
+rust/target/
+rust/lokal/

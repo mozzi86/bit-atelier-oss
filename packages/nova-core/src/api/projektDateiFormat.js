@@ -74,6 +74,139 @@ export function entferneBereiche(daten, ohne, ohneSettingKeys, ohneDokumentBerei
 }
 
 /**
+ * Field names that bind a record to a project. The stores use all three spellings (project_id is the
+ * convention; projectId/projekt_id occur in older modules).
+ */
+const PROJEKT_FELDER = Object.freeze(['project_id', 'projectId', 'projekt_id']);
+
+/**
+ * W1-BUERO-F3: records that can hang on a project only through a parent id (collection → [parent field,
+ * parent collection], checked in order). Found by grepping every create/write payload for `*_id`
+ * fields on 19.11.2026 (there are no entity schemas besides the four in packages/nova-core/server/schemas):
+ * - Bid.tender_id → Tender: the bidder portal (src/pages/BieterPortal.jsx) creates a bid WITHOUT project_id;
+ * - Measurement.position_id → LVPosition / tender_id → Tender: SettlementPanel copies project_id from the
+ *   position and writes `undefined` when the position is not in the list;
+ * - ChangeOrder.issue_id → Issue: nachtraege.nachtragAusTicket writes project_id null when the ticket has none;
+ * - Terminquittung.termin_id → Termin: never carries a project (office area "fristen");
+ * - Auflage.genehmigung_id → Genehmigung, Bemusterung.sonderwunsch_id → Sonderwunsch,
+ *   ProjectFolder.parent_id → ProjectFolder, Document.folder_id → ProjectFolder: carry project_id today;
+ *   listed so a row written without it still follows its parent.
+ * Office-area children (Honorarangebot/Honorarnachtrag → Honorarvertrag, Postbucheintrag → Schreiben,
+ * Ausgangsrechnung → Honorarvertrag) need no entry: an office area is exported only by a role whose
+ * project view is "all" (zugriffFilter.exportBereicheFuer), where no project filter applies.
+ * [ASSUMED] the list is complete for project-bound, non-office collections as of origin/main 58d52f2b; a
+ * new parent-only collection must be added here (the unit test bitproj-projektsicht-w1 names each case).
+ */
+const ELTERN_VERWEISE = Object.freeze({
+  Bid: [['tender_id', 'Tender']],
+  Measurement: [['position_id', 'LVPosition'], ['tender_id', 'Tender']],
+  ChangeOrder: [['issue_id', 'Issue']],
+  Terminquittung: [['termin_id', 'Termin']],
+  Auflage: [['genehmigung_id', 'Genehmigung']],
+  Bemusterung: [['sonderwunsch_id', 'Sonderwunsch']],
+  ProjectFolder: [['parent_id', 'ProjectFolder']],
+  Document: [['folder_id', 'ProjectFolder']],
+});
+
+/** Marker: the record names a parent that is not in the data — its project cannot be told. */
+const UNBEKANNT = Symbol('unbekannt');
+
+/**
+ * Wave 1 (BEFUNDE-82 H-2, W1-BUERO-F3): keeps only the projects of a project view, and every record bound
+ * to one of them — directly (PROJEKT_FELDER) or through its parent (ELTERN_VERWEISE). Records without any
+ * project stay (office rows, settings, contacts). A record whose parent is missing from the data leaves
+ * a restricted file ([ASSUMED] narrowest choice: its project cannot be told). The export dialog's row
+ * filter (82-02) only decides office AREAS; this decides PROJECTS, below every caller.
+ * @param {Record<string, object[]>} daten all collections (never mutated)
+ * @param {Iterable<string>|null|undefined} projektIds the role's project view: null/undefined = all
+ *   projects (owner, E-17), an empty set = none (user record without a linked person)
+ * @returns {Record<string, object[]>} `daten` itself when nothing is filtered, otherwise a new object
+ */
+export function nurSichtbareProjekte(daten, projektIds) {
+  if (projektIds === null || projektIds === undefined) return daten;
+  const erlaubt = new Set(projektIds);
+  /** @type {Map<string, Map<string, any>>} */
+  const indizes = new Map();
+  /** @param {string} sammlung @returns {Map<string, any>} id → row */
+  const index = (sammlung) => {
+    let m = indizes.get(sammlung);
+    if (!m) {
+      m = new Map();
+      const rows = /** @type {any} */ (daten || {})[sammlung];
+      if (Array.isArray(rows)) for (const r of rows) if (r && typeof r.id === 'string') m.set(r.id, r);
+      indizes.set(sammlung, m);
+    }
+    return m;
+  };
+  /**
+   * @param {string} entity @param {any} r @param {number} tiefe parent hops so far (cycle guard)
+   * @returns {string|null|typeof UNBEKANNT} project id, null = no project, UNBEKANNT = parent missing
+   */
+  const projektVon = (entity, r, tiefe) => {
+    for (const feld of PROJEKT_FELDER) {
+      const id = r?.[feld];
+      if (typeof id === 'string' && id) return id;
+    }
+    if (tiefe > 8) return UNBEKANNT;
+    for (const [feld, eltern] of /** @type {any} */ (ELTERN_VERWEISE)[entity] || []) {
+      const pid = r?.[feld];
+      if (typeof pid !== 'string' || !pid) continue;
+      const parent = index(eltern).get(pid);
+      return parent ? projektVon(eltern, parent, tiefe + 1) : UNBEKANNT;
+    }
+    return null;
+  };
+  /** @type {Record<string, object[]>} */
+  const ergebnis = {};
+  for (const [entity, rows] of Object.entries(daten || {})) {
+    if (!Array.isArray(rows)) { ergebnis[entity] = rows; continue; }
+    ergebnis[entity] = entity === 'Project'
+      ? rows.filter((p) => erlaubt.has(/** @type {any} */ (p)?.id))
+      : rows.filter((r) => {
+        const pid = projektVon(entity, r, 0);
+        return pid === null || (pid !== UNBEKANNT && erlaubt.has(pid));
+      });
+  }
+  return ergebnis;
+}
+
+/**
+ * W1-BUERO-F1: applies an export restriction (api/exportSicht.js) to a data snapshot — the office areas
+ * the role may not export completely leave the file, then only the role's projects stay. Pure, shared by
+ * projektAlsBlob() in the browser and the Express export/save-back routes, so every path filters alike.
+ * @param {Record<string, object[]>} daten all collections (never mutated)
+ * @param {{projektIds?: Iterable<string>|null, ohne?: string[], ohneSettingKeys?: string[], ohneDokumentBereiche?: string[]}|null|undefined} e
+ *   the restriction; null/undefined = none
+ * @returns {Record<string, object[]>} `daten` itself when nothing is filtered, otherwise a new object
+ */
+export function wendeEinschraenkungAn(daten, e) {
+  if (!e) return daten;
+  const ohneBereiche = entferneBereiche(daten, e.ohne || [], e.ohneSettingKeys || [], e.ohneDokumentBereiche || []);
+  return nurSichtbareProjekte(ohneBereiche, e.projektIds ?? null);
+}
+
+/** German message of a refused restricted save-back (EN in lib/i18nTeile/buero-nachgang-w1.js). */
+export const ZURUECK_EINGESCHRAENKT_TEXT =
+  'Mit eingeschränkter Ansicht wird die verknüpfte Projektdatei nicht überschrieben. Speichern Sie eine Kopie daneben.';
+
+/**
+ * R-BUERO-1: may "save back" write now, or must the app ask first? One rule for the installed edition's
+ * route (server/dateiOeffnenRouter.js) and the desktop shell (src/client/dateiHuelle.js).
+ * A restricted role (export restriction active) NEVER overwrites the linked file — that file may be the
+ * full office file (other projects, accounting, users), and the role's file is only a handover. It may
+ * only save a copy beside it, even when the file is unchanged and even with "ueberschreiben".
+ * @param {{eingeschraenkt: boolean, geaendert: boolean, vorhanden: boolean, entscheidung?: "ueberschreiben"|"kopie"|null}} lage
+ *   eingeschraenkt: an export restriction applies; geaendert: the file differs from its fingerprint at
+ *   import (or is missing); vorhanden: the file exists; entscheidung: the user's answer to an earlier question
+ * @returns {"eingeschraenkt"|"geaendert"|"fehlt"|null} the question to ask, null = write
+ */
+export function zurueckKonflikt({ eingeschraenkt, geaendert, vorhanden, entscheidung = null }) {
+  if (eingeschraenkt && entscheidung !== 'kopie') return 'eingeschraenkt';
+  if (geaendert && !entscheidung) return vorhanden ? 'geaendert' : 'fehlt';
+  return null;
+}
+
+/**
  * Record counts per collection, for the preview before an import overwrites anything. A file written
  * before 79-12 has neither `art` nor `bereiche` and is read as a full backup (`art: "sicherung"`).
  * @param {object} obj parsed project object

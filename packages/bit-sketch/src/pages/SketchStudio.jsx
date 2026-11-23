@@ -46,8 +46,13 @@ const CONSTRAINT_LABELS = {
  *   (debounced + Unmount-Flush). Der projektbewusste Host ist
  *   PlanSketchStudio (@designer) mit useSketchLayer → BimModel-Feld.
  */
-/** @param {{initialJson?: any, onPersist?: (json: any) => void}} props */
-export default function SketchStudio({ initialJson, onPersist }) {
+/**
+ * @param {{initialJson?: any, onPersist?: (json: any) => void,
+ *   pausen?: Array<{id: string, art: "grundriss"|"schnitt", geschoss: string|null, linien: any[], bbox: any}>}} props
+ *   pausen (15.11.2026): tracing underlays of the host (floor plan per storey, section) in sketch metres — display only;
+ *   without them (demo mode, no project) the row of buttons is not shown.
+ */
+export default function SketchStudio({ initialJson, onPersist, pausen = [] }) {
   const { t } = useI18n();
   const sketchRef = useRef(null);
   if (!sketchRef.current) {
@@ -58,6 +63,9 @@ export default function SketchStudio({ initialJson, onPersist }) {
   onPersistRef.current = onPersist;
 
   const [version, setVersion] = useState(0);
+  // tracing underlay in view (id of `pausen`) or null; a view choice of this visit, not part of the sketch
+  const [pauseId, setPauseId] = useState(/** @type {string|null} */ (null));
+  const pause = pausen.find((p) => p.id === pauseId) || null;
   const [epoche, setEpoche] = useState(0); // remountet den Canvas bei Sketch-Austausch (Draft/View-Reset)
   // 72-05: two modes of one editor — freehand ink (default) and the constraint drawing.
   // `?modus=constraint` opens the constraint mode directly (link "In der Skizze öffnen" in the
@@ -357,6 +365,18 @@ export default function SketchStudio({ initialJson, onPersist }) {
                 data-testid={`modus-${m}`} onClick={() => modusWechseln(m)}>{l}</Button>
             ))}
           </div>
+          {pausen.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1" role="group" aria-label={t("Transparenzpause")} data-testid="pause-wahl">
+              <span className="mr-1 text-xs text-muted-foreground">{t("Transparenzpause")}</span>
+              <Button type="button" size="sm" variant={pause ? "ghost" : "secondary"} aria-pressed={!pause} data-testid="pause-aus" onClick={() => setPauseId(null)}>{t("aus")}</Button>
+              {pausen.map((p) => (
+                <Button key={p.id} type="button" size="sm" variant={pause?.id === p.id ? "default" : "outline"} aria-pressed={pause?.id === p.id}
+                  data-testid={`pause-${p.id}`} onClick={() => setPauseId(pause?.id === p.id ? null : p.id)}>
+                  {`${p.art === "schnitt" ? t("Schnitt") : t("Grundriss")} ${p.geschoss ?? ""}`.trim()}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
         <div className={`px-3 py-1.5 rounded-full text-xs font-semibold ${statusFarbe}`}>
           {lastSolve == null
@@ -417,6 +437,7 @@ export default function SketchStudio({ initialJson, onPersist }) {
             onDragEnd={onDragEnd}
             onAddStroke={onAddStroke}
             onErase={onErase}
+            pause={pause}
             stift={{ breite: STIFTBREITEN[stift.breite] ?? STIFTBREITEN.mittel, farbe: stift.farbe }}
           />
         </div>

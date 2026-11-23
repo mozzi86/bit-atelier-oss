@@ -24,7 +24,7 @@
 // [ASSUMED] Parallel-Array-Näherung: Die TED-Search-API liefert je Notice unverknüpfte
 // Parallel-Arrays (mehrere CPV-/NUTS-/Wert-Einträge ohne Los-Zuordnung). Näherung:
 // je tender-value-Eintrag ein Los-Wert; CPV = erster 45*-Code der Notice; NUTS =
-// erster DE*-Code der Notice. Für Gruppen-Aggregate auf 4-Steller-Ebene ist der
+// erster echte DE-NUTS-Code der Notice (Ländercode „DEU“ zählt nicht). Für Gruppen-Aggregate auf 4-Steller-Ebene ist der
 // dadurch entstehende Fehler klein, einzelne Lose können aber falsch zugeordnet sein.
 //
 // [ASSUMED] TRADE_CPV: Das Mapping der internen Gewerke (Phase 25) auf CPV-Codes ist
@@ -157,9 +157,15 @@ export function buildTedQuery({ year, page = 1, limit = 250 } = {}) {
   };
 }
 
+/**
+ * Shape of a German NUTS code at any depth (NUTS 0 "DE" to NUTS 3 e.g. "DEA1A"), case-insensitive.
+ * Excludes the ISO country code "DEU" (F-28-01). Source: Eurostat NUTS 2021 classification (DE1…DEG, DEZ extra-regio).
+ */
+export const NUTS_DE = /^DE(?:[1-9A-GZ][0-9A-Z]{0,2})?$/i;
+
 // TED-Antwort → normalisierte Lose { value, cpv, nuts, year }.
 // [ASSUMED] Parallel-Arrays: je tender-value-Eintrag ein Los; CPV = erster 45*-Code,
-// NUTS = erster DE*-Code (siehe Kopfkommentar). Nicht-EUR verworfen; wirft nie.
+// NUTS = erster echte DE-NUTS-Code (NUTS_DE, nicht „DEU“; siehe Kopfkommentar). Nicht-EUR verworfen; wirft nie.
 export function parseTedResponse(json, year) {
   const lots = [];
   const notices = Array.isArray(json?.notices) ? json.notices : [];
@@ -174,7 +180,9 @@ export function parseTedResponse(json, year) {
       if (!cpv) continue; // kein Bau-CPV → Notice verwerfen
       const places = Array.isArray(n["place-of-performance"]) ? n["place-of-performance"]
         : n["place-of-performance"] ? [n["place-of-performance"]] : [];
-      const nuts = places.find((p) => typeof p === "string" && p.toUpperCase().startsWith("DE")) || null;
+      // F-28-01: first proper German NUTS code — "DE" (NUTS 0) or DE + NUTS-1 letter/digit (1-9, A-G, Z = extra-regio)
+      // + up to two more levels. The ISO 3166 alpha-3 country code "DEU" is NOT a NUTS code and is skipped.
+      const nuts = places.find((p) => typeof p === "string" && NUTS_DE.test(p)) || null;
       const curs = Array.isArray(n["tender-value-cur"]) ? n["tender-value-cur"]
         : n["tender-value-cur"] ? [n["tender-value-cur"]] : [];
       values.forEach((v, i) => {

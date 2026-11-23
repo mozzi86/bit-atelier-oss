@@ -9,10 +9,13 @@
 
 import React from "react";
 import { Link } from "react-router-dom";
-import { useI18n } from "@core/lib/i18n";
+import { useI18n, englischErgaenzen } from "@core/lib/i18n";
+import { EN as EN_KALENDER_LAENDER } from "@core/lib/i18nTeile/kalender-laender-w1.js";
 import { feiertage } from "@core/lib/kalender/feiertage.js";
-import { feiertagsAbgleich } from "@/lib/abwesenheit/kalenderRegeln.js";
+import { feiertagsAbgleich } from "@/lib/abwesenheit/feiertagsAbgleich.js";
 import { feiertagLabel } from "@/lib/abwesenheit/feiertagNamen.js";
+
+englischErgaenzen(EN_KALENDER_LAENDER); // lazy part: holiday names of the other federal states
 
 /** Names of regional holidays (calendar core, snake_case). */
 const REGIONAL = new Set(["mariae_himmelfahrt", "augsburger_friedensfest"]);
@@ -44,7 +47,7 @@ export default function FeiertageReiter({ jahr, einst, kalkulationTage, onJahr }
           </li>
         ))}
       </ul>
-      <p className="text-xs text-slate-600 dark:text-slate-300">{t("Mariä Himmelfahrt gilt nur in Gemeinden mit überwiegend katholischer Bevölkerung — Status der eigenen Gemeinde beim Bayerischen Landesamt für Statistik prüfen.")}</p>
+      {einst.bundesland === "BY" && <p className="text-xs text-slate-600 dark:text-slate-300">{t("Mariä Himmelfahrt gilt nur in Gemeinden mit überwiegend katholischer Bevölkerung — Status der eigenen Gemeinde beim Bayerischen Landesamt für Statistik prüfen.")}</p>}
       <p className="text-sm text-slate-700 dark:text-slate-200" data-testid="feiertage-abgleich">
         {t("Kalender {jahr}: {n} Feiertage, davon {m} an Wochentagen · Kalkulationsbasis Kostensatz: {k} Tage")
           .replace("{jahr}", String(jahr)).replace("{n}", String(abgleich.kalender)).replace("{m}", String(abgleich.anWochentagen)).replace("{k}", String(abgleich.kalkulation))}

@@ -24,7 +24,7 @@ import Layout from '@/Layout';
 import { AuthProvider, useAuth } from '@core/lib/AuthContext';
 import { ProjectProvider } from '@core/lib/ProjectContext';
 import { ZugriffProvider, useZugriff } from '@core/lib/ZugriffContext.jsx';
-import { ladeZugriffsdaten } from '@/lib/zugriffLader.js';
+import { ladeZugriffsdaten, verborgeneExportBereiche } from '@/lib/zugriffLader.js';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Seitenwechsel from '@/components/Seitenwechsel';
 import { useI18n } from '@core/lib/i18n';
@@ -224,9 +224,11 @@ const HauptApp = () => {
  * a chunk load is what crashed the page: in the serverless build SpeicherStatus (header, mounted with the layout) imports
  * projektDatei statically, so the module is already in memory; should the import fail anyway, Fehlerkarte catches it and
  * shows "Sichern fehlgeschlagen" (ModulFehlergrenze.jsx).
+ * R-BUERO-2: an emergency backup ({notsicherung: true}) — still possible after a FAILED rights load
+ * (exportSicht.js "ladefehler"); a loaded role keeps its restriction.
  * @returns {Promise<string>} the offered file name (exportProjekt)
  */
-const projektSichern = async () => (await import('@core/api/projektDatei')).exportProjekt();
+const projektSichern = async () => (await import('@core/api/projektDatei')).exportProjekt(undefined, { notsicherung: true });
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, isAuthenticated, user } = useAuth();
@@ -363,7 +365,7 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         {/* 82-02: access (roles, "Ansicht als") before the project list — the
             project view filters the projects (AuthProvider > ZugriffProvider > ProjectProvider). */}
-        <ZugriffProvider lade={ladeZugriffsdaten}>
+        <ZugriffProvider lade={ladeZugriffsdaten} exportBereiche={verborgeneExportBereiche}>
         <ProjectProvider>
           {inhalt}
           {/* Registers the service worker and shows the update strip of the

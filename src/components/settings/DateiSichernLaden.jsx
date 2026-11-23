@@ -1,12 +1,14 @@
 // 93-13: "Als Datei sichern" / "Aus Datei laden" for the installed edition (Express data source). Until now a
 // .bitproj could only be made by the browser edition and the desktop client; here the server writes the file
 // (GET /api/datei/export) and an uploaded file opens the same import preview as a double-click
-// (POST /api/datei/hochladen → /?import=<token>).
+// (POST /api/datei/hochladen → /?import=<token>). Wave 1 (BEFUNDE-82 H-2, W1-BUERO-F1): the export names the
+// active role's restriction (exportSicht.js: projects and office areas), the server applies it.
 //
 // In:  nothing. Out: a card with two buttons; data-testids datei-sichern, datei-laden, datei-meldung.
 import React from "react";
 import { Download, Upload } from "lucide-react";
 import { useI18n } from "@core/lib/i18n";
+import { exportEinschraenkungAbfrage } from "@core/api/exportSicht.js";
 
 export default function DateiSichernLaden() {
   const { t } = useI18n();
@@ -16,7 +18,7 @@ export default function DateiSichernLaden() {
   const sichern = async () => {
     setMeldung({ text: t("Datei wird erstellt …"), fehler: false });
     try {
-      const r = await fetch("/api/datei/export", { cache: "no-store" });
+      const r = await fetch(`/api/datei/export${await exportEinschraenkungAbfrage()}`, { cache: "no-store" });
       if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || `HTTP ${r.status}`);
       const name = /filename="([^"]+)"/.exec(r.headers.get("content-disposition") || "")?.[1] || "bit-atelier.bitproj";
       const url = URL.createObjectURL(await r.blob());

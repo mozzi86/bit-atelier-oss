@@ -111,7 +111,7 @@ function wertText(regel, wert, lang, t) {
     case "monatstag": return typeof wert === "string" && wert.length === 5 ? datumText(`2000-${wert}`, lang).slice(0, lang === "en" ? 5 : 6) : String(wert);
     case "datum": return datumText(wert, lang);
     case "ja_nein": return wert ? t("Ja") : t("Nein");
-    case "auswahl": { const o = (regel.optionen || []).find((x) => x.wert === wert); return o ? o.label : String(wert); }
+    case "auswahl": { const o = (regel.optionen || []).find((x) => x.wert === wert); return o ? t(o.label) : String(wert); } // option labels are i18n keys (guard i18nAbdeckung)
     case "termine": return (Array.isArray(wert) ? wert : []).map((mmtt) => `${mmtt.slice(3, 5)}.${mmtt.slice(0, 2)}.`).join(", ");
     case "liste": return t("{n} Einträge").replace("{n}", String(Array.isArray(wert) ? wert.length : 0));
     case "tabelle": return t("{n} Zeilen").replace("{n}", String(Array.isArray(wert) ? wert.length : 0));
@@ -317,7 +317,7 @@ export default function RegelwerkTabelle({ gruppe, zeilen, speicherArt, onSetzen
                                 onChange={(e) => setEntwurf((d) => ({ ...d, wert: e.target.value }))}>
                                 {regel.typ === "ja_nein"
                                   ? [["ja", t("Ja")], ["nein", t("Nein")]].map(([w, l]) => <option key={w} value={w}>{l}</option>)
-                                  : (regel.optionen || []).map((o) => <option key={o.wert} value={o.wert}>{o.label}</option>)}
+                                  : (regel.optionen || []).map((o) => <option key={o.wert} value={o.wert}>{t(o.label)}</option>)}
                               </select>
                             ) : (
                               <input className={FELD} type={regel.typ === "datum" ? "date" : "text"}

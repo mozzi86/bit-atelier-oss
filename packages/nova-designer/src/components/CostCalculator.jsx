@@ -4,6 +4,11 @@ import { NumberField, Stat } from "@core/components/Field";
 import { Calculator } from "lucide-react";
 import { useBuildingProgram, programMetrics } from "@core/lib/useBuildingProgram";
 import { pxAreaToM2 } from "@core/lib/geo";
+import { useI18n, englischErgaenzen } from "@core/lib/i18n";
+import { EN as EN_KOSTEN_PAUSCHAL } from "@core/lib/i18nTeile/kosten-pauschal-kd09.js";
+import { GRUNDSTUECK_JE_GRUNDFLAECHE, PAUSCHAL_SAETZE, pauschalKosten } from "@designer/lib/pauschalKosten";
+
+englischErgaenzen(EN_KOSTEN_PAUSCHAL); // lazy part (KD-09): the assumption notes below
 
 const eur = (n) => `€${Math.round(n).toLocaleString("de-DE")}`;
 
@@ -11,15 +16,12 @@ const eur = (n) => `€${Math.round(n).toLocaleString("de-DE")}`;
 export default function CostCalculator({ complexData, onCostUpdate }) {
   const buildings = complexData?.buildings || [];
   const energy = complexData?.energy_systems || [];
+  const { t } = useI18n();
   const store = useBuildingProgram();
   const pm = programMetrics(store);
 
-  const [rates, setRates] = useState({
-    construction: 2400, // €/m² BGF
-    infrastructure: 180, // €/m² site (designated)
-    energy: 1200, // €/kW
-    site_prep: 95, // €/m² footprint
-  });
+  // [ASSUMED] default rates (units and status: lib/pauschalKosten.js PAUSCHAL_SAETZE).
+  const [rates, setRates] = useState({ ...PAUSCHAL_SAETZE });
 
   // BGF und Grundfläche bevorzugt aus dem gemeinsamen Gebäudemodell (eine Quelle);
   // Fallback auf die aus complexData.buildings abgeleiteten Werte.
@@ -41,22 +43,12 @@ export default function CostCalculator({ complexData, onCostUpdate }) {
   const footprint = pm.footArea > 0 ? pm.footArea : footprintBuildings;
   const totalKw = energy.reduce((s, x) => s + (Number(x.capacity_kw) || 0), 0);
 
-  const costs = useMemo(() => {
-    const construction_cost = bgf * rates.construction;
-    const infrastructure_cost = footprint * 4 * rates.infrastructure;
-    const energy_system_cost = totalKw * rates.energy;
-    const site_preparation_cost = footprint * rates.site_prep;
-    const total_cost =
-      construction_cost + infrastructure_cost + energy_system_cost + site_preparation_cost;
-    return {
-      construction_cost,
-      infrastructure_cost,
-      energy_system_cost,
-      site_preparation_cost,
-      total_cost,
-      cost_per_m2: bgf ? total_cost / bgf : 0,
-    };
-  }, [bgf, footprint, totalKw, rates]);
+  // KD-09: the flat model lives in lib/pauschalKosten.js; infrastructure is priced on an ASSUMED site area of
+  // GRUNDSTUECK_JE_GRUNDFLAECHE × footprint (the factor 4 of the original formula, numbers unchanged).
+  const { grundstueck_m2: grundstueckM2, ...costs } = useMemo(
+    () => pauschalKosten({ bgf, footprint, totalKw, rates }),
+    [bgf, footprint, totalKw, rates]
+  );
 
   // Push computed costs up whenever they change.
   useEffect(() => {
@@ -64,13 +56,15 @@ export default function CostCalculator({ complexData, onCostUpdate }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [costs.total_cost]);
 
-  // Schätzung in den gemeinsamen Store spiegeln (Quelle für AVA-Kostenkontrolle).
+  // Mirror the flat estimate into the shared store; the AVA cost control shows it as the budget of the building
+  // model. KD-09: `grundstuecksFaktor` (new, optional field) tells it the estimate rests on the [ASSUMED] site factor.
   useEffect(() => {
     store.set({
       costEstimate: {
         total: Math.round(costs.total_cost),
         bgf: Math.round(bgf),
         perM2: Math.round(costs.total_cost / bgf || 0),
+        grundstuecksFaktor: GRUNDSTUECK_JE_GRUNDFLAECHE,
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -112,6 +106,12 @@ export default function CostCalculator({ complexData, onCostUpdate }) {
             <Stat label="Energietechnik" value={eur(costs.energy_system_cost)} />
             <Stat label="Baufeld" value={eur(costs.site_preparation_cost)} />
           </div>
+          <p className="text-xs text-muted-foreground" data-testid="kosten-annahme">
+            {t("Annahme: Infrastruktur auf {f} × Grundfläche ≈ {m} m² Grundstück (entspricht GRZ {grz}); Kostensätze sind Richtwerte, keine Kostenberechnung.")
+              .replace("{f}", String(GRUNDSTUECK_JE_GRUNDFLAECHE))
+              .replace("{m}", Math.round(grundstueckM2).toLocaleString("de-DE"))
+              .replace("{grz}", (1 / GRUNDSTUECK_JE_GRUNDFLAECHE).toLocaleString("de-DE"))}
+          </p>
           <div className="rounded-lg bg-muted p-4">
             <div className="text-xs text-muted-foreground">Gesamtkosten</div>
             <div className="text-2xl font-bold text-foreground">{eur(costs.total_cost)}</div>

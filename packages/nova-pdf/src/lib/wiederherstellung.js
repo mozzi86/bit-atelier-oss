@@ -14,7 +14,7 @@
 //
 // In: studio state (records, drafts, page). Out: journal objects; storage through an adapter.
 
-import { speicherOrt } from "@core/lib/speicherOrt";
+import { browserJournal } from "@core/lib/browserJournal.js";
 
 /** Journal format version; a different version is ignored, never misread. */
 export const JOURNAL_VERSION = 1;
@@ -181,40 +181,8 @@ export async function journalAufraeumen(speicher, { maxTage = JOURNAL_MAX_TAGE, 
 }
 
 // ---------- Browser storage: localStorage for small, IndexedDB for large journals ----------
-
-const IDB_NAME = "bit-atelier-pdfstudio";
-const IDB_STORE = "journal";
-
-/** Opens the journal database (one store, out-of-line string keys). */
-function idbOeffnen() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_NAME, 1);
-    req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE); };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-/**
- * One request in a fresh transaction; resolves with its result once the transaction completed.
- * @param {"readonly"|"readwrite"} modus
- * @param {(store: IDBObjectStore) => IDBRequest} auftrag
- * @returns {Promise<any>}
- */
-async function idb(modus, auftrag) {
-  const db = await idbOeffnen();
-  try {
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, modus);
-      const req = auftrag(tx.objectStore(IDB_STORE));
-      tx.oncomplete = () => resolve(req.result);
-      tx.onerror = () => reject(tx.error || req.error);
-      tx.onabort = () => reject(tx.error || new Error("IndexedDB-Transaktion abgebrochen"));
-    });
-  } finally {
-    db.close();
-  }
-}
+// 115-05c: the storage itself moved to @core/lib/browserJournal.js (the building-model draft uses it too); the PDF studio keeps
+// its database, store and key prefix, so no stored journal is renamed.
 
 /**
  * Journal storage of the browser. Where a journal goes is decided by the platform's storage rule
@@ -224,40 +192,5 @@ async function idb(modus, auftrag) {
  * @returns {JournalSpeicher}
  */
 export function browserSpeicher() {
-  const ls = () => { try { return globalThis.localStorage || null; } catch { return null; } };
-  const hatIdb = () => typeof indexedDB !== "undefined";
-  return {
-    async lesen(key) {
-      const l = ls()?.getItem(key);
-      if (l != null) return l;
-      return hatIdb() ? ((await idb("readonly", (s) => s.get(key))) ?? null) : null;
-    },
-    async schreiben(key, text) {
-      // A journal grows with the editing session (freehand strokes) — that answers the grey zone.
-      const { ort } = speicherOrt(text, { waechst: true });
-      const store = ls();
-      if (ort === "db" && store) {
-        try {
-          store.setItem(key, text);
-          if (hatIdb()) await idb("readwrite", (s) => s.delete(key));
-          return;
-        } catch { /* quota or blocked: fall through to IndexedDB */ }
-      }
-      if (!hatIdb()) throw new Error("Kein Browserspeicher verfügbar — der Bearbeitungsstand kann nicht gesichert werden.");
-      await idb("readwrite", (s) => s.put(text, key));
-      try { store?.removeItem(key); } catch { /* noop */ }
-    },
-    async loeschen(key) {
-      try { ls()?.removeItem(key); } catch { /* noop */ }
-      if (hatIdb()) await idb("readwrite", (s) => s.delete(key));
-    },
-    async schluessel() {
-      /** @type {Set<string>} */
-      const out = new Set();
-      const store = ls();
-      if (store) for (let i = 0; i < store.length; i += 1) { const k = store.key(i); if (k?.startsWith(JOURNAL_PRAEFIX)) out.add(k); }
-      if (hatIdb()) for (const k of /** @type {any[]} */ (await idb("readonly", (s) => s.getAllKeys()))) if (String(k).startsWith(JOURNAL_PRAEFIX)) out.add(String(k));
-      return [...out];
-    },
-  };
+  return browserJournal({ idbName: "bit-atelier-pdfstudio", idbStore: "journal", praefix: JOURNAL_PRAEFIX });
 }

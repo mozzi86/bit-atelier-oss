@@ -9,6 +9,8 @@
 //
 // In:  commands registered by the surface (they close over its state); ctx = whatever the surface passes.
 // Out: lookup (befehlFinden), list with "aktiv", uniform execution and the JSON-line protocol.
+//      105-14: registerAnmelden() publishes the register of a MOUNTED surface, so the app-wide shortcut help ("?",
+//      src/components/KuerzelHilfe.jsx) lists its keys without a hand-written list; angemeldeteRegister() reads them.
 
 import { befehlFinden } from "./befehlszeile.js";
 
@@ -89,4 +91,65 @@ export function befehlsRegister() {
 /** @param {Befehl} b @param {any} ctx */
 function istAktiv(b, ctx) {
   try { return b.aktiv ? !!b.aktiv(ctx) : true; } catch { return false; }
+}
+
+// ---------------------------------------------------------------------------
+// 105-14: registers of the surfaces that are mounted right now (for the shortcut help)
+// ---------------------------------------------------------------------------
+
+/** @type {Array<{bereich: string, reg: ReturnType<typeof befehlsRegister>}>} mounted registers in mount order */
+let angemeldet = [];
+let anmeldeStand = 0;
+/** @type {Set<() => void>} */
+const anmeldeAbos = new Set();
+
+function anmeldungMelden() {
+  anmeldeStand += 1;
+  for (const fn of anmeldeAbos) {
+    try { fn(); } catch { /* a throwing subscriber must not stop the others */ }
+  }
+}
+
+/**
+ * Publishes the register of a mounted drawing surface for the shortcut help. Call it in an effect and return the result
+ * as the cleanup, e.g. `useEffect(() => registerAnmelden(befehle, { bereich: "Massenmodell" }), [befehle])`.
+ * @param {ReturnType<typeof befehlsRegister>} reg the surface's register
+ * @param {{bereich: string}} optionen bereich: German i18n key naming the surface (heading in the help)
+ * @returns {() => void} removes exactly this publication again
+ */
+export function registerAnmelden(reg, optionen) {
+  const eintrag = { bereich: String(optionen?.bereich || ""), reg };
+  angemeldet = [...angemeldet, eintrag];
+  anmeldungMelden();
+  return () => {
+    const vorher = angemeldet.length;
+    angemeldet = angemeldet.filter((e) => e !== eintrag);
+    if (angemeldet.length !== vorher) anmeldungMelden();
+  };
+}
+
+/**
+ * Registers of the surfaces mounted right now, in mount order.
+ * @returns {ReadonlyArray<{bereich: string, reg: ReturnType<typeof befehlsRegister>}>}
+ */
+export function angemeldeteRegister() {
+  return angemeldet;
+}
+
+/**
+ * Subscribe to (un)publications — for useSyncExternalStore together with registerStand().
+ * @param {() => void} fn
+ * @returns {() => void} unsubscribe
+ */
+export function registerAbonnieren(fn) {
+  anmeldeAbos.add(fn);
+  return () => { anmeldeAbos.delete(fn); };
+}
+
+/**
+ * Change counter of the publications (snapshot value for useSyncExternalStore).
+ * @returns {number}
+ */
+export function registerStand() {
+  return anmeldeStand;
 }

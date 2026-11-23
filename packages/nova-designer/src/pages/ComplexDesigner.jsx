@@ -3,7 +3,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { bitApi } from "@core/api/bitApi";
 import { toast } from "sonner";
-import { useBimModelSync, storeGehoertZu } from "@core/lib/useBimModelSync";
+import { leereKomplexHistorie, aufzeichnen, gesteStart, gesteEnde, gesteAbbrechen, schrittZurueck, schrittVor, verlaufNummern } from "@core/lib/komplexHistorie.js";
+import { useBimModelSync, storeGehoertZu, loadBimModel, wertKurz } from "@core/lib/useBimModelSync";
+// 115-05a (A-4, K6): the design record is written as a patch of the changed fields on its strict base, merged three ways on a 409
+import { komplexPatch, komplexFremdUebernehmen, komplexDatensatzWaehlen, KOMPLEX_VERWALTUNG, KOMPLEX_LAGE_GRUPPE, KOMPLEX_ABGELEITET, KOMPLEX_FELDNAMEN, LAGE } from "@core/lib/abgleich/komplexAbgleich.js";
+import { abgleichStand } from "@core/lib/abgleich/abgleichStand";
+import { gleichWert } from "@core/lib/abgleich/dreiWege";
+import { EN as EN_STANDSCHUTZ } from "@core/lib/i18nTeile/standschutz-115-05.js"; // 115-05a: lazy part (entry chunk budget)
 import { buildingProgram, useBuildingProgram } from "@core/lib/useBuildingProgram";
 import { footprintToMeters } from "@core/lib/buildingModel";
 import { polygonAreaM2, metersPerPixel } from "@core/lib/geo";
@@ -12,13 +18,22 @@ import { grundstueckAusFlurstuecken } from "@designer/lib/flurstueckImport";
 import { buildSiteParcel, parcelBbox, bboxIntersects, reanchorParcel, reanchorPoints } from "@designer/lib/siteParcel";
 import { istGeneriert } from "@designer/lib/apartments";
 // 72-02: Struktur der 30 Reiter als Daten — siehe config/designerNavigation.js.
-import { DESIGNER_BEREICHE, aufloesen, bereichFuerTab, reiterFuerTab, reiterImBereich } from "@designer/config/designerNavigation";
+// 115-03: tabs per kind of project (reiterFuerProjektart) and the direct views of the building model come from there too.
+import {
+  DESIGNER_BEREICHE, aufloesen, bereichFuerTab, reiterFuerTab, reiterFuerProjektart, projektartVon, ausgeblendeteReiter,
+  PROJEKTARTEN, BIM_ANSICHTEN, GEBAEUDEMODELL_TAB, ANSICHT_PARAMETER, bimAnsichtAusParam,
+} from "@designer/config/designerNavigation";
+import { wohnungsmixAnzahl } from "@designer/lib/kennzahlen";
 import PanelHeader from "@designer/components/PanelHeader";
 import { istWerkstattZone } from "@designer/lib/tesselierung";
 // MSB-9 (75-06 Task 0): regenerates the workshop ·WT zones from the layer
 // after a reload — mounted here so the Massing gets rooms even when the
 // workshop tab was never opened.
 import { useWerkstattRehydrate } from "@designer/lib/useWerkstattRehydrate";
+// W-1118-02: furniture keys follow the room GUID — migration on open (already in this chunk through InteriorDesigner)
+import { migriereMoeblierung } from "@designer/lib/moebel";
+// W-1118-02 review R-3: the GUID the studio pins per room _idx (steckbrief.js is in this chunk already through BitBimStudio)
+import { bauteilGuid } from "@core/lib/bauteil/steckbrief.js";
 import { Button } from "@core/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@core/components/ui/tabs";
 import { MapPin, Building, Calculator, Droplets, CheckSquare, Sofa, Boxes, Sparkles, Sun, Plug, CalendarRange, LifeBuoy, ClipboardList, ShieldCheck, Mountain, Frame, Trees, Thermometer, Flame, Accessibility, ClipboardCheck, HandCoins, LayoutTemplate, Volume2, ThermometerSnowflake, Layers, ThermometerSun, Puzzle } from "lucide-react";
@@ -28,22 +43,24 @@ import { useI18n, englischErgaenzen } from "@core/lib/i18n";
 import { bauartVon, herkunftZeile } from "@core/lib/bauart";
 import { aufbauGrundlage } from "@core/lib/bimClassification";
 import { footprintQuelleText, footprintQuelleBaufeldPlanung, footprintUebernahme, flaechenHash } from "@core/lib/footprintQuelle";
-import { EN as EN_EFH_108 } from "@core/lib/i18nTeile/efh-108.js"; // 108-01: lazy part (footprint note)
+import { EN as EN_EFH_108 } from "@core/lib/i18nTeile/efh-108.js"; // 108-01: lazy part (footprint note); 115-03: navigation texts
 import MassingStudio from "../components/MassingStudio";
-import SpaceProgram from "../components/SpaceProgram";
-import UnitMixCompliance from "../components/UnitMixCompliance";
 import LocationSelector from "../components/LocationSelector";
 import SiteDesigner from "../components/SiteDesigner";
 import BuildingConfig from "../components/BuildingConfig";
 import BauaufnahmePanel from "../components/BauaufnahmePanel";
-import CostCalculator from "../components/CostCalculator";
-import InteriorDesigner from "../components/InteriorDesigner";
 import TerrainView3D from "../components/TerrainView3D";
 import BitBimStudio from "../components/BitBimStudio";
-import BrandschutzPlanner from "../components/BrandschutzPlanner";
-import ApartmentPlanner from "../components/ApartmentPlanner";
 // 107-10 (size budget): rarely used tab panels load on demand — the designer chunk was at 100 % of chunk_max after 107-09.
 // Only the active TabsContent mounts, so each panel's chunk is fetched when its tab is opened; the tab bar stays usable meanwhile.
+// 115-05c (size): tab panels that are only shown on their tab load lazily (the designer chunk was at its size budget; the draft
+// mode and the parallel stair work need room) - rendered inside ReiterLaden like the other lazy panels
+const SpaceProgram = React.lazy(() => import("../components/SpaceProgram"));
+const UnitMixCompliance = React.lazy(() => import("../components/UnitMixCompliance"));
+const InteriorDesigner = React.lazy(() => import("../components/InteriorDesigner"));
+const BrandschutzPlanner = React.lazy(() => import("../components/BrandschutzPlanner"));
+const ApartmentPlanner = React.lazy(() => import("../components/ApartmentPlanner"));
+const WohnungsWerkstatt = React.lazy(() => import("../components/WohnungsWerkstatt"));
 const FoerderPlanner = React.lazy(() => import("../components/FoerderPlanner"));
 const FloodRiskAnalyzer = React.lazy(() => import("../components/FloodRiskAnalyzer"));
 const SupportPanel = React.lazy(() => import("../components/SupportPanel"));
@@ -62,8 +79,18 @@ const HaustechnikPlanner = React.lazy(() => import("../components/HaustechnikPla
 const GenerativeLayout = React.lazy(() => import("../components/GenerativeLayout"));
 const EnergyPlanner = React.lazy(() => import("../components/EnergyPlanner"));
 const NachhaltigkeitKarte = React.lazy(() => import("../components/NachhaltigkeitKarte"));
+// Wave 1 (KD-09): the cost tab loads like its siblings — its flat cost model and assumption texts grew the
+// ComplexDesigner chunk, which is the largest JS chunk of the build (budget chunk_max). Radix tabs mount only the
+// active panel, so the tab's effects (costEstimate mirror, onCostUpdate) run exactly when they ran before.
+const CostCalculator = React.lazy(() => import("../components/CostCalculator"));
+// 115-05b part 2 (A-5): the focus check and its banner - lazy (size budget of this chunk); a failed load shows nothing, never an error
+// 115-05c (D-115-12): the draft bar (state, "Speichern", "Verwerfen", leave dialog, one tab per project) and the draft module, lazily
+const EntwurfLeiste = React.lazy(() => import("../components/EntwurfLeiste.jsx"));
+const entwurfModul = () => import("@core/lib/entwurf/entwurfStand.js");
+const StandWaechterHinweis = React.lazy(() => import("../components/StandWaechterHinweis.jsx").catch(() => ({ default: () => null })));
 
 englischErgaenzen(EN_EFH_108); // 108-01: lazy i18n part of phase 108
+englischErgaenzen(EN_STANDSCHUTZ); // 115-05a: the conflict card of the design record and its notes
 
 /**
  * Suspense boundary of one lazy tab panel (107-10): a quiet status line while the panel's chunk is on the wire.
@@ -78,9 +105,92 @@ function ReiterLaden({ children }) {
   );
 }
 
+/** 115-03: browser key of the switch "Alle Reiter zeigen" — a view preference per browser, never project data. */
+const ALLE_REITER_SCHLUESSEL = "bit.designer.alle-reiter";
+
+/**
+ * 115-03: reads the remembered switch "Alle Reiter zeigen". Storage may be blocked (private window): then off.
+ * @returns {boolean} true when the user asked to see every tab
+ */
+function alleReiterGemerkt() {
+  try { return window.localStorage.getItem(ALLE_REITER_SCHLUESSEL) === "1"; } catch { return false; }
+}
+
+/**
+ * 115-03: remembers the switch "Alle Reiter zeigen" for this browser.
+ * @param {boolean} an new state of the switch
+ * @returns {void} writes localStorage; a blocked storage is ignored — the switch then holds for this visit only
+ */
+function alleReiterMerken(an) {
+  try {
+    if (an) window.localStorage.setItem(ALLE_REITER_SCHLUESSEL, "1");
+    else window.localStorage.removeItem(ALLE_REITER_SCHLUESSEL);
+  } catch { /* storage blocked: nothing to remember, the state in memory still works */ }
+}
+
+/**
+ * 115-03 (W-1115-02): direct way to the views of the building model — "Grundriss" first, then section and 3D. Sits at the
+ * right end of the tab row (same place in every area), so it is a shortcut inside the existing navigation, not a second
+ * one. No pressed state on purpose: which view is open is shown by the studio's own switcher; these buttons only open.
+ * The accessible names start with "Gebäudemodell:" — they must not read "Ansicht Grundriss" (the studio's switcher).
+ * @param {{ onWahl: (ansicht: string) => void }} props onWahl gets the view id of BIM_ANSICHTEN
+ */
+function DirektAnsichten({ onWahl }) {
+  const { t } = useI18n();
+  return (
+    <div className="ml-auto flex items-center gap-2" role="group" aria-label={t("Gebäudemodell direkt öffnen")} data-testid="designer-direkt">
+      <span className="hidden xl:inline text-xs text-muted-foreground whitespace-nowrap" aria-hidden="true">{t("Gebäudemodell")}</span>
+      <div className="flex items-center rounded-md border border-border overflow-hidden">
+        {BIM_ANSICHTEN.map((a, i) => (
+          <button
+            key={a.id}
+            type="button"
+            onClick={() => onWahl(a.id)}
+            data-testid={`designer-direkt-${a.id}`}
+            aria-label={`${t("Gebäudemodell")}: ${t(a.label)}`}
+            title={`${t("Gebäudemodell")}: ${t(a.label)}`}
+            className={"flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium text-foreground whitespace-nowrap transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" + (i > 0 ? " border-l border-border" : "")}
+          >
+            <a.icon className="w-4 h-4" aria-hidden="true" /> {t(a.label)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 115-03: status and switch for the tabs hidden for this kind of project — the ONE place that says what is hidden, with one
+ * button to show everything (115-DESIGN §6). Renders nothing when the kind of project hides no tab.
+ * @param {{ projektart: string|null, anzahl: number, namen: string[], alle: boolean, onAlle: (an: boolean) => void }} props
+ *   projektart = key of PROJEKTARTEN, anzahl = number of hidden tabs (pieces), namen = their labels,
+ *   alle = switch state, onAlle = called with the new state
+ */
+function ReiterUmschalter({ projektart, anzahl, namen, alle, onAlle }) {
+  const { t } = useI18n();
+  if (!projektart || anzahl < 1) return null;
+  const art = t(PROJEKTARTEN[projektart]?.titel || "");
+  const stand = alle
+    ? t("{art}: alle Reiter sichtbar").replace("{art}", art)
+    : t("{art}: {n} Reiter ausgeblendet").replace("{art}", art).replace("{n}", String(anzahl));
+  return (
+    <button
+      type="button"
+      aria-pressed={alle}
+      onClick={() => onAlle(!alle)}
+      data-testid="designer-alle-reiter"
+      title={`${stand} — ${namen.join(", ")}`}
+      className={"px-2 py-1 rounded-md text-xs whitespace-nowrap transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 " + (alle ? "bg-muted text-foreground" : "text-muted-foreground")}
+    >
+      <span className="sr-only">{stand}. </span>
+      <span className="hidden xl:inline" aria-hidden="true">{art} · </span>
+      {t("Alle Reiter zeigen")}{!alle && <span aria-hidden="true"> (+{anzahl})</span>}
+    </button>
+  );
+}
+
 /** 101-05: tabs that work as a full-height drawing surface (no page scroll from lg up). */
 const ARBEITSFLAECHE_REITER = new Set(["site", "massing", "studio", "bim"]);
-import WohnungsWerkstatt from "../components/WohnungsWerkstatt";
 
 /** 73-04: tabs that compute on the build-up (Bauteilaufbau) and show its provenance in an existing building. */
 const AUFBAU_REITER = new Set(["acoustics", "waermebruecken", "bauphysik", "energy"]);
@@ -128,7 +238,7 @@ function komplexStart() {
     hochwasser: null,
     cost_estimate: { construction_cost: 0, infrastructure_cost: 0, energy_system_cost: 0, site_preparation_cost: 0, total_cost: 0, cost_per_m2: 0 },
     interior_designs: [],
-    // Raum-Möblierung: { [roomKey]: [{id, typ, x, y, rot}] } — siehe @designer/lib/moebel
+    // Raum-Möblierung: { [zoneKey]: [{id, typ, x, y, rot}] } — keys guid:/id:/level:name, see @designer/lib/moebel
     moeblierung: {},
     // Eigene Möbeltypen des Projekts (Phase 43): [{ id, name, b, t, kategorie, benutzerseite }]
     moebel_eigene: [],
@@ -136,8 +246,175 @@ function komplexStart() {
   };
 }
 
+// ---- 115-05a (A-4, K6): stand protection of the design record (BuildingComplex) ----
+// Before, the autosave wrote the WHOLE record without `?stand` (the server let the last writer win), the updated_date of the load
+// rode along in the body (every later save got the hint "changed meanwhile", also without another writer), "Entwurf speichern"
+// bypassed the queue and complexRecordId was read only when the save ran. Now: only the changed fields leave the page, on the
+// strict base; pid, id and stand are frozen when the save is planned; a 409 is merged per field (komplexAbgleich.js) - the
+// site/location fields as ONE unit (K6c); a field with an open conflict card is held back from every save (K6a) and what only the
+// other writer changed is taken over at once (K6b). The card is the page-wide one of the Layout (no viewer shows source "komplex").
+
+/** Fields held back per project while their conflict card is open (K6a). @type {Map<string, Set<string>>} */
+const komplexSperren = new Map();
+/** The page's own version of each open design-record card, kept when the designer unmounts (card id → field values). @type {Map<string, Record<string, any>>} */
+const komplexMeinStand = new Map();
+/**
+ * The designer mounted now — a card's resolver acts on it, never on the closures of an unmounted one (pattern studioHalter).
+ * @type {{current: {pid: string, zustand: () => Record<string, any>, setzen: (w: Record<string, any>) => void,
+ *   basis: () => ({id: string|null, updated_date: string|null, felder: Record<string, any>}|undefined),
+ *   schreiben: (werte: Record<string, any>) => Promise<boolean>}|null}}
+ */
+const komplexHalter = { current: null };
+/** A writer whose name is not known (a refused save tells only that someone was faster). */
+const UNBEKANNT_GERAET = Object.freeze({ name: "", unbekannt: true });
+
+/** @param {string} einheit "lage" or a field name @returns {ReadonlyArray<string>} the fields a card of this unit holds back */
+const einheitFelder = (einheit) => (einheit === LAGE ? KOMPLEX_LAGE_GRUPPE : [einheit]);
+
+/** 115-05c: draft fields of the design record (the site group as one unit + the cost estimate derived from it, entwurfRegeln.js). */
+const ENTWURF_KOMPLEX = Object.freeze([...KOMPLEX_LAGE_GRUPPE, "cost_estimate"]);
+/** 115-05d: what an undo step of the site data is called in the hint "Rückgängig: …", by the first field that changed. */
+const KOMPLEX_SCHRITT_NAME = Object.freeze({ site_parcel: "Grundstück", grundstueck: "Grundstück", designated_areas: "Baufeld", buildings: "Baukörper", riegel: "Baukörper",
+  location: "Standort", map_context: "Standort", nordwinkel: "Nordwinkel", topography: "Gelände", context_buildings: "Umgebung", context_buildings_source: "Umgebung" });
+/** @param {Record<string, any>} patch @returns {Record<string, any>} the patch without draft fields (they wait for "Speichern") */
+const ohneEntwurf = (patch) => Object.fromEntries(Object.entries(patch).filter(([k]) => !ENTWURF_KOMPLEX.includes(k)));
+
+/** @param {string} pid @returns {Set<string>} fields of the project held back by an open card (a copy) */
+function komplexGesperrt(pid) {
+  return new Set(komplexSperren.get(pid) || []);
+}
+
+/** @param {string} pid @param {ReadonlyArray<string>} felder */
+function komplexFreigeben(pid, felder) {
+  const m = komplexSperren.get(pid);
+  if (!m) return;
+  for (const f of felder) m.delete(f);
+  if (!m.size) komplexSperren.delete(pid);
+}
+
+// a lock lives exactly as long as its card (decided, or dropped with another project) - pattern useBimModelSync.js
+abgleichStand.abonnieren(() => {
+  if (!komplexSperren.size && !komplexMeinStand.size) return;
+  const offen = abgleichStand.stand().konflikte.filter((k) => k.quelle === "komplex");
+  for (const [pid, felder] of [...komplexSperren]) {
+    const noch = new Set(offen.filter((k) => k.projektId === pid).flatMap((k) => einheitFelder(k.feld)));
+    komplexFreigeben(pid, [...felder].filter((f) => !noch.has(f)));
+  }
+  for (const id of [...komplexMeinStand.keys()]) if (!offen.some((k) => k.id === id)) komplexMeinStand.delete(id);
+});
+
+/**
+ * The fields of a design record in the normal form the comparison uses: start values + record, without administration fields
+ * (so start values never count as a change, ComplexDesigner komplexStart).
+ * @param {Record<string, any>|null|undefined} rec stored record or the page's complexData
+ * @returns {Record<string, any>}
+ */
+function komplexNormal(rec) {
+  return Object.fromEntries(Object.entries({ ...komplexStart(), ...(rec || {}) }).filter(([k]) => !KOMPLEX_VERWALTUNG.includes(k)));
+}
+
+/** @param {Record<string, any>|null|undefined} o @param {ReadonlyArray<string>} felder @returns {Record<string, any>} */
+const auswahl = (o, felder) => Object.fromEntries(felder.map((k) => [k, o?.[k]]));
+
+/** @param {any} rec an answer of the API @returns {Record<string, any>} its fields without administration (no start values added) */
+const komplexOhneVerwaltung = (rec) => (rec && typeof rec === "object"
+  ? Object.fromEntries(Object.entries(rec).filter(([k]) => !KOMPLEX_VERWALTUNG.includes(k))) : {});
+
+/**
+ * A planned write of the design record (115-05a): pid, record id and stand frozen when planned.
+ * @typedef {{pid: string, id: string|null, stand: string|null, basisFelder: Record<string, any>, patch: Record<string, any>,
+ *   voll?: Record<string, any>}} KomplexPlan
+ *   basisFelder = the base the patch was computed against; voll = the whole state (normal form) for a create without a record
+ */
+
+/**
+ * Both versions of a design-record conflict as short text (data text of the card; field keys like konfliktZeilen does).
+ * @param {import("@core/lib/abgleich/komplexAbgleich.js").KomplexKonflikt} k
+ * @returns {Array<{schluessel: null, name: string, mein: string, fremd: string}>}
+ */
+function komplexZeilen(k) {
+  const name = KOMPLEX_FELDNAMEN[k.einheit] ?? k.einheit;
+  if (k.einheit !== LAGE) return [{ schluessel: null, name, mein: wertKurz(k.mein), fremd: wertKurz(k.fremd) }];
+  /** the fields one side changed against the base, scalars with their value @param {Record<string, any>} seite */
+  const text = (seite) => k.felder.filter((f) => !gleichWert(seite?.[f], k.basis?.[f]))
+    .map((f) => (seite?.[f] !== null && typeof seite?.[f] === "object" ? f : `${f} ${wertKurz(seite?.[f])}`)).join(", ") || "—";
+  return [{ schluessel: null, name, mein: text(k.mein), fremd: text(k.fremd) }];
+}
+
+/**
+ * "Meine Fassung behalten" of a design-record card: the lock goes and the own values are written at once on the current stand —
+ * through the mounted designer, or (none mounted) as a partial PUT on a freshly read record with its stand (a write in between
+ * answers 409 and the card stays).
+ * @param {string} pid @param {string} einheit
+ */
+async function komplexMeinBehalten(pid, einheit) {
+  const id = `komplex:${einheit}`;
+  const felder = einheitFelder(einheit);
+  const h = komplexHalter.current?.pid === pid ? komplexHalter.current : null;
+  const werte = h ? auswahl(h.zustand(), felder) : komplexMeinStand.get(id);
+  komplexFreigeben(pid, felder);
+  komplexMeinStand.delete(id);
+  if (!werte) return;
+  // 115-05c: the site group is a draft field - with the designer mounted "keep mine" stays in the draft ("Speichern" writes it)
+  if (h && einheit === LAGE) return;
+  if (h) { await h.schreiben(werte); return; }
+  const frisch = /** @type {any} */ (komplexDatensatzWaehlen(await bitApi.entities.BuildingComplex.filter({ project_id: pid })).datensatz);
+  if (frisch?.id) await bitApi.entities.BuildingComplex.update(frisch.id, werte, { stand: frisch.updated_date ?? null });
+}
+
+/**
+ * "Fassung des anderen Geräts übernehmen": the fields go back to the stored state (the base after the 409), the lock goes; nothing
+ * is written.
+ * @param {string} pid @param {string} einheit
+ */
+function komplexFremdNehmen(pid, einheit) {
+  const felder = einheitFelder(einheit);
+  const h = komplexHalter.current?.pid === pid ? komplexHalter.current : null;
+  komplexFreigeben(pid, felder);
+  komplexMeinStand.delete(`komplex:${einheit}`);
+  const b = h?.basis();
+  if (h && b) h.setzen(auswahl(b.felder, felder));
+}
+
+/**
+ * Reports one design-record conflict (page-wide card) and holds its fields back until the person decides (K6a).
+ * @param {string} pid @param {import("@core/lib/abgleich/komplexAbgleich.js").KomplexKonflikt} k
+ */
+function komplexKonfliktMelden(pid, k) {
+  const sperre = komplexSperren.get(pid) || new Set();
+  for (const f of einheitFelder(k.einheit)) sperre.add(f);
+  komplexSperren.set(pid, sperre);
+  abgleichStand.konfliktMelden({
+    quelle: "komplex", projektId: pid, feld: k.einheit, titel: KOMPLEX_FELDNAMEN[k.einheit] ?? k.einheit, geraet: UNBEKANNT_GERAET,
+    zeilen: komplexZeilen(k),
+    loesen: { mein: () => komplexMeinBehalten(pid, k.einheit), fremd: () => komplexFremdNehmen(pid, k.einheit) },
+  });
+}
+
+/**
+ * 115-05c: the site group of a draft goes onto the freshly loaded design record - on its own base as it is, on another state of the
+ * same record three ways (the group as ONE unit, entwurfRebase); a draft made on another record / a record gone is never continued
+ * automatically (it waits, offenSetzen).
+ * @param {typeof import("@core/lib/entwurf/entwurfStand.js")} E @param {string} pid
+ * @param {import("@core/lib/entwurf/modellEntwurf.js").ModellEntwurf|null} entwurf @param {any} datensatz the stored record (null = none)
+ * @returns {{werte: Record<string, any>, konflikte: any[]}} werte = fields to put into complexData; konflikte = cards to show
+ */
+function komplexEntwurfEinspielen(E, pid, entwurf, datensatz) {
+  const mein = entwurf?.aenderungen.komplex || {};
+  if (!Object.keys(mein).length) return { werte: {}, konflikte: [] };
+  const basis = entwurf?.basis.komplex;
+  const wahl = E.entwurfEntscheiden(basis, datensatz);
+  if (wahl === "ersetzt" || wahl === "geloescht") { E.offenSetzen(pid, wahl); return { werte: {}, konflikte: [] }; }
+  if (wahl === "gleich") return { werte: mein, konflikte: [] };
+  const r = E.entwurfRebase({ teil: "komplex", basis: basis?.felder || {}, mein, server: komplexNormal(datensatz) });
+  return { werte: r.werte, konflikte: r.konflikte };
+}
+
 export default function ComplexDesigner() {
   const [complexData, setComplexData] = useState(komplexStart);
+  // 115-05d: set inside the updater of a write that is not the person's — "leeren" (load, foreign state, conflict, discard) or
+  // "anwenden" (the undo itself); read and cleared by the history effect below
+  const komplexStillRef = useRef(/** @type {"leeren"|"anwenden"|null} */ (null));
 
   const { project } = useProject();
   // 72-01 A-13: Deep-Link ?tab=<reiter> setzt den Start-Tab (z. B. Redirect
@@ -163,17 +440,53 @@ export default function ComplexDesigner() {
   }, [bauart, project?.id]);
   // Nach-Navigation auf denselben Reiter (z. B. zweiter Klick auf die
   // umgeleitete Route) folgt dem Parameter.
+  // 115-03: `?tab=bim&ansicht=grundriss|schnitt|3d` opens the building model in that view. The wish is handed to the studio
+  // as a prop ({ ansicht, n } — n counts, so the same view can be asked for twice); the direct buttons of the header use
+  // the same path. It is dropped when another tab opens, so coming back by the tab row starts the studio as usual.
+  const ansichtParam = bimAnsichtAusParam(searchParams.get(ANSICHT_PARAMETER));
+  const [bimAnsicht, setBimAnsicht] = useState(/** @type {{ansicht: string|null, n: number}} */ ({ ansicht: null, n: 0 }));
   useEffect(() => {
     if (tabParam) setActiveTab(tabParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabParam, searchParams]);
+  // Follows the VALUES of the two parameters only — an unrelated change of the query string must not force the view again.
+  useEffect(() => {
+    if (tabParam === GEBAEUDEMODELL_TAB && ansichtParam) setBimAnsicht((w) => ({ ansicht: ansichtParam, n: w.n + 1 }));
+  }, [tabParam, ansichtParam]);
+  useEffect(() => {
+    if (activeTab !== GEBAEUDEMODELL_TAB) setBimAnsicht((w) => (w.ansicht ? { ...w, ansicht: null } : w));
+  }, [activeTab]);
   // Aktiver Arbeitsbereich folgt dem Reiter (Ebene 1 der Navigation).
   const [bereich, setBereich] = useState(() => bereichFuerTab(tabParam ?? "site") ?? "standort");
   useEffect(() => {
     const b = bereichFuerTab(activeTab);
     if (b) setBereich(b);
   }, [activeTab]);
-  const [isSaving, setIsSaving] = useState(false);
+  // 115-03: tabs per kind of project. The kind comes from what the project says about its use (projektartVon): Project.type,
+  // the typology of the dwelling workshop (werkstatt_layer.typ, read once per project through the shared loadBimModel cache —
+  // read only, no second writer on that layer) and the unit mix of the design record (complexData.unit_types, live). A failed
+  // load leaves the kind unknown = every tab visible, the safe side; the load error itself is reported by useBimModelSync
+  // (SyncHinweis). "Alle Reiter zeigen" is remembered per browser.
+  const [werkstattTyp, setWerkstattTyp] = useState(/** @type {string|null} */ (null));
+  useEffect(() => {
+    setWerkstattTyp(null);
+    if (!project?.id) return undefined;
+    let weg = false;
+    loadBimModel(project.id)
+      .then((m) => { if (!weg) setWerkstattTyp(m?.werkstatt_layer?.typ ?? null); })
+      .catch(() => { if (!weg) setWerkstattTyp(null); });
+    return () => { weg = true; };
+  }, [project?.id]);
+  const [alleReiter, setAlleReiter] = useState(alleReiterGemerkt);
+  const projektart = projektartVon({ projektTyp: project?.type ?? null, werkstattTyp, wohneinheiten: wohnungsmixAnzahl(complexData.unit_types) });
+  const reiterJeBereich = reiterFuerProjektart(projektart, { alle: alleReiter, aktiv: activeTab });
+  const ausgeblendet = ausgeblendeteReiter(projektart);
+  /** Opens the building model in one view (direct buttons): area 3, tab `bim`, the wish goes to the studio as a prop. */
+  const oeffneGebaeudemodell = (/** @type {string} */ ansicht) => {
+    setBimAnsicht((w) => ({ ansicht, n: w.n + 1 }));
+    setBereich("gebaeude");
+    setActiveTab(GEBAEUDEMODELL_TAB);
+  };
   // Sprungbrett aus der Wohnungs-Fokusansicht (Phase 61-05): „Zum Innenausbau"
   // dispatcht ein CustomEvent, hier wechselt der Tab auf den Innenausbau-Reiter.
   useEffect(() => {
@@ -188,6 +501,17 @@ export default function ComplexDesigner() {
   // something changed since the load, serialised (two overlapping saves would create two records).
   const geladenAls = useRef(/** @type {string|null} */ (null));
   const speichertGerade = useRef(Promise.resolve());
+  // 115-05a (A-4): the stored base per project (record id, updated_date = the strict `stand`, fields in the normal form komplexNormal)
+  // — the load, every successful write (its answer) and every 409 (the stored record) set it; the autosave sends what differs from it
+  const komplexBasisJe = useRef(/** @type {Map<string, {id: string|null, updated_date: string|null, felder: Record<string, any>}>} */ (new Map()));
+  // the save planned and not yet sent (flushed on a project switch / unmount); pid, id and stand frozen when planned
+  const ausstehendKomplexRef = useRef(/** @type {KomplexPlan|null} */ (null));
+  const complexDataRef = useRef(complexData);
+  complexDataRef.current = complexData;
+  const projektIdRef = useRef(/** @type {string|null} */ (project?.id ?? null));
+  projektIdRef.current = project?.id ?? null;
+  const gemountetRef = useRef(false);
+  useEffect(() => { gemountetRef.current = true; return () => { gemountetRef.current = false; }; }, []);
 
   // 108-01 review: the project whose BuildingComplex record (or the knowledge that it has none) is in complexData — the footprint takeover
   // below waits for it, so the areas of the previous project can never be taken over into the next one
@@ -197,6 +521,12 @@ export default function ComplexDesigner() {
   // Beim Mount / Projektwechsel: vorhandenen Entwurf aus der DB rehydrieren,
   // damit Standort, Baufelder, Gebäude & Kosten einen Reload überleben.
   useEffect(() => {
+    // 115-05a (A-4): what the autosave still had pending for the previous project is written now, with its frozen pid / id / stand
+    const pend = ausstehendKomplexRef.current;
+    if (pend && pend.pid !== project?.id) {
+      ausstehendKomplexRef.current = null;
+      komplexSchreibenRef.current(pend).catch((error) => console.error("Entwurf beim Projektwechsel nicht gespeichert:", error));
+    }
     if (!project?.id) return;
     complexRecordId.current = null;
     geladenAls.current = null;
@@ -204,22 +534,41 @@ export default function ComplexDesigner() {
     // 108-01 review: a real project switch inside the mounted designer starts from the start values (before, everything of the previous
     // project stayed when the new one has no record, and a record without a field kept the previous project's value). The autosave
     // stays quiet on them (no name / location), like on a fresh mount.
-    if (komplexProjekt.current && komplexProjekt.current !== project.id) setComplexData(komplexStart());
+    if (komplexProjekt.current && komplexProjekt.current !== project.id) setComplexData(() => { komplexStillRef.current = "leeren"; return komplexStart(); });
     komplexProjekt.current = project.id;
     const pid = project.id;
     let cancelled = false;
     (async () => {
       try {
-        const rows = await bitApi.entities.BuildingComplex.filter({ project_id: pid });
+        // 115-05c: the draft of this project (this page, or the browser after a reload) is read beside the record (no extra wait
+        // before the record goes on screen - an input made in between would be overwritten by the late load)
+        const [rows, [E, start]] = await Promise.all([bitApi.entities.BuildingComplex.filter({ project_id: pid }),
+          entwurfModul().then(async (m) => /** @type {const} */ ([m, await m.starten(pid)]))]);
         if (cancelled) return;
-        if (!rows?.length) { geladenAls.current = "leer"; setComplexGeladenFuer(pid); return; }
-        const { id, ...rest } = rows[0];
+        // 115-05b (E-3): old data may hold two records of one project (two tabs created one each before the server refused a
+        // second create) - the newest is the design, none is deleted, the person is told
+        const wahl = komplexDatensatzWaehlen(rows);
+        if (wahl.anzahl > 1) {
+          console.warn(`[BuildingComplex] ${wahl.anzahl} Datensätze für Projekt ${pid} — der neueste (${wahl.datensatz?.id}) wird verwendet`);
+          toast.warning(tf("Für dieses Projekt sind {{n}} Entwürfe gespeichert — der neueste wird verwendet, keiner wurde gelöscht.").replace("{{n}}", String(wahl.anzahl)));
+        }
+        const entwurf = komplexEntwurfEinspielen(E, pid, start.entwurf, wahl.datensatz);
+        if (!wahl.datensatz) {
+          komplexBasisJe.current.set(pid, { id: null, updated_date: null, felder: komplexNormal({}) });
+          if (Object.keys(entwurf.werte).length) setComplexData((prev) => { komplexStillRef.current = "leeren"; return { ...prev, ...entwurf.werte }; });
+          geladenAls.current = "leer"; setComplexGeladenFuer(pid); return;
+        }
+        const { id, ...rest } = wahl.datensatz;
         complexRecordId.current = id;
+        // 115-05a (A-4): the base of the strict writes — the loaded state as complexData holds it (start values + record)
+        komplexBasisJe.current.set(pid, { id, updated_date: wahl.datensatz.updated_date ?? null, felder: komplexNormal(wahl.datensatz) });
         setComplexData((prev) => {
+          komplexStillRef.current = "leeren"; // 115-05d: a load is no undo step
           const neu = { ...prev, ...rest };
           geladenAls.current = JSON.stringify(neu);
-          return neu;
+          return { ...neu, ...entwurf.werte };
         });
+        for (const k of entwurf.konflikte) komplexKonfliktMelden(pid, k);
         setComplexGeladenFuer(pid);
       } catch (error) {
         console.error("BuildingComplex laden fehlgeschlagen:", error);
@@ -285,6 +634,66 @@ export default function ComplexDesigner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complexData.designated_areas, bimGeladen, complexGeladenFuer, project?.id]);
 
+  // W-1118-02: furniture follows the room GUID. On open — once BOTH records of THIS project are loaded (the store zones of the
+  // BimModel and complexData of the BuildingComplex) — old keys are moved by migriereMoeblierung (`id:<_idx>` only when the
+  // furniture provably lies in that room, else it stays and the Innenausbau tab lists it as "Möbel ohne Raum"). Runs here, not in
+  // the Innenausbau tab, so every reader (ASR data sheet, apartment focus) sees the moved keys without opening that tab. It also
+  // runs again when the rooms change (own studio save writing the GUIDs back, or another device's save through the stream).
+  // Final review F1: a change that is ONLY this migration (the state equals what was loaded / last saved) must not go through the
+  // 95-01 autosave — that writes the WHOLE complexData, and a tab opened long ago and left alone would put its old copy over what
+  // other tabs stored since, without anybody touching it. Such a change is marked as saved and only the field moeblierung is
+  // stored, migrated from the FRESH record (moeblierungMigrierenSpeichern). With unsaved changes of the person the autosave
+  // stores everything anyway, the migration included (unchanged).
+  const zonenImStore = /** @type {{zones?: any[]}} */ (programmStand).zones;
+  /**
+   * Final review F1: stores ONLY the migrated furniture field of the project's BuildingComplex. Reads the fresh record (another tab
+   * may have stored furniture or anything else since this tab loaded it), migrates ITS furniture with the same rooms and writes
+   * this one field on the strict base (106-09 `stand`): a write in between answers 409 and nothing is overwritten — the next open
+   * migrates again. Queued behind the autosaves (speichertGerade). Side effect: one GET and at most one PUT.
+   * @param {string} pid project the migration ran for @param {any[]} zonen store zones it ran with
+   * @param {import("@designer/lib/moebel").IdPruefOptionen} opts the same GUID evidence
+   */
+  const moeblierungMigrierenSpeichern = (pid, zonen, opts) => {
+    speichertGerade.current = speichertGerade.current.then(async () => {
+      try {
+        const id = complexRecordId.current;
+        if (!id) return;
+        // 115-05b (E-4): the answer goes into the three-way path with the base (komplexStandNehmen) - a field both this tab and the
+        // other writer changed gets its card and lock, never dropped; without the designer of this project mounted the base stays.
+        // Part 2: the write lives in a lazily loaded module (size budget of this chunk; unit test moebelMigration-11505b).
+        const { moeblierungMigrationSchreiben } = await import("../lib/moebelMigrationSpeichern.js");
+        await moeblierungMigrationSchreiben({ api: bitApi.entities.BuildingComplex, pid, id, zonen, opts,
+          aktiv: () => komplexBasisJe.current.has(pid) && gemountetRef.current && projektIdRef.current === pid,
+          nehmen: (gespeichert) => komplexStandNehmen(pid, gespeichert) });
+      } catch (error) {
+        if (/** @type {any} */ (error)?.status === 409) return; // written in between: not overwritten, the next open migrates again
+        console.error("Möbel-Schlüssel konnten nicht gespeichert werden:", error);
+      }
+    });
+  };
+  useEffect(() => {
+    const pid = project?.id || null;
+    // storeGehoertZu: the shared store still holds THIS project's rooms (a switch must never re-key with the previous rooms)
+    if (!bimGeladen || !pid || complexGeladenFuer !== pid || !storeGehoertZu(pid)) return;
+    // review R-3: the GUID the studio's save pins for a room record with this _idx (BitBimStudio guidsAnheften, same project id) —
+    // a room still carrying it was never renumbered, so its stacked copies on other storeys do not make its id: entry ambiguous
+    const opts = { guidAusIdx: (/** @type {number|string} */ idx) => bauteilGuid(pid, "customZones", { _idx: /** @type {any} */ (idx) }) };
+    const zonen = zonenImStore || [];
+    const r = migriereMoeblierung(complexData.moeblierung, zonen, opts);
+    if (!r.verschoben) return;
+    const neu = { ...complexData, moeblierung: r.moeblierung };
+    // 115-05a: "the state equals what was loaded / last saved" is now "no field differs from the stored base"; the migrated field
+    // counts as stored for the autosave (its patch leaves it out) while the fresh record is migrated and written on its own
+    const basis = komplexBasisJe.current.get(pid);
+    if (geladenAls.current != null && basis && !Object.keys(komplexPatch(basis.felder, complexData)).length) {
+      komplexBasisJe.current.set(pid, { ...basis, felder: { ...basis.felder, moeblierung: r.moeblierung } });
+      moeblierungMigrierenSpeichern(pid, zonen, opts);
+    }
+    // another update queued in between: skip — the effect runs again with that state
+    setComplexData((prev) => (prev === complexData ? neu : prev));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bimGeladen, complexGeladenFuer, project?.id, zonenImStore, complexData]);
+
   // KD-11 + 72-01 A-2: echter Grundstücksbezug für alle Dichtekennwerte.
   // Null nur, solange GAR keine Parzelle da ist. Das generische Startquadrat
   // trägt seit A-2 einen expliziten m_per_px aus der Projektableitung — seine
@@ -294,6 +703,79 @@ export default function ComplexDesigner() {
     complexData.site_parcel && Number.isFinite(Number(complexData.site_parcel.m_per_px))
       ? Number(complexData.site_area) || null
       : null;
+
+  // ---- 115-05d (C-2 … C-4): ONE undo history of the site data (plot, envelopes, blocks, bars, location) on the page ----
+  // The page outlives its tabs, so the history outlives a tab switch. It OBSERVES the site group: whatever writer changed it (plan,
+  // map, parcel import, "Neu schätzen", the massing page) lands in the same order of steps. Writes that are not the person's
+  // (load, a foreign state taken over, a conflict decided, discard, the undo itself) set komplexStillRef in their updater and are
+  // not recorded; all but the undo itself start a fresh history (a snapshot from before would bring old elements back).
+  // A pointer held down is one gesture = one step (window listeners below); Esc inside it takes the step off again when the editor
+  // has written the state of the press back.
+  const komplexHistorieRef = useRef(leereKomplexHistorie());
+  const komplexVorherRef = useRef(/** @type {{pid: string|null, werte: Record<string, any>, bild: string}|null} */ (null));
+  const [komplexVerlaufStand, setKomplexVerlaufStand] = useState({ zurueck: 0, vor: 0 });
+  const komplexVerlaufMelden = () => setKomplexVerlaufStand({ zurueck: komplexHistorieRef.current.past.length, vor: komplexHistorieRef.current.future.length });
+  useEffect(() => {
+    const pid = project?.id ?? null;
+    const werte = Object.fromEntries(KOMPLEX_LAGE_GRUPPE.map((k) => [k, complexData[k]]));
+    const bild = JSON.stringify(KOMPLEX_LAGE_GRUPPE.filter((k) => !KOMPLEX_ABGELEITET.includes(k)).map((k) => complexData[k] ?? null));
+    const v = komplexVorherRef.current;
+    const still = komplexStillRef.current;
+    komplexStillRef.current = null;
+    const jetzt = { pid, werte, bild };
+    if (!v || v.pid !== pid || complexGeladenFuer !== pid || still === "leeren") {
+      komplexVorherRef.current = jetzt;
+      if (komplexHistorieRef.current.past.length || komplexHistorieRef.current.future.length) { komplexHistorieRef.current = leereKomplexHistorie(); komplexVerlaufMelden(); }
+      return;
+    }
+    komplexVorherRef.current = jetzt;
+    if (v.bild === bild || still === "anwenden") return;
+    const feld = KOMPLEX_LAGE_GRUPPE.find((k) => !KOMPLEX_ABGELEITET.includes(k) && JSON.stringify(v.werte[k] ?? null) !== JSON.stringify(werte[k] ?? null));
+    komplexHistorieRef.current = aufzeichnen(komplexHistorieRef.current, v.werte, { label: KOMPLEX_SCHRITT_NAME[feld] || "Lage" });
+    komplexVerlaufMelden();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complexData, project?.id, complexGeladenFuer]);
+  useEffect(() => {
+    /** @type {ReturnType<typeof setTimeout>|null} */
+    let ende = null;
+    const runter = () => { if (ende) { clearTimeout(ende); ende = null; } komplexHistorieRef.current = gesteStart(komplexHistorieRef.current); };
+    // the release closes the gesture a moment later: the change of the last pointer move is recorded in an effect after this event
+    const hoch = () => { if (ende) clearTimeout(ende); ende = setTimeout(() => { ende = null; komplexHistorieRef.current = gesteEnde(komplexHistorieRef.current); }, 80); };
+    const taste = (/** @type {KeyboardEvent} */ e) => {
+      if (e.key !== "Escape" || !komplexHistorieRef.current.ziehe) return;
+      setTimeout(() => {
+        const vorher = komplexHistorieRef.current;
+        komplexHistorieRef.current = gesteAbbrechen(vorher, komplexVorherRef.current?.werte);
+        if (komplexHistorieRef.current !== vorher) komplexVerlaufMelden();
+      }, 60);
+    };
+    window.addEventListener("pointerdown", runter, true);
+    window.addEventListener("pointerup", hoch, true);
+    window.addEventListener("pointercancel", hoch, true);
+    window.addEventListener("keydown", taste, true);
+    return () => {
+      if (ende) clearTimeout(ende);
+      window.removeEventListener("pointerdown", runter, true);
+      window.removeEventListener("pointerup", hoch, true);
+      window.removeEventListener("pointercancel", hoch, true);
+      window.removeEventListener("keydown", taste, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const komplexSchritt = (/** @type {"zurueck"|"vor"} */ richtung) => {
+    const jetzt = Object.fromEntries(KOMPLEX_LAGE_GRUPPE.map((k) => [k, complexDataRef.current[k]]));
+    const r = richtung === "vor" ? schrittVor(komplexHistorieRef.current, jetzt) : schrittZurueck(komplexHistorieRef.current, jetzt);
+    if (!r) return false;
+    komplexHistorieRef.current = r.historie;
+    komplexVerlaufMelden();
+    complexDataRef.current = { ...complexDataRef.current, ...r.werte };
+    setComplexData((prev) => { komplexStillRef.current = "anwenden"; return { ...prev, ...r.werte }; });
+    toast.info(`${richtung === "vor" ? tf("Wiederholt") : tf("Rückgängig")}: ${tf(r.label)}`, { id: "komplex-verlauf", duration: 1800 });
+    return true;
+  };
+  const komplexVerlauf = { rueckgaengig: () => komplexSchritt("zurueck"), wiederholen: () => komplexSchritt("vor"),
+    kannZurueck: komplexVerlaufStand.zurueck > 0, kannVor: komplexVerlaufStand.vor > 0, schritte: komplexVerlaufStand.zurueck,
+    nummern: () => verlaufNummern(komplexHistorieRef.current) }; // for one order with other histories of the page (neuesterVerlauf)
 
   const updateComplexData = (section, data) => {
     setComplexData(prev => ({
@@ -485,46 +967,210 @@ export default function ComplexDesigner() {
 
   // 95-01: save automatically 1.5 s after a change once name and location are set — before, the drawn
   // parcel and everything else lived only until the page was left, unless "Entwurf speichern" was pressed.
+  // 115-05a (A-4): only the fields that differ from the stored base, without the fields of an open card (K6a); the plan (pid, id,
+  // stand frozen) waits in ausstehendKomplexRef until its timer fires, so a project switch / unmount can flush it.
   useEffect(() => {
-    if (!project?.id || geladenAls.current == null || !complexData.name || !complexData.location) return undefined;
-    const stand = JSON.stringify(complexData);
-    if (stand === geladenAls.current) return undefined;
+    const pid = project?.id;
+    // 115-05c: the site group is reported to the draft (written with "Speichern"), the other fields keep their autosave
+    if (pid) void komplexMeldenRef.current(pid);
+    if (!pid || geladenAls.current == null || !complexData.name || !complexData.location) return undefined;
+    const basis = komplexBasisJe.current.get(pid);
+    if (!basis) return undefined;
+    const patch = ohneEntwurf(komplexPatch(basis.felder, complexData, komplexGesperrt(pid)));
+    if (!Object.keys(patch).length) {
+      if (ausstehendKomplexRef.current?.pid === pid) ausstehendKomplexRef.current = null;
+      return undefined;
+    }
+    /** @type {KomplexPlan} */
+    // 115-05c: a create by the autosave carries the STORED values of the draft fields (start values) - the site group of an unsaved
+    // draft never reaches the record without "Speichern"
+    const plan = { pid, id: basis.id, stand: basis.updated_date, basisFelder: basis.felder, patch,
+      voll: { ...komplexNormal(complexData), ...Object.fromEntries(ENTWURF_KOMPLEX.map((k) => [k, basis.felder?.[k]])) } };
+    ausstehendKomplexRef.current = plan;
     const t = setTimeout(() => {
-      speichertGerade.current = speichertGerade.current.then(async () => {
-        try {
-          const payload = { ...complexData, project_id: project.id };
-          if (complexRecordId.current) await bitApi.entities.BuildingComplex.update(complexRecordId.current, payload);
-          else complexRecordId.current = (await bitApi.entities.BuildingComplex.create(payload))?.id ?? null;
-          geladenAls.current = stand;
-        } catch (error) {
-          console.error("Automatisches Speichern fehlgeschlagen:", error);
-          toast.error("Automatisches Speichern fehlgeschlagen — bitte „Entwurf speichern“");
-        }
+      // review 115-05a (R-11505a-01): "Entwurf speichern" or a flush took this plan over meanwhile - writing it again created a
+      // second record when the project had none yet (its id was frozen as null)
+      if (ausstehendKomplexRef.current !== plan) return;
+      ausstehendKomplexRef.current = null;
+      komplexSchreiben(plan).catch((error) => {
+        console.error("Automatisches Speichern fehlgeschlagen:", error);
+        toast.error(tf("Automatisches Speichern fehlgeschlagen — bitte „Entwurf speichern“"));
       });
     }, 1500);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- komplexSchreiben / tf read refs and stable setters at call time
   }, [complexData, project?.id]);
 
-  const saveComplex = async () => {
-    if (!complexData.name || !complexData.location) return;
-    
-    setIsSaving(true);
-    try {
-      const payload = { ...complexData, project_id: project?.id ?? null };
-      if (complexRecordId.current) {
-        await bitApi.entities.BuildingComplex.update(complexRecordId.current, payload);
-      } else {
-        const created = await bitApi.entities.BuildingComplex.create(payload);
-        complexRecordId.current = created?.id ?? null;
-      }
-      toast.success("Entwurf gespeichert");
-    } catch (error) {
-      console.error("Error saving complex:", error);
-      toast.error("Speichern fehlgeschlagen — bitte erneut versuchen");
-    } finally {
-      setIsSaving(false);
+  /**
+   * 115-05b part 2: another stored state of the design record comes in - a 409 of its write, the furniture migration's answer (E-4),
+   * the focus check (StandWaechterHinweis). Merged three ways (komplexFremdUebernehmen); the base moves with the merge. With the
+   * designer of `pid` mounted, what only the other writer changed comes into the state (K6b) and each conflict gets its card and
+   * lock (K6a); otherwise only the base moves (the caller decides, see the 409 path).
+   * @param {string} pid @param {any} gespeichert the stored record
+   * @param {{id: string|null, updated_date: string|null, felder: Record<string, any>}} [basis] the base it is compared with
+   * @param {Record<string, any>} [mein] the own state (default: the page's state now)
+   * @returns {ReturnType<typeof komplexFremdUebernehmen>}
+   */
+  const komplexStandNehmen = (pid, gespeichert, basis = komplexBasisJe.current.get(pid), mein = komplexNormal(complexDataRef.current)) => {
+    const r = komplexFremdUebernehmen({ basis, mein, gespeichert, gesperrt: komplexGesperrt(pid), normal: komplexNormal });
+    komplexBasisJe.current.set(pid, r.basis);
+    if (!gemountetRef.current || projektIdRef.current !== pid) return r;
+    if (r.basis.id) complexRecordId.current = r.basis.id;
+    if (Object.keys(r.setzen).length) {
+      complexDataRef.current = { ...complexDataRef.current, ...r.setzen };
+      setComplexData((prev) => { komplexStillRef.current = "leeren"; return { ...prev, ...r.setzen }; });
     }
+    for (const k of r.konflikte) komplexKonfliktMelden(pid, k);
+    return r;
   };
+
+  /**
+   * 115-05a (A-4): THE write path of the design record (autosave, "Entwurf speichern", flush, "keep mine") — queued behind every
+   * other write of it (speichertGerade), so two writes never overlap and never create two records.
+   * @param {KomplexPlan} plan
+   * @returns {Promise<boolean>} true = written (or nothing to write); false = refused (a toast said why)
+   */
+  const komplexSchreiben = (plan) => {
+    const lauf = speichertGerade.current.then(() => komplexSchreibenJetzt(plan));
+    speichertGerade.current = lauf.then(() => undefined, () => undefined);
+    return lauf;
+  };
+  const komplexSchreibenRef = useRef(komplexSchreiben);
+  komplexSchreibenRef.current = komplexSchreiben;
+
+  /**
+   * One strict write of the design record. Without a stored record: create (the answer becomes the base). Else a PUT of the patch
+   * on `?stand` (the body carries no updated_date: no false "changed meanwhile" hint). On 409: merge three ways against the stored
+   * record (komplexAbgleich.js) — what only the other writer changed comes into the state (K6b), each conflict gets a card and its
+   * fields are held back (K6a), the own changes are written again on the new stand; at most three attempts, then a toast.
+   * The base it builds on is the newest one of its project and record (an own write queued before it moved the stand; a plan made
+   * before the record existed takes the record an own write queued before it created), else the frozen one of the plan.
+   * @param {KomplexPlan} start
+   * @returns {Promise<boolean>}
+   */
+  const komplexSchreibenJetzt = async (start) => {
+    let plan = start;
+    for (let versuch = 1; versuch <= 3; versuch += 1) {
+      const b = komplexBasisJe.current.get(plan.pid);
+      // review 115-05a (R-11505a-01): plan.id null and a record created meanwhile → update it (before: a second create)
+      const basis = b && (b.id === plan.id || (plan.id == null && b.id)) ? b : { id: plan.id, updated_date: plan.stand, felder: plan.basisFelder };
+      const offen = komplexGesperrt(plan.pid);
+      const patch = Object.fromEntries(Object.entries(plan.patch).filter(([k, v]) => !offen.has(k) && !gleichWert(v, basis.felder?.[k])));
+      const aktuell = () => gemountetRef.current && projektIdRef.current === plan.pid;
+      if (basis.id && !Object.keys(patch).length) { if (aktuell()) geladenAls.current = "gespeichert"; return true; }
+      try {
+        /** @type {any} */
+        let antwort;
+        if (!basis.id) {
+          // 115-05b (E-3): one record per project - another tab may have created it since this one loaded "none". Its record is
+          // taken over like the stored record of a 409 (three ways below); the server refuses a second create the same way.
+          const da = komplexDatensatzWaehlen(await bitApi.entities.BuildingComplex.filter({ project_id: plan.pid })).datensatz;
+          if (da) throw Object.assign(new Error("BuildingComplex vorhanden"), { status: 409, data: { gespeichert: da } });
+          antwort = await bitApi.entities.BuildingComplex.create({ ...(plan.voll || { ...basis.felder, ...patch }), project_id: plan.pid });
+        }
+        else antwort = await bitApi.entities.BuildingComplex.update(basis.id, patch, { stand: basis.updated_date ?? null });
+        const neueId = antwort?.id ?? basis.id;
+        const felder = basis.id ? { ...basis.felder, ...patch, ...komplexOhneVerwaltung(antwort) } : komplexNormal({ ...(plan.voll || {}), ...(antwort || {}) });
+        komplexBasisJe.current.set(plan.pid, { id: neueId, updated_date: antwort?.updated_date ?? basis.updated_date ?? null, felder });
+        if (aktuell()) { complexRecordId.current = neueId; geladenAls.current = "gespeichert"; }
+        return true;
+      } catch (err) {
+        const e = /** @type {any} */ (err);
+        if (e?.status !== 409 || !e?.data?.gespeichert) throw err;
+        // 115-05b part 2: the same merge as the furniture migration and the focus check (komplexStandNehmen)
+        const r = komplexStandNehmen(plan.pid, e.data.gespeichert, basis, aktuell() ? undefined : { ...basis.felder, ...plan.patch });
+        if (!aktuell() && r.konflikte.length) {
+          // a flush of a project that is no longer open: nothing mixed, the person is told (D-115-50)
+          toast.error(tf("Entwurf nicht gespeichert — er wird gerade an anderer Stelle geändert. Bitte neu laden."));
+          return false;
+        }
+        plan = { ...plan, id: r.basis.id, stand: r.basis.updated_date, basisFelder: r.basis.felder, patch: r.schreiben };
+      }
+    }
+    toast.error(tf("Entwurf nicht gespeichert — er wird gerade an anderer Stelle geändert. Bitte neu laden."));
+    return false;
+  };
+
+  // 115-05a (A-4): the designer of this project for the cards' resolvers; on unmount the own version of each open card stays
+  // (komplexMeinStand) and a pending save goes out (flush)
+  useEffect(() => {
+    const pid = project?.id;
+    if (!pid) return undefined;
+    const halter = {
+      pid,
+      zustand: () => komplexNormal(complexDataRef.current),
+      setzen: (/** @type {Record<string, any>} */ w) => {
+        complexDataRef.current = { ...complexDataRef.current, ...w };
+        setComplexData((prev) => { komplexStillRef.current = "leeren"; return { ...prev, ...w }; });
+      },
+      basis: () => komplexBasisJe.current.get(pid),
+      schreiben: (/** @type {Record<string, any>} */ werte) => {
+        const b = komplexBasisJe.current.get(pid);
+        if (!b) return Promise.resolve(false);
+        return komplexSchreibenRef.current({ pid, id: b.id, stand: b.updated_date, basisFelder: b.felder, patch: werte, voll: komplexNormal(complexDataRef.current) });
+      },
+    };
+    komplexHalter.current = halter;
+    return () => {
+      for (const k of abgleichStand.stand().konflikte) {
+        if (k.quelle === "komplex" && k.projektId === pid) komplexMeinStand.set(k.id, auswahl(halter.zustand(), einheitFelder(k.feld)));
+      }
+      if (komplexHalter.current === halter) komplexHalter.current = null;
+    };
+  }, [project?.id]);
+  useEffect(() => () => {
+    const pend = ausstehendKomplexRef.current;
+    if (!pend) return;
+    ausstehendKomplexRef.current = null;
+    komplexSchreibenRef.current(pend).catch((error) => console.error("Entwurf beim Verlassen nicht gespeichert:", error));
+  }, []);
+
+  /**
+   * 115-05c: the design record as a source of the draft - its site group (ENTWURF_KOMPLEX) against the stored base, reported to the
+   * draft module (the other fields keep their autosave). Read through a ref, so the autosave effect and the save call the newest.
+   */
+  const komplexMeldenRef = useRef((/** @type {string} */ pid) => { void pid; return Promise.resolve(); });
+  komplexMeldenRef.current = (pid) => {
+    const basis = komplexBasisJe.current.get(pid);
+    if (!basis || geladenAls.current == null || projektIdRef.current !== pid) return Promise.resolve();
+    const werte = komplexNormal(complexDataRef.current);
+    return entwurfModul().then((E) => E.melden(pid, "komplex", { stand: { id: basis.id, updated_date: basis.updated_date }, basis: basis.felder, werte, felder: ENTWURF_KOMPLEX }));
+  };
+  // 115-05c: the designer registers its save (the site group, K5: first) and its "Verwerfen" with the draft of its project
+  useEffect(() => {
+    const pid = project?.id;
+    if (!pid) return undefined;
+    /** @type {Array<() => void>} */ let ab = [];
+    let weg = false;
+    void entwurfModul().then((E) => {
+      if (weg) return;
+      ab = [
+        E.speichererSetzen(pid, "komplex", async () => {
+          const basis = komplexBasisJe.current.get(pid);
+          if (!basis) throw new Error(tf("Speichern fehlgeschlagen — bitte erneut versuchen"));
+          const jetzt = komplexNormal(complexDataRef.current);
+          const patch = Object.fromEntries(Object.entries(komplexPatch(basis.felder, jetzt, komplexGesperrt(pid))).filter(([k]) => ENTWURF_KOMPLEX.includes(k)));
+          // derived values (site area, cost estimate) ride along with a real change only - alone they are no unsaved work
+          if (!Object.keys(patch).some((k) => k !== "site_area" && k !== "cost_estimate")) return komplexGesperrt(pid).size ? "konflikt" : "leer";
+          // a design record is created only with a name and a location (as before); the building model is saved anyway (K5)
+          if (!basis.id && (!jetzt.name || !jetzt.location)) { toast.info(tf("Grundstück und Lage werden erst gespeichert, wenn Name und Standort gesetzt sind.")); return "teilweise"; }
+          if (ausstehendKomplexRef.current?.pid === pid) ausstehendKomplexRef.current = null;
+          const ok = await komplexSchreiben({ pid, id: basis.id, stand: basis.updated_date, basisFelder: basis.felder, patch, voll: jetzt });
+          await komplexMeldenRef.current(pid);
+          return !ok ? "teilweise" : komplexGesperrt(pid).size ? "konflikt" : "ok";
+        }),
+        E.zuruecksetzerSetzen(pid, "komplex", () => {
+          const basis = komplexBasisJe.current.get(pid);
+          if (!basis || projektIdRef.current !== pid) return;
+          const zurueck = Object.fromEntries(ENTWURF_KOMPLEX.map((k) => [k, basis.felder?.[k]]));
+          complexDataRef.current = { ...complexDataRef.current, ...zurueck };
+          setComplexData((prev) => { komplexStillRef.current = "leeren"; return { ...prev, ...zurueck }; });
+        }),
+      ];
+    });
+    return () => { weg = true; ab.forEach((f) => f()); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refs and stable setters are read at call time
+  }, [project?.id]);
 
   // 75-06 Task 2 (D-P75-04): GeoJSON parcel import — pure parse in
   // @designer/lib/flurstueckImport, this handler owns the data-model write.
@@ -607,13 +1253,33 @@ export default function ComplexDesigner() {
           </div>
         )}
         <SyncHinweis />
+        {project?.id && (
+          <React.Suspense fallback={null}>
+            <StandWaechterHinweis projectId={project.id} komplex={{
+              pid: project.id,
+              basis: () => (geladenAls.current == null ? undefined : komplexBasisJe.current.get(project.id)),
+              // review 115-05b part 2 (finding 1): the designer left or another project open → nothing taken, the base stays (as the
+              // furniture migration with aktiv() false); a flush of this project then meets the 409 and its refusal note
+              nehmen: (/** @type {any} */ g) => {
+                if (!gemountetRef.current || projektIdRef.current !== project.id) return false;
+                komplexStandNehmen(project.id, g);
+                return true;
+              },
+              einreihen: (/** @type {() => Promise<any>} */ f) => { const l = speichertGerade.current.then(f); speichertGerade.current = l.then(() => undefined, () => undefined); return l; },
+            }} />
+          </React.Suspense>
+        )}
 
         {/* 101-01 (user 18.10.2026, "Stufenpyramide"): one flat header row — title, the five areas,
             the tabs of the active area and the save state — instead of title block + card + two tab rows. */}
         <div className={af("ws:flex-1 ws:min-h-0 ws:flex ws:flex-col").trim() || undefined}>
           <div className={af("ws:flex-1 ws:min-h-0 ws:flex ws:flex-col").trim() || undefined}>
             <Tabs value={activeTab} onValueChange={setActiveTab} className={"w-full" + af("ws:flex-1 ws:min-h-0 ws:flex ws:flex-col")}>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border pb-2">
+              {/* 115-03: two fixed lines inside the one header — line 1: title, the five areas, save; line 2: the tabs of the
+                  active area, the switch for hidden tabs and the direct views of the building model. Line 1 never changes and
+                  line 2 keeps its height, so nothing below jumps when a tab is switched (D-115-41). */}
+              <div className="border-b border-border pb-2 space-y-2">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 {/* h1 = menu name exactly (navigation test); the project name stands next to it. */}
                 <h1 className="text-base font-semibold text-foreground whitespace-nowrap">Komplex-Designer</h1>
                 {project && <span className="-ml-2 text-base text-muted-foreground whitespace-nowrap">· {project.name}</span>}
@@ -624,7 +1290,7 @@ export default function ComplexDesigner() {
                     <button
                       key={b.id}
                       type="button"
-                      onClick={() => { setBereich(b.id); const erste = reiterImBereich(b.id)[0]; if (erste) setActiveTab(erste.key); }}
+                      onClick={() => { setBereich(b.id); const erste = reiterJeBereich[b.id]?.[0]; if (erste) setActiveTab(erste.key); }}
                       aria-current={bereich === b.id ? "true" : undefined}
                       className={
                         bereich === b.id
@@ -636,27 +1302,34 @@ export default function ComplexDesigner() {
                     </button>
                   ))}
                 </div>
-                <span className="hidden lg:block h-5 w-px bg-border" aria-hidden="true" />
-                {/* Ebene 2: die Reiter des aktiven Bereichs. */}
+                {project?.id ? (
+                  <React.Suspense fallback={null}>
+                    <EntwurfLeiste projectId={project.id} />
+                  </React.Suspense>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-h-9">
+                {/* Ebene 2: die Reiter des aktiven Bereichs (115-03: je Projektart, der offene Reiter bleibt immer in der Zeile).
+                    The active tab carries aria-selected (Radix) and the filled state; the line below names area › tab. */}
                 <TabsList className="flex flex-wrap h-auto gap-0.5 bg-muted p-0.5">
-                  {reiterImBereich(bereich).map((r) => {
+                  {(reiterJeBereich[bereich] || []).map((r) => {
                     const Icon = r.icon;
                     return (
                       <TabsTrigger key={r.key} value={r.key} className="flex items-center gap-2">
                         <Icon className="w-4 h-4" /> {r.label}
                       </TabsTrigger>
                     );
-                  })}                </TabsList>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={saveComplex}
-                  disabled={isSaving || !complexData.name || !complexData.location}
-                  className="ml-auto"
-                  title="Speichert sonst automatisch 1,5 s nach jeder Änderung (sobald Name und Standort gesetzt sind)"
-                >
-                  {isSaving ? "Speichern…" : "Entwurf speichern"}
-                </Button>
+                  })}
+                </TabsList>
+                <ReiterUmschalter
+                  projektart={projektart}
+                  anzahl={ausgeblendet.length}
+                  namen={ausgeblendet.map((k) => reiterFuerTab(k)?.label).filter(Boolean)}
+                  alle={alleReiter}
+                  onAlle={(an) => { setAlleReiter(an); alleReiterMerken(an); }}
+                />
+                <DirektAnsichten onWahl={oeffneGebaeudemodell} />
+              </div>
               </div>
 
               {/* 72-02: eine Zeile statt Textwand — braucht / liefert / Stand. */}
@@ -680,6 +1353,7 @@ export default function ComplexDesigner() {
 
               <TabsContent value="studio" className="px-0 py-2 ws:flex-1 ws:min-h-0 ws:overflow-y-auto">
                 <MassingStudio
+                  verlauf={komplexVerlauf}
                   lat={project?.location?.lat || complexData.location?.lat || 50.1}
                   projectName={project?.name || complexData.name}
                   parcel={complexData.site_parcel}
@@ -719,11 +1393,11 @@ export default function ComplexDesigner() {
               </TabsContent>
 
               <TabsContent value="program" className="px-0 py-2">
-                <SpaceProgram siteArea={siteAreaM2} />
+                <ReiterLaden><SpaceProgram siteArea={siteAreaM2} /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="compliance" className="px-0 py-2">
-                <UnitMixCompliance siteArea={siteAreaM2} parking={complexData.parking} />
+                <ReiterLaden><UnitMixCompliance siteArea={siteAreaM2} parking={complexData.parking} /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="site" className="px-0 py-2 ws:flex-1 ws:min-h-0 ws:overflow-y-auto">
@@ -746,6 +1420,7 @@ export default function ComplexDesigner() {
                   onFlurstueckImport={handleFlurstueckImport}
                   onParcelChange={(parcel) => updateComplexData('site_parcel', parcel)}
                   onRiegelChange={(riegel) => updateComplexData('riegel', riegel)}
+                  verlauf={komplexVerlauf}
                 />
               </TabsContent>
 
@@ -754,7 +1429,7 @@ export default function ComplexDesigner() {
               </TabsContent>
 
               <TabsContent value="bim" className="px-0 py-2 ws:flex-1 ws:min-h-0 ws:overflow-y-auto">
-                <BitBimStudio complexData={complexData} />
+                <BitBimStudio complexData={complexData} startAnsicht={bimAnsicht} />
               </TabsContent>
 
               <TabsContent value="buildings" className="px-0 py-2">
@@ -779,7 +1454,7 @@ export default function ComplexDesigner() {
               </TabsContent>
 
               <TabsContent value="brandschutz" className="px-0 py-2">
-                <BrandschutzPlanner />
+                <ReiterLaden><BrandschutzPlanner /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="asr" className="px-0 py-2">
@@ -811,30 +1486,30 @@ export default function ComplexDesigner() {
               </TabsContent>
 
               <TabsContent value="apartments" className="px-0 py-2">
-                <ApartmentPlanner />
+                <ReiterLaden><ApartmentPlanner /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="werkstatt" className="px-0 py-2">
                 {/* 75-09 Task 6: furniture wiring — the focus writes ONLY through
                     the callback into complexData.moeblierung (same path as
                     InteriorDesigner below, never a store write). speicherbar
-                    mirrors saveComplex's guard (needs name + location). */}
-                <WohnungsWerkstatt
+                    mirrors the create guard of the design record (needs name + location). */}
+                <ReiterLaden><WohnungsWerkstatt
                   moeblierung={complexData.moeblierung}
                   moebelEigene={complexData.moebel_eigene}
                   onMoeblierungChange={(m) => updateComplexData('moeblierung', m)}
                   speicherbar={!!complexData.name && !!complexData.location}
                   standort={complexData.location || null}
-                />
+                /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="interiors" className="px-0 py-2">
-                <InteriorDesigner 
+                <ReiterLaden><InteriorDesigner 
                   complexData={complexData}
                   onInteriorDesignsChange={(designs) => updateComplexData('interior_designs', designs)}
                   onMoeblierungChange={(moeblierung) => updateComplexData('moeblierung', moeblierung)}
                   onMoebelEigeneChange={(liste) => updateComplexData('moebel_eigene', liste)}
-                />
+                /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="analysis" className="px-0 py-2">
@@ -854,10 +1529,10 @@ export default function ComplexDesigner() {
               </TabsContent>
 
               <TabsContent value="costs" className="px-0 py-2">
-                <CostCalculator 
+                <ReiterLaden><CostCalculator
                   complexData={complexData}
                   onCostUpdate={(costs) => updateComplexData('cost_estimate', costs)}
-                />
+                /></ReiterLaden>
               </TabsContent>
 
               <TabsContent value="integrations" className="px-0 py-2">

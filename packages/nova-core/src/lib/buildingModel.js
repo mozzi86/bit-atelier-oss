@@ -2,7 +2,7 @@
 // 3D-Darstellung, später 2D-Schnitt und IFC-Export. Koordinaten in der XZ-Ebene
 // (y = oben). Footprint-Polygon zentriert um den Ursprung.
 
-import { metersPerPixel } from "@core/lib/geo";
+import { metersPerPixel } from "./geo.js"; // 108-09: relative (not the @core alias), so plain Node (the import route of the server) loads this module
 import { WALL_COMPOSITES, aufbauById, aufbautenListe } from "./bauteil/aufbauten.js";
 import { elevationOf, geschosshoehe, geschosseAus, deckenLage, kniestockAus, MIN_WANDHOEHE_M, DECKEN_STANDARD } from "./bauteil/hoehen.js";
 import { untergeschosseAnzahl, geschossName } from "./bauteil/ebenen.js";

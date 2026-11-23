@@ -3,7 +3,7 @@
 // Until 111-02 every delete was hard (DELETE /entities/:e/:id → db.remove → splice). This module adds a second road that never
 // loses a record: the record is copied with time, reason and origin into the collection `Papierkorb`, and only then removed from
 // its own collection. Restoring puts it back with the SAME id, but only while that id is free in the target collection
-// (db.create takes a given id unchecked, finding B-111-02-01 - so the check happens here, before the call).
+// (checked here for the 409 text, and again by db.create's explicit id path since B-111-02-01).
 // The generic CRUD stays as it is; the bin itself is read-only there (papierkorbSperre, mounted before entitiesRouter).
 // The app's own delete buttons still delete hard (a follow-up plan decides whether they move to the bin as well).
 //
@@ -108,7 +108,7 @@ export function papierkorbAufraeumen(db, jetzt = new Date(), tage = AUFBEWAHRUNG
  * @param {any} db  createDb() store
  * @param {string} entity  collection of the record
  * @param {string} id  record id
- * @param {{grund?: unknown, herkunft?: unknown, person?: boolean, jetzt?: Date, stand?: string}} [o]  stand: updated_date the caller saw (ISO); older than the record → 409
+ * @param {{grund?: unknown, herkunft?: unknown, person?: boolean, jetzt?: Date, stand?: string}} [o]  stand: updated_date the caller saw (ISO); another than the record's (newer or older, review 115-05b part 2) → 409
  *   grund: reason in words (cut to MAX_GRUND_ZEICHEN); herkunft: one of HERKUENFTE; person: personImBrowser(req)
  * @returns {Ergebnis} status 201 with the entry, or the refusal (400/403/404)
  */
@@ -120,7 +120,7 @@ export function inPapierkorb(db, entity, id, { grund, herkunft, person = false, 
   const roh = typeof db?._raw === 'function' ? db._raw() : null;
   const datensatz = roh && !Array.isArray(roh[entity]) ? null : db.get(entity, String(id));
   if (!datensatz) return { ok: false, status: 404, fehler: `${entity} ${id} nicht gefunden — schon gelöscht oder nie angelegt` };
-  // the same stale-base rule as PUT ?stand= (routes.js): a delete prepared on an older state is refused, nothing moves
+  // the same stale-base rule as PUT ?stand= (routes.js, inequality): a delete prepared on another state is refused, nothing moves
   if (standVeraltet(datensatz, stand)) return { ok: false, status: 409, fehler: STAND_KONFLIKT_TEXT };
   const text = grund == null ? '' : String(grund).trim().slice(0, MAX_GRUND_ZEICHEN);
   const projektId = datensatz.project_id ?? (entity === 'Project' ? datensatz.id : null);
@@ -149,8 +149,8 @@ export function ausPapierkorb(db, eintragId, { person = false } = {}) {
   if (belegt) {
     return { ok: false, status: 409, fehler: `nicht übernommen: die id ${eintrag.record_id} ist in ${eintrag.entity} inzwischen wieder belegt — nichts wurde überschrieben` };
   }
-  // db.create keeps the id of the record (B-111-02-01): wanted here, and safe because the id was checked free just above
-  const datensatz = db.create(eintrag.entity, JSON.parse(JSON.stringify(eintrag.datensatz || {})));
+  // B-111-02-01: the explicit internal path - same id (checked free just above) and the record's own dates, as it was stored
+  const datensatz = db.create(eintrag.entity, JSON.parse(JSON.stringify(eintrag.datensatz || {})), { kennungUebernehmen: true, zeitUebernehmen: true });
   db.remove(PAPIERKORB_ENTITY, eintrag.id);
   return { ok: true, status: 200, datensatz, entity: eintrag.entity };
 }

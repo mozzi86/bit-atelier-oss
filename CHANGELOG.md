@@ -10,6 +10,42 @@ zuerst unter **Unveröffentlicht** und wandern beim nächsten Release unter die 
 
 ## [Unveröffentlicht]
 
+## [1.16.0] - 2026-11-23
+
+Enthält auch alle Änderungen der Fassung 1.15.0, die nicht als Release erschienen ist (siehe unten).
+
+### Neu
+
+- **Entwurfsmodus im Gebäudemodell und im Lageplan:** Änderungen sind ein Entwurf, bis „Speichern“ gedrückt wird. Ungespeichertes bleibt im Browser erhalten, beim Verlassen fragt die App nach, und hat inzwischen jemand anderes gespeichert, werden beide Stände abgeglichen statt überschrieben.
+- **Rückgängig mit 99 Schritten:** Der Verlauf übersteht den Wechsel des Reiters. Grundstück, Baufelder, Baukörper und Standort teilen sich einen Verlauf; ein Ziehen mit gedrückter Maustaste ist ein Schritt. Nach jedem Schritt sagt ein Hinweis, was zurückgenommen wurde.
+- **Plansatz mit Maßketten:** Im Gebäudemodell unter „Mappe“ entsteht ein PDF mit einem Grundriss je Geschoss und beiden Schnitten, maßstäblich in 1:50 oder 1:100. Je Fassade stehen Maßketten für Öffnungen, Wandlagen und das Gesamtmaß; die Stücke gehen auf das Gesamtmaß auf.
+- **Der Bauherr rückt Möbel:** Das Büro kann die Möblierung der Räume für den Bauherrn freigeben. Er verschiebt und dreht Möbel im Portal und schickt seine Fassung als Vorschlag; das Büro prüft ihn und übernimmt ihn ins Modell oder nicht. Im Cloud-Betrieb braucht das die Datenbank-Fassung 0018.
+- **Vordach als Bauteil** im Gebäudemodell, in Plan, 3D und IFC.
+- **Exposé-Bild aus dem Modell:** Außen- und Innenbilder mit Möbeln, Leuchten und Bepflanzung für das Exposé.
+- **Zweiläufige Treppe** mit Zwischenpodest und Treppenauge; die Kopfhöhe wird über den Stufenvorderkanten geprüft.
+- **Gelände:** Bestand und neues Gelände als zwei Ebenen in 3D, Schnitt, DXF und IFC; Erdbewegung (Abtrag, Auftrag, KG 310) in den Mengen; Öffnungen unter Gelände und die 1,40-m-Regel gegen das maßgebende Gelände.
+- **Grundriss drehen** in 90°-Schritten, mit eigener Blattausrichtung für PDF und DXF.
+- **Trackpad:** Wischen verschiebt, Spreizen zoomt.
+- **Wohnungsplaner:** Räume direkt wählen, in der Größe ändern und verschieben.
+- **Navigation:** Das Gebäudemodell steht unter „3 · Gebäude“, die Projektkarte führt direkt in den Grundriss, die Reiter richten sich nach der Projektart.
+- **Modell aus einer Geometrie-Datei:** Prüfung, Probelauf und Einlesen eines Gebäudemodells aus JSON, auch über die KI-Schnittstelle.
+- **Befehlspalette:** Volltextsuche über Datensätze und eine Kurzbefehl-Hilfe aus dem Befehlsregister.
+- **PDF:** Jedes erzeugte PDF trägt Dokumentsprache und Titel.
+
+### Geändert
+
+- **Schnitt:** Das Dach ist auch im Längsschnitt zu sehen (Dachflächen in Ansicht, Giebelwände bis zum Dach); Maßtexte überlappen sich nicht mehr.
+- **Kalender:** Feiertage aller 16 Bundesländer.
+- **Brief:** Die Betragstabelle steht vor dem Schlusstext.
+
+### Behoben
+
+- **Speichern mischt keine alten Bauteile zurück:** Ein Tab mit älterem Stand überschreibt den neueren nicht mehr; ein Speichern bleibt bei seinem Projekt.
+- **Möbel bleiben in ihrem Raum,** auch wenn die Räume neu aufgebaut werden.
+- **Massing-Studio:** Rückgängig nach dem Ziehen von Grundstück oder Baufeld ersetzte den Baukörper durch den alten Umriss, und ein Strg+Z nahm zwei Schritte zurück.
+- **Bauherrenportal:** Downloads tragen den lesbaren Titel; der Hinweis an den Bauherrn bleibt nach dem Neuladen erhalten.
+- **Datenablage:** Eine leere oder beschädigte Hauptdatei ersetzt nie eine Sicherung, die noch Datensätze enthält.
+
 ## [1.15.0] - 2026-11-11
 
 ### Neu

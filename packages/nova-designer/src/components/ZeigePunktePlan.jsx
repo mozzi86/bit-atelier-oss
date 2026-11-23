@@ -12,11 +12,13 @@ import React from "react";
 /**
  * Numbered pointing points (1..4) and the plan notes of the shown storey.
  * @param {{punkte: ReadonlyArray<{x: number, z: number, level?: number}>, notizen: ReadonlyArray<any>, level: number,
- *   X: (x: number) => number, Z: (z: number) => number, px: (n: number) => number}} props
+ *   X: (x: number) => number, Z: (z: number) => number, px: (n: number) => number, aufrecht?: ((x: number, y: number) => string|undefined)|null}} props
  *   punkte: pointing points in m; notizen: plan notes {x, z, level, text, _idx} in m; level: storey shown (0-based);
  *   X/Z: plan transformers (svg units); px(n): svg units of n screen pixels (sizes stay the same at every zoom).
+ *   115-04: aufrecht(x, y) = SVG transform of a turned host plan that keeps a text upright about a point (undefined when the plan
+ *   is not turned); without it the texts are drawn as before.
  */
-export default function ZeigePunktePlan({ punkte, notizen, level, X, Z, px }) {
+export default function ZeigePunktePlan({ punkte, notizen, level, X, Z, px, aufrecht = null }) {
   const hier = (punkte || []).map((p, i) => ({ ...p, nr: i + 1 })).filter((p) => (p.level ?? 0) === level);
   const texte = (notizen || []).filter((n) => (n.level ?? 0) === level);
   if (!hier.length && !texte.length) return null;
@@ -29,7 +31,7 @@ export default function ZeigePunktePlan({ punkte, notizen, level, X, Z, px }) {
               {/* a note is a remark on the sheet: a small leader cross at its point, the text beside it */}
               <path d={`M${X(n.x) - px(4)},${Z(n.z)} L${X(n.x) + px(4)},${Z(n.z)} M${X(n.x)},${Z(n.z) - px(4)} L${X(n.x)},${Z(n.z) + px(4)}`}
                 stroke="currentColor" strokeWidth={px(1.2)} />
-              <text x={X(n.x) + px(6)} y={Z(n.z) - px(4)} fill="currentColor" fontSize={px(11)} fontStyle="italic">{n.text}</text>
+              <text x={X(n.x) + px(6)} y={Z(n.z) - px(4)} fill="currentColor" fontSize={px(11)} fontStyle="italic" transform={aufrecht?.(X(n.x), Z(n.z))}>{n.text}</text>
             </g>
           ))}
         </g>
@@ -40,7 +42,7 @@ export default function ZeigePunktePlan({ punkte, notizen, level, X, Z, px }) {
             <g key={p.nr} data-testid="zeige-punkt" data-nr={p.nr}>
               <circle cx={X(p.x)} cy={Z(p.z)} r={px(7)} fill="none" stroke="currentColor" strokeWidth={px(1.5)} />
               <circle cx={X(p.x)} cy={Z(p.z)} r={px(1.5)} fill="currentColor" />
-              <text x={X(p.x) + px(9)} y={Z(p.z) - px(8)} fill="currentColor" fontSize={px(12)} fontWeight="700">{p.nr}</text>
+              <text x={X(p.x) + px(9)} y={Z(p.z) - px(8)} fill="currentColor" fontSize={px(12)} fontWeight="700" transform={aufrecht?.(X(p.x), Z(p.z))}>{p.nr}</text>
             </g>
           ))}
         </g>

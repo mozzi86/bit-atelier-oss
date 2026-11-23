@@ -8,7 +8,7 @@
 //
 // In:  footprintM — the building footprint in world metres (any polygon the fit accepts);
 //      basis — the workshop inputs WITHOUT layout-bound fields: gesperrteGrenzen, anordnung,
-//      grenzenPositionen, tuerAufschlaege, stufeJeWe and raumGrenzen (75-12) are dropped here, because they belong
+//      grenzenPositionen, tuerAufschlaege, stufeJeWe, raumGrenzen (75-12) and raumHand (115-12) are dropped here, because they belong
 //      to the layout the user has today, not to a proposal (86-05a-PLAN, Arch condition 2).
 // Out: Vorschlag[] (see typedef below), figures via kennzahlen(), order via
 //      sortiereVorschlaege(); KENNZAHLEN is the register the UI (86-05b) renders from.
@@ -83,7 +83,7 @@ export const VARIANTEN_ACHSEN = {
 export const BASIS_FELDER = ["storeys", "einheiten", "raumzonen", "regeln", "nordwinkel", "okf_m"];
 
 /** Layout-bound workshop fields — dropped from the base (they belong to the previous layout). */
-export const LAYOUT_FELDER = ["gesperrteGrenzen", "anordnung", "grenzenPositionen", "tuerAufschlaege", "stufeJeWe", "raumGrenzen", "geschosseJeRiegel"];
+export const LAYOUT_FELDER = ["gesperrteGrenzen", "anordnung", "grenzenPositionen", "tuerAufschlaege", "stufeJeWe", "raumGrenzen", "raumHand", "geschosseJeRiegel"];
 
 /**
  * Register of the figures: key, German label (i18n key in the UI), unit, default sort

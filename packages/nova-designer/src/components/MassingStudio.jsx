@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@core/components/ui/ca
 import { Sun, Building2, Maximize2, Ruler, Layers, Car, Home, Info, Users } from "lucide-react";
 import BimModelViewer from "@ifc/components/BimModelViewer";
 import MassingView3D from "@designer/components/MassingView3D";
+import { naechsteNr, neuesterVerlauf } from "@core/lib/komplexHistorie.js";
 import { useModellierer, ModellWerkzeugleiste, ModellEbene, ErsteSchritte, ModellBefehlszeile, modellKontext } from "@designer/components/MassingModellierer";
 import { useKontextmenue, KontextmenueAnzeige } from "@core/components/Kontextmenue";
 import KnotenEditor from "@designer/components/KnotenEditor";
@@ -42,6 +43,9 @@ import { konvexeHuelle, flaecheAusserhalb, istKonvex, clipSutherlandHodgman, lae
 // 75-06 Task 6 (D-P75-05): ONE north angle — layer wins when set. The layer
 // is READ ONLY here (WohnungsWerkstatt owns the writer).
 import { useFachlayer } from "@designer/lib/useFachlayer";
+import { useElevationGrid } from "@designer/lib/useElevationGrid"; // 108-10: start of the existing ground from the elevation model
+import { sandkastenAusHoehenmodell } from "@core/lib/massing/gelaendeEbenen.js";
+import { loadBimModel } from "@core/lib/useBimModelSync";
 import { WERKSTATT_DEFAULT, einheitenAnreichern, zerlegungsArt } from "@designer/lib/werkstattDefaults";
 // 75-13: escape-route paths (red line) come from the SAME solver as the workshop.
 import { tesseliere, RETTUNGSWEG_INNEN_NAEHERUNG } from "@designer/lib/tesselierung";
@@ -101,6 +105,7 @@ export default function MassingStudio({
   nordwinkel = 0,
   onBaufeldChange = null,
   onGrundstueckChange = null,
+  verlauf = null, // 115-05d: the page's history of the site data ({rueckgaengig, wiederholen, kannZurueck, kannVor, nummern})
   onNordwinkelChange = null,
   buildings = KEINE,
   wohnungsmix = null,
@@ -460,7 +465,24 @@ export default function MassingStudio({
   // 98-02: SketchUp-like modelling tools (line → face, push/pull, move/copy with *n and /n, groups).
   const bezugMitte = useMemo(() => { const b = polyBBox(poly); return { x: +((b.minX + b.maxX) / 2).toFixed(2), y: +((b.minY + b.maxY) / 2).toFixed(2) }; }, [poly]);
   const kontext = useKontextmenue(); // 101-07: own right-click menu on the plan
-  const modell = useModellierer({ projectId: project?.id || null, geschossHoehe: floorH, flaeche: { w: site.w, d: site.d }, bezug: bezugMitte });
+  // 108-10: the existing ground can start from the public elevation model (same 200-m patch as the building studio). ±0,00 = the surveyed
+  // level of the ground floor from the building survey (read once, read only), else the highest point under the body. Never from the
+  // invented offline heights.
+  const { grid: hoehenGrid, offline: hoehenOffline } = useElevationGrid(project?.location, 10, 0.2);
+  const [okffNHN, setOkffNHN] = useState(/** @type {number|null} */ (null));
+  useEffect(() => {
+    let ab = false;
+    setOkffNHN(null);
+    if (!project?.id) return undefined;
+    loadBimModel(project.id).then((r) => {
+      const v = /** @type {any} */ (r)?.bauaufnahme_layer?.georeferenz?.okff_eg_nhn;
+      if (!ab) setOkffNHN(v != null && Number.isFinite(Number(v)) ? Number(v) : null);
+    }).catch(() => { /* no record yet: the rule applies */ });
+    return () => { ab = true; };
+  }, [project?.id]);
+  const bestandVorschlag = useMemo(() => (hoehenOffline || !hoehenGrid?.length ? null
+    : sandkastenAusHoehenmodell({ feld: site, demGrid: hoehenGrid, patch_m: 200, umrissSite: poly, okffNHN_m: okffNHN })), [hoehenOffline, hoehenGrid, site, poly, okffNHN]);
+  const modell = useModellierer({ projectId: project?.id || null, geschossHoehe: floorH, flaeche: { w: site.w, d: site.d }, bezug: bezugMitte, bestandVorschlag, tasten: false }); // 115-05d: Strg+Z / Strg+Y in one order here (schritt)
   /** Pointer event → site metres (same transform as the axis tool), not clamped: bodies may sit anywhere. */
   const zuSite = (e) => {
     const svg = svgRef.current, ctm = svg?.getScreenCTM?.();
@@ -636,8 +658,9 @@ export default function MassingStudio({
       if (!inFeld && !isDragging()) {
         const kuerzel = editorKuerzel(e);
         // An empty polygon history must not swallow the key: the modeller's own undo listens too.
-        if (kuerzel === "undo" && undoRef.current.past.length) { e.preventDefault(); undo(); return; }
-        if (kuerzel === "redo" && undoRef.current.future.length) { e.preventDefault(); redo(); return; }
+        // 115-05d: body outline and site data (plot, envelope) in ONE order — the newer step goes first (schrittRef)
+        if (kuerzel === "undo" && schrittRef.current("zurueck")) { e.preventDefault(); return; }
+        if (kuerzel === "redo" && schrittRef.current("vor")) { e.preventDefault(); return; }
       }
       if (!isDragging()) return;
       if (e.key === "Alt") { e.preventDefault(); return; }
@@ -683,15 +706,52 @@ export default function MassingStudio({
   // written (a reference to the automatically placed polygon was skipped by the write effect).
   /** @param {Array<{x:number,y:number}>} pts @returns {Array<{x:number,y:number}>} */
   const kopie = (pts) => pts.map((p) => ({ ...p }));
-  const merkePoly = (snap) => { undoRef.current = merke(undoRef.current, kopie(snap)); undoSync(); };
-  const undo = () => { const r = zurueck(undoRef.current, polyNow.current); if (!r) return; undoRef.current = r.stack; setPoly(kopie(r.snapshot)); undoSync(); };
+  // 115-05d (C-4): every stored outline carries the page-wide step number, so this stack and the page's history of the site data
+  // (plot, envelope, blocks) are undone in the order the steps were made
+  const polyNrRef = useRef({ past: /** @type {number[]} */ ([]), future: /** @type {number[]} */ ([]) });
+  const merkePoly = (snap) => {
+    const vorher = undoRef.current.past;
+    undoRef.current = merke(undoRef.current, kopie(snap));
+    if (undoRef.current.past !== vorher) polyNrRef.current = { past: [...polyNrRef.current.past, naechsteNr()].slice(-undoRef.current.past.length), future: [] };
+    undoSync();
+  };
+  const undo = () => {
+    const r = zurueck(undoRef.current, polyNow.current); if (!r) return;
+    undoRef.current = r.stack; setPoly(kopie(r.snapshot));
+    const n = polyNrRef.current; polyNrRef.current = { past: n.past.slice(0, -1), future: [...n.future, n.past[n.past.length - 1]] };
+    undoSync();
+  };
   // F1 (102): a project switch starts a fresh history (no undo into the previous project's outline).
-  useEffect(() => { undoRef.current = leererStack(); undoSync(); }, [project?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const redo = () => { const r = vor(undoRef.current, polyNow.current); if (!r) return; undoRef.current = r.stack; setPoly(kopie(r.snapshot)); undoSync(); };
+  useEffect(() => { undoRef.current = leererStack(); polyNrRef.current = { past: [], future: [] }; undoSync(); }, [project?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const redo = () => {
+    const r = vor(undoRef.current, polyNow.current); if (!r) return;
+    undoRef.current = r.stack; setPoly(kopie(r.snapshot));
+    const n = polyNrRef.current; polyNrRef.current = { past: [...n.past, n.future[n.future.length - 1]], future: n.future.slice(0, -1) };
+    undoSync();
+  };
+  // 115-05d: a drag of the plot or the envelope is NOT an outline of the body — before, its start polygon went into this stack and
+  // Strg+Z replaced the body by the old plot outline. Those levels are recorded by the page's history (it observes the site data).
+  const ebeneRef = useRef(ebene);
+  ebeneRef.current = ebene;
   const merkeDragEnde = () => {
+    if (ebeneRef.current !== "baukoerper") return;
     const start = dragStartRef.current;
     if (start && JSON.stringify(start) !== JSON.stringify(polyNow.current)) merkePoly(start);
   };
+  const verlaufRef = useRef(verlauf);
+  verlaufRef.current = verlauf;
+  /** One step back or forward: the newest one of body outline, site data and modelled bodies. @returns {boolean} false when neither has a step */
+  const schritt = (/** @type {"zurueck"|"vor"} */ richtung) => {
+    const n = polyNrRef.current, seite = verlaufRef.current?.nummern?.() || {};
+    const wahl = neuesterVerlauf([{ name: "koerper", zurueckNr: n.past[n.past.length - 1] ?? null, vorNr: n.future[n.future.length - 1] ?? null }, { name: "seite", ...seite },
+      { name: "modell", ...modell.verlaufNummern() }], richtung);
+    if (wahl === "modell") { if (richtung === "vor") modell.redo(); else modell.undo(); return true; }
+    if (wahl === "koerper") { if (richtung === "vor") redo(); else undo(); return true; }
+    if (wahl === "seite") { if (richtung === "vor") verlaufRef.current.wiederholen(); else verlaufRef.current.rueckgaengig(); return true; }
+    return false;
+  };
+  const schrittRef = useRef(schritt);
+  schrittRef.current = schritt;
 
   const onDown = (mode, idx) => (e) => {
     if (e.button !== 0) return; // Mitteltaste gehört dem Pan
@@ -1041,6 +1101,8 @@ export default function MassingStudio({
       stufeJeWe: layer.stufeJeWe && typeof layer.stufeJeWe === "object" ? layer.stufeJeWe : {},
       // 75-12: interior walls moved in the focus (same guard as the workshop).
       raumGrenzen: layer.raumGrenzen && typeof layer.raumGrenzen === "object" ? layer.raumGrenzen : {},
+      // 115-12: rooms sized / moved by hand (same guard as the workshop).
+      raumHand: layer.raumHand && typeof layer.raumHand === "object" ? layer.raumHand : {},
       // 86-04: building form + storeys per bar (same guard as the workshop).
       zerlegung: zerlegungsArt(layer.zerlegung),
       achse: store.achseM ?? null,
@@ -1810,8 +1872,8 @@ export default function MassingStudio({
               <button onClick={() => vp.zoomBy(1.2)} className="w-6 h-6 rounded border border-slate-300 bg-white/90 text-slate-600 hover:bg-slate-100" aria-label="Vergrößern" title="Vergrößern">+</button>
               <button onClick={vp.resetView} className="h-6 px-1.5 rounded border border-slate-300 bg-white/90 text-slate-600 hover:bg-slate-100" aria-label="Ansicht zurücksetzen" title="Zoom/Verschiebung zurücksetzen">⌖</button>
               <span className="w-2" />
-              <button type="button" onClick={undo} disabled={!undoStand.p} data-undo data-testid="ms-undo" className="w-6 h-6 rounded border border-slate-300 bg-white/90 text-slate-600 hover:bg-slate-100 disabled:opacity-40" aria-label={t("Rueckgaengig")} title={t("Rueckgaengig (Strg+Z)")}>↶</button>
-              <button type="button" onClick={redo} disabled={!undoStand.f} data-redo data-testid="ms-redo" className="w-6 h-6 rounded border border-slate-300 bg-white/90 text-slate-600 hover:bg-slate-100 disabled:opacity-40" aria-label={t("Wiederholen")} title={t("Wiederholen (Strg+Y)")}>↷</button>
+              <button type="button" onClick={() => schritt("zurueck")} disabled={!undoStand.p && !verlauf?.kannZurueck} data-undo data-testid="ms-undo" className="w-6 h-6 rounded border border-slate-300 bg-white/90 text-slate-600 hover:bg-slate-100 disabled:opacity-40" aria-label={t("Rueckgaengig")} title={t("Rueckgaengig (Strg+Z)")}>↶</button>
+              <button type="button" onClick={() => schritt("vor")} disabled={!undoStand.f && !verlauf?.kannVor} data-redo data-testid="ms-redo" className="w-6 h-6 rounded border border-slate-300 bg-white/90 text-slate-600 hover:bg-slate-100 disabled:opacity-40" aria-label={t("Wiederholen")} title={t("Wiederholen (Strg+Y)")}>↷</button>
             </div>
             </div>
             {/* 75-08 Task 5 G: split shows the iso RIGHT NEXT to the plan on

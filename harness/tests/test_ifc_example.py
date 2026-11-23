@@ -356,3 +356,35 @@ def test_eingechecktes_modell_ist_aktuell(fresh):
         "examples/efh-satteldach/model/efh.ifc weicht vom Skript ab — "
         "neu erzeugen mit: python skills/ifc/scripts/make_example.py"
     )
+
+
+def test_eingechecktes_modell_hat_lf_zeilenenden():
+    """The committed model is stored with LF only.
+
+    It was once committed from a Windows run with CRLF (the `*.ifc -text` attribute keeps the
+    bytes as written), so the drift guard above failed on every other platform.
+    """
+    roh = CHECKED_IN.read_bytes()
+    cr = roh.count(b"\r")  # outside the f-string: a backslash in an f-string expression needs Python 3.12
+    assert cr == 0, f"efh.ifc enthält {cr} CR-Zeichen (CRLF statt LF)"
+
+
+def test_generator_schreibt_lf_auch_wenn_ifcopenshell_crlf_schreibt(tmp_path, monkeypatch):
+    """build() writes LF on every platform, even when ifcopenshell's writer emits CRLF.
+
+    Simulates the Windows writer (text-mode stream -> CRLF) by wrapping ifcopenshell.file.write.
+    """
+    original = ifcopenshell.file.write
+
+    def schreibt_crlf(self, path, *args, **kwargs):
+        original(self, path, *args, **kwargs)
+        p = Path(path)
+        p.write_bytes(p.read_bytes().replace(b"\n", b"\r\n"))
+
+    monkeypatch.setattr(ifcopenshell.file, "write", schreibt_crlf)
+    out = tmp_path / "efh.ifc"
+    make_example.build(out)
+    roh = out.read_bytes()
+    cr = roh.count(b"\r")
+    assert cr == 0, f"Generator schrieb {cr} CR-Zeichen"
+    assert roh.endswith(b"END-ISO-10303-21;\n")

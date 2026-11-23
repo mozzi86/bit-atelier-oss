@@ -29,6 +29,9 @@ import { inhaltPruefen } from "@core/lib/pfadRichtlinie.js";
 import { DATENQUELLE } from "@core/lib/umgebung";
 import { useBestaetigung } from "@core/lib/useBestaetigung";
 import { useBriefkopf } from "@core/lib/useBriefkopf";
+import { useEinstellung } from "@core/lib/useEinstellung";
+import { briefkopfFuerBrief } from "@core/lib/briefkopfBrief.js";
+import { SETTING_KEY as BUCHHALTUNG_SETTING_KEY } from "@/lib/accounting/datenmodell.js";
 import { useTabParam } from "@core/lib/useTabParam";
 import { useErlaubteReiter, useZugriff } from "@core/lib/ZugriffContext.jsx";
 import { seitenWurzel } from "@core/lib/utils";
@@ -86,7 +89,12 @@ export default function Correspondence() {
   const gesperrt = cloudGesperrt("schriftverkehr", DATENQUELLE);
   const zugriff = useZugriff();
   const ctx = useProject();
-  const { briefkopf } = useBriefkopf();
+  const { briefkopf: briefkopfGespeichert } = useBriefkopf();
+  // W1-BUERO-F2: letters name the office like the dunning letter and the invoice do — letterhead,
+  // else the legacy accounting name (read only, never written back; see briefkopfFuerBrief).
+  const [buchhaltungEinst] = useEinstellung(BUCHHALTUNG_SETTING_KEY, null);
+  const altBueroName = buchhaltungEinst?.buero?.name;
+  const briefkopf = useMemo(() => briefkopfFuerBrief(briefkopfGespeichert, altBueroName), [briefkopfGespeichert, altBueroName]);
   const [suche, setSuche] = useSearchParams();
   const heute = heuteLokal();
   const kontext = { datenquelle: DATENQUELLE };

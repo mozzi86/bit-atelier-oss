@@ -42,3 +42,14 @@ export async function ladeZugriffsdaten({ datenquelle, rolle, stichtagIso }, { a
     zuordnungen: Array.isArray(zuordnungen) ? zuordnungen : [],
   };
 }
+
+/**
+ * Wave 1 (W1-BUERO-F1): the office areas an access may not export, for ZugriffProvider's
+ * `exportBereiche` prop. The registry, the rule and the English refusal text load lazily on the first export
+ * (exportSichtLaden.js; the area entity lists must not enter the entry chunk).
+ * @param {any} zugriff a Zugriff of rechte.js; null/undefined = narrowest
+ * @returns {Promise<{bereiche: string[], ohne: string[], ohneSettingKeys: string[], ohneDokumentBereiche: string[]}>}
+ */
+export async function verborgeneExportBereiche(zugriff) {
+  return (await import("./exportSichtLaden.js")).verborgen(zugriff);
+}

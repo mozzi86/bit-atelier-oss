@@ -53,6 +53,12 @@
 //        - locked entities (API keys, AI settings, HR data), entities only the person writes and the bin itself are refused in
 //          the preview already; protected project fields (bild_freigabe, loosening nda) are named as problems and never sent.
 //        None of these tools takes over a proposal of the model (D-IDEE-03 / D-IM-04).
+// 108-09: modell_importieren (write permission, preview first): a model from a geometry JSON through POST /api/modell/import
+//        (server/modellImportRouter.js, validator @core bauteil/modellImport.js) - the dry run names every fault with path and German
+//        sentence, ausfuehren: true plus the stand applies it with a backup. There is deliberately NO undo tool: taking something back
+//        is the person's act (D-IM-04, the name rule of freigabe-10610); the backup is undone over the route on this computer.
+// B-106-10-02: the generic write tools refuse the model entities (BimModel, IfcAenderung) - model changes of an agent only as
+//        proposals a person confirms, so they reach the change log (AenderungsSchritt) and the change stream.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -291,6 +297,16 @@ async function bildFreigabePruefen(projektId) {
  */
 const NUR_PERSON_ENTITAETEN = Object.freeze(['AenderungsSchritt', 'Befehlsvorlage']);
 
+/**
+ * B-106-10-02: the model entities (same list as server/aenderungsStrom.js STROM_ENTITAETEN; a unit test compares both). An agent
+ * changes the model only through the proposal tools - a person confirms them in the viewer, which writes the step into the
+ * change log (AenderungsSchritt) and the change stream like every AI step of the app. The generic record tools would bypass both.
+ */
+const MODELL_ENTITAETEN = Object.freeze(['BimModel', 'IfcAenderung']);
+
+/** Refusal of a generic write on a model entity. */
+const MODELL_HINWEIS = 'Das Modell ändert ein Agent nur über Vorschläge (eigenschaft_setzen, transformieren, teilen), die die Person im Viewer bestätigt — nur so landet die Änderung im Änderungsprotokoll (Modellfreigabe). create_record, update_record, delete_record und wiederherstellen sind für BimModel und IfcAenderung gesperrt.';
+
 /** Refusal of create_record / update_record on those entities. */
 const NUR_PERSON_HINWEIS = 'Freigeben, Zurücknehmen und die Befehlsbibliothek sind Handlungen der Person in der App (Seite „Modellfreigabe“) — ein Agent kann sie lesen, aber nicht schreiben.';
 
@@ -393,7 +409,7 @@ const PAPIERKORB_ENTITY = 'Papierkorb';
  */
 const GESCHUETZTE_PROJEKTFELDER = Object.freeze(['bild_freigabe', 'nda']);
 
-/** Fields the app sets itself; a write never sends them (an `id` in a create would even be taken over unchecked, B-111-02-01). */
+/** Fields the app sets itself; a write never sends them (the app ignores them on create since B-111-02-01 anyway). */
 const VERWALTUNGSFELDER = Object.freeze(['id', 'created_date', 'updated_date']);
 
 /** Field of a created record that carries the idempotency key (additive, optional). */
@@ -438,6 +454,7 @@ function schreibEntitaetAus(args) {
   const entity = entitaetAus(args);
   const klein = entity.toLowerCase();
   if (NUR_PERSON_ENTITAETEN.some((e) => e.toLowerCase() === klein)) throw new Abgelehnt(NUR_PERSON_HINWEIS);
+  if (MODELL_ENTITAETEN.some((e) => e.toLowerCase() === klein)) throw new Abgelehnt(MODELL_HINWEIS);
   if (GESPERRTE_ENTITAETEN.some((e) => e.toLowerCase() === klein)) throw new Abgelehnt(`${entity} ${GESPERRT_HINWEIS}`);
   if (klein === PAPIERKORB_ENTITY.toLowerCase()) throw new Abgelehnt('Der Papierkorb ist nur lesbar — Datensätze kommen über delete_record hinein und über wiederherstellen zurück.');
   return entity;
@@ -919,6 +936,44 @@ const VORSCHLAG = { readOnlyHint: false, destructiveHint: false, idempotentHint:
 /** Refusal text for confirming over MCP (decision D-IM-04): the person confirms in the app, there is no agent road. */
 const BESTAETIGEN_ABGELEHNT = 'Ein Agent bestätigt Änderungen nicht selbst (Entscheidung D-IM-04): die Person übernimmt den Vorschlag in der App (Übernehmen) oder per Befehlszeile. Ein Werkzeug zum Bestätigen gibt es für Agenten nicht.';
 
+// --- 108-09: a model from a geometry JSON ------------------------------------------------------
+
+/**
+ * 108-09: modell_importieren - without ausfuehren the dry run of the app (POST /modell/import, modus pruefen): faults with path and German
+ * sentence, warnings, elements per list before/after, the stand; nothing is written. With ausfuehren: true and that stand the import is
+ * applied (modus anwenden): the app checks again, backs up the replaced fields (BimModelImport) and reports the change to open pages.
+ * @param {Record<string, any>} args {projekt_id, modell, ausfuehren?, stand?} @returns {Promise<Record<string, any>>}
+ */
+async function modellImportieren(args) {
+  const projekt = idAus({ id: args.projekt_id });
+  if (args.modell == null || typeof args.modell !== 'object' || Array.isArray(args.modell)) throw new EingabeFehler('modell muss das Import-Objekt sein ({"format": "bit-modell", "version": 1, …}).');
+  const q = (/** @type {Record<string, string>} */ x) => new URLSearchParams({ projekt, ...x }).toString();
+  const vorschau = await api('POST', `/modell/import?${q({ modus: 'pruefen' })}`, args.modell);
+  if (args.ausfuehren !== true) {
+    return {
+      vorschau: true, ...vorschau,
+      naechster_schritt: vorschau.ok
+        ? { werkzeug: 'modell_importieren', argumente: { projekt_id: projekt, modell: '(dasselbe Objekt)', ausfuehren: true, ...(vorschau.stand ? { stand: vorschau.stand } : {}) },
+          hinweis: 'Der Person Fehler/Warnungen und vorher/nachher zeigen; dann mit ausfuehren: true und diesem stand aufrufen.' }
+        : { hinweis: 'Erst die Fehler im JSON beheben und erneut prüfen — angewendet wird nur ein fehlerfreier Import.' },
+    };
+  }
+  if (!vorschau.ok) return { uebernommen: false, grund: 'nicht übernommen: der Import hat Fehler', fehler: vorschau.fehler, warnungen: vorschau.warnungen };
+  const stand = args.stand == null || args.stand === '' ? null : String(args.stand);
+  if (vorschau.stand && !stand) throw new EingabeFehler(standFehltText('modell_importieren'));
+  // R-GJ-1: only the stand of this very dry run was seen; any other value (a word, an older or a future date) sends nothing
+  if (vorschau.stand && stand !== vorschau.stand) return { uebernommen: false, grund: INZWISCHEN_GEAENDERT, stand_jetzt: vorschau.stand };
+  try {
+    const r = await api('POST', `/modell/import?${q({ modus: 'anwenden', ...(stand ? { stand } : {}) })}`, args.modell);
+    return { uebernommen: true, sicherung: r.sicherung, bim_model_id: r.bim_model_id, wuerde: r.wuerde, warnungen: r.warnungen, stand: r.stand,
+      hinweis: 'Die Sicherung (BimModelImport, id = sicherung) hält den alten Stand; zurücknehmen kann ihn nur die Person an diesem Rechner (D-IM-04).' };
+  } catch (err) {
+    if (err instanceof ApiFehler && err.status === 409) return { uebernommen: false, grund: INZWISCHEN_GEAENDERT, stand_jetzt: vorschau.stand };
+    throw err;
+  }
+}
+
+
 /**
  * All tools. `art` is THE convention (tools/mcp-konvention.mjs, stated once here and in the instructions, not per tool):
  * lesen | vorschlag | vorschau-dann-ausfuehren | sofort. `schreibt`: visible and callable only with --schreiben (then the
@@ -1356,6 +1411,26 @@ const WERKZEUGE = [
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     schreibt: true,
     ausfuehren: datensatzWiederherstellen,
+  },
+  // --- 108-09: a model from a geometry JSON (dry run first, then ausfuehren with the stand) ---
+  {
+    name: 'modell_importieren',
+    art: 'vorschau-dann-ausfuehren',
+    title: 'Import model from geometry JSON',
+    description: 'Baut das Gebäudemodell eines Projekts aus einem Geometrie-JSON (Format „bit-modell“, Version 1, Meter, Achsen x nach rechts / z nach Süden; nur mit Schreibrecht). Ohne ausfuehren nur PROBELAUF: jeder Fehler mit Pfad und deutschem Satz (welches Feld, welches Bauteil, warum), Warnungen, Bauteile je Liste vorher/nachher und stand — nichts wird geschrieben. Mit ausfuehren: true und dem stand des Probelaufs ersetzt der Import Programmfelder und Bauteillisten (Fachlayer bleiben); der alte Stand wird als Sicherung abgelegt (Antwort: sicherung; zurücknehmen kann nur die Person), offene Studios bekommen die Änderung. / Builds the model of a project from a geometry JSON (write permission only). Without ausfuehren only a dry run with faults and warnings; ausfuehren: true plus the stand applies it and keeps a backup.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projekt_id: { type: 'string', description: 'id des Projekts (list_projects)' },
+        modell: { type: 'object', description: 'Das Import-Objekt {"format": "bit-modell", "version": 1, "einheit": "m", "achsen": "x-rechts-z-sued", "programm": {...}, "customWalls": [...], ...}' },
+        ausfuehren: AUSFUEHREN_SCHEMA,
+        stand: STAND_SCHEMA,
+      },
+      required: ['projekt_id', 'modell'],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    schreibt: true,
+    ausfuehren: modellImportieren,
   },
   // --- 111-01: the call log, read back (only with --protokoll-lesen: it holds the arguments of every call) ---
   {

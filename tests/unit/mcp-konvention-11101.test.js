@@ -55,6 +55,8 @@ function fakeApi() {
       // 111-02: the recycle bin (list and one entry) for papierkorb_lesen and the preview of wiederherstellen
       // (since the review of 111-02 wiederherstellen reads the entry from the list, never through the generic CRUD)
       if (p === '/api/papierkorb') return json(200, [{ id: 'pk1', entity: 'Notiz', record_id: 'n9', datensatz: { id: 'n9', text: 'x' } }]);
+      // 108-09: the dry run of the model import (the preview is all an example call does)
+      if (p === '/api/modell/import') return json(200, { ok: true, modus: 'pruefen', fehler: [], warnungen: [], geschrieben: false, stand: null });
       const m = /^\/api\/entities\/([A-Za-z]+)(?:\/([^/]+))?$/.exec(p);
       if (m && req.method === 'GET') return json(200, m[2] ? { id: m[2] } : []);
       if (m && (req.method === 'POST' || req.method === 'PUT')) return json(200, { id: m[2] || 'n1', ...JSON.parse(body) });
@@ -121,7 +123,7 @@ describe('111-01 — one convention (K-06, K-18)', () => {
       assert.ok(SOFORT_AUSNAHMEN.zeichenflaeche_ausfuehren.includes('Massing-Studio'), 'the exception names its reason');
       // 111-02 gave create_record and update_record the switch and emptied the transition list
       assert.deepEqual([...UEBERGANG_111_02], [], '111-02 empties this list');
-      assert.deepEqual(liste.filter((w) => w.art === 'vorschau-dann-ausfuehren').map((w) => w.name), ['create_record', 'update_record', 'delete_record', 'wiederherstellen']);
+      assert.deepEqual(liste.filter((w) => w.art === 'vorschau-dann-ausfuehren').map((w) => w.name), ['create_record', 'update_record', 'delete_record', 'wiederherstellen', 'modell_importieren']);
       assert.deepEqual(liste.filter((w) => w.art === 'vorschlag').map((w) => w.name), ['eigenschaft_setzen', 'transformieren', 'teilen', 'vorschlag_verwerfen']);
       assert.ok(!liste.some((w) => /bestaetig/.test(w.name)), 'no tool confirms (D-IDEE-03)');
       assert.ok(!/convention violated/.test(mcp.stderr), mcp.stderr);

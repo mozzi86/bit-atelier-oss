@@ -17,7 +17,7 @@
  * @type {Record<string, number>}
  */
 export const LAYER_VERSION = {
-  werkstatt_layer: 6, // 107-11: optional `dachschraege_quelle`, `kniestock_m` at a unit type (einheiten[])
+  werkstatt_layer: 7, // 107-11: optional `dachschraege_quelle`, `kniestock_m` at a unit type (einheiten[]); 115-12: optional `raumHand`
   netz_layer: 1,
   aussenanlagen_layer: 1,
   entwaesserung_layer: 1,
@@ -38,7 +38,8 @@ export const LAYER_VERSION = {
   aufbauten_layer: 1, // 107-03: { aufbauten: { "<id>": { name, skins[] } } } project build-ups (bauteil/aufbauten.js, D-BK-22)
   solidrelationen_layer: 1, // 107-10: { relationen: [{ id, ziel_guid, operator_guid, operation, aktiv }] } stored solid element operations (bauteil/seo.js); the target stays unchanged, the result is derived
   csg_cache_layer: 1, // 107-14: { eintraege: { "<guid>|<art>": { pruefsumme, ort, objekt_id, inhalt, groesse_bytes, dreiecke, volumen_m3, quelle, warnung, erzeugt } } } — mesh CACHE of the CSG core, never a source (csg/cache.js, D-BK-08a)
-  ansicht_layer: 1, // 107-12 / 55-01: { ausschnitte: [...], ebenen: [...], kombinationen: { name: [ids] }, regel_vorlagen?: [{ id, name, regeln }] } saved views + optional graphic-rule presets (UEB-04); parameters only, never geometry (D-BK-08a). regel_vorlagen is additive on v1 (absent → []).
+  ansicht_layer: 1, // 107-12 / 55-01: { ausschnitte: [...], ebenen: [...], kombinationen: { name: [ids] }, regel_vorlagen?: [{ id, name, regeln }] } saved views + optional graphic-rule presets (UEB-04); parameters only, never geometry (D-BK-08a). regel_vorlagen is additive on v1 (absent → []). 115-04: additive view fields plan_drehung (0|90|180|270, floor plan on screen) and blatt_drehung (0|90|180|270|null, sheet orientation PDF/DXF; null = as on screen), absent → 0 / null (plan/planDrehung.js ansichtDrehung).
+  expose_layer: 1, // W-1118-28: { dach, kamin, aussentreppen[], umfeld{flaechen, bordsteine, hecken, mauern, baeume, straeucher, baumring, nachbarn}, blicke[] } — what the exposé picture needs beyond the building elements (designer lib/exposeSzene.js); m, model axes
 };
 
 /**
@@ -62,7 +63,10 @@ export const MIGRATIONEN = {
   // werkstatt_layer 5 → 6 (107-11, D-BK-14): a unit type in `einheiten[]` may carry OPTIONAL `dachschraege_quelle` ("geometrie" |
   // "hand"; missing = "hand" = the typed-in `dachschraege` as before) and `kniestock_m` (m, knee wall of the roof storey; missing =
   // KNIESTOCK_STANDARD_M of dachschraegenAnteile.js). A v5 blob is a valid v6 blob — nothing to rewrite.
-  werkstatt_layer: [(wert) => wert, (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert })],
+  // werkstatt_layer 6 → 7 (115-12, D-115-47): one OPTIONAL field — `raumHand` ({ "<level>|<zoneName>": { versatzU_m, versatzV_m,
+  // laengeU_m, laengeV_m } }, m in the room's own frame; rooms sized / moved by hand in the apartment planner; missing = {} = every
+  // room follows the rules). A v6 blob is a valid v7 blob — nothing to rewrite.
+  werkstatt_layer: [(wert) => wert, (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert }), (wert) => ({ ...wert })],
   // lieferung_layer 1 → 2 (66-15): each delivery may carry `geschosse` (storey names the
   // section covers; missing/empty = same-named storey or whole building). A v1 blob is a
   // valid v2 blob — lieferplan.normalisiereLayer fills the missing list with [].

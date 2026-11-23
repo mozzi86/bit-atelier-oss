@@ -48,6 +48,10 @@ export const WERKSTATT_DEFAULT = {
   // 75-12: interior-wall offsets { "<level>|<zoneA>|<zoneB>": m } (raumGrenzen.js), set in the
   // focus. A solver input like grenzenPositionen; older layers default additively to {}.
   raumGrenzen: {},
+  // 115-12: rooms sized / moved by hand { "<level>|<zoneName>": { versatzU_m, versatzV_m, laengeU_m, laengeV_m } }
+  // (m in the room's own frame, raumBearbeiten.js), set in the apartment planner. A solver input: the hand room
+  // survives every regeneration ("hand locks rule"). Older layers default additively to {}.
+  raumHand: {},
   // 86-04: building form ("auto" = 86-01/86-03 decomposition, "rand" = perimeter block around a
   // court) and own storey count per bar { "<k>": n }. Older layers default additively.
   zerlegung: "auto",

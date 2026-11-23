@@ -14,10 +14,13 @@ const RAND_M = 0.15;
 
 /**
  * @param {{modell: () => any, guids: ReadonlyArray<string>, projektId?: string|number|null, huellWaende?: ReadonlyArray<any>|null, level: number,
- *   X: (x: number) => number, Z: (z: number) => number, SCALE: number}} props  huellWaende: generated hull walls shown (m); level: storey
+ *   X: (x: number) => number, Z: (z: number) => number, SCALE: number, drehung?: number, aufrecht?: ((x: number, y: number) => string|undefined)|null}} props  huellWaende: generated hull walls shown (m); level: storey
  *   shown (0-based); X/Z/SCALE: the plan's LIVE transformers (svg units, SCALE per m).
+ *   115-04: drehung = rotation of the host plan (degrees counter-clockwise as seen, 0 | 90 | 180 | 270) and aufrecht(x, y) = its SVG
+ *   transform that keeps a text upright about a point (undefined when not turned) — the "?" then sits at the corner the reader sees
+ *   top-right. Without them the marks are drawn as before.
  */
-export default function KiVermerkPlan({ modell, guids, projektId = null, huellWaende = null, level, X, Z, SCALE }) {
+export default function KiVermerkPlan({ modell, guids, projektId = null, huellWaende = null, level, X, Z, SCALE, drehung = 0, aufrecht = null }) {
   if (!guids?.length) return null;
   const marken = kiMarkierungen(modell(), guids, { projektId, huellWaende }).filter((m) => m.level === level);
   if (!marken.length) return null;
@@ -25,11 +28,14 @@ export default function KiVermerkPlan({ modell, guids, projektId = null, huellWa
     <g data-testid="ki-vermerk-plan" style={{ pointerEvents: "none" }} className="text-warnung">
       {marken.map((m) => {
         const r = markenRahmen(m.punkte, RAND_M);
+        // corners of the frame: 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left in the model frame; a quarter turn to the left
+        // brings the next one to the top-right as seen
+        const ecke = r[(1 + Math.round((Number(drehung) || 0) / 90)) % 4] || r[1];
         return (
           <g key={m.guid} data-testid="ki-vermerk-marke" data-guid={m.guid} data-form="gestrichelt">
             <polygon points={r.map((q) => `${X(q.x)},${Z(q.z)}`).join(" ")} fill="none" stroke="currentColor" strokeDasharray="6 3"
               strokeWidth={Math.max(1.5, SCALE * 0.04)} strokeLinejoin="round" />
-            <text x={X(r[1].x) + 3} y={Z(r[1].z) + 4} fill="currentColor" fontSize={Math.max(11, SCALE * 0.35)} fontWeight="700">?</text>
+            <text x={X(ecke.x) + 3} y={Z(ecke.z) + 4} fill="currentColor" fontSize={Math.max(11, SCALE * 0.35)} fontWeight="700" transform={aufrecht?.(X(ecke.x), Z(ecke.z))}>?</text>
           </g>
         );
       })}

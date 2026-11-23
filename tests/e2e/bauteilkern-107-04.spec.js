@@ -10,6 +10,8 @@
 // kamera, bildpunkt3d, ...), the IFC values from the downloaded text.
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -304,6 +306,9 @@ test.describe("107-04 Öffnungskette: Wirt, Maße, Höhenanker, fülllose Öffnu
       await page.screenshot({ path: path.join(ORDNER, "plan-deckenloch.png") });
 
       // ---- persisted: after a reload the openings, the hole and the penetrations are all there ----
+      // 115-05c (adapted): the openings and the slab hole are a draft - nothing of them is stored before "Speichern" (before: autosave)
+      expect((await gespeichert()).customWindows?.length ?? 0, "nothing stored before Speichern").toBe(0);
+      expect(await speichernUndWarten(page)).toBe("gespeichert");
       await expect.poll(async () => { const g = await gespeichert(); return `${g.customWindows?.length}|${g.envOpenings?.length}|${g.customSlabs?.[0]?.oeffnungen?.length}`; }, { timeout: 20000 }).toBe("3|0|1");
 
       expect(warnungen, `Konsole: ${warnungen.join(" | ")}`).toEqual([]);

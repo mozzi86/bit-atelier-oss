@@ -196,9 +196,13 @@ test("hub: an invalid holder is closed instead of served; schliessenFuer; old ev
   // a big model is recognised by a bounded walk, never serialised for an event (no stringify of several MB per save)
   assert.equal(vermutlichKlein({ a: [1, 2, 3], b: "x" }, 16 * 1024), true);
   const gross = { customWalls: Array.from({ length: 200000 }, (_, i) => ({ _idx: i, a: { x: i, z: 0 } })) };
-  const t0 = performance.now();
   assert.equal(vermutlichKlein(gross, 16 * 1024), false);
-  assert.ok(performance.now() - t0 < 50, "stops after about 16 KB of work, not after 200 000 walls");
+  // The bound is counted, not timed (finding 124-37: "< 50 ms" turned red on a loaded machine). Every wall reports when the
+  // walk reads it; 16 KB of budget is used up after a few hundred walls, so far fewer than 200 000 may be read.
+  let gelesen = 0; // walls whose fields the walk looked at (count)
+  const gezaehlt = { customWalls: Array.from({ length: 200000 }, (_, i) => ({ _idx: i, get a() { gelesen += 1; return { x: i, z: 0 }; } })) };
+  assert.equal(vermutlichKlein(gezaehlt, 16 * 1024), false);
+  assert.ok(gelesen > 0 && gelesen < 2000, `stops after about 16 KB of work, not after 200 000 walls (read: ${gelesen})`);
   assert.equal(ereignisAusSchreiben({ methode: "PUT", entitaet: "BimModel", id: "b", datensatz: { id: "b", project_id: "P", ...gross }, body: { customWalls: [] } })?.datensatz, undefined);
   assert.equal(ereignisAusSchreiben({ methode: "PUT", entitaet: "BimModel", id: "b", datensatz: { id: "b", project_id: "P" }, body: { x: 1 }, mitDatensatz: false })?.datensatz, undefined);
 });
@@ -357,17 +361,18 @@ test("two devices drew a new wall with the same _idx: this page's wall (and its 
   const basis = [wand(1, 0)];
   const fremd = [wand(1, 0), wand(2, 10)];
   const lokal = { customWalls: [wand(1, 0), wand(2, 20)], customWindows: [{ _idx: 3, wallIdx: 2, u: 0.5 }] };
-  const r = neueKollisionenUmnummern({ vorher: { customWalls: basis }, lokal, patch: { customWalls: fremd } });
+  // 115-05a: `basis` = the full stored record (only elements missing there are local new ones and may be renumbered)
+  const r = neueKollisionenUmnummern({ vorher: { customWalls: basis }, basis: { customWalls: basis }, lokal, patch: { customWalls: fremd } });
   assert.deepEqual(r.umbenannt, [[2, 4]]);
   assert.deepEqual(r.geaendert.sort(), ["customWalls", "customWindows"]);
   assert.equal(r.lokal.customWalls[1]._idx, 4);
   assert.equal(r.lokal.customWindows[0].wallIdx, 4, "the opening follows its wall");
   assert.equal(r.naechsteIdx, 5);
   // the same new element on both (identical) is no collision
-  const gleich = neueKollisionenUmnummern({ vorher: { customWalls: basis }, lokal: { customWalls: fremd }, patch: { customWalls: fremd } });
+  const gleich = neueKollisionenUmnummern({ vorher: { customWalls: basis }, basis: { customWalls: basis }, lokal: { customWalls: fremd }, patch: { customWalls: fremd } });
   assert.deepEqual(gleich.umbenannt, []);
   // a foreign new COLUMN with the number of my new wall (the counter is shared by all lists)
-  const quer = neueKollisionenUmnummern({ vorher: { customColumns: [] }, lokal: { customWalls: [wand(1, 0), wand(2, 20)] }, patch: { customColumns: [{ _idx: 2, x: 1, z: 1 }] } });
+  const quer = neueKollisionenUmnummern({ vorher: { customColumns: [] }, basis: { customWalls: [wand(1, 0)], customColumns: [] }, lokal: { customWalls: [wand(1, 0), wand(2, 20)] }, patch: { customColumns: [{ _idx: 2, x: 1, z: 1 }] } });
   assert.deepEqual(quer.umbenannt, [[2, 3]]);
   assert.equal(feldName("netz_layer"), "Haustechnik-Netz");
   assert.equal(feldName("customWalls"), "Wände");

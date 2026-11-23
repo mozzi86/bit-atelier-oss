@@ -357,6 +357,34 @@ export function guidsAnheften(liste, projektId, quelle, nur = null) {
   return geaendert ? neu : liste;
 }
 
+/**
+ * W-1118-02 review (R-W111802-1): carries the GUIDs a save pinned (guidsAnheften) back into the editor state, so the state — and
+ * every mirror of it, e.g. the rooms of the shared store that key the furniture (@designer/lib/moebel zoneKey) — knows a stored
+ * GUID right after the save instead of only after the next load. Only elements that are still the very objects the save started
+ * from get their pinned version; an element changed or added while the save was under way (a new object) and the elements of
+ * another project (after a switch) stay as they are — their own save pins them. Pure.
+ * @template T
+ * @param {T[]} aktuell the list in the state now
+ * @param {T[]} gespeichertVon the list the save started from
+ * @param {T[]} angeheftet the stored list, same order as `gespeichertVon` (guidsAnheften of it, or a part of that)
+ * @returns {T[]} `aktuell` itself when nothing had to change, else a new array
+ */
+export function guidsUebernehmen(aktuell, gespeichertVon, angeheftet) {
+  if (!Array.isArray(aktuell) || !Array.isArray(gespeichertVon) || !Array.isArray(angeheftet) || angeheftet === gespeichertVon) return aktuell;
+  /** @type {Map<T, T>} */
+  const neu = new Map();
+  gespeichertVon.forEach((el, i) => { if (el && angeheftet[i] && angeheftet[i] !== el) neu.set(el, angeheftet[i]); });
+  if (!neu.size) return aktuell;
+  let geaendert = false;
+  const out = aktuell.map((el) => {
+    const p = neu.get(el);
+    if (p === undefined) return el;
+    geaendert = true;
+    return p;
+  });
+  return geaendert ? out : aktuell;
+}
+
 /** Area of a polygon in the x/z plane (m², shoelace). */
 function flaeche(points) {
   const p = Array.isArray(points) ? points : [];

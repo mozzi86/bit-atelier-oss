@@ -8,7 +8,7 @@
 // caller passes in can smuggle a glyph jsPDF's WinAnsi standard font cannot
 // draw — the model itself never contains a non-WinAnsi character.
 //
-// In:  {absender, empfaenger, datum, betreff, absaetze, tabelle} — amounts and
+// In:  {absender, empfaenger, datum, betreff, absaetze, tabelle, schluss} — amounts and
 //      dates already formatted as text by the caller (this package cannot
 //      import src/lib/accounting/geld.js — the app/package boundary).
 // Out: a page model in mm (A4 210×297): the fixed DIN 5008 marks, wrapped body
@@ -27,6 +27,12 @@
 // - `variante: "verteiler"` with `verteiler: string[]` → a protocol letter: no
 //   address field, the body starts with "Verteiler:" and one line per recipient;
 // - `fusszeileLinks: string` → the office line bottom left on every page.
+//
+// Phase 115 (user finding 15.11.2026, fee offer) adds one more OPTION, again without effect when absent:
+// - `schluss: string[]` → paragraphs printed AFTER the amount table (closing text, greeting, draft note). Before, a
+//   letter with a table could only end with the table, so the greeting stood above the amounts. The pages then carry
+//   `zeilenNach` (the closing lines of that page, drawn below its table). A letter without `schluss` gives exactly the
+//   model it gave before (tests/unit/briefSchluss.test.js compares it with a frozen copy of the core).
 
 import { ersetzeNichtWinAnsi } from "./winAnsi.js";
 
@@ -88,6 +94,29 @@ function umbrechen(text, zeichenJeZeile) {
   return zeilen;
 }
 
+/** Free space kept between a wrapped cell and the next column, in mm. */
+const ZELLEN_ABSTAND_MM = 3;
+
+/**
+ * Splits one table row into several when a cell of a LEFT-aligned column is longer than its column (width in mm at the
+ * 10 pt character budget ZEICHENBREITE_10PT_MM, minus ZELLEN_ABSTAND_MM). Right-aligned cells (amounts, shares) stay on the
+ * first line. A single word longer than the column is not cut (as in the body text).
+ * @param {string[]} zeile cells of one row (already cleaned)
+ * @param {BriefSpalte[]} spalten column widths and alignment
+ * @returns {string[][]} the row itself when everything fits, else one row per text line
+ */
+function zeileUmbrechen(zeile, spalten) {
+  const teile = zeile.map((zelle, k) => {
+    const sp = spalten[k];
+    if (!sp || sp.ausrichtung !== "links" || !(sp.breite_mm > 0)) return [zelle];
+    const zeichen = Math.max(8, Math.floor((sp.breite_mm - ZELLEN_ABSTAND_MM) / ZEICHENBREITE_10PT_MM));
+    return zelle.length > zeichen ? umbrechen(zelle, zeichen) : [zelle];
+  });
+  const hoehe = Math.max(1, ...teile.map((t) => t.length));
+  if (hoehe === 1) return [zeile];
+  return Array.from({ length: hoehe }, (_, i) => teile.map((t) => t[i] ?? ""));
+}
+
 /**
  * Column of a table (phase 81-03): width in mm and alignment of its cells.
  * @typedef {{breite_mm: number, ausrichtung?: 'links'|'rechts'}} BriefSpalte
@@ -96,7 +125,7 @@ function umbrechen(text, zeichenJeZeile) {
 /**
  * @param {{
  *   absender?: string[], empfaenger?: string[], datum?: string, betreff?: string,
- *   absaetze?: string[], tabelle?: {kopf?: string[], zeilen: string[][], spalten?: BriefSpalte[]}|null,
+ *   absaetze?: string[], tabelle?: {kopf?: string[], zeilen: string[][], spalten?: BriefSpalte[]}|null, schluss?: string[],
  *   seitenzahlen?: boolean, variante?: 'verteiler'|null, verteiler?: string[], fusszeileLinks?: string,
  * }} eingabe
  *   absender/empfaenger: address lines, top to bottom;
@@ -104,17 +133,19 @@ function umbrechen(text, zeichenJeZeile) {
  *   tabelle: a right-aligned block at the end of the body (e.g. an amount
  *     breakdown) — cell values already formatted as text by the caller;
  *     `spalten` (81-03) draws it in columns;
+ *   schluss (115): paragraphs after the table — closing text, greeting, draft note (wrapped like `absaetze`);
  *   seitenzahlen (81-03): "Seite n von m" on every page;
  *   variante/verteiler (82-05): protocol letter with distribution list, no address field;
  *   fusszeileLinks (82-05): office line bottom left on every page.
  * @returns {{
  *   a4: {w: number, h: number}, din5008: typeof DIN5008,
  *   datum: string, betreff: string, absender: string[], empfaenger: string[],
- *   seiten: Array<{nummer: number, zeilen: string[], tabelle: {kopf: string[], zeilen: string[][], spalten?: BriefSpalte[]}|null, fusszeile?: string, fussLinks?: string}>,
+ *   seiten: Array<{nummer: number, zeilen: string[], tabelle: {kopf: string[], zeilen: string[][], spalten?: BriefSpalte[]}|null, zeilenNach?: string[], fusszeile?: string, fussLinks?: string}>,
  *   zeichenJeZeile: number, zeilenHoeheMm: number, ersetzt: number, variante?: 'verteiler', verteiler?: string[],
  * }}
+ *   seiten[].zeilenNach: the closing lines of that page (only with `schluss`), drawn one blank line below its body lines / table
  */
-export function briefLayout({ absender = [], empfaenger = [], datum = "", betreff = "", absaetze = [], tabelle = null, seitenzahlen = false, variante = null, verteiler = [], fusszeileLinks = "" } = {}) {
+export function briefLayout({ absender = [], empfaenger = [], datum = "", betreff = "", absaetze = [], tabelle = null, schluss = [], seitenzahlen = false, variante = null, verteiler = [], fusszeileLinks = "" } = {}) {
   let ersetztGesamt = 0;
   /** @param {unknown} wert */
   const reinigen = (wert) => {
@@ -142,6 +173,14 @@ export function briefLayout({ absender = [], empfaenger = [], datum = "", betref
   // 81-03: the key appears only when columns were asked for (79's model stays identical).
   if (tabelleModell && Array.isArray(tabelle?.spalten)) tabelleModell.spalten = tabelle.spalten.map((sp) => ({ breite_mm: Number(sp.breite_mm) || 0, ausrichtung: sp.ausrichtung === "links" ? "links" : "rechts" }));
 
+  // User finding 15.11.2026 (fee offer): a long first cell ("Besondere Leistung: …") ran across the amount column. A cell of a
+  // left-aligned column is wrapped to its column width; the continuation lines are rows of their own with the other cells
+  // empty, so the pagination below counts them and the PDF writer needs no change. Rows that fit stay exactly as they were.
+  if (tabelleModell?.spalten) {
+    const spalten = tabelleModell.spalten;
+    tabelleModell.zeilen = tabelleModell.zeilen.flatMap((zeile) => zeileUmbrechen(zeile, spalten));
+  }
+
   // One flat list of body lines with a blank line between paragraphs, so
   // pagination only has to count lines against each page's budget.
   const koerperZeilen = /** @type {string[]} */ ([]);
@@ -156,7 +195,7 @@ export function briefLayout({ absender = [], empfaenger = [], datum = "", betref
   const zeilenErsteSeite = Math.max(1, Math.floor(platzErsteSeite / ZEILENHOEHE_MM));
   const zeilenFolgeseite = Math.max(1, Math.floor(platzFolgeseite / ZEILENHOEHE_MM));
 
-  /** @type {Array<{nummer: number, zeilen: string[], tabelle: {kopf: string[], zeilen: string[][], spalten?: BriefSpalte[]}|null, fusszeile?: string, fussLinks?: string}>} */
+  /** @type {Array<{nummer: number, zeilen: string[], tabelle: {kopf: string[], zeilen: string[][], spalten?: BriefSpalte[]}|null, zeilenNach?: string[], fusszeile?: string, fussLinks?: string}>} */
   const seiten = [];
   let rest = koerperZeilen;
   do {
@@ -192,6 +231,33 @@ export function briefLayout({ absender = [], empfaenger = [], datum = "", betref
         seiten.push({ nummer: seiten.length + 1, zeilen: [], tabelle: teil(restZeilen.slice(0, jeSeite)) });
         restZeilen = restZeilen.slice(jeSeite);
       }
+    }
+  }
+
+  // 115: the closing block (closing text, greeting, draft note) below the table. Same rule as for the table above: it
+  // stays whole — on the page where the table ends when it fits there (one blank line apart), otherwise on a fresh page,
+  // so the greeting is never torn from the sentences before it. Only a block longer than a whole page runs on line by line.
+  const schlussZeilen = /** @type {string[]} */ ([]);
+  (Array.isArray(schluss) ? schluss : []).map(reinigen).forEach((absatz, i) => {
+    if (i > 0) schlussZeilen.push("");
+    schlussZeilen.push(...umbrechen(absatz, zeichenJeZeile));
+  });
+  if (schlussZeilen.length) {
+    const letzte = seiten[seiten.length - 1];
+    const budget = letzte.nummer === 1 ? zeilenErsteSeite : zeilenFolgeseite;
+    // Lines the page already carries: body lines, and for a table one blank line, the head row and the rows (briefPdf.js).
+    const belegt = letzte.zeilen.length + (letzte.tabelle ? 1 + (letzte.tabelle.kopf.length ? 1 : 0) + letzte.tabelle.zeilen.length : 0);
+    const frei = budget - belegt - (belegt > 0 ? 1 : 0);
+    let rest = schlussZeilen;
+    if (rest.length <= frei || (rest.length > zeilenFolgeseite && frei >= 2)) {
+      letzte.zeilenNach = rest.slice(0, frei);
+      rest = rest.slice(frei);
+    }
+    while (rest.length) {
+      // A page never starts with the blank line that separates two paragraphs.
+      if (rest[0] === "") { rest = rest.slice(1); continue; }
+      seiten.push({ nummer: seiten.length + 1, zeilen: [], tabelle: null, zeilenNach: rest.slice(0, zeilenFolgeseite) });
+      rest = rest.slice(zeilenFolgeseite);
     }
   }
 

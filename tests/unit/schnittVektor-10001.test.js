@@ -12,7 +12,7 @@ const model = createBuildingModel({ footprintM: [{ x: -10, z: -6 }, { x: 10, z: 
 test("Kotentext: ±0,00, Vorzeichen, Komma, zwei Nachkommastellen", () => {
   assert.equal(koteText(0), "±0,00");
   assert.equal(koteText(3), "+3,00");
-  assert.equal(koteText(-2.5), "-2,50");
+  assert.equal(koteText(-2.5), "−2,50"); // 115-02: minus sign U+2212, not the hyphen
   assert.equal(koteText(0.004), "±0,00");
 });
 

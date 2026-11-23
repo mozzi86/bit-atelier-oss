@@ -15,6 +15,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { mittelklickZaehler } from "./mittelklick.js";
+import { radGestenLeser } from "./radGeste.js";
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -148,6 +149,17 @@ export function zoomedAt(viewT, loc, factor, minZoom, maxZoom) {
   return { zoom: nz, x: loc.x - (loc.x - viewT.x) * r, y: loc.y - (loc.y - viewT.y) * r };
 }
 
+/**
+ * View state after the VIEW travelled over the plan (115-01: two-finger swipe on a trackpad). The zoom stays.
+ * @param {{zoom:number, x:number, y:number}} viewT view state (viewBox units)
+ * @param {number} dxU travel of the view to the right, viewBox units (the plan moves left)
+ * @param {number} dyU travel of the view down, viewBox units
+ * @returns {{zoom:number, x:number, y:number}}
+ */
+export function panned(viewT, dxU, dyU) {
+  return { ...viewT, x: viewT.x + dxU, y: viewT.y + dyU };
+}
+
 /** Zoom um die Sichtfeld-Mitte (+/−-Buttons). */
 export function zoomedAroundCenter(viewT, W, H, factor, minZoom, maxZoom) {
   const cx = viewT.x + W / viewT.zoom / 2;
@@ -235,16 +247,27 @@ export function usePlanViewport({ svgRef, W, H, minZoom = 0.3, maxZoom = 12, whe
 
   // Mausrad-Zoom auf den Cursor — nativer Listener (passive:false), sonst
   // scrollt die Seite mit (Muster aus BimPlan2D beibehalten).
+  // 115-01: radGeste tells mouse wheel, trackpad pinch and two-finger swipe apart — the wheel zooms one step per event
+  // as before, a pinch zooms in proportion to the fingers, a swipe pans the plan.
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return undefined;
+    const radLesen = radGestenLeser();
     const onWheel = (e) => {
       e.preventDefault();
       const d = dims.current;
+      const g = radLesen(e, { radFaktor: d.wheelFactor });
+      if (g.art === "schieben") {
+        // CSS px → viewBox units through the screen matrix (covers zoom, letterbox and fill mode; a = d for "meet")
+        const ctm = svg.getScreenCTM();
+        if (!ctm || !ctm.a || !ctm.d) return;
+        setViewT((v) => panned(v, g.dx / ctm.a, g.dy / ctm.d));
+        return;
+      }
+      if (g.art !== "zoom") return;
       const loc = clientToLocalRef.current(e);
       if (!loc) return;
-      const f = e.deltaY < 0 ? d.wheelFactor : 1 / d.wheelFactor;
-      setViewT((v) => zoomedAt(v, loc, f, d.minZoom, d.maxZoom));
+      setViewT((v) => zoomedAt(v, loc, g.faktor, d.minZoom, d.maxZoom));
     };
     svg.addEventListener("wheel", onWheel, { passive: false });
     // 101-01: two/three clicks on the wheel = zoom extents (the caller's `einpassen`, else the whole sheet).

@@ -21,6 +21,8 @@ import { demoDbAuslesen, demoDbErsetzen } from "@core/api/demoDb";
 import { parseProjektDatei, uebernehmeProjekt, projektAlsBlob, kopieAnfuegen, vorhandeneProjekte, projekteIn } from "@core/api/projektDatei";
 import { anzahlenVon, kopieOptionen, zurueckOptionen } from "@/lib/dateiOeffnen.js";
 import { pfadRichtlinie } from "@core/lib/pfadRichtlinie.js";
+import { zurueckKonflikt } from "@core/api/projektDateiFormat.js";
+import { exportEinschraenkung } from "@core/api/exportSicht.js";
 
 /**
  * 104-10: the path rule for a path the page is about to hand to the shell.
@@ -138,6 +140,7 @@ export function kopiePfad(pfad, versuch, jetzt = new Date()) {
 /**
  * Linked-source adapter of the desktop client (same shape as quelleAdapter() of the local edition).
  * Change detection: size + modification time (no hashing crate in the shell — D-93-10-04).
+ * R-BUERO-1: a restricted role gets konflikt "eingeschraenkt" unless it asked for a copy.
  * @returns {{quelle: () => Promise<any>, zurueck: (entscheidung?: "ueberschreiben"|"kopie") => Promise<any>}}
  */
 export function quelleAdapterHuelle() {
@@ -157,7 +160,11 @@ export function quelleAdapterHuelle() {
       /** @type {DateiInfo|null} */
       const stand = await huelleAufrufen("datei_stand", { pfad: huellenPfad(link.pfad) });
       const geaendert = !stand || stand.groesse !== link.groesse || stand.geaendert_ms !== link.geaendertMs;
-      if (geaendert && !entscheidung) return { konflikt: stand ? "geaendert" : "fehlt" };
+      // R-BUERO-1: same rule as the server route — a restricted role only ever saves a copy.
+      // exportEinschraenkung() throws while the rights are not loaded (no file is written then).
+      const eingeschraenkt = !!(await exportEinschraenkung());
+      const konflikt = zurueckKonflikt({ eingeschraenkt, geaendert, vorhanden: !!stand, entscheidung });
+      if (konflikt) return { konflikt };
       const { blob } = await projektAlsBlob(link.projektname || undefined, {
         ohne: link.ohne, ohneSettingKeys: link.ohneSettingKeys, ohneDokumentBereiche: link.ohneDokumentBereiche, art: link.art, bereiche: link.bereiche,
       });

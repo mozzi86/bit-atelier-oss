@@ -17,6 +17,11 @@
 //      font height (px), number format.
 // Out: dimension line, extension lines, slashes, text anchors with angle — all
 //      in metres (model x/z); callers map them with X()/Z(). No React, no DOM.
+//
+// 115-04: `drehung` (plan turned in 90° steps, display only — @core/lib/plan/planDrehung.js). The chain is still computed in the
+// model frame; only the reading direction of the numbers and the side they sit on ("above" the line) follow what the reader sees,
+// so numbers of a turned plan read from below or from the right as well. Without it (0) the result is unchanged.
+import { normiereDrehung, textWinkelImRahmen } from "@core/lib/plan/planDrehung.js";
 
 /** Extension lines overshoot the dimension line by this much (screen px, ≈ 2 mm). */
 export const UEBERSTAND_PX = 6;
@@ -80,6 +85,8 @@ export function seiteVon(punkte, zentrum) {
  * @param {number} [p.pxJeM=40] screen px per metre (converts the px constants)
  * @param {number} [p.schrift=9] font height in screen px
  * @param {(m:number)=>string} [p.format=formatMeter] number format
+ * @param {number} [p.drehung=0] 115-04: rotation of the drawing the chain is drawn in, degrees counter-clockwise as seen
+ *   (0 | 90 | 180 | 270); the text angles are then LOCAL angles inside the turned drawing
  * @returns {{
  *   linie: {a:{x:number,z:number}, b:{x:number,z:number}},
  *   hilfslinien: Array<{a:{x:number,z:number}, b:{x:number,z:number}}>,
@@ -93,7 +100,7 @@ export function seiteVon(punkte, zentrum) {
  *   from the measured edge towards the dimension line; `breiteM` = how far the chain
  *   (incl. its text rows) extends beyond the measured edge — the next chain starts there
  */
-export function ketteGeometrie({ punkte, offsetM = 0.5, seite = 1, pxJeM = 40, schrift = 9, format = formatMeter }) {
+export function ketteGeometrie({ punkte, offsetM = 0.5, seite = 1, pxJeM = 40, schrift = 9, format = formatMeter, drehung = 0 }) {
   const leer = { linie: { a: { x: 0, z: 0 }, b: { x: 0, z: 0 } }, hilfslinien: [], striche: [], texte: [], winkel: 0,
     richtung: { x: 1, z: 0 }, normale: { x: 0, z: 1 }, aussenReihe: false, breiteM: 0, ausgelassen: 0 };
   const pts = (Array.isArray(punkte) ? punkte : []).filter((q) => Number.isFinite(q?.x) && Number.isFinite(q?.z));
@@ -145,7 +152,10 @@ export function ketteGeometrie({ punkte, offsetM = 0.5, seite = 1, pxJeM = 40, s
   // is the reading direction turned 90° towards screen-up (y down ⇒ (x,y)→(y,−x)).
   // It is independent of `seite`, so a right-hand vertical chain reads
   // bottom-to-top with its numbers on the left of the line, as in a plan.
-  const winkel = normiereWinkel(Math.atan2(dz, dx) * 180 / Math.PI);
+  // 115-04: in a turned drawing the angle is the local one that reads right on the screen (textWinkelImRahmen); "above" follows
+  // from it the same way, because the whole drawing — text and its offset — is turned together.
+  const gedreht = normiereDrehung(drehung);
+  const winkel = gedreht ? textWinkelImRahmen(Math.atan2(dz, dx) * 180 / Math.PI, gedreht) : normiereWinkel(Math.atan2(dz, dx) * 180 / Math.PI);
   const rad = winkel * Math.PI / 180;
   const obenX = Math.sin(rad), obenZ = -Math.cos(rad);
   const textAbstandM = TEXT_ABSTAND_PX * mProPx;

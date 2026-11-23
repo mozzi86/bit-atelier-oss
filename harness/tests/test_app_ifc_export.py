@@ -229,3 +229,38 @@ def test_kombi_dachpfade_neben_den_typen(export_kombi):
     for e in [wirt, *daecher]:
         assert not ue.get_type(e), f"{e.is_a()} {e.Name} ist unerwartet typisiert"
 
+
+# --- 108-10: the two terrain layers (existing ground / new ground) on the site ---------------------------------------------
+
+@pytest.fixture(scope="module")
+def export_gelaende(tmp_path_factory):
+    """IFC export of the mixed model plus the terrain example tests/unit/fixtures/gelaendeBeispiel-10810.js."""
+    node = shutil.which("node")
+    if not node or not (REPO / "node_modules").is_dir():
+        pytest.skip("108-10 Cross-Check (Gelände) übersprungen: Node.js oder node_modules fehlt — im Repo `npm ci` ausführen")
+    ziel = tmp_path_factory.mktemp("app-ifc-gelaende") / "gelaendeprobe.ifc"
+    erg = subprocess.run([node, "--import", "./tests/alias-register.mjs", SCHREIBER, str(ziel), "gelaende"], cwd=REPO,
+                         capture_output=True, text=True, encoding="utf-8", timeout=180)
+    assert erg.returncode == 0, f"App-Export (Gelände) fehlgeschlagen (Exit {erg.returncode}): {erg.stderr or erg.stdout}"
+    return {"pfad": ziel, "datei": ifcopenshell.open(str(ziel))}
+
+
+def test_gelaende_gueltig_und_zwei_ebenen(export_gelaende):
+    """Schema and WHERE rules hold; existing and new ground are IfcGeographicElement TERRAIN with ObjectType "Bestand" / "Neu",
+    contained in the site, each a triangulated surface; the earthworks (KG 310) are properties of the new ground."""
+    r = bk.pruefen(export_gelaende["pfad"])
+    assert r["gueltig"], f"Schema-/WHERE-Fehler im App-Export mit Gelände: {r['fehler']}"
+    f = export_gelaende["datei"]
+    gelaende = f.by_type("IfcGeographicElement")
+    assert sorted(g.ObjectType for g in gelaende) == ["Bestand", "Neu"]
+    assert len({g.GlobalId for g in gelaende}) == 2
+    for g in gelaende:
+        assert g.PredefinedType == "TERRAIN"
+        assert g.ContainedInStructure and g.ContainedInStructure[0].RelatingStructure.is_a("IfcSite")
+        items = [i for rep in g.Representation.Representations for i in rep.Items]
+        assert len(items) == 1 and items[0].is_a("IfcTriangulatedFaceSet")
+        assert len(items[0].Coordinates.CoordList) == 13 * 11 and len(items[0].CoordIndex) == 12 * 10 * 2
+    neu = next(g for g in gelaende if g.ObjectType == "Neu")
+    werte = {p.Name: p.NominalValue.wrappedValue for rel in neu.IsDefinedBy if rel.is_a("IfcRelDefinesByProperties")
+             for p in rel.RelatingPropertyDefinition.HasProperties}
+    assert werte["DIN276_KG"] == "310" and werte["Abtrag_m3"] > 0 and werte["Auftrag_m3"] > 0

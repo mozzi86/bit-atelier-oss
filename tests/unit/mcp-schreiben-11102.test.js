@@ -301,7 +301,7 @@ describe('111-02 — recycle bin over MCP (K-07)', () => {
 
     // occupied id: the preview says so, ausfuehren is "nicht übernommen" with the reason
     const d2 = await M.werkzeug('delete_record', { entity: 'Contact', id: k.id, ausfuehren: true, stand: k.updated_date });
-    A.db.create('Contact', { id: k.id, name: 'Belegt' });
+    A.db.create('Contact', { id: k.id, name: 'Belegt' }, { kennungUebernehmen: true });
     const wv2 = await M.werkzeug('wiederherstellen', { id: d2.json.papierkorb_id });
     assert.equal(wv2.json.naechster_schritt, null);
     assert.equal(wv2.json.probleme[0].art, 'id_belegt');

@@ -31,7 +31,7 @@ import { useAuth } from '@core/lib/AuthContext';
 import { useI18n } from '@core/lib/i18n';
 import { useProject } from '@core/lib/ProjectContext';
 import { useZugriff } from '@core/lib/ZugriffContext.jsx';
-import { bauherrDateiname, fuerBauherrSichtbar, portalAufbereiten } from '@core/lib/bauherrProjektion';
+import { bauherrDateiname, fuerBauherrSichtbar, lesbarerDateiname, portalAufbereiten } from '@core/lib/bauherrProjektion';
 import { flaecheFehler, flaecheKarte, flaecheKnopfLeise, flaecheLeise, flaecheTitel, flaecheWarnung } from '@core/lib/portalFlaeche';
 import BauherrAnsicht from '../components/bauherr/BauherrAnsicht';
 
@@ -41,7 +41,7 @@ import BauherrAnsicht from '../components/bauherr/BauherrAnsicht';
  * @returns {Promise<Record<string, any[]>>}
  */
 async function allesLaden() {
-  const [p, te, pl, mo, ko, dok, bem, fo, re, bet, ant, rue, up] = await Promise.all([
+  const [p, te, pl, mo, ko, dok, bem, fo, re, bet, ant, rue, up, moe] = await Promise.all([
     bitApi.entities.BauherrProjekt.list(),
     bitApi.entities.BauherrTermin.list(),
     bitApi.entities.BauherrPlan.list(),
@@ -55,11 +55,12 @@ async function allesLaden() {
     bitApi.entities.BauherrAntwort.list(),
     bitApi.entities.BauherrRueckmeldung.list(),
     bitApi.entities.BauherrUpload.list(),
+    bitApi.entities.BauherrMoeblierung.list(), // W-1118-22: the furnished rooms the client may move furniture in
   ]);
   return {
     BauherrProjekt: p, BauherrTermin: te, BauherrPlan: pl, BauherrModell: mo, BauherrKosten: ko, BauherrDokument: dok,
     BauherrBemusterung: bem, BauherrFoto: fo, BauherrRechnung: re, BauherrBeteiligter: bet,
-    BauherrAntwort: ant, BauherrRueckmeldung: rue, BauherrUpload: up,
+    BauherrAntwort: ant, BauherrRueckmeldung: rue, BauherrUpload: up, BauherrMoeblierung: moe,
   };
 }
 
@@ -95,20 +96,38 @@ export default function BauherrPortal({ vorschau = false }) {
   const projektId = daten.projekt?.project_id
     || Object.values(daten.abschnitte).flat().find((z) => z?.project_id)?.project_id || null;
 
-  /** @param {{ art: string, bezug?: Record<string, any>|null, text?: string, option?: string }} e */
+  /** @param {{ art: string, bezug?: Record<string, any>|null, text?: string, option?: string, vorschlag?: string }} e */
   const rueckmelden = async (e) => {
     if (!projektId) throw new Error(t('Kein Projekt freigegeben — Rückmeldung nicht möglich.'));
     await bitApi.entities.BauherrRueckmeldung.create({
       project_id: projektId, art: e.art, bezug_id: e.bezug?.id || null, option: e.option || null, text: e.text || '',
+      ...(e.art === 'moeblierung' ? { vorschlag: e.vorschlag || '' } : {}), // W-1118-22: the changed furniture places as one text
     });
     await laden();
   };
 
-  /** @param {Record<string, any>} zeile */
+  /**
+   * Saves a released file under the title the client sees. The signed URL ends
+   * in the storage name ("<id>-Expose_Entwurf_…pdf"), and the browser would
+   * save it under that; fetching the file and handing it to an <a download>
+   * sets the readable name instead (storage answers CORS, so the blob is
+   * readable here). Finding 22.11.2026 on a live project.
+   * @param {Record<string, any>} zeile projection row with titel and datei
+   */
   const oeffnen = async (zeile) => {
     try {
       const url = await freigabeDateiLink(zeile.id);
-      window.open(url, '_blank', 'noopener');
+      const antwort = await fetch(url);
+      if (!antwort.ok) throw new Error(t('Datei nicht verfügbar — bitte später erneut versuchen.'));
+      const objektUrl = URL.createObjectURL(await antwort.blob());
+      const link = document.createElement('a');
+      link.href = objektUrl;
+      link.download = lesbarerDateiname(zeile.titel, zeile.datei);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // Revoke later: some browsers read the blob only after click() returned.
+      setTimeout(() => URL.revokeObjectURL(objektUrl), 60_000);
     } catch (e) {
       setFehler(String(/** @type {any} */ (e)?.message || e));
     }

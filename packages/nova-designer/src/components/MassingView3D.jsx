@@ -5,6 +5,7 @@ import { Camera } from "lucide-react";
 import { useI18n } from "@core/lib/i18n";
 import { lichtrichtung } from "@designer/lib/sonnenstand";
 import { mittelklickZaehler } from "@core/lib/mittelklick";
+import { radGestenLeser } from "@core/lib/radGeste.js"; // 115-01: mouse wheel / trackpad pinch / two-finger swipe
 import { ZEIGE_ZUSTAENDE } from "@core/lib/zeigen/zustaende.js"; // 107-05: error token of invalid modelled bodies
 import { lochImWand } from "@core/lib/bauteil/oeffnungen.js"; // 107-06: hole rectangle of a body opening (rule of the wall openings)
 import { dachBerechnen, dachDreiecke } from "@core/lib/bauteil/dachGeometrie.js"; // 107-10: roof on a body (massing_layer v6 `dach`)
@@ -837,6 +838,7 @@ export default function MassingView3D({
     };
 
     const mittelMehrfach = mittelklickZaehler();
+    const radLesen = radGestenLeser();
     const onPointerDown = (ev) => {
       if (ev.button !== 0 && ev.button !== 1) return;
       // 98-03: with the push/pull tool, dragging a modelled body changes its height (Ctrl = stack).
@@ -954,9 +956,23 @@ export default function MassingView3D({
       ev.preventDefault();
       const e = eingabe.current;
       const k = kam.current;
-      // deltaMode 1 = lines (×33 px [ASSUMED]), 2 = pages (× canvas height).
-      const faktor = ev.deltaMode === 1 ? 33 : ev.deltaMode === 2 ? (mount.clientHeight || 420) : 1;
-      e.radAccum += ev.deltaY * faktor;
+      // 115-01: a two-finger swipe pans (like the middle-button drag) instead of running down the zoom ladder; a pinch
+      // climbs the ladder by its zoom factor; the mouse wheel counts as before.
+      const g = radLesen(ev);
+      if (g.art === "schieben") {
+        k.ziel = verschiebeZiel({ yaw: k.yaw, pitch: k.pitch, ziel: k.ziel, pxJeM: k.pxJeM }, g.dx, g.dy);
+        anwenden();
+        return;
+      }
+      if (g.art !== "zoom") return;
+      if (g.quelle === "pinch") {
+        // one ladder level per doubling of the picture: the ladder 1:2000 … 1:200 steps by ×2 and ×2.5
+        e.radAccum -= Math.log2(g.faktor) * RAD_SCHWELLE;
+      } else {
+        // deltaMode 1 = lines (×33 px [ASSUMED]), 2 = pages (× canvas height).
+        const faktor = ev.deltaMode === 1 ? 33 : ev.deltaMode === 2 ? (mount.clientHeight || 420) : 1;
+        e.radAccum += ev.deltaY * faktor;
+      }
       if (Math.abs(e.radAccum) < RAD_SCHWELLE) return; // below one notch — accumulate
       const schritte = Math.trunc(e.radAccum / RAD_SCHWELLE); // may exceed 1 on trackpad flings
       e.radAccum -= schritte * RAD_SCHWELLE;

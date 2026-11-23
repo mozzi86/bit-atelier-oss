@@ -183,7 +183,8 @@ async function speichereEinmal(api, entitaet, obj) {
       const { id, ...rest } = obj;
       return await c.update(id, rest);
     }
-    return await c.create(obj);
+    // B-111-02-01: the id fixed above must survive (retry, deterministic ids like wa:<template>:<period>) - explicit path
+    return await c.create(obj, { kennungUebernehmen: true });
   } catch (fehler) {
     if (/** @type {any} */ (fehler)?.gobd) throw fehler;
     throw new Error(`${entitaet} konnte nicht gespeichert werden: ${text(fehler)}`);

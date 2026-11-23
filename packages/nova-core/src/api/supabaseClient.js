@@ -20,6 +20,16 @@ let instanz = null;
  *   but the environment variables are missing (never a silent fallback —
  *   project rule: errors in plain text).
  */
+/**
+ * 115-05b part 2: replaces the client - ONLY for unit tests, which run without a Vite environment and without a cloud
+ * (tests/unit/datenquelle-stand-11505b.test.js hands in a stand-in of the few builder calls supabaseDb.js makes). The app never calls it.
+ * @param {any} client a stand-in with `from()` and `auth`, or null to build the real one again
+ * @returns {void}
+ */
+export function supabaseClientSetzen(client) {
+  instanz = client;
+}
+
 export function supabaseClient() {
   if (instanz) return instanz;
   const url = import.meta.env?.VITE_SUPABASE_URL;

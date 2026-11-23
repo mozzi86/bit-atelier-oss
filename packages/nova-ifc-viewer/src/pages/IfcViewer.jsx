@@ -71,7 +71,7 @@ import { ZEIGE_ZUSTAENDE, ZEIGE_CSS_RAND } from "@core/lib/zeigen/zustaende.js";
 import { ansichtAufBox } from "@core/lib/zeigen/ansichtAufBox.js";
 import { auswahlBefehleRegistrieren } from "@core/lib/zeigen/auswahlBefehle.js";
 import { ansichtAlsPng, xrZeigtGerade, BILD_BREITE_MAX } from "@core/lib/zeigen/ansichtBild.js";
-import { befehlsRegister } from "@core/lib/befehlsregister.js";
+import { befehlsRegister, registerAnmelden } from "@core/lib/befehlsregister.js";
 import { starteSteuerungsBruecke } from "@core/lib/steuerungsBruecke.js";
 import { elementBox, ifcAuswahlKontext, ifcModellUebersicht } from "@ifc/lib/auswahlIfc";
 // 106-03: change commands (property of an imported element -> journal entry; the file stays unchanged).
@@ -1671,6 +1671,8 @@ export default function IfcViewer({ embedded = false }) {
     eingabeBefehlRegistrieren(reg, () => /** @type {any} */ (aenderung.current), { bibliothekVorladen: () => bibliothekLaden() });
     return reg;
   }, []);
+  // 105-14: publish the register while mounted, so the shortcut help "?" lists its keys (no hand-written list).
+  useEffect(() => registerAnmelden(befehle, { bereich: "IFC-Viewer" }), [befehle]);
   // the buttons of the preview take the same road as the commands; a refusal is shown in words
   const aenderungBefehl = (/** @type {string} */ id, /** @type {any} */ p) => {
     const r = befehle.ausfuehren(id, p);

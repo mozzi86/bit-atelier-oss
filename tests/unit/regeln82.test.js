@@ -4,7 +4,7 @@
 // calendar standard imported from the calendar core, the one holiday setting
 // and the comparison with 81's calculation basis.
 //
-// In:  abnahme.js, abwesenheit.js, brief/status.js, fristenRegeln.js, kalenderRegeln.js, regelwerke.js. Out: assertions only.
+// In:  abnahme.js, abwesenheit.js, brief/status.js, fristenRegeln.js, kalenderRegeln.js, feiertagsAbgleich.js, regelwerke.js. Out: assertions only.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -13,7 +13,8 @@ import { normalisiereAbnahme, ABNAHME_REGELN } from "@core/lib/kalender/abnahme.
 import { abwesenheitStatusWechsel, ABWESENHEIT_ARTEN, ABWESENHEIT_FELDER, direktErfassbar, normalisiereAbwesenheit } from "@/lib/abwesenheit/abwesenheit.js";
 import { BEREICHE, DOKUMENT_BEREICH, schreibenStatusWechsel } from "@core/lib/brief/status.js";
 import { FRISTEN_REGELWERK } from "@/lib/termine/fristenRegeln.js";
-import { feiertagsAbgleich, KALENDER_REGELWERK, kalenderEinstellung } from "@/lib/abwesenheit/kalenderRegeln.js";
+import { KALENDER_REGELWERK, kalenderEinstellung } from "@/lib/abwesenheit/kalenderRegeln.js";
+import { feiertagsAbgleich } from "@/lib/abwesenheit/feiertagsAbgleich.js";
 import { KALENDER_STANDARD } from "@core/lib/kalender/feiertage.js";
 import { REGELWERKE, regelNachId } from "@/lib/settings/regelwerke.js";
 import { wirksamerWert } from "@core/lib/regelwerk.js";

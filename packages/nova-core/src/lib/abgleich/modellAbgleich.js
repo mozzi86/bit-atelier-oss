@@ -7,7 +7,9 @@
 //   konfliktZeilen             both versions of every conflicting element as short text
 //   konfliktAufloesen          the field after the person picked "mine" or "the other device's"
 //   neueKollisionenUmnummern   review 106-09: two devices drew a new element at the same time with the same `_idx` -
-//                              this page's one gets a free number before the merge, so both stay (no fake conflict)
+//                              this page's one gets a free number before the merge, so both stay (no fake conflict).
+//                              115-05a (D-115-50): only a LOCAL NEW element (missing in the full stored base of its list)
+//                              is ever renumbered; an element of the stored base keeps its number
 //   feldName                   the German label of any record field (conflict cards; translated by the card)
 //
 // Nothing here confirms or writes anything (D-IM-04): the other device's change was confirmed by the person there; it
@@ -16,17 +18,23 @@
 // In:  patch / vorher of a FremderStand (useBimModelSync.js), the page's local values. Out: see above.
 
 import { elementSchluessel, feldDreiWege, gleichWert } from "./dreiWege.js";
+import { IDX_LISTEN } from "./idxListen.js";
 
-/** Element lists of the BIM studio (field → German label, translated by the caller). */
+/**
+ * Element lists of the BIM studio (field → German label, translated by the caller). 115-05a: the stairs (108-06), dormers
+ * (108-13) and plan notes (261111-zs1) added - the studio's holder claims them through STUDIO_SPEICHER_FELDER and merges them
+ * live like the other lists (same set as idxListen.js IDX_LISTEN; the stored field names are unchanged).
+ */
 export const ELEMENT_FELDER = Object.freeze({
   customWalls: "Wände", customColumns: "Stützen", customWindows: "Fenster und Türen", envOpenings: "Öffnungen der Hülle",
-  customZones: "Räume", customSlabs: "Decken", customRoofs: "Dächer",
+  customZones: "Räume", customSlabs: "Decken", customRoofs: "Dächer", customStairs: "Treppen", gauben: "Gauben", planNotizen: "Plan-Notizen",
+  vordaecher: "Vordächer", // W-1118-29
 });
 
-/** Element kind per list in the singular (for a line "Wand #3"). */
+/** Element kind per list in the singular (for a line "Wand #3", 115-05a: "Treppe #7"). */
 const EINZEL = Object.freeze({
   customWalls: "Wand", customColumns: "Stütze", customWindows: "Öffnung", envOpenings: "Öffnung",
-  customZones: "Raum", customSlabs: "Decke", customRoofs: "Dach",
+  customZones: "Raum", customSlabs: "Decke", customRoofs: "Dach", customStairs: "Treppe", gauben: "Gaube", planNotizen: "Notiz", vordaecher: "Vordach",
 });
 
 /** Single values of the BIM studio's envelope (field → German label). */
@@ -35,6 +43,7 @@ export const STUDIO_WERTE = Object.freeze({
   huelle_decke_dicke_m: "Deckendicke der Hülle", huelle_decke_bezug: "Deckenbezug der Hülle", parapet: "Attika",
   dachform: "Dachform", dachneigung: "Dachneigung", entranceCfg: "Eingang", verschneidung: "Wände verschneiden",
   dachform_ifc: "Gebäudedach im IFC", // 107-10 review: switch "Gebäudedach ins IFC" (optional, written once used)
+  huelle_erscheinung: "Erscheinung der Hülle", // 115-05a: claimed and merged by the studio (before: left in useBimModelSync's `vorbehalt`)
 });
 
 /**
@@ -49,7 +58,7 @@ export const FALSCH_WIE_FEHLT = Object.freeze(new Set(["verschneidung", "dachfor
  * translated by the card), so a conflict card never shows an internal field name.
  */
 export const FELD_NAMEN = Object.freeze({
-  footprintM: "Grundriss", footprintQuelle: "Herkunft des Grundrisses", achseM: "Achse", storeys: "Geschosszahl",
+  footprintM: "Gebäudeumriss", footprintQuelle: "Herkunft des Gebäudeumrisses", achseM: "Achse", storeys: "Geschosszahl",
   storeyHeight: "Geschosshöhe", geschosse: "Geschosstabelle", untergeschosse: "Untergeschosse", unit: "Einheit",
   bauteil_attribute_layer: "Bauteil-Attribute", sketch_layer: "Skizze", massing_layer: "Massing-Körper",
   netz_layer: "Haustechnik-Netz", statik_layer: "Tragwerk", werkstatt_layer: "Wohnungs-Werkstatt",
@@ -60,6 +69,7 @@ export const FELD_NAMEN = Object.freeze({
   schallschutz_vermerke_layer: "Schallschutz-Vermerke", aufbauten_layer: "Aufbauten des Projekts",
   csg_cache_layer: "3D-Zwischenspeicher (CSG)", solidrelationen_layer: "Bauteil-Operationen",
   ansicht_layer: "Ausschnitte und Ebenen",
+  expose_layer: "Exposé-Bild (Umfeld und Blickpunkte)",
 });
 
 /**
@@ -110,42 +120,61 @@ const idxVon = (v) => (Array.isArray(v) ? v.map((e) => e?._idx).filter((x) => ty
 /**
  * Review 106-09: two devices drew a new element at the same time. Both counters start at "highest _idx + 1", so both new
  * elements carry the same `_idx` and the three-way merge took them for ONE element changed twice - a conflict whose every
- * way out dropped one of the two. Before the merge, THIS page's new element gets a free number above every number of both
+ * way out dropped one of the two. Before the merge, THIS page's new element gets a free number above every number of all
  * versions; openings on a renumbered wall follow it (customWindows.wallIdx). The other device never saw this page's
  * number, so nothing breaks there; after the next save it gets both elements.
- * A foreign element is "new" when its number is not in the base of its list; any local element with that number that is
- * not the same element (same list, same content) is renumbered - the counter is shared by all lists.
- * @param {{vorher: Record<string, any>, lokal: Record<string, any>, patch: Record<string, any>}} a
- *   vorher = base of the changed fields, lokal = this page's element lists (all of them), patch = the foreign values
- * @returns {{lokal: Record<string, any>, geaendert: string[], umbenannt: Array<[number, number]>, naechsteIdx: number}}
+ *
+ * 115-05a (D-115-50): "new" is measured against the FULL stored base (`basis`), never against `vorher` - `vorher` holds only
+ * the fields the other device changed, so a list it did not touch looked empty and every element of it "new". A foreign
+ * element is new when its number is missing in the base of ITS list. A local element is renumbered only when all three hold:
+ * (a) a foreign new element carries its number, (b) its number is missing in the base of its own list (a real local new
+ * element), (c) it is not that same element (same list, same content). An element of the stored base is never renumbered,
+ * and a duplicate number counts per list (K12: keys are per list, dreiWege.js; the GUID carries the list name). Without a base
+ * nothing is renumbered: in doubt the merge shows a conflict card, never a mix.
+ * 115-05b (E-2): a renumbered element keeps its `guid` here; the BIM studio drops one derived from the old number afterwards
+ * (bimHistorie.js altGuidsVerwerfen - this module is in the entry chunk, the data-sheet module that derives GUIDs is not).
+ * @param {{vorher: Record<string, any>, lokal: Record<string, any>, patch: Record<string, any>, basis?: Record<string, any>|null}} a
+ *   vorher = base of the changed fields; lokal = this page's element lists (all of them); patch = the foreign values;
+ *   basis = the full stored record this page built on (FremderStand.basis of useBimModelSync.js)
+ * @returns {{lokal: Record<string, any>, geaendert: string[], umbenannt: Array<[number, number]>,
+ *   umbenanntJeListe: Record<string, Array<[number, number]>>, naechsteIdx: number}}
  *   lokal = the lists after renumbering (unchanged ones as they were); geaendert = lists that changed; umbenannt = [alt, neu];
- *   naechsteIdx = the first free number for the next element drawn here
+ *   umbenanntJeListe = the same pairs per list (115-05a, for the undo snapshots); naechsteIdx = the first free number for the
+ *   next element drawn here
  */
-export function neueKollisionenUmnummern({ vorher, lokal, patch }) {
-  const listen = Object.keys(ELEMENT_FELDER);
-  /** @type {Map<number, {feld: string, el: any}>} */
-  const fremdNeu = new Map();
+export function neueKollisionenUmnummern({ vorher, lokal, patch, basis = null }) {
   let max = 0;
-  for (const feld of listen) {
-    for (const n of [...idxVon(lokal[feld]), ...idxVon(patch[feld]), ...idxVon(vorher[feld])]) max = Math.max(max, n);
-    if (!(feld in patch)) continue;
-    const basis = new Set(idxVon(vorher[feld]));
-    for (const el of Array.isArray(patch[feld]) ? patch[feld] : []) {
-      if (typeof el?._idx === "number" && !basis.has(el._idx)) fremdNeu.set(el._idx, { feld, el });
-    }
+  for (const feld of IDX_LISTEN) {
+    for (const n of [...idxVon(lokal?.[feld]), ...idxVon(patch?.[feld]), ...idxVon(vorher?.[feld]), ...idxVon(basis?.[feld])]) max = Math.max(max, n);
   }
   /** @type {Record<string, any>} */ const out = { ...lokal };
   /** @type {Set<string>} */ const geaendert = new Set();
   /** @type {Array<[number, number]>} */ const umbenannt = [];
+  /** @type {Record<string, Array<[number, number]>>} */ const umbenanntJeListe = {};
+  if (!basis || !patch) return { lokal: out, geaendert: [], umbenannt, umbenanntJeListe, naechsteIdx: max + 1 };
+  /** foreign new elements per number (a number may be new in more than one list) @type {Map<number, Array<{feld: string, el: any}>>} */
+  const fremdNeu = new Map();
+  for (const feld of IDX_LISTEN) {
+    if (!(feld in patch)) continue;
+    const bekannt = new Set(idxVon(basis[feld]));
+    for (const el of Array.isArray(patch[feld]) ? patch[feld] : []) {
+      if (typeof el?._idx !== "number" || bekannt.has(el._idx)) continue;
+      fremdNeu.set(el._idx, [...(fremdNeu.get(el._idx) || []), { feld, el }]);
+    }
+  }
   /** @type {Map<number, number>} */ const waende = new Map();
   if (fremdNeu.size) {
-    for (const feld of listen) {
+    for (const feld of IDX_LISTEN) {
       if (!Array.isArray(out[feld])) continue;
+      const bekannt = new Set(idxVon(basis[feld]));
       out[feld] = out[feld].map((/** @type {any} */ el) => {
-        const f = typeof el?._idx === "number" ? fremdNeu.get(el._idx) : undefined;
-        if (!f || (f.feld === feld && gleichWert(f.el, el))) return el;
+        if (typeof el?._idx !== "number" || bekannt.has(el._idx)) return el; // (b) an element of the stored base keeps its number
+        const treffer = fremdNeu.get(el._idx);
+        if (!treffer) return el; // (a) no foreign new element with this number
+        if (treffer.some((f) => f.feld === feld && gleichWert(f.el, el))) return el; // (c) the same new element on both
         max += 1;
         umbenannt.push([el._idx, max]);
+        (umbenanntJeListe[feld] ||= []).push([el._idx, max]);
         if (feld === "customWalls") waende.set(el._idx, max);
         geaendert.add(feld);
         return { ...el, _idx: max };
@@ -159,7 +188,7 @@ export function neueKollisionenUmnummern({ vorher, lokal, patch }) {
       });
     }
   }
-  return { lokal: out, geaendert: [...geaendert], umbenannt, naechsteIdx: max + 1 };
+  return { lokal: out, geaendert: [...geaendert], umbenannt, umbenanntJeListe, naechsteIdx: max + 1 };
 }
 
 /**
@@ -238,7 +267,7 @@ const kurz = (v) => {
 export function konfliktZeilen(feld, konflikte, t = (s) => s) {
   return konflikte.map((k) => {
     if (k.schluessel == null) {
-      const label = STUDIO_WERTE[/** @type {keyof typeof STUDIO_WERTE} */ (feld)] ?? ELEMENT_FELDER[/** @type {keyof typeof ELEMENT_FELDER} */ (feld)] ?? feld;
+      const label = feldName(feld); // 115-05c: also the layers the studio holds (attribute layer)
       return { schluessel: null, name: t(label), mein: kurz(k.mein), fremd: kurz(k.fremd) };
     }
     const el = k.mein ?? k.fremd ?? k.basis;

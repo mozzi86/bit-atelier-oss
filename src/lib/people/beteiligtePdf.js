@@ -29,8 +29,10 @@ const safeName = (s) => String(s || "").replace(/[^\p{L}\p{N}_-]+/gu, "_").repla
  * @returns {Promise<{bytes: Uint8Array, dateiname: string}>}
  */
 export async function beteiligtePdf(rows, projekt, { jetzt = new Date() } = {}) {
-  const { jsPDF } = await import("jspdf");
+  // W0-F6: the metadata helper is imported dynamically, so the entry's preload map does not name its chunk.
+  const [{ jsPDF }, { jsPdfMetadaten }] = await Promise.all([import("jspdf"), import("@core/lib/pdfMetadaten.js")]);
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  jsPdfMetadaten(pdf, { titel: `Projektbeteiligte ${projekt?.name || ""}`.trim(), betreff: projekt?.name || "" }); // 105-19
   const mitAdresse = rows.some((r) => r.adresse);
   // With addresses the remark column gives its width to an address column.
   const spalten = mitAdresse

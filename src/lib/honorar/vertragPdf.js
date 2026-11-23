@@ -3,6 +3,12 @@
 // 81-03's options (page numbers, columns, fixed hash, transliteration) and the
 // builders HONORAR_BRIEFE.auftragsbestaetigung / .honorarnachtrag.
 //
+// Phase 115 (user finding 15.11.2026): both letters print the amount table before
+// closing text and greeting (template version 2). The order confirmation is a new
+// letter with today's date at every call and always uses the current version; the
+// amendment letter is built in the version of its record (honorarBriefVersion): a
+// draft the current one, an amendment already offered the one it was offered with.
+//
 // The confirmation names the payment term WITH its source (E-12): the contract's
 // own value ("laut Architektenvertrag"), otherwise 79's chain — client map ("je
 // Bauherr") or office standard. A consumer client gets the hint on § 650r BGB
@@ -12,9 +18,10 @@
 // In:  contract, offer, amendment, project, letterhead, 79 settings, today,
 //      optional `fixiert`. Out: {bytes, ersetzt, zeichen, layout}.
 
-import { briefkopfZeilen } from "@core/lib/brief/briefkopf.js";
-import { HONORAR_BRIEFE } from "@core/lib/brief/vorlagen.js";
-import { normalisiereBriefkopf } from "@core/lib/briefkopf.js";
+import { fixiertFuerVersion } from "@core/lib/brief/briefPdf.js";
+import { HONORAR_BRIEFE, honorarBriefBauer, honorarBriefVersion } from "@core/lib/brief/vorlagen.js";
+import { HONORAR_BRIEF_VERSION_MIT_SPRACHE } from "@core/lib/brief/vorlagenVersion.js";
+import { briefkopfZeilen } from "@core/lib/briefkopfBrief.js";
 import { datumText } from "@core/lib/kalender/datum.js";
 import { leistungsbildInfo } from "@core/lib/hoai/leistungsbilder.js";
 import { bauherrSchluessel, zahlungszielTage } from "@/lib/accounting/grundlagen.js";
@@ -49,7 +56,7 @@ function empfaengerZeilen(v) {
  * Letter input of the order confirmation.
  * @param {Record<string, any>} vertrag
  * @param {{angebot?: Record<string, any>|null, projekt?: Record<string, any>|null, briefkopf?: any, einst?: Record<string, any>|null, heuteIso: string, gegenlesen?: boolean, optionen?: {weitere?: ReadonlyArray<any>}}} kontext
- * @returns {{absender: string[], empfaenger: string[], datum: string, betreff: string, absaetze: string[], tabelle: any}}
+ * @returns {{absender: string[], empfaenger: string[], datum: string, betreff: string, absaetze: string[], tabelle: any, schluss?: string[]}}
  * @throws {Error} plain text when the contract has no amount
  */
 export function bestaetigungEingabe(vertrag, { angebot = null, projekt = null, briefkopf = null, einst = null, heuteIso, gegenlesen = false, optionen = {} }) {
@@ -83,7 +90,7 @@ export function bestaetigungEingabe(vertrag, { angebot = null, projekt = null, b
     termine: (Array.isArray(vertrag.termine) ? vertrag.termine : []).filter((t) => t?.datum).map((t) => `${t.titel} bis ${datumText(t.datum)}`),
     haftung, verbraucher: vertrag.bauherr_art === "verbraucher", gegenlesen,
   });
-  return { absender: briefkopfZeilen(normalisiereBriefkopf(briefkopf)), empfaenger: empfaengerZeilen(vertrag), datum: datumText(heuteIso), ...brief };
+  return { absender: briefkopfZeilen(briefkopf), empfaenger: empfaengerZeilen(vertrag), datum: datumText(heuteIso), ...brief };
 }
 
 /**
@@ -93,7 +100,9 @@ export function bestaetigungEingabe(vertrag, { angebot = null, projekt = null, b
  * @returns {ReturnType<typeof briefPdfAusEingabe>}
  */
 export async function auftragsbestaetigungPdf(vertrag, { fixiert = null, ...kontext }) {
-  return briefPdfAusEingabe(bestaetigungEingabe(vertrag, kontext), fixiert);
+  // 105-19 follow-up: a new letter at every call in the current template version — /Lang from version 3 on.
+  const mitSprache = HONORAR_BRIEFE.auftragsbestaetigung.version >= HONORAR_BRIEF_VERSION_MIT_SPRACHE;
+  return briefPdfAusEingabe(bestaetigungEingabe(vertrag, kontext), fixiertFuerVersion(fixiert, mitSprache));
 }
 
 /**
@@ -101,7 +110,8 @@ export async function auftragsbestaetigungPdf(vertrag, { fixiert = null, ...kont
  * @param {Record<string, any>} nachtrag
  * @param {Record<string, any>} vertrag
  * @param {{projekt?: Record<string, any>|null, briefkopf?: any, heuteIso: string, gegenlesen?: boolean}} kontext
- * @returns {{absender: string[], empfaenger: string[], datum: string, betreff: string, absaetze: string[], tabelle: any}}
+ * @returns {{absender: string[], empfaenger: string[], datum: string, betreff: string, absaetze: string[], tabelle: any, schluss?: string[]}}
+ * @throws {Error} plain text when the record names a template version this build does not know
  */
 export function nachtragEingabe(nachtrag, vertrag, { projekt = null, briefkopf = null, heuteIso, gegenlesen = false }) {
   const grund = /** @type {any} */ (NACHTRAG_GRUENDE)[nachtrag.grund] || NACHTRAG_GRUENDE.leistungsaenderung;
@@ -109,13 +119,13 @@ export function nachtragEingabe(nachtrag, vertrag, { projekt = null, briefkopf =
   const berechnung = b.art === "stunden"
     ? `${String(b.stunden ?? 0).replace(".", ",")} Stunden × ${euroText(Number(b.satz_eur_h) || 0)}`
     : b.art === "wiederholung" ? `${b.wiederholung_prozent ?? 0} % der Grundleistungen der LPH ${b.lph ?? nachtrag.lph ?? ""}` : "pauschal";
-  const brief = HONORAR_BRIEFE.honorarnachtrag.bauen({
+  const brief = honorarBriefBauer("honorarnachtrag", honorarBriefVersion("honorarnachtrag", nachtrag))({
     nr: nachtrag.nr, titel: nachtrag.titel || "", vertragNummer: vertrag.nummer || "", projektName: projekt?.name || "",
     grund: grund.label, grundQuelle: grund.quelle, lph: nachtrag.lph ? `LPH ${nachtrag.lph}` : "",
     berechnung, betrag: euroText(Number(nachtrag.betrag_euro) || 0),
     nebenkostenProzent: typeof vertrag.nebenkosten_prozent === "number" ? vertrag.nebenkosten_prozent : 5, gegenlesen,
   });
-  return { absender: briefkopfZeilen(normalisiereBriefkopf(briefkopf)), empfaenger: empfaengerZeilen(vertrag), datum: datumText(heuteIso), ...brief };
+  return { absender: briefkopfZeilen(briefkopf), empfaenger: empfaengerZeilen(vertrag), datum: datumText(heuteIso), ...brief };
 }
 
 /**
@@ -126,5 +136,7 @@ export function nachtragEingabe(nachtrag, vertrag, { projekt = null, briefkopf =
  * @returns {ReturnType<typeof briefPdfAusEingabe>}
  */
 export async function honorarnachtragPdf(nachtrag, vertrag, { fixiert = null, ...kontext }) {
-  return briefPdfAusEingabe(nachtragEingabe(nachtrag, vertrag, kontext), fixiert);
+  // 105-19 follow-up: /Lang only from template version 3 on — an amendment offered with version 1 or 2 keeps its bytes.
+  const mitSprache = honorarBriefVersion("honorarnachtrag", nachtrag) >= HONORAR_BRIEF_VERSION_MIT_SPRACHE;
+  return briefPdfAusEingabe(nachtragEingabe(nachtrag, vertrag, kontext), fixiertFuerVersion(fixiert, mitSprache));
 }

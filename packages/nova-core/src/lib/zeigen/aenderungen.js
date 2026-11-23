@@ -22,6 +22,7 @@ import { normalizeStatus } from "../bimClassification.js";
 import { BAUTEIL_TYPEN, bauteilGuid } from "../bauteil/steckbrief.js";
 import { wandTeilen, deckeTeilen } from "./teilen.js";
 import { ANLEGEN_OBJEKTE, WANDARTEN, anlegenBauen } from "./anlegen.js";
+import { naechsteFreieIdx } from "../abgleich/idxListen.js";
 
 /**
  * Origins of a change (guard rail 2). Every step records ONE main origin `quelle` (read by older code and stored entries) and, since
@@ -548,6 +549,7 @@ const ARRAYS = [
   { name: "customStairs", art: "treppe", wort: "Treppe", kuerzel: "T", quelle: "customStairs" }, // 108-06
   { name: "gauben", art: "gaube", wort: "Gaube", kuerzel: "G", quelle: "gauben" }, // 108-13
   { name: "planNotizen", art: "notiz", wort: "Notiz", kuerzel: "N", quelle: "planNotizen" }, // 261111-zs1: text notes of the plan
+  { name: "vordaecher", art: "vordach", wort: "Vordach", kuerzel: "V", quelle: "vordaecher" }, // W-1118-29: canopies on a hull wall
 ];
 const OEFFNUNG_ARRAYS = [{ name: "customWindows", env: false }, { name: "envOpenings", env: true }];
 
@@ -591,14 +593,10 @@ export function bauteilImModell(modell, guid, opt = {}) {
   return null;
 }
 
-/** Next free `_idx` over all element arrays of a model (what the studio's idRef would hand out). @param {any} modell @returns {number} */
-export function naechsteFreieIdx(modell) {
-  let max = 0;
-  for (const k of ["customWalls", "customColumns", "customZones", "customSlabs", "customRoofs", "customWindows", "envOpenings", "customStairs", "gauben", "planNotizen"]) {
-    for (const el of Array.isArray(modell?.[k]) ? modell[k] : []) if (Number.isFinite(el?._idx) && el._idx > max) max = el._idx;
-  }
-  return max + 1;
-}
+// 115-05a: naechsteFreieIdx (next free `_idx` over all element arrays, what the studio's idRef would hand out) moved unchanged to
+// ../abgleich/idxListen.js, the one place that names the ten lists of the shared counter; imported above and re-exported here
+// (callers: BitBimStudio.jsx, vorschlag.js).
+export { naechsteFreieIdx };
 
 // ---------------------------------------------------------------------------------------------------------------
 // Proposal and origin record

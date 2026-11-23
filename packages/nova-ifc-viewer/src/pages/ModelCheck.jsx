@@ -18,7 +18,7 @@ import { seitenWurzel } from "@core/lib/utils";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, startTransition } from "react";
 import { motion } from "framer-motion";
-import { bitApi } from "@core/api/bitApi";
+import { useBriefkopf } from "@core/lib/useBriefkopf";
 import { useSearchParams, useLocation } from "react-router-dom";
 import { useProject } from "@core/lib/ProjectContext";
 import { useI18n } from "@core/lib/i18n";
@@ -92,13 +92,6 @@ const KIND_BADGE = {
   ohne_partner: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
-// Standard-Briefkopf — identisch zur Berichte-Seite (Setting-Entität key "briefkopf").
-const BRIEFKOPF_DEFAULTS = {
-  office: "Architekturbüro",
-  tagline: "INTEGRATED PROJECT PLATFORM",
-  address: "",
-  contact: "",
-};
 
 const fmtCenter = (c) =>
   c ? `(${nf2.format(c.x)} / ${nf2.format(c.y)} / ${nf2.format(c.z)})` : "—";
@@ -211,16 +204,9 @@ export default function ModelCheck() {
   const [ordnung, setOrdnung] = useState(/** @type {"paar"|"abschnitt"} */ ("paar"));
   const [exportiert, setExportiert] = useState(false);
 
-  // Briefkopf für den Prüfbericht (persistente Setting-Entität, wie Berichte-Seite).
-  const [briefkopf, setBriefkopf] = useState(BRIEFKOPF_DEFAULTS);
-  useEffect(() => {
-    (async () => {
-      try {
-        const rows = await bitApi.entities.Setting.filter({ key: "briefkopf" });
-        if (rows[0]) setBriefkopf({ ...BRIEFKOPF_DEFAULTS, ...rows[0].value });
-      } catch { /* Defaults verwenden */ }
-    })();
-  }, []);
+  // Letterhead of the inspection report: the one read path (wave 1, B-81-05/M-2) —
+  // normalised, so the retired English subtitle no longer appears as a default.
+  const { briefkopf } = useBriefkopf();
   const reportRef = useRef(null);
   // Lieferung (71-03): die LieferpaketKarte meldet Lieferung, Richtlinien-Name
   // und Warnungen — der Prüfbericht zieht daraus seinen Abschnitt „Lieferung".

@@ -10,6 +10,8 @@
 //     0.8675 m³), intersection group default 1; the field `verschneidung: true` is stored. Console clean.
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 
 const NAME = "E2E Bauteilkern 10709";
 const MODUL_ANFRAGE = /manifold-3d|manifold[^/]*\.wasm|\/lib\/csg\/|\/csg-[A-Za-z0-9_-]+\.js|solidAbleitung|bauteil\/verschneidung/;
@@ -110,6 +112,7 @@ test("107-09 Verschneidung: Standard aus = alter Plan ohne Nachladen; ein = Kern
     await expect(page.getByTestId("sb-gruppe")).toHaveAttribute("data-herkunft", "offen");
     await expect(page.getByTestId("sb-gruppe")).toHaveAttribute("placeholder", "1");
     // the switch is stored as the element field `verschneidung`
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(async () => (await (await request.get(`/api/entities/BimModel?project_id=${id}`)).json())[0]?.verschneidung, { timeout: 20000 }).toBe(true);
     expect(warnungen, `Konsole: ${warnungen.join(" | ")}`).toEqual([]);
   } finally {

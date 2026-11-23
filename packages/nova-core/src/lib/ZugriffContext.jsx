@@ -15,7 +15,9 @@
 // owner); it is no sign-in and protects nothing on this device. The provider
 // reloads on 'bueroOrga:geaendert', on EINSTELLUNG_EREIGNIS and when the window
 // regains focus (after editing assignments in /People). A load error falls
-// back to the owner AND is shown (ladeFehler), never swallowed.
+// back to the owner AND is shown (ladeFehler), never swallowed. Wave 1: the
+// provider registers the role's access and the app's area calculator for
+// .bitproj exports (exportSicht.js); until the data are loaded, exports are refused.
 //
 // In:  React children; props lade (async loader) or wert (fixed value, tests).
 // Out: ZugriffKontext, mitHelfern, ZUGRIFF_RUECKFALL, ZugriffProvider,
@@ -27,6 +29,7 @@ import { baueZugriff, darf, darfProjekt } from "./rechte.js";
 import { ANSICHT_ALS_SCHLUESSEL, ermittleZugriff } from "./zugriffErmitteln.js";
 import { useAuth } from "./AuthContext";
 import { EINSTELLUNG_EREIGNIS } from "./einstellungen.js";
+import { setzeExportSicht, exportSichtZugriff } from "../api/exportSichtStand.js";
 
 /** Window event after office-organisation data changed (users, sample). */
 export const BUERO_ORGA_EREIGNIS = "bueroOrga:geaendert";
@@ -79,10 +82,12 @@ function gespeicherteId() {
  * @param {{
  *   children?: React.ReactNode, wert?: ZugriffWert|null,
  *   lade?: ((kontext: {datenquelle: string, rolle: string|null, stichtagIso: string}) => Promise<ZugriffDaten>)|null,
- * }} props
+ *   exportBereiche?: ((zugriff: any) => Promise<import("../api/exportSicht.js").VerborgeneBereiche>)|null,
+ * }} props exportBereiche (wave 1): the app's calculator of the office areas a role may not export
+ *   (src/lib/zugriffLader.js); without it a non-owner's export is refused
  * @returns {React.ReactElement}
  */
-export function ZugriffProvider({ children, wert = null, lade = null }) {
+export function ZugriffProvider({ children, wert = null, lade = null, exportBereiche = null }) {
   const { user } = useAuth();
   const [daten, setDaten] = useState(/** @type {ZugriffDaten|null} */ (null));
   const [ladeFehler, setLadeFehler] = useState(/** @type {string|null} */ (null));
@@ -139,7 +144,17 @@ export function ZugriffProvider({ children, wert = null, lade = null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lade, daten, nutzerId, user, ladeFehler, wechsleNutzer, neuLaden]);
 
-  return <ZugriffKontext.Provider value={wert || berechnet}>{children}</ZugriffKontext.Provider>;
+  const wertAktiv = wert || berechnet;
+  // Wave 1 (BEFUNDE-82 H-2, W1-BUERO-F1): every .bitproj export follows the active role — its project
+  // view and the office areas it may export (api/exportSicht.js → projektAlsBlob, and the installed
+  // edition's server export). Until the loader has delivered (or after it failed without data) the
+  // export is refused: deny until loaded, never the owner fallback the menu uses meanwhile.
+  // R-BUERO-2: a failed load without data registers its own state (the error card may still back up).
+  const exportZugriff = exportSichtZugriff(wert, lade, daten, ladeFehler, wertAktiv || ZUGRIFF_RUECKFALL);
+  useEffect(() => {
+    setzeExportSicht(exportZugriff, exportBereiche);
+  }, [exportZugriff, exportBereiche]);
+  return <ZugriffKontext.Provider value={wertAktiv}>{children}</ZugriffKontext.Provider>;
 }
 
 /** @returns {ZugriffWert} the access of the session, or the owner fallback */

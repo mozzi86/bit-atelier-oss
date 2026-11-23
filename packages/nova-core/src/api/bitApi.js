@@ -92,6 +92,12 @@ export function kopfZeilenMischen(vorgaben, eigene) {
  */
 export async function request(path, options = {}) {
   const { headers, ...rest } = options;
+  // 115-05b (E-1): a PUT / DELETE whose record id got lost (null, undefined, empty) never leaves the page - before, a save
+  // redirected after a project switch sent PUT /entities/BimModel/null. Entity and personal records alike; the serverless and
+  // cloud paths never build such a URL (no HTTP), [ASSUMED] their stores answer an unknown id with 404 as before.
+  if ((rest.method === 'PUT' || rest.method === 'DELETE') && /\/(null|undefined)?(\?|$)/.test(path)) {
+    throw Object.assign(new Error(`${path} ohne Datensatz-Id`), { code: 'ohne_id' });
+  }
   const res = await fetch(`${API_BASE}${path}`, {
     ...rest,
     headers: kopfZeilenMischen({ 'Content-Type': 'application/json', [CLIENT_KOPF]: clientKennung() }, headers),
@@ -148,7 +154,8 @@ function entityClient(name) {
       filter: async (query, sort) => (await ladeSupabaseDb()).entityClientSupabase(name).filter(query, sort),
       get: async (id) => (await ladeSupabaseDb()).entityClientSupabase(name).get(id),
       create: async (data) => (await ladeSupabaseDb()).entityClientSupabase(name).create(data),
-      update: async (id, data) => (await ladeSupabaseDb()).entityClientSupabase(name).update(id, data),
+      // 115-05b part 2: opts.stand reaches the cloud store (409 on another stored state)
+      update: async (id, data, opts) => (await ladeSupabaseDb()).entityClientSupabase(name).update(id, data, opts),
       delete: async (id) => (await ladeSupabaseDb()).entityClientSupabase(name).delete(id),
     };
   }
@@ -162,8 +169,9 @@ function entityClient(name) {
         return rec;
       },
       create: async (data) => (await import('./demoDb.js')).demoDb.create(name, data),
-      update: async (id, data) => {
-        const rec = await (await import('./demoDb.js')).demoDb.update(name, id, data);
+      // 115-05b part 2: opts.stand reaches the serverless store (409 on another stored state)
+      update: async (id, data, opts) => {
+        const rec = await (await import('./demoDb.js')).demoDb.update(name, id, data, opts);
         if (!rec) { const err = /** @type {Error & {status?: number}} */ (new Error('Request failed: 404')); err.status = 404; throw err; }
         return rec;
       },
@@ -174,8 +182,9 @@ function entityClient(name) {
     list: (sort) => request(`/entities/${name}${buildQuery({}, sort)}`),
     filter: (query, sort) => request(`/entities/${name}${buildQuery(query, sort)}`),
     get: (id) => request(`/entities/${name}/${id}`),
-    create: (data) =>
-      request(`/entities/${name}`, { method: 'POST', body: JSON.stringify(data) }),
+    // B-111-02-01: the server ignores a sent id unless opts.kennungUebernehmen (then 409 when it is taken)
+    create: (data, opts) =>
+      request(`/entities/${name}${opts?.kennungUebernehmen ? '?kennung=uebernehmen' : ''}`, { method: 'POST', body: JSON.stringify(data) }),
     // 106-09 (105-20): opts.stand = updated_date the write builds on; the server refuses an outdated base with 409
     update: (id, data, opts) =>
       request(`/entities/${name}/${id}${opts?.stand ? `?stand=${encodeURIComponent(opts.stand)}` : ''}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -189,19 +198,22 @@ function entityClient(name) {
  * @property {(sort?: string) => Promise<any[]>} list
  * @property {(query?: Record<string, any>, sort?: string) => Promise<any[]>} filter
  * @property {(id: string) => Promise<any>} get
- * @property {(data: Record<string, any>) => Promise<any>} create
+ * @property {(data: Record<string, any>, opts?: {kennungUebernehmen?: boolean}) => Promise<any>} create
+ *   B-111-02-01: the express server sets id / created_date / updated_date itself; opts.kennungUebernehmen keeps the data's own
+ *   `id` (HTTP 409 when it is taken). Demo and cloud paths ignore opts (they keep their former behaviour).
  * @property {(id: string, data: Record<string, any>, opts?: {stand?: string|null}) => Promise<any>} update
  *   opts.stand (106-09; for bitApi.personal since 112-01): ISO updated_date of the base; an outdated base answers 409
- *   (err.status, err.data.gespeichert). Only the express path checks it.
- *   The serverless path (demoDb / personalDb) ignores it and has NO conflict check across tabs: IndexedDB belongs to the
- *   origin and is shared by every tab of the browser, so two tabs of the same browser are two writers and the last write
- *   wins between them (personalDb.js reads the store on every call, so a tab never writes from a stale cache, but a
- *   concurrent edit in the other tab is still overwritten). Left open on purpose: the serverless edition has one person
- *   at one device; a cross-tab check (Web Locks / BroadcastChannel) would be a plan of its own.
- *   The cloud path (supabase) ignores it too: records are written row-wise under RLS by the one owner (see the E-20 note
- *   in umgebung.js) and HR entities never go there (PERSONAL_NUR_LOKAL) — a conflict check there belongs to phase 74.
- *   No HR form passes stand yet (MitarbeiterFormular, GehaltsVerlauf …): until they do, personal writes stay
- *   last-write-wins on the express path as well.
+ *   (err.status, err.data.gespeichert).
+ *   115-05b part 2 (D-115-50): the entities of the serverless path (demoDb) and of the cloud path (supabaseDb) check it too and
+ *   throw the same shape {status: 409, data: {konflikt: true, gespeichert}} - on INEQUALITY with the stored updated_date (a
+ *   restore puts an older state back); the cloud update is bound to the read row's updated_date (`.eq`), so a writer between
+ *   read and write also gets the 409. This reverses the deferral that stood here ("one owner, one device, phase 74"): the
+ *   anecdote behind D-115-50 - an old tab putting old elements back - happened ONLINE, and the strict writers (useBimModelSync,
+ *   ComplexDesigner) already send the stand on every path. [ASSUMED] demoDb compares against its cached collection: exact within
+ *   a tab; two tabs of one browser keep separate caches, so across tabs it is only as good as that cache (no Web Locks here).
+ *   Still unchecked: the personal store (personalDb, HR, PERSONAL_NUR_LOKAL) - no HR form passes stand yet (MitarbeiterFormular,
+ *   GehaltsVerlauf …), so personal writes stay last-write-wins; the express path's own check stays "older than stored"
+ *   (routes.js standVeraltet).
  * @property {(id: string) => Promise<any>} delete
  */
 
@@ -254,7 +266,7 @@ function personalEntityClient(name) {
     list: (sort) => request(`/personal/${name}${buildQuery({}, sort)}`),
     filter: (query, sort) => request(`/personal/${name}${buildQuery(query, sort)}`),
     get: (id) => request(`/personal/${name}/${id}`),
-    create: (data) => request(`/personal/${name}`, { method: 'POST', body: JSON.stringify(data) }),
+    create: (data, opts) => request(`/personal/${name}${opts?.kennungUebernehmen ? '?kennung=uebernehmen' : ''}`, { method: 'POST', body: JSON.stringify(data) }),
     // 112-01 (foreign review point 3): opts.stand like the entity route (106-09) — the server answers 409 when the stored
     // record is newer than the base the write was built on (personalRouter.js uses the same standVeraltet check).
     update: (id, data, opts) =>

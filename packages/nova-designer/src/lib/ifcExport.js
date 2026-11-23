@@ -54,7 +54,9 @@ import { istBodenplatte, huellPlattenId, huellwandDaten, untersterLevel, globale
 import { elevationOf, unterkante, wandHoehe, stuetzenHoehe, raumHoehe, geschosshoehe, deckenLage, dachNeigung_grad, geschosseAus, FLACHDACH_BIS_GRAD, DECKEN_STANDARD } from "@core/lib/bauteil/hoehen.js";
 import { dachBerechnen, dachVonDachelement, globalerDachAnstieg_m, globalesDach } from "@core/lib/bauteil/dachGeometrie.js";
 import { treppeBerechnen, treppeKoerper, mitTreppenLoechern } from "@core/lib/bauteil/treppe.js"; // 108-06: IfcStair/IfcStairFlight, derived slab openings
+import { istUTreppe, treppeUBerechnen, treppeUKoerper } from "@core/lib/bauteil/treppeU.js"; // 115-13: two-flight stair with landing
 import { gaubeBerechnen } from "@core/lib/bauteil/gauben.js"; // 108-13: dormers on the global roof
+import { vordachBerechnen } from "@core/lib/bauteil/vordach.js"; // W-1118-29: canopies on a hull wall
 import { mitGiebelProfilen, mitWandProfilen } from "@core/lib/bauteil/giebel.js"; // 108-03: hull walls up to the roof contour, drawn attic walls cut at the roof (with dachGlobal)
 import { dachImRahmen, wandProfilUnterDach } from "@core/lib/bauteil/seoAnalytik.js";
 import { grenzWaende, nettoFlaeche_m2, raeumeMitNetto, polyAreaXZ } from "@core/lib/bauteil/raeume.js";
@@ -157,9 +159,9 @@ const TYPEN_9 = new Set(["IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcRoof"
  * @param {object} modelRoh createBuildingModel-Ergebnis
  * @param {{ customWalls?: Array<object>, customColumns?: Array<object>, customWindows?: Array<object>,
  *   envOpenings?: Array<object>, autoOpenings?: Array<object>, customZones?: Array<object>,
- *   customSlabs?: Array<object>, customRoofs?: Array<object>, customStairs?: Array<any>, gauben?: Array<any>, storeyHeight?: number, geschosse?: Array<{level: number, name?: string, hoehe_m: number}>|null, projectName?: string,
+ *   customSlabs?: Array<object>, customRoofs?: Array<object>, customStairs?: Array<any>, gauben?: Array<any>, vordaecher?: Array<any>, storeyHeight?: number, geschosse?: Array<{level: number, name?: string, hoehe_m: number}>|null, projectName?: string,
  *   timestamp?: number, onWarn?: ((msg: string, art?: string, daten?: Record<string, any>) => void)|null, netz?: object|null, werkstatt?: any, dachGlobal?: {form: string, neigung_grad?: number}|null, seo?: {waende: Map<string, any[]>}|null,
- *   steckbrief?: {projektId?: string|number|null, schichtdetails?: boolean}|null, tragwerk?: object|null, bauteilAttribute?: object|null, massing?: object|null, durchbrueche?: Array<object>|null, instanzTypen?: boolean,
+ *   steckbrief?: {projektId?: string|number|null, schichtdetails?: boolean}|null, tragwerk?: object|null, bauteilAttribute?: object|null, massing?: object|null, gelaende?: {bestand?: any, neu?: any, quelleBestand?: string|null, erdmassen?: {abtrag_m3: number, auftrag_m3: number}|null}|null, durchbrueche?: Array<object>|null, instanzTypen?: boolean,
  *   verschneidung?: {jeSchluessel: Map<string, Array<{umrisse: Array<Array<{x: number, z: number}>>}>>, decken?: Map<number, {kerne: boolean, waende: string[]}>|null}|null, raumGrenzen?: boolean }} [opts]
  *   netz (Phase 41): TGA-Netz (`netz_layer`) — je Kante ein IfcPipe-/Duct-/CableSegment mit
  *   Polylinien-Achse; ohne Netz ist die Datei byte-identisch zu vorher.
@@ -176,6 +178,9 @@ const TYPEN_9 = new Set(["IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcRoof"
  *   steckbrief.schichtdetails (107-03, needs steckbrief): layer Category/Priority, IfcMaterialLayerSetUsage per wall with a build-up (offset
  *   see below), material density and conductivity; absent/false = byte-identical to before.
  *   tragwerk (97-02a, needs steckbrief): `statik_layer` — beams as IfcBeam.
+ *   gelaende (108-10): `{bestand?, neu?, quelleBestand?, erdmassen?}` — the two terrain layers of gelaendeEbenen.js (rasters in model
+ *   metres, heights relative to ±0,00) and the earthworks between them; each layer becomes an IfcGeographicElement .TERRAIN. on the
+ *   site with ObjectType "Bestand" / "Neu". Without it nothing is written.
  *   massing (98-05): `massing_layer` of the Massing Studio — each body an IfcBuildingElementProxy (stable
  *   GUID, extruded profile, Pset_BIT_Bauteil), each group number an IfcElementAssembly aggregating its
  *   instances; placed via `massing.bezug` (site → model). Without bodies the file is unchanged. 107-05: the profile comes
@@ -213,7 +218,7 @@ const TYPEN_9 = new Set(["IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcRoof"
  *   Qto_SpaceBaseQuantities (GrossFloorArea, NetFloorArea in m²) per space; absent/false = byte-identical.
  * @returns {string} STEP-Text
  */
-export function exportIFC(modelRoh, { customWalls = [], customColumns = [], customWindows = [], envOpenings = [], autoOpenings = [], customZones = [], customSlabs = [], customRoofs = [], customStairs = [], gauben = [], storeyHeight = 3, geschosse = null, projectName = "BIT-Atelier", timestamp = 0, onWarn = null, netz = null, werkstatt = null, steckbrief: sbOpt = null, tragwerk = null, bauteilAttribute = null, massing = null, durchbrueche = null, instanzTypen = false, verschneidung = null, dachGlobal = null, seo = null, raumGrenzen = false } = {}) {
+export function exportIFC(modelRoh, { customWalls = [], customColumns = [], customWindows = [], envOpenings = [], autoOpenings = [], customZones = [], customSlabs = [], customRoofs = [], customStairs = [], gauben = [], vordaecher = [], storeyHeight = 3, geschosse = null, projectName = "BIT-Atelier", timestamp = 0, onWarn = null, netz = null, werkstatt = null, steckbrief: sbOpt = null, tragwerk = null, bauteilAttribute = null, massing = null, durchbrueche = null, instanzTypen = false, verschneidung = null, dachGlobal = null, seo = null, raumGrenzen = false, gelaende = null } = {}) {
   // 97-02: workshop walls/doors carry the attribute table's decisions (status, KG, trade …).
   if (werkstatt && bauteilAttribute) werkstatt = werkstattMitAttributen(werkstatt, bauteilAttribute);
   // 107-02: storey source — the programme's storey table when it has one, else one height for all storeys (the old behaviour).
@@ -594,27 +599,48 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
     });
   });
 
-  // ---- 108-06: Treppen (IfcStair → IfcStairFlight, one straight flight each) ----
+  // ---- 108-06: Treppen (IfcStair → IfcStairFlight, one straight flight each; 115-13: two flights + landing slab) ----
   // Body: one box per tread (treppeKoerper, massive flight [ASSUMED]) in the storey frame, placed at the floor of `level`. IFC4
   // IfcStairFlight carries NumberOfRisers/NumberOfTreads/RiserHeight/TreadLength as attributes; Pset_StairCommon on the stair.
+  // A vertical prism over a plan ring (absolute plan m) from `unten` to `oben` (m above the stair placement) — the body unit of both types.
+  const prisma = (/** @type {Array<{x: number, z: number}>} */ pts, /** @type {number} */ unten, /** @type {number} */ oben) => {
+    const ring = pts.map((p) => E("IFCCARTESIANPOINT", `(${f(p.x)},${f(p.z)})`));
+    const prof = E("IFCARBITRARYCLOSEDPROFILEDEF", `.AREA.,$,${E("IFCPOLYLINE", `(${[...ring, ring[0]].join(",")})`)}`);
+    const pos3 = E("IFCAXIS2PLACEMENT3D", `${E("IFCCARTESIANPOINT", `(0.,0.,${f(unten)})`)},${dirZ},${dirX}`);
+    return E("IFCEXTRUDEDAREASOLID", `${prof},${pos3},${dirZ},${f(oben - unten)}`);
+  };
   (customStairs || []).forEach((t, ti) => {
     if (!t?.start) return;
     const lvl = Math.round(Number(t.level) || 0);
-    const erg = treppeBerechnen(t, geschosshoehe(lvl, gs));
     const y0 = elevationOf(lvl, gs);
+    const id = t._idx ?? `t${ti}`;
+    const stairGuid = t.guid || bauteilGuid(projektId, "customStairs", t);
+    // 115-13: two-flight stair with intermediate landing — IfcStair HALF_TURN_STAIR (IFC4 IfcStairTypeEnum: two flights turning 180°
+    // with a landing) aggregating two IfcStairFlight (STRAIGHT, attributes per flight) and the landing as IfcSlab LANDING. Flight 1 keeps
+    // the flight GUID key of the straight stair (a stair whose type is switched keeps it); flight 2 and the landing get keys of their own.
+    if (istUTreppe(t)) {
+      const stairPl = placement(0, 0, y0);
+      const ue = treppeUBerechnen(t, geschosshoehe(lvl, gs));
+      const kp = treppeUKoerper(ue);
+      const koerperVon = (/** @type {string} */ teil) => kp.filter((k) => k.teil === teil).map((k) => prisma(k.ring, k.unten_m, k.oben_m)).join(",");
+      const stair = E("IFCSTAIR", `'${stairGuid}',$,${S("Treppe")},$,$,${stairPl},$,$,.HALF_TURN_STAIR.`);
+      const laeufe = ue.laeufe.map((l, li) => E("IFCSTAIRFLIGHT", `'${bauteilGuid(projektId, "customStairs-lauf", { id: li ? `${id}:2` : id })}',$,${S(`Treppenlauf ${li + 1}`)},$,$,${placement(0, 0, 0, 0, stairPl)},${shape(koerperVon(`lauf${li + 1}`))},$,${l.n},${l.n - 1},${f(ue.s_m)},${f(ue.a_m)},.STRAIGHT.`));
+      const podest = E("IFCSLAB", `'${bauteilGuid(projektId, "customStairs-podest", { id })}',$,${S("Podest")},$,$,${placement(0, 0, 0, 0, stairPl)},${shape(koerperVon("podest"))},$,.LANDING.`);
+      E("IFCRELAGGREGATES", `${G()},$,$,$,${stair},(${[...laeufe, podest].join(",")})`);
+      contain(lvl, stair);
+      pset(stair, "Pset_StairCommon", [["NumberOfRiser", ue.n], ["NumberOfTreads", ue.n - 2], ["RiserHeight", ue.s_m], ["TreadLength", ue.a_m], ["IsExternal", false], ["LoadBearing", true]]);
+      pset(stair, "Pset_BIT_Bauteil", [["Bauteiltyp", "Treppe (zweiläufig mit Zwischenpodest)"], ["Laufbreite", ue.breite_m], ["Lauflaenge", ue.laufLaenge_m], ["Schrittmass", ue.schrittmass_m],
+        ["Steigungen Lauf 1", ue.n1], ["Steigungen Lauf 2", ue.n2], ["Treppenauge", ue.auge_m], ["Podesttiefe", ue.podest_tiefe_m], ["KG", "351"], ["Hinweise", ue.warnungen.map((w) => w.text).join("; ") || "—"]]);
+      pset(podest, "Pset_BIT_Bauteil", [["Bauteiltyp", "Podest"], ["Podesttiefe", ue.podest_tiefe_m], ["Flaeche", ue.podest.flaeche_m2], ["KG", "351"]]);
+      return;
+    }
+    const erg = treppeBerechnen(t, geschosshoehe(lvl, gs));
     const b = Math.max(0.1, Number(t.breite_m) || 1);
     const q = erg.quer, d = erg.richtung;
     const at = (/** @type {number} */ s, /** @type {number} */ qq) => ({ x: t.start.x + d.x * s + q.x * qq, z: t.start.z + d.z * s + q.z * qq });
-    const kasten = (/** @type {{d0_m: number, d1_m: number, unten_m: number, oben_m: number}} */ k) => {
-      const ring = [at(k.d0_m, -b / 2), at(k.d1_m, -b / 2), at(k.d1_m, b / 2), at(k.d0_m, b / 2)].map((p) => E("IFCCARTESIANPOINT", `(${f(p.x)},${f(p.z)})`));
-      const prof = E("IFCARBITRARYCLOSEDPROFILEDEF", `.AREA.,$,${E("IFCPOLYLINE", `(${[...ring, ring[0]].join(",")})`)}`);
-      const pos3 = E("IFCAXIS2PLACEMENT3D", `${E("IFCCARTESIANPOINT", `(0.,0.,${f(k.unten_m)})`)},${dirZ},${dirX}`);
-      return E("IFCEXTRUDEDAREASOLID", `${prof},${pos3},${dirZ},${f(k.oben_m - k.unten_m)}`);
-    };
+    const kasten = (/** @type {{d0_m: number, d1_m: number, unten_m: number, oben_m: number}} */ k) => prisma([at(k.d0_m, -b / 2), at(k.d1_m, -b / 2), at(k.d1_m, b / 2), at(k.d0_m, b / 2)], k.unten_m, k.oben_m);
     const koerper = treppeKoerper(erg).map(kasten).join(",");
-    const id = t._idx ?? `t${ti}`;
-    const stairGuid = t.guid || bauteilGuid(projektId, "customStairs", t);
-    const stairPl = placement(0, 0, y0);
+    const stairPl = placement(0, 0, y0); // after the bodies: the entity order of 108-06 stays (byte-identical export)
     const stair = E("IFCSTAIR", `'${stairGuid}',$,${S("Treppe")},$,$,${stairPl},$,$,.STRAIGHT_RUN_STAIR.`);
     const flight = E("IFCSTAIRFLIGHT", `'${bauteilGuid(projektId, "customStairs-lauf", { id })}',$,${S("Treppenlauf")},$,$,${placement(0, 0, 0, 0, stairPl)},${shape(koerper)},$,${erg.n},${erg.n - 1},${f(erg.s_m)},${f(erg.a_m)},.STRAIGHT.`);
     E("IFCRELAGGREGATES", `${G()},$,$,$,${stair},(${flight})`);
@@ -722,6 +748,17 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
   } else if ((gauben || []).length) {
     warn(`${gauben.length} Gaube(n) nicht im IFC — dafür am Dach „ins IFC“ einschalten.`, WARNART_DACH, { nr: null, gaube: true });
   }
+  // W-1118-29: canopies — IfcRoof USERDEFINED "Vordach" (IFC has no canopy class; the dormers use the same form), the plate and each
+  // bracket as an extruded box from vordach.js (absolute heights, the same box as 3D and plan). Independent of the switch "Dach ins
+  // IFC": a canopy hangs on the wall, not on the roof. A canopy the library refuses is reported and left out.
+  (vordaecher || []).forEach((v, vi) => {
+    const erg = vordachBerechnen(v, model, gs);
+    if (!erg.ok) { warn(`Vordach ${v._idx ?? vi + 1}: ${/** @type {{text: string}} */ (erg).text} — nicht im IFC.`, WARNART_DACH, { nr: v._idx ?? null, vordach: true }); return; }
+    const teile = [geneigtePlatte(erg.platte.slice(0, 4), erg.dicke_m), ...erg.konsolen.map((k) => geneigtePlatte(k.slice(0, 4), k[4].y - k[0].y))].join(",");
+    const vordach = E("IFCROOF", `'${v.guid || bauteilGuid(projektId, "vordaecher", v)}',$,${S("Vordach")},$,${S("Vordach")},${placement(0, 0, 0)},${shape(teile)},$,.USERDEFINED.`);
+    contain(erg.level, vordach);
+    pset(vordach, "Pset_BIT_Bauteil", [["Bauteiltyp", "Vordach"], ["Breite", erg.breite_m], ["Tiefe", erg.tiefe_m], ["Plattendicke", erg.dicke_m], ["Unterkante", erg.y_unten_m], ["Konsolen", erg.konsolen.length], ["Material", v.material === "glas" ? "Glas (VSG)" : String(v.material || "")], ["KG", "339"]]);
+  });
 
   // ---- Räume (Spaces) — Modell-Spaces + gezeichnete Zonen ----
   // 107-11: every space is remembered with its polygon for the optional room boundaries (option `raumGrenzen`, written at the end);
@@ -1110,6 +1147,41 @@ export function exportIFC(modelRoh, { customWalls = [], customColumns = [], cust
       E("IFCRELAGGREGATES", `${G()},$,$,$,${asm},(${refs.join(",")})`);
       contain(0, asm);
     }
+  }
+
+  // ---- 108-10: the two terrain layers (existing ground, new ground) as IfcGeographicElement .TERRAIN. on the site ----
+  // Each a triangulated surface (IfcTriangulatedFaceSet, 'Body' / 'Tessellation'), ObjectType "Bestand" / "Neu" so a checking tool
+  // (IDS) can tell them apart; the earthworks between them (cut / fill, KG 310 of DIN 276) as properties of the new ground. Stable
+  // GUIDs per layer. Without `gelaende` nothing is written (goldens byte-identical).
+  if (gelaende && (gelaende.bestand || gelaende.neu)) {
+    /** @type {string[]} */
+    const refs = [];
+    for (const [status, name, raster] of /** @type {Array<[string, string, any]>} */ ([["Bestand", "Gelände Bestand", gelaende.bestand], ["Neu", "Gelände neu", gelaende.neu]])) {
+      if (!raster || !(raster.nx >= 2 && raster.ny >= 2) || !Array.isArray(raster.h) || raster.h.length !== raster.nx * raster.ny) continue;
+      /** @type {string[]} */
+      const punkte = [];
+      // IFC (x, y, z) = (model x, model z, height) — the plan mapping of every other element of this export
+      for (let j = 0; j < raster.ny; j += 1) for (let i = 0; i < raster.nx; i += 1) punkte.push(`(${f(raster.x0 + i * raster.zelle)},${f(raster.y0 + j * raster.zelle)},${f(Number(raster.h[j * raster.nx + i]))})`);
+      /** @type {string[]} */
+      const dreiecke = [];
+      for (let j = 0; j < raster.ny - 1; j += 1) for (let i = 0; i < raster.nx - 1; i += 1) {
+        const a = j * raster.nx + i + 1, b = a + 1, c = a + raster.nx, d = c + 1; // 1-based indices
+        dreiecke.push(`(${a},${b},${c})`, `(${b},${d},${c})`); // counter-clockwise seen from above (+z)
+      }
+      const liste = E("IFCCARTESIANPOINTLIST3D", `(${punkte.join(",")})`);
+      const netz = E("IFCTRIANGULATEDFACESET", `${liste},$,.F.,(${dreiecke.join(",")}),$`);
+      const sr = E("IFCSHAPEREPRESENTATION", `${ctx},'Body','Tessellation',(${netz})`);
+      const form = E("IFCPRODUCTDEFINITIONSHAPE", `$,$,(${sr})`);
+      const quelle = status === "Neu" ? "Massing-Studio (modelliertes Gelände)"
+        : gelaende.quelleBestand === "aufnahme" ? "Massing-Studio (Aufnahme)" : "Öffentliches Höhenmodell, ±0,00 nach Regel (Annahme)";
+      // IfcGeographicElement (IFC4): GlobalId, OwnerHistory, Name, Description, ObjectType, ObjectPlacement, Representation, Tag, PredefinedType
+      const ref = E("IFCGEOGRAPHICELEMENT", `'${bauteilGuid(sbOpt?.projektId ?? null, "gelaende", { id: status.toLowerCase() })}',$,${S(name)},${S(quelle)},${S(status)},${placement(0, 0, 0)},${form},${S(`gelaende-${status.toLowerCase()}`)},.TERRAIN.`);
+      const zeilen = /** @type {Array<[string, any]>} */ ([["Status", status], ["Quelle", quelle], ["Rasterweite_m", raster.zelle]]);
+      if (status === "Neu" && gelaende.erdmassen) zeilen.push(["DIN276_KG", "310"], ["Abtrag_m3", gelaende.erdmassen.abtrag_m3], ["Auftrag_m3", gelaende.erdmassen.auftrag_m3]);
+      pset(ref, "Pset_BIT_Gelaende", zeilen);
+      refs.push(ref);
+    }
+    if (refs.length) E("IFCRELCONTAINEDINSPATIALSTRUCTURE", `${G()},$,$,$,(${refs.join(",")}),${site}`);
   }
 
   // 107-10 (D-BK-20, D-BK-08b): the basement walls and slabs are in the file (107-13); the terrain subtraction (excavation pit, ground

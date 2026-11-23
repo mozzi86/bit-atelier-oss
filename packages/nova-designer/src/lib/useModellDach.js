@@ -10,7 +10,7 @@
 //      and as {ladeFehler: message}, so the studio can say that the roof of the building model is missing instead of silently
 //      showing the box.
 import { useEffect, useState } from "react";
-import { loadBimModel, aufBimModelAenderung } from "@core/lib/useBimModelSync";
+import { bimModelLesen, aufBimModelAenderung } from "@core/lib/useBimModelSync";
 
 /** Record fields this hook reads. */
 const FELDER = Object.freeze(["dachform", "dachneigung", "huelle_decke_dicke_m", "huelle_decke_bezug"]);
@@ -45,7 +45,7 @@ export function useModellDach(projectId) {
     if (!projectId) { setFelder(null); return undefined; }
     let aus = false;
     const nur = (/** @type {Record<string, any>|null|undefined} */ r) => Object.fromEntries(FELDER.filter((k) => r && k in r).map((k) => [k, r?.[k]]));
-    loadBimModel(projectId)
+    bimModelLesen(String(projectId)) // 115-05c: with the page's unsaved draft on top (reader overlay)
       // merge: a patch that arrived while the record was loading is newer than the loaded record and wins
       .then((m) => { if (!aus) setFelder((alt) => ({ ...nur(m), ...(alt || {}) })); })
       .catch((/** @type {any} */ e) => {

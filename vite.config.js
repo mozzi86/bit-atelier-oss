@@ -137,6 +137,10 @@ export default defineConfig(({ mode }) => ({
           // 110-05: glTF exporter (BIM studio writes the client's 3D file) and loader (client portal viewer) are reached only by
           // dynamic imports; in the shared `three` chunk they would ride along on every 3D page (budget chunks.three).
           if (/\/node_modules\/three\/examples\/jsm\/(exporters\/GLTFExporter|loaders\/GLTFLoader)\.js$/.test(p)) return 'three-gltf';
+          // W-1118-28: the post-processing of the exposé picture (composer, ambient occlusion, output pass and their shaders) is
+          // reached only by the dynamic import of lib/exposeBild.js; in the shared `three` chunk it would ride along on every 3D page.
+          if (p.includes('/node_modules/three/examples/jsm/postprocessing/') || p.includes('/node_modules/three/examples/jsm/shaders/')
+            || p.endsWith('/node_modules/three/examples/jsm/math/SimplexNoise.js')) return 'three-post';
           if (p.includes('/node_modules/three/') || p.includes('three-stdlib')) return 'three';
           if (p.includes('/node_modules/recharts/') || p.includes('victory-vendor') || /\/node_modules\/d3-/.test(p)) return 'charts';
           if (p.includes('/node_modules/maplibre-gl/')) return 'map';
@@ -172,7 +176,10 @@ export default defineConfig(({ mode }) => ({
   // URL comes from csg/manifoldWasm.js (`?url`). Dev server only — the build is unaffected.
   // 110-05: same for the glTF exporter/loader (client 3D file, "3D ansehen") — found on first use, the reload threw away the
   // click (E2E bauherrenzugang-110-03).
-  optimizeDeps: { include: ['manifold-3d', 'three/examples/jsm/exporters/GLTFExporter.js', 'three/examples/jsm/loaders/GLTFLoader.js'] },
+  // W-1118-28: same for the post-processing of the exposé picture — found on first use, the reload threw away the click.
+  optimizeDeps: { include: ['manifold-3d', 'three/examples/jsm/exporters/GLTFExporter.js', 'three/examples/jsm/loaders/GLTFLoader.js',
+    'three/examples/jsm/postprocessing/EffectComposer.js', 'three/examples/jsm/postprocessing/RenderPass.js', 'three/examples/jsm/postprocessing/GTAOPass.js',
+    'three/examples/jsm/postprocessing/OutputPass.js', 'three/examples/jsm/postprocessing/ShaderPass.js'] },
   // 69-21: the IFC reading worker imports the WASM bootstrap dynamically (code splitting) —
   // only the ES worker format supports that.
   worker: { format: 'es' },

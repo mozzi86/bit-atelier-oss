@@ -194,6 +194,19 @@ export function radRasten(deltaY, deltaMode = 0) {
 }
 
 /**
+ * Notches that enlarge the picture by a zoom factor (115-01: a trackpad pinch gives a factor, zoomSchritt() and
+ * zoomParallel() count in notches). One notch changes the distance by `schritt`, so (1 − schritt)^rasten = 1 / faktor.
+ * Hand check: faktor 1.15, schritt 0.023 → ln 1.15 / −ln 0.977 = 0.13976 / 0.023269 = 6.006 notches.
+ * @param {number} faktor factor of the picture scale, > 1 = closer (radGeste().faktor)
+ * @param {number} [schritt] share of the distance per notch (ZOOM_SCHRITT)
+ * @returns {number} notches, positive = closer; not limited to ±1; 0 for a factor that is not positive
+ */
+export function rastenAusFaktor(faktor, schritt = ZOOM_SCHRITT) {
+  if (!(faktor > 0) || !(schritt > 0 && schritt < 1)) return 0;
+  return Math.log(faktor) / -Math.log(1 - schritt);
+}
+
+/**
  * Camera shift of a wheel step towards (or away from) the point under the pointer.
  * Each notch changes the distance by `schritt` (2.3 %): far away the steps are large, close to the element small.
  * Towards the element the camera stops `stopp` metres in front of it.

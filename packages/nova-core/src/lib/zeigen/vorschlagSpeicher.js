@@ -13,7 +13,8 @@ export const VERLAUF_MAX = 200;
 
 /**
  * @typedef {ReturnType<typeof import("./aenderungen.js").vorschlagErzeugen>} Vorschlag
- * @typedef {ReturnType<typeof import("./aenderungen.js").herkunftEintrag> & {zurueckgenommen?: string|null}} Schritt
+ * @typedef {ReturnType<typeof import("./aenderungen.js").herkunftEintrag> & {zurueckgenommen?: string|null, verworfen?: string|null}} Schritt
+ *   115-05c (D-115-51, additive): verworfen = time the step was dropped with the unsaved draft ("Verwerfen"), never stored
  * @typedef {{offen: ReadonlyArray<Vorschlag>, verlauf: ReadonlyArray<Schritt>}} Stand
  */
 

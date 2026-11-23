@@ -7,6 +7,7 @@
 // In:  kennzahlen + clash/IDS findings (same shapes as ModelCheck). Out: PDF bytes.
 
 import { jsPDF } from "jspdf";
+import { jsPdfMetadaten } from "@core/lib/pdfMetadaten.js";
 
 const KIND_LABELS = {
   hard: "Kollision",
@@ -48,6 +49,7 @@ function fmtCenter(c) {
  */
 export function schreibeBitCheckPdf(p = {}) {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  jsPdfMetadaten(pdf, { titel: `Prüfbericht (bit-check) ${p.modell || ""}`.trim() }); // 105-19
   const pageW = pdf.internal.pageSize.getWidth();
   const margin = 14;
   const maxW = pageW - 2 * margin;

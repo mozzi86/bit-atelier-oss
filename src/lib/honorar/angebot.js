@@ -20,6 +20,7 @@
 import { lphFuerLeistungsbild } from "@core/lib/hoai/honorar.js";
 import { leistungsbildInfo } from "@core/lib/hoai/leistungsbilder.js";
 import { istBestand } from "@core/lib/bauart.js";
+import { HONORAR_BRIEF_VERSION } from "@core/lib/brief/vorlagenVersion.js";
 import { plusTage, tageZwischen } from "@core/lib/kalender/datum.js";
 import { naechsteNummer } from "@core/lib/nummernkreis.js";
 import { bauherrSchluessel, zahlungszielTage } from "@/lib/accounting/grundlagen.js";
@@ -133,6 +134,10 @@ export function neueFassung(angebot, alle, { heuteIso }) {
  * other open version of the same number (draft or sent) becomes "ersetzt". An
  * offer without an amount (missing table without a flat fee, or outside the
  * table) cannot be sent.
+ * Phase 115: the sent offer is stamped with the letter template version it is written with (`vorlage_version`), so its
+ * PDF is built the same way later even when the template has moved on; a draft that becomes "ersetzt" is stamped too
+ * (it was shown with the current template). Offers frozen before the stamp existed count as version 1
+ * (honorarBriefVersion in @core/lib/brief/vorlagenVersion.js — only the numbers are imported here, not the letter texts).
  * @param {Record<string, any>} angebot
  * @param {ReadonlyArray<Record<string, any>>} alle all offers
  * @param {{heuteIso: string, jetztIso?: string, optionen?: {weitere?: ReadonlyArray<any>}}} kontext
@@ -143,12 +148,13 @@ export function versenden(angebot, alle, { heuteIso, jetztIso, optionen = {} }) 
   const a = aufstellung(angebot, optionen);
   if (a.tafelFehlt) return { ok: false, fehler: "tafel_fehlt" };
   if (a.summen.netto === null) return { ok: false, fehler: "frei" };
+  const vorlageVersion = HONORAR_BRIEF_VERSION.honorarangebot;
   const ersetzte = (alle || [])
     .filter((x) => x && x.id !== angebot.id && x.nummer === angebot.nummer && (x.status === "entwurf" || x.status === "versendet"))
-    .map((x) => ({ ...x, status: "ersetzt" }));
+    .map((x) => ({ ...x, status: "ersetzt", ...((x.status || "entwurf") === "entwurf" ? { vorlage_version: vorlageVersion } : {}) }));
   return {
     ok: true,
-    angebot: { ...angebot, status: "versendet", versendet_am: jetztIso || `${heuteIso}T00:00:00.000Z`, summen: a.summen },
+    angebot: { ...angebot, status: "versendet", versendet_am: jetztIso || `${heuteIso}T00:00:00.000Z`, summen: a.summen, vorlage_version: vorlageVersion },
     ersetzte,
   };
 }

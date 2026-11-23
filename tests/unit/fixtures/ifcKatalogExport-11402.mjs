@@ -4,19 +4,24 @@
 //
 // Run from the repo root: node --import ./tests/alias-register.mjs tests/unit/fixtures/ifcKatalogExport-11402.mjs <out.ifc>
 // Variant "kombi" (argv[3]): the mixed model ifcKatalogKombi-11402.js (catalogue types + gable walls + stair opening + dormer).
-// In: argv[2] = path of the IFC file to write (the sidecar is <out.ifc>.json), argv[3] = optional "kombi". Out: the two files; exit 1 with the reason on error,
+// Variant "gelaende" (108-10): the mixed model plus the two terrain layers (existing ground on a slope, new ground with a levelled pad).
+// In: argv[2] = path of the IFC file to write (the sidecar is <out.ifc>.json), argv[3] = optional "kombi" | "gelaende". Out: the two files; exit 1 with the reason on error,
 // exit 2 when the export reported a warning (the example model must export without any).
 import { writeFileSync } from "node:fs";
 import { exportIFCMitKatalog } from "@designer/lib/ifcExport";
 import { ifcKatalogSzenario } from "./ifcKatalogModell-11402.js";
 import { ifcKombiSzenario } from "./ifcKatalogKombi-11402.js";
+import { gelaendeBeispiel } from "./gelaendeBeispiel-10810.js";
 
 const ziel = process.argv[2];
 if (!ziel) {
   console.error("Aufruf: node --import ./tests/alias-register.mjs tests/unit/fixtures/ifcKatalogExport-11402.mjs <ziel.ifc>");
   process.exit(1);
 }
-const { model, opts } = process.argv[3] === "kombi" ? ifcKombiSzenario() : ifcKatalogSzenario();
+const variante = process.argv[3];
+const basis = variante === "kombi" || variante === "gelaende" ? ifcKombiSzenario() : ifcKatalogSzenario();
+const model = basis.model;
+const opts = variante === "gelaende" ? { ...basis.opts, gelaende: gelaendeBeispiel() } : basis.opts;
 /** @type {Array<{msg: string, art?: string}>} */
 const meldungen = [];
 const text = await exportIFCMitKatalog(model, { ...opts, onWarn: (msg, art) => meldungen.push({ msg, art }) });

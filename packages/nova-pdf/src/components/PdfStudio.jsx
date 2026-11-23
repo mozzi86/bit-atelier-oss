@@ -627,6 +627,14 @@ export default function PdfStudio({ project, openDoc, refreshKey }) {
         else out.addPage([vp1.width, vp1.height], orientation);
         out.addImage(img, "JPEG", 0, 0, vp1.width, vp1.height);
       }
+      // 105-19: the annotated copy keeps the source's title and language (pdfjs info); missing ones come from the
+      // file name and the UI language.
+      const info = /** @type {any} */ ((await pdf.getMetadata().catch(() => null))?.info);
+      const { jsPdfMetadaten, pdfSpracheAusUi, pdfTitelAusDateiname } = await import("@core/lib/pdfMetadaten"); // W0-F6: dynamic import
+      jsPdfMetadaten(out, {
+        titel: String(info?.Title || "").trim() || pdfTitelAusDateiname(selectedDoc.name),
+        sprache: String(info?.Language || "").trim() || pdfSpracheAusUi(),
+      });
       out.save(`${selectedDoc.name.replace(/\.pdf$/i, "")}_annotiert.pdf`);
       toast.success("Annotiertes PDF exportiert");
     } catch (err) {

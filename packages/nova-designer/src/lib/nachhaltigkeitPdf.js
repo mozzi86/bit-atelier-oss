@@ -23,8 +23,10 @@ const FARBE = { umgesetzt: [22, 128, 61], teilweise: [180, 110, 0], offen: [120,
  * @returns {Promise<{bytes: Uint8Array, dateiname: string, seiten: number}>}
  */
 export async function nachhaltigkeitPdf(modell, projekt, { jetzt = new Date() } = {}) {
-  const { jsPDF } = await import("jspdf");
+  // W0-F6: the metadata helper is imported dynamically, so the entry's preload map does not name its chunk.
+  const [{ jsPDF }, { jsPdfMetadaten }] = await Promise.all([import("jspdf"), import("@core/lib/pdfMetadaten.js")]);
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  jsPdfMetadaten(pdf, { titel: `Nachhaltigkeitskonzept ${projekt?.name || ""} (Entwurf)`.replace(/\s+/g, " "), betreff: projekt?.name || "" }); // 105-19
   const breite = HOCH.w - HOCH.links - HOCH.rechts;
   const stand = jetzt.toLocaleDateString("de-DE");
   let y = HOCH.oben;

@@ -48,6 +48,8 @@ const EINTRAEGE = [
   { schluessel: 'currentProjectId', speicher: 'localStorage', zweck: 'Kennung des zuletzt geöffneten Projekts', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: false },
   { schluessel: 'bit.erste-schritte', speicher: 'localStorage', zweck: 'Erledigte Schritte der Einführung im Massing-Studio', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: true },
   { schluessel: 'bit.brillen', speicher: 'localStorage', zweck: 'Gewählte Brille je Planansicht im Gebäudemodell', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: true },
+  // 115-03: switch "Alle Reiter zeigen" of the Komplex-Designer (tabs per kind of project) — a view preference, safe to delete.
+  { schluessel: 'bit.designer.alle-reiter', speicher: 'localStorage', zweck: 'Schalter „Alle Reiter zeigen“ im Komplex-Designer', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: false },
   // 104-05: object snap switches (F3/F8/F9/F10) — a device setting like the lens choice above.
   { schluessel: 'bit.fang', speicher: 'localStorage', zweck: 'Fang-Einstellungen der Zeichenflächen (Objektfang, Ortho, Polar, Raster)', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: true },
   { schluessel: 'nc-bim-favs', speicher: 'localStorage', zweck: 'Favoriten im Gebäudemodell', kategorie: 'notwendig', fassung: 'alle Fassungen', loeschbar: true, inRichtlinie: true, geraetecache: true },

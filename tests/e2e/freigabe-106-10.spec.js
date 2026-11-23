@@ -9,6 +9,8 @@
 // (its own carry the marker MARKE in the description; the default set is only tried when the library is empty).
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -105,6 +107,7 @@ test.describe("106-10 Modellfreigabe: Protokoll, Freigabe mit Name und Zeit, Rü
       const e3 = await befehl(page, "transformieren", { guid: GC, verschiebung_m: [0.5, 0, 0], herkunft: "sprache", befehl_text: "schieb die wand einen halben meter nach rechts" });
       expect(e3.ok, JSON.stringify(e3)).toBe(true);
       expect((await befehl(page, "bestaetigen", { vorschlag_id: e3.result.id, durch: "tastatur" })).ok).toBe(true);
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).customWalls.find((w) => w.guid === GC)?.a.x, { timeout: 20000 }).toBe(14.5);
       await expect.poll(async () => (await gespeichert()).customWalls.find((w) => w.guid === GA)?.feuerwiderstand, { timeout: 20000 }).toBe("F90");
       await expect.poll(async () => (await gespeichert()).customWalls.find((w) => w.guid === GB)?.kg, { timeout: 20000 }).toBe("341");
@@ -167,6 +170,7 @@ test.describe("106-10 Modellfreigabe: Protokoll, Freigabe mit Name und Zeit, Rü
       expect((await gespeichert()).customWalls.find((w) => w.guid === GC).a.x, "nothing undone before the confirmation").toBe(14.5);
       await page.getByTestId("freigabe-bestaetigen").click();
       await expect(page.getByTestId("freigabe-meldung")).toContainText("1 zurückgenommen");
+      // (the review workplace's reversal stays a strict direct write - 115-05-PLAN §6.8; no draft bar there)
       await expect.poll(async () => (await gespeichert()).customWalls.find((w) => w.guid === GC).a.x, { timeout: 20000 }).toBe(14);
       expect((await gespeichert()).customWalls.find((w) => w.guid === GA).feuerwiderstand, "released steps stay").toBe("F90");
       await expect(page.getByTestId("freigabe-leer")).toBeVisible();

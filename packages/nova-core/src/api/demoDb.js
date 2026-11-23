@@ -25,7 +25,7 @@
 import { demoIdb, speicherDauerhaft, speicherStand } from './demoIdb.js';
 // 80-02 Task 1: id/sort/filter extracted to sammlungKern.js so the "personal"
 // storage class's own module reuses them instead of growing a second copy.
-import { neueId as id, sortiereDatensaetze as sortRecords, passtFilter } from './sammlungKern.js';
+import { neueId as id, sortiereDatensaetze as sortRecords, passtFilter, standKonflikt } from './sammlungKern.js';
 import { mitBehaltenem } from './projektDateiFormat.js';
 import { schnappschussAusDaten } from './schnappschussRing.js';
 
@@ -231,10 +231,25 @@ export const demoDb = {
     await schreibe(() => adapter.schreiben(entity, record));
     return record;
   },
-  async update(entity, recordId, data) {
+  /**
+   * Flat merge + new updated_date, like server/db.js update.
+   * 115-05b part 2: `opts.stand` (the updated_date the write builds on, as bitApi passes it) refuses a write on another stored
+   * state with the shape of the express route's 409 - `{status: 409, data: {konflikt: true, gespeichert}}` - so the three-way paths
+   * of the strict writers work here too. Compared on INEQUALITY (not "older"): a restore or an import puts an older state back,
+   * and that is another state as well. Two tabs of one browser share this store; the check runs on the cached collection right
+   * before the write (no await in between), so it is exact within one tab and as good as the cache across tabs.
+   * @param {string} entity @param {string} recordId @param {Record<string, any>} data
+   * @param {{stand?: string|null}} [opts]
+   * @returns {Promise<any|null>} the stored record, null when there is none with that id
+   * @throws {Error & {status: number, data: {konflikt: true, gespeichert: any}}} on another stored state
+   */
+  async update(entity, recordId, data, opts) {
     const col = await collection(entity);
     const idx = col.findIndex((r) => r.id === recordId);
     if (idx === -1) return null;
+    if (opts?.stand && String(col[idx].updated_date ?? '') !== String(opts.stand)) {
+      throw standKonflikt(structuredClone(col[idx]));
+    }
     col[idx] = { ...col[idx], ...data, id: recordId, updated_date: new Date().toISOString() };
     await schreibe(() => adapter.schreiben(entity, col[idx]));
     return col[idx];
@@ -258,6 +273,10 @@ export async function demoDbAuslesen() {
   return structuredClone(await laden());
 }
 
+/** German message of an import refused for want of a full snapshot (R-BUERO-3; EN in i18nTeile/export-sicht-w1.js). */
+export const SCHNAPPSCHUSS_PFLICHT_TEXT =
+  'Der vollständige Schnappschuss vor dem Import konnte nicht angelegt werden. Mit eingeschränkter Ansicht wird ohne ihn nichts ersetzt.';
+
 /**
  * Replaces the whole database (project import, demo reset).
  *
@@ -280,10 +299,13 @@ export async function demoDbAuslesen() {
  * @param {string|null} [grund] snapshot reason; null = caller already snapshotted
  * 82-02: `behalteDokumentBereiche` does the same for Document rows by `bereich` — the
  * local rows of those areas stay, rows of those areas in the file are not taken.
- * @param {{behalte?: string[], behalteSettingKeys?: string[], behalteDokumentBereiche?: string[]}} [optionen]
+ * R-BUERO-3: `schnappschussPflicht` = the snapshot must succeed, or nothing is replaced (throws
+ * SCHNAPPSCHUSS_PFLICHT_TEXT before any data is touched).
+ * @param {{behalte?: string[], behalteSettingKeys?: string[], behalteDokumentBereiche?: string[], schnappschussPflicht?: boolean}} [optionen]
  * @returns {Promise<{schnappschuss: object|null, schnappschussFehler: string|null}>}
+ * @throws {Error} with SCHNAPPSCHUSS_PFLICHT_TEXT when a required snapshot could not be taken
  */
-export async function demoDbErsetzen(db, grund = 'vor Import', { behalte = [], behalteSettingKeys = [], behalteDokumentBereiche = [] } = {}) {
+export async function demoDbErsetzen(db, grund = 'vor Import', { behalte = [], behalteSettingKeys = [], behalteDokumentBereiche = [], schnappschussPflicht = false } = {}) {
   let schnappschuss = null;
   let schnappschussFehler = null;
   if (grund != null) {
@@ -294,6 +316,8 @@ export async function demoDbErsetzen(db, grund = 'vor Import', { behalte = [], b
     } catch (err) {
       schnappschussFehler = err?.message || String(err);
     }
+    // R-BUERO-3: without the full snapshot nothing is replaced when the caller requires it (restricted role).
+    if (schnappschussPflicht && !schnappschuss) throw new Error(SCHNAPPSCHUSS_PFLICHT_TEXT);
   }
   // 93-10: the keep-what-the-file-lacks merge is shared with the server import (projektDateiFormat.js).
   const neu = (behalte.length || behalteSettingKeys.length || behalteDokumentBereiche.length)

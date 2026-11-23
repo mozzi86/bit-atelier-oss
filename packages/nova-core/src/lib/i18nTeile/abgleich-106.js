@@ -51,8 +51,11 @@ export const EN = {
   "Konflikt mit einem anderen Gerät": "Conflict with another device",
   "wird nicht gespeichert, bis Sie am Bildschirm entscheiden": "not saved until you decide at the screen",
   "{eigenschaft} ({pset}) an {guid}: {werte}": "{eigenschaft} ({pset}) on {guid}: {werte}",
-  "Grundriss": "Footprint",
-  "Herkunft des Grundrisses": "Footprint source",
+  // i18n-Grundriss (wave 1): "Grundriss" is the VIEW (tabs, plan lists) → "Floor plan"; the building outline of the
+  // record (footprintM) has its own key "Gebäudeumriss" → "Footprint" (modellAbgleich.js FELD_NAMEN).
+  "Grundriss": "Floor plan",
+  "Gebäudeumriss": "Footprint",
+  "Herkunft des Gebäudeumrisses": "Footprint source",
   "Achse": "Axis",
   "Geschosszahl": "Number of storeys",
   "Geschosstabelle": "Storey table",

@@ -179,6 +179,9 @@ const DICT = {
     "Ungespeicherte Eingaben verwerfen?": "Discard unsaved input?",
     "Weiter bearbeiten": "Keep editing",
     "Verwerfen": "Discard",
+    // 115-05c: the draft bar of the designer (EntwurfLeiste) - moved here from the lazy accounting parts, which use them too
+    "Speichern": "Save",
+    "Gespeichert": "Saved",
     // Loading states and the toast region (72-12 N-09: App.jsx, LoadingState, ui/toaster.jsx)
     "Wird geladen …": "Loading …",
     "Wird geladen": "Loading",

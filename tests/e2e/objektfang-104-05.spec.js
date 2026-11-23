@@ -5,6 +5,8 @@
 // spuren polar — das gespeicherte Polygon liegt exakt auf den Fangpunkten. Eigene Projekte, Aufräumen im finally.
 import { test, expect } from "./fixtures/base.js";
 import { nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 
 const NAME = "E2E Objektfang 10405";
 const NAME_LP = "E2E Objektfang 10405 Lageplan";
@@ -239,6 +241,7 @@ test("104-05 Lageplan (Karte): Polar-Glyphe im Overlay, zweiter Punkt liegt exak
     await page.waitForTimeout(150);
     await page.getByRole("button", { name: "Polygon schließen" }).click();
     // stored in canvas units: the 2nd point shares the 1st point's y (polar 0°), the 3rd the 2nd point's x (270°)
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(async () => ((await (await request.get(`/api/entities/BuildingComplex/${bc}`)).json()).designated_areas || []).length, { timeout: 20000 }).toBe(1);
     const pts = (await (await request.get(`/api/entities/BuildingComplex/${bc}`)).json()).designated_areas[0].points;
     expect(pts).toHaveLength(3);

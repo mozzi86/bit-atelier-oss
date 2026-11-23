@@ -23,7 +23,8 @@ export function useSketchLayer(projectId) {
     let cancelled = false;
     loadBimModel(projectId)
       .then((m) => {
-        if (!cancelled) setGeladen({ json: m?.[FELD] || null, nonce: projectId });
+        // `satz` (15.11.2026): the whole record as loaded, for the tracing underlays of the sketch page (read-only)
+        if (!cancelled) setGeladen({ json: m?.[FELD] || null, nonce: projectId, satz: m || null });
       })
       .catch(() => {
         // offline: leer starten — Speichern versucht es später erneut

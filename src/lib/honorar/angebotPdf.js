@@ -3,24 +3,29 @@
 // (@core/lib/brief/vorlagen.js), briefLayout() with page numbers and an amount
 // table in columns, erzeugeBriefPdf() with fixed date/id for a reproducible hash.
 //
+// Phase 115 (user finding 15.11.2026): the builder is taken in the template VERSION of
+// the offer (honorarBriefVersion) — a draft gets the current one (amount table before
+// closing text and greeting), an offer that was already sent keeps the version it was
+// sent with (stamp `vorlage_version`; without a stamp version 1, table after the greeting).
+//
 // Every text runs through ersetzeNichtWinAnsi(…, {umschrift:true}) FIRST: a
 // client name like "Şahin" becomes "Sahin" with a message instead of the "?"
 // briefLayout() would put in (pitfall 13). The sender comes from the office
-// letterhead (80-03 normalisiereBriefkopf, rendered as lines by 79-03's
-// briefkopfZeilen). An offer without an amount (missing table without a flat fee,
+// letterhead (@core/lib/briefkopf.js briefkopfZeilen, which normalises itself —
+// one module since wave 1, B-81-05). An offer without an amount (missing table without a flat fee,
 // or outside the table) gets no PDF.
 //
 // In:  the offer, its project, the letterhead, today, optional `fixiert` and the
 //      test injection `optionen`. Out: {bytes, ersetzt, zeichen, layout}.
 
 import { briefLayout } from "@core/lib/brief/briefLayout.js";
-import { erzeugeBriefPdf } from "@core/lib/brief/briefPdf.js";
-import { briefkopfZeilen } from "@core/lib/brief/briefkopf.js";
-import { HONORAR_BRIEFE } from "@core/lib/brief/vorlagen.js";
+import { erzeugeBriefPdf, fixiertFuerVersion } from "@core/lib/brief/briefPdf.js";
+import { honorarBriefBauer, honorarBriefVersion } from "@core/lib/brief/vorlagen.js";
+import { HONORAR_BRIEF_VERSION_MIT_SPRACHE } from "@core/lib/brief/vorlagenVersion.js";
 import { ersetzeNichtWinAnsi } from "@core/lib/brief/winAnsi.js";
 import { datumText } from "@core/lib/kalender/datum.js";
 import { leistungsbildInfo } from "@core/lib/hoai/leistungsbilder.js";
-import { normalisiereBriefkopf } from "@core/lib/briefkopf.js";
+import { briefkopfZeilen } from "@core/lib/briefkopfBrief.js";
 import { aufstellung, euroText } from "./aufstellung.js";
 
 /** Lines the letter template appends itself (net, VAT, gross). */
@@ -30,8 +35,9 @@ const SUMMEN_ARTEN = new Set(["netto", "ust", "brutto"]);
  * The letter input of an offer (before WinAnsi cleaning).
  * @param {Record<string, any>} angebot
  * @param {{projekt?: Record<string, any>|null, briefkopf?: any, heuteIso: string, optionen?: {weitere?: ReadonlyArray<any>}}} kontext
- * @returns {{absender: string[], empfaenger: string[], datum: string, betreff: string, absaetze: string[], tabelle: any}}
- * @throws {Error} "Tafel fehlt …" / "frei vereinbar …" when the offer has no amount
+ * @returns {{absender: string[], empfaenger: string[], datum: string, betreff: string, absaetze: string[], tabelle: any, schluss?: string[]}}
+ *   schluss: the paragraphs after the amount table (template version 2 and later)
+ * @throws {Error} "Tafel fehlt …" / "frei vereinbar …" when the offer has no amount; a template version this build does not know
  */
 export function angebotBriefEingabe(angebot, { projekt = null, briefkopf = null, heuteIso, optionen = {} }) {
   const a = aufstellung(angebot, optionen);
@@ -43,7 +49,7 @@ export function angebotBriefEingabe(angebot, { projekt = null, briefkopf = null,
     .map((z) => (z.art === "lph"
       ? { bezeichnung: `LPH ${z.werte.nr} ${z.werte.bezeichnung}`, prozent: `${String(z.werte.prozent).replace(".", ",")} %`, betrag: euroText(/** @type {number} */ (z.betrag_eur)) }
       : { bezeichnung: z.text, prozent: "", betrag: euroText(/** @type {number} */ (z.betrag_eur)) }));
-  const brief = HONORAR_BRIEFE.honorarangebot.bauen({
+  const brief = honorarBriefBauer("honorarangebot", honorarBriefVersion("honorarangebot", angebot))({
     nummer: angebot.nummer, fassung: Number(angebot.fassung) || 1,
     datum: datumText(angebot.datum || heuteIso), gueltigBis: datumText(angebot.gueltig_bis || heuteIso),
     projektName: projekt?.name || "",
@@ -58,7 +64,7 @@ export function angebotBriefEingabe(angebot, { projekt = null, briefkopf = null,
   });
   const empfaenger = [angebot.bauherr_name, ...String(angebot.bauherr_anschrift || "").split(/\n|,\s*/)].map((z) => String(z || "").trim()).filter(Boolean);
   return {
-    absender: briefkopfZeilen(normalisiereBriefkopf(briefkopf)),
+    absender: briefkopfZeilen(briefkopf),
     empfaenger,
     datum: datumText(angebot.datum || heuteIso),
     ...brief,
@@ -74,16 +80,20 @@ export function angebotBriefEingabe(angebot, { projekt = null, briefkopf = null,
  * @throws {Error} plain text when the offer has no amount
  */
 export async function angebotPdf(angebot, { fixiert = null, ...kontext }) {
-  return briefPdfAusEingabe(angebotBriefEingabe(angebot, kontext), fixiert);
+  // 105-19 follow-up: /Lang only from template version 3 on — an offer sent with version 1 or 2 keeps its bytes.
+  const mitSprache = honorarBriefVersion("honorarangebot", angebot) >= HONORAR_BRIEF_VERSION_MIT_SPRACHE;
+  return briefPdfAusEingabe(angebotBriefEingabe(angebot, kontext), fixiertFuerVersion(fixiert, mitSprache));
 }
 
 /**
- * A letter input (absender, empfaenger, datum, betreff, absaetze, tabelle) as PDF:
+ * A letter input (absender, empfaenger, datum, betreff, absaetze, tabelle, schluss) as PDF:
  * every text transliterated first (umschrift), then 79-03's briefLayout with page
  * numbers and erzeugeBriefPdf. Shared by the offer, the order confirmation and
- * the fee amendment (81-04).
- * @param {{absender: string[], empfaenger: string[], datum: string, betreff: string, absaetze: string[], tabelle: any}} eingabe
- * @param {{erstelltAm: string, dateiId: string}|null} [fixiert]
+ * the fee amendment (81-04). `schluss` (115) is handed on only when the input has it,
+ * so an input of template version 1 gives the bytes it gave before.
+ * @param {{absender: string[], empfaenger: string[], datum: string, betreff: string, absaetze: string[], tabelle: any, schluss?: string[]}} eingabe
+ * @param {{erstelltAm: string, dateiId: string, sprache?: string}|null} [fixiert] see erzeugeBriefPdf (`sprache` only for
+ *   a letter whose template version carries /Lang — fixiertFuerVersion)
  * @returns {Promise<{bytes: Uint8Array, ersetzt: number, zeichen: string[], layout: ReturnType<typeof briefLayout>}>}
  */
 export async function briefPdfAusEingabe(eingabe, fixiert = null) {
@@ -100,6 +110,7 @@ export async function briefPdfAusEingabe(eingabe, fixiert = null) {
     absender: eingabe.absender.map(um), empfaenger: eingabe.empfaenger.map(um), datum: um(eingabe.datum), betreff: um(eingabe.betreff),
     absaetze: eingabe.absaetze.map(um),
     tabelle: { ...eingabe.tabelle, kopf: eingabe.tabelle.kopf.map(um), zeilen: eingabe.tabelle.zeilen.map((/** @type {string[]} */ z) => z.map(um)) },
+    ...(Array.isArray(eingabe.schluss) && eingabe.schluss.length ? { schluss: eingabe.schluss.map(um) } : {}),
     seitenzahlen: true,
   });
   const bytes = await erzeugeBriefPdf(layout, { fixiert });

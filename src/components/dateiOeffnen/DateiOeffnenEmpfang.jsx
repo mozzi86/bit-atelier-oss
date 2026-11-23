@@ -128,7 +128,7 @@ export default function DateiOeffnenEmpfang({ suche }) {
       <Dialog open={!!fehler} onOpenChange={(o) => { if (!o) setFehler(null); }}>
         <DialogContent className="max-w-md p-5" data-testid="datei-oeffnen-fehler">
           <DialogTitle className="text-base mb-1">{t("Projektdatei konnte nicht geöffnet werden")}</DialogTitle>
-          <DialogDescription className="mb-3" role="alert">{fehler}</DialogDescription>
+          <DialogDescription className="mb-3" role="alert">{t(fehler)}</DialogDescription>
           <div className="flex justify-end">
             <button type="button" onClick={() => setFehler(null)} className="px-3 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
               {t("Schließen")}

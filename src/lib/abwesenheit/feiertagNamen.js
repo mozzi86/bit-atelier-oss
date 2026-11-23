@@ -20,6 +20,12 @@ export const FEIERTAG_NAMEN = Object.freeze({
   allerheiligen: "Allerheiligen",
   weihnachtstag_1: "1. Weihnachtstag",
   weihnachtstag_2: "2. Weihnachtstag",
+  // Wave 1 (B-81-04): the holidays of the other federal states.
+  frauentag: "Internationaler Frauentag",
+  tag_der_befreiung: "Tag der Befreiung",
+  weltkindertag: "Weltkindertag",
+  reformationstag: "Reformationstag",
+  buss_und_bettag: "Buß- und Bettag",
 });
 
 /**

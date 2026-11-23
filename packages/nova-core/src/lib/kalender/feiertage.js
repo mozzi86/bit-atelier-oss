@@ -1,15 +1,16 @@
-// Calendar core, part 2: public holidays. v1 knows only the nation-wide
-// holidays of Germany; phase 81 adds state holidays (e.g. Bavaria) through the
-// `land` parameter that is already part of the signature.
+// Calendar core, part 2: public holidays. feiertageBund(jahr) is the
+// nation-wide list of Germany (phase 79); feiertage(jahr, einst) adds the
+// holidays of the office's federal state (phase 81: Bavaria; wave 1 / B-81-04:
+// all 16 states).
 //
-// In:  a year. Out: Easter Sunday and the list of nation-wide holidays as
-//      'YYYY-MM-DD' strings with a key each. UTC only (./datum.js).
+// In:  a year (and the office calendar setting). Out: Easter Sunday and lists of
+//      holidays as 'YYYY-MM-DD' strings with a key each. UTC only (./datum.js).
 //
-// Phase 81 (81-01) adds the state holidays of Bavaria as a separate function,
-// feiertage(jahr, einst) — feiertageBund stays exactly as phase 79 built it
-// (its callers, e.g. the tax deadlines, keep their nation-wide behaviour).
+// feiertageBund stays exactly as phase 79 built it (its callers, e.g. the tax
+// deadlines without an office calendar, keep their nation-wide behaviour).
 
-import { plusTage, tag } from "./datum.js";
+import { plusTage, tag, wochentag } from "./datum.js";
+import { BUNDESLAENDER, KALENDER_STANDARD } from "./bundeslaender.js";
 
 /**
  * Easter Sunday (Gregorian), anonymous algorithm after Meeus/Jones/Butcher
@@ -39,11 +40,11 @@ export function ostersonntag(jahr) {
  * Nation-wide public holidays of a year, sorted by date. Keys match
  * GESETZ.FEIERTAGE_BUND in src/lib/accounting/einstellungen.js.
  * @param {number} jahr year
- * @param {string|null} [land] federal state code — prepared for phase 81, ignored in v1
+ * @param {string|null} [land] ignored — the state holidays live in feiertage(jahr, einst) below
  * @returns {Array<{datum: string, name: string}>}
  */
 export function feiertageBund(jahr, land = null) {
-  void land; // nation-wide only; the state holidays live in feiertage(jahr, einst) below (phase 81).
+  void land; // nation-wide only; the state holidays live in feiertage(jahr, einst) below.
   const ostern = ostersonntag(jahr);
   const liste = [
     { datum: tag(jahr, 1, 1), name: "neujahr" },
@@ -59,29 +60,71 @@ export function feiertageBund(jahr, land = null) {
   return liste.sort((x, y) => (x.datum < y.datum ? -1 : x.datum > y.datum ? 1 : 0));
 }
 
-// --- Phase 81 (81-01): state holidays of Bavaria ---------------------------
+// --- Phase 81 (81-01) / wave 1 (B-81-04): state holidays ------------------
+
+// KALENDER_STANDARD and BUNDESLAENDER live in ./bundeslaender.js (no tables, so
+// the entry chunk can import them without this module) and are re-exported here.
+export { BUNDESLAENDER, KALENDER_STANDARD };
+
+// Which state holiday applies where — source: the holiday laws of the states
+// (Feiertagsgesetze der Länder): BW FTG, BayFTG, BE FTG (Gesetz über die Sonn-
+// und Feiertage), BbgFTG, HB FeiertagsG, HH FeiertagsG, HFeiertagsG, MV FTG,
+// NFeiertagsG, NW FeiertagsG, RP LFtG, SL FTG, SächsSFG, ST FeiertG LSA,
+// SH SFTG, ThürFtG. [ASSUMED] The table was written from the known state of
+// these laws (as of 2026) and NOT re-read against the law texts while building
+// it; way to a confirmed value: compare with the current law texts or the
+// federal overview "Gesetzliche Feiertage in Deutschland" (BMI) once a year.
+// Checked on 19.11.2026 against an independently written computation of the
+// rules listed below (all 16 states, 2017-2020 and 2023-2028, Easter after
+// Gauss/Lichtenberg): no difference. That check confirms the code matches the
+// rule list, not that the rule list matches the law texts.
+// Epiphany (6.1.): BW, BY, ST.
+// International Women's Day (8.3.): BE since 2019, MV since 2023.
+// Corpus Christi (Easter + 60): BW, BY, HE, NW, RP, SL. [ASSUMED] Not in SN/TH:
+//   there it is a holiday only in some Catholic municipalities named by state
+//   regulation — the calendar setting has no municipality, so these are left out.
+// Assumption Day (15.8.): SL state-wide; BY by the switch mariae_himmelfahrt.
+// Augsburg Peace Festival (8.8.): BY by the switch augsburger_friedensfest.
+// World Children's Day (20.9.): TH since 2019.
+// Reformation Day (31.10.): BB, MV, SN, ST, TH (since 1991; earlier years are
+//   not modelled); HB, HH, NI, SH since 2018; 2017 (500th anniversary) one-time
+//   in ALL states.
+// All Saints (1.11.): BW, BY, NW, RP, SL.
+// Repentance Day (Wednesday before 23.11.): SN.
+// One-time: 8.5.2020 and 8.5.2025 in BE (75th/80th anniversary of the end of
+//   the war, set by amendments of the BE FTG).
+// Easter Sunday and Whit Sunday (legal holidays in BB and HE) are NOT listed:
+//   they are Sundays, never change a working-day count, and listing them would
+//   change the holiday COUNT that feiertagsAbgleich compares with the cost-rate
+//   basis.
 
 /**
- * Calendar setting of the office: federal state and the two Bavarian holidays
- * that depend on the municipality. [ASSUMED] Bavaria with Assumption Day
- * (15.8.) — the office is in Nuremberg; whether 15.8. is a holiday there
- * depends on the district (Art. 1 Abs. 1 Nr. 2 BayFTG: municipalities with a
- * predominantly Catholic population) and is UNVERIFIED for the office address.
- * Way to a confirmed value: the municipality list of the Bavarian State Office
- * for Statistics. The Augsburg Peace Festival (8.8.) applies only in the city
- * of Augsburg (Art. 1 Abs. 2 BayFTG), so it is off.
- * @type {Readonly<{bundesland: string, mariae_himmelfahrt: boolean, augsburger_friedensfest: boolean}>}
+ * State holidays by one-letter key: [id, month, day] for a fixed date; month 0 = day offset from
+ * Easter Sunday; B = Repentance Day, the Wednesday before 23 November.
+ * @type {Readonly<Record<string, [string, number, number]>>}
  */
-export const KALENDER_STANDARD = Object.freeze({ bundesland: "BY", mariae_himmelfahrt: true, augsburger_friedensfest: false });
+const TAGE = Object.freeze({
+  D: ["heilige_drei_koenige", 1, 6], W: ["frauentag", 3, 8], F: ["fronleichnam", 0, 60], M: ["mariae_himmelfahrt", 8, 15],
+  K: ["weltkindertag", 9, 20], R: ["reformationstag", 10, 31], A: ["allerheiligen", 11, 1], B: ["buss_und_bettag", 11, 0],
+});
+
+/** State → keys of TAGE (table above; BY's switchable days come from the setting). One row per code of BUNDESLAENDER. @type {Readonly<Record<string, string>>} */
+const LAND = Object.freeze({
+  SH: "R", HH: "R", NI: "R", HB: "R", NW: "FA", HE: "F", RP: "FA", BW: "DFA",
+  BY: "DFA", SL: "FMA", BE: "W", BB: "R", MV: "WR", SN: "RB", ST: "DR", TH: "KR",
+});
+
+/** First year of a holiday introduced later, key state + TAGE key. @type {Readonly<Record<string, number>>} */
+const AB_JAHR = Object.freeze({ BEW: 2019, MVW: 2023, THK: 2019, HBR: 2018, HHR: 2018, NIR: 2018, SHR: 2018 });
 
 /**
  * Public holidays of a year for the office's federal state: the nation-wide
- * list of feiertageBund plus — for Bavaria (Art. 1 BayFTG) — Epiphany (6.1.),
- * Corpus Christi (Easter + 60), All Saints (1.11.) and the two switchable days
- * 15.8./8.8. Same shape as feiertageBund ([{datum, name}], sorted), built on
- * the one Easter algorithm above. Other states: nation-wide only, until a
- * phase needs them.
- * feiertage(2026, KALENDER_STANDARD) → 13 entries, 9 of them on weekdays.
+ * list of feiertageBund plus the state holidays of `einst.bundesland` (table
+ * above), for Bavaria with the two switchable days 15.8./8.8. Same shape as
+ * feiertageBund ([{datum, name}], sorted), built on the one Easter algorithm
+ * above. An unknown state code gets the nation-wide list only.
+ * feiertage(2026, KALENDER_STANDARD) → 13 entries, 9 of them on weekdays;
+ * feiertage(2026, {bundesland: "NW"}) → 11 entries.
  * @param {number} jahr year
  * @param {{bundesland?: string, mariae_himmelfahrt?: boolean, augsburger_friedensfest?: boolean}} [einst] KALENDER_STANDARD by default
  * @returns {Array<{datum: string, name: string}>}
@@ -89,13 +132,24 @@ export const KALENDER_STANDARD = Object.freeze({ bundesland: "BY", mariae_himmel
 export function feiertage(jahr, einst = KALENDER_STANDARD) {
   const liste = feiertageBund(jahr);
   const e = { ...KALENDER_STANDARD, ...(einst || {}) };
-  if (e.bundesland === "BY") {
-    liste.push({ datum: tag(jahr, 1, 6), name: "heilige_drei_koenige" });
-    liste.push({ datum: /** @type {string} */ (plusTage(ostersonntag(jahr), 60)), name: "fronleichnam" });
-    liste.push({ datum: tag(jahr, 11, 1), name: "allerheiligen" });
+  const land = String(e.bundesland || "");
+  const eigene = /** @type {Record<string, string>} */ (LAND)[land];
+  const ab = /** @type {Record<string, number>} */ (AB_JAHR);
+  for (const k of eigene || "") {
+    if (jahr < (ab[land + k] ?? 0)) continue;
+    const [name, monat, t] = /** @type {Record<string, [string, number, number]>} */ (TAGE)[k];
+    const nov22 = tag(jahr, 11, 22);
+    const datum = k === "B" ? plusTage(nov22, -((/** @type {number} */ (wochentag(nov22)) + 4) % 7)) // Wednesday before 23.11.
+      : monat ? tag(jahr, monat, t) : plusTage(ostersonntag(jahr), t);
+    liste.push({ datum: /** @type {string} */ (datum), name });
+  }
+  if (land === "BY") {
     if (e.mariae_himmelfahrt) liste.push({ datum: tag(jahr, 8, 15), name: "mariae_himmelfahrt" });
     if (e.augsburger_friedensfest) liste.push({ datum: tag(jahr, 8, 8), name: "augsburger_friedensfest" });
   }
+  // One-time holidays: Reformation Day 2017 in every state, 8 May 2020/2025 in BE.
+  if (eigene && jahr === 2017 && !liste.some((f) => f.name === "reformationstag")) liste.push({ datum: tag(2017, 10, 31), name: "reformationstag" });
+  if (land === "BE" && (jahr === 2020 || jahr === 2025)) liste.push({ datum: tag(jahr, 5, 8), name: "tag_der_befreiung" });
   return liste.sort((x, y) => (x.datum < y.datum ? -1 : x.datum > y.datum ? 1 : 0));
 }
 

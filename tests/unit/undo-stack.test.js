@@ -20,7 +20,9 @@ describe("undoStack", () => {
     assert.equal(s.future.length, 1);
     s = merke(s, { x: 9 }); assert.equal(s.future.length, 0);
     s = merke(s, { x: 9 }); assert.equal(s.past.length, 2);
-    for (let i = 0; i < 80; i += 1) s = merke(s, i);
+    for (let i = 0; i < 150; i += 1) s = merke(s, i);
     assert.equal(s.past.length, UNDO_MAX);
+    assert.equal(UNDO_MAX, 99, "D-115-12: 99 steps");
+    assert.equal(s.past[0], 51, "the oldest steps fall out, the newest 99 stay");
   });
 });

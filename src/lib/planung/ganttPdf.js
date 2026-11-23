@@ -41,11 +41,13 @@ export function ganttLayout(tasks, format = "A1") {
  * @returns {Promise<{bytes: Uint8Array, dateiname: string, bericht: {zeilen: number, zeileH_mm: number, von: string, bis: string}}>}
  */
 export async function ganttPdf(tasks, projekt, { format = "A1", titel = "Terminplan", jetzt = new Date() } = {}) {
-  const { jsPDF } = await import("jspdf");
+  // W0-F6: the metadata helper is imported dynamically, so the entry's preload map does not name its chunk.
+  const [{ jsPDF }, { jsPdfMetadaten }] = await Promise.all([import("jspdf"), import("@core/lib/pdfMetadaten.js")]);
   const liste = [...tasks].filter((t) => Number.isFinite(tag(t.start_date)) && Number.isFinite(tag(t.end_date)))
     .sort((a, b) => String(a.planner_gliederung || "").localeCompare(String(b.planner_gliederung || ""), "de", { numeric: true }) || tag(a.start_date) - tag(b.start_date));
   const L = ganttLayout(liste, format);
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: [L.w, L.h] });
+  jsPdfMetadaten(pdf, { titel: `${titel}${projekt?.name ? ` – ${projekt.name}` : ""}`, betreff: projekt?.name || "" }); // 105-19: same text as the sheet header
   const s = L.w / 841; // font scale relative to A1
   // Header
   pdf.setFont("helvetica", "bold"); pdf.setFontSize(22 * s); pdf.text(`${titel}${projekt?.name ? ` – ${projekt.name}` : ""}`, L.rand, L.rand + 9 * s);

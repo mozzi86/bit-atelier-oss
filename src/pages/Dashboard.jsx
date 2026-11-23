@@ -16,7 +16,7 @@ import {
 import {
   Building2, Plus, ArrowRight, Hammer, CheckCircle2, Ruler, CalendarClock,
   Boxes, FileSpreadsheet, MapPin, FileText, PencilRuler, ShieldCheck, Ticket,
-  TriangleAlert,
+  TriangleAlert, Grid2x2,
 } from "lucide-react";
 import {
   PROJECT_STATUS, statusInfo, hoaiProgress, hoaiPhaseShort, projectHealth,
@@ -61,8 +61,11 @@ const Kpi = ({ icon: Icon, label, value, sub, tint }) => (
 
 // Per-project shortcuts to the five core modules (72-09, FINDINGS-BACKLOG-03):
 // no Labor module and no redirecting placeholder route (EnergyAnalysis) any more.
+// 115-03 (W-1115-02): "Grundriss" opens the building model of the project directly in the floor-plan view; `suche` is the
+// query string of the link (guarded by tests/unit/designerNavigation-11503.test.js against the navigation registry).
 const MODULES = [
   { to: "ComplexDesigner", icon: PencilRuler, label: "Entwurf" },
+  { to: "ComplexDesigner", suche: "tab=bim&ansicht=grundriss", icon: Grid2x2, label: "Grundriss" },
   { to: "ModelCheck", icon: ShieldCheck, label: "Prüfen" },
   { to: "AVA", icon: FileSpreadsheet, label: "AVA" },
   { to: "BimViewer", icon: Ticket, label: "Tickets" },
@@ -127,9 +130,9 @@ function ProjectCard({ project, delay, onPick }) {
             {/* 72-09 (A11Y-I18N-15): the link IS the button (asChild) - one tab stop,
                 valid HTML, announced once as a link. */}
             {MODULES.map((m) => (
-              <Button key={m.to} asChild variant="ghost" size="sm" className="flex-1 flex-col h-auto px-1 py-1.5 gap-0.5 text-slate-500 hover:text-slate-900">
+              <Button key={m.label} asChild variant="ghost" size="sm" className="flex-1 flex-col h-auto px-1 py-1.5 gap-0.5 text-slate-500 hover:text-slate-900">
                 <Link
-                  to={createPageUrl(m.to)}
+                  to={createPageUrl(m.to) + (m.suche ? `?${m.suche}` : "")}
                   onClick={() => onPick?.(project.id)}
                   aria-label={fuellen(t("{modul} für {name}"), { modul: t(m.label), name: project.name })}
                 >

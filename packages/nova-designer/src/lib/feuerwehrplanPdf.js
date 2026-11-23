@@ -92,12 +92,14 @@ const hexZuRgb = (hex) => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2}
  * @returns {Promise<{ seiten: number, dateiname: string, vermerk: boolean }>}  vermerk: the sheet carries the note
  */
 export async function feuerwehrplanPdf({ png, projekt, geschoss, datum, legende = [], hinweise = [], dateiname, modellstand = null, t = (s) => s }) {
-  const { jsPDF } = await import("jspdf");
+  // W0-F6: the metadata helper is imported dynamically, so the entry's preload map does not name its chunk.
+  const [{ jsPDF }, { jsPdfMetadaten }] = await Promise.all([import("jspdf"), import("@core/lib/pdfMetadaten.js")]);
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   // the raster plan carries no marks: "0 von n Bauteilen auf diesem Blatt markiert"
   const vz = vermerkZeilen(modellstand, t, { markiert: 0 });
   const L = feuerwehrplanLayout({ imgW: png.w, imgH: png.h, legendeZeilen: legende.length + hinweise.length, vermerkZeilen: vz ? vz.zeilen.length : 0 });
-  pdf.setProperties({ keywords: modellstandMetadaten(modellstand) });
+  // 105-19: /Lang, /Title and the model-state keywords in one place (the sheet text is German like the vector plans).
+  jsPdfMetadaten(pdf, { titel: `Feuerwehrplan (Konzept) ${projekt || ""} ${geschoss || ""}`.replace(/\s+/g, " ").trim(), betreff: projekt || "", stichwoerter: modellstandMetadaten(modellstand) });
   // element names come from people and agents: characters outside WinAnsi become "?" (jsPDF's standard fonts)
   const druck = (/** @type {string} */ s) => ersetzeNichtWinAnsi(String(s)).text;
 

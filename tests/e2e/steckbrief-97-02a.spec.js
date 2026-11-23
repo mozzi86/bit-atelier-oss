@@ -5,6 +5,8 @@
 // Konsole sauber.
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 
 const NAME = "E2E Steckbrief 9702a";
 
@@ -44,6 +46,7 @@ test("97-02a Steckbrief am gezeichneten Bauteil", async ({ page, request }) => {
     await page.getByTestId("sb-typ").selectOption("wand-innen");
     await expect(page.getByTestId("sb-ifc")).toHaveText("IfcWall · PARTITIONING");
     await expect(page.getByTestId("sb-kg")).toHaveValue("342");
+    await speichernUndWarten(page); // 115-05c (adapted): the decisions are written with "Speichern" (before: the studio autosave)
     await expect.poll(async () => {
       const m = (await (await request.get(`/api/entities/BimModel/${modellId}`)).json());
       const w = (m.customWalls || [])[0] || {};
@@ -124,6 +127,13 @@ test("97-02 Hüllwand: Status und Gewerk in der Attribut-Tabelle", async ({ page
     await oeffnen();
     await page.getByTestId("el-zustand").selectOption("bestand");
     await page.getByTestId("sb-gewerk").selectOption("023");
+    // 115-05c (adapted): the hull's decisions are a draft until "Speichern" (before: written at once) - nothing stored before it
+    await page.waitForTimeout(2000);
+    {
+      const vorher = await (await request.get(`/api/entities/BimModel/${modellId}`)).json();
+      expect(vorher.bauteil_attribute_layer?.attribute?.["hull-wall"]?.gewerk_lb ?? null, "nothing written before Speichern").toBeNull();
+    }
+    await speichernUndWarten(page);
     await expect.poll(async () => {
       const m = await (await request.get(`/api/entities/BimModel/${modellId}`)).json();
       const a = m.bauteil_attribute_layer?.attribute?.["hull-wall"] || {};
@@ -143,6 +153,7 @@ test("97-02 Hüllwand: Status und Gewerk in der Attribut-Tabelle", async ({ page
     await page.locator('[data-wand="1"]').first().dispatchEvent("click");
     await expect(page.getByTestId("sb-schicht-2")).toHaveValue("");
     await page.getByTestId("sb-schicht-2").selectOption("neubau");
+    await speichernUndWarten(page); // 115-05c (adapted): the layer status of the wall is written with "Speichern" (before: autosave)
     await expect.poll(async () => {
       const m = await (await request.get(`/api/entities/BimModel/${modellId}`)).json();
       return JSON.stringify(m.customWalls?.[0]?.schicht_status || null);

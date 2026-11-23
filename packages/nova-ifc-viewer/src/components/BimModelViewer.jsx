@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { useBuildingProgram } from "@core/lib/useBuildingProgram";
 import { dachDreiecke } from "@core/lib/bauteil/dachGeometrie.js"; // 108-11: triangles of the roof faces handed in (no own roof computation)
+import { radGestenLeser } from "@core/lib/radGeste.js"; // 115-01: mouse wheel / trackpad pinch / two-finger swipe
 
 // Lightweight IFC-style 3D model viewer built directly on three.js (no addons,
 // so no import-path fragility). Renders a multi-storey building and places
@@ -356,9 +357,26 @@ export default function BimModelViewer({
         }
       }
     };
+    // 115-01: mouse wheel as before; a trackpad pinch changes the radius by its zoom factor; a two-finger swipe pans the
+    // orbit target and Shift + swipe orbits ([ASSUMED], see radGeste.js) — both like a drag by (−dx, −dy) px above.
+    const radLesen = radGestenLeser();
     const onWheel = (e) => {
       e.preventDefault();
-      orbit.radius = Math.min(200, Math.max(5, orbit.radius + e.deltaY * 0.05));
+      const g = radLesen(e, { umschaltDreht: true });
+      if (g.art === "nichts") return;
+      if (g.art === "schieben") {
+        const factor = orbit.radius * 0.0018;
+        panRight.setFromMatrixColumn(camera.matrix, 0);
+        panUp.setFromMatrixColumn(camera.matrix, 1);
+        orbit.target.addScaledVector(panRight, g.dx * factor);
+        orbit.target.addScaledVector(panUp, -g.dy * factor);
+      } else if (g.art === "drehen") {
+        orbit.theta += g.dx * 0.01;
+        orbit.phi = Math.min(Math.PI - 0.2, Math.max(0.2, orbit.phi + g.dy * 0.01));
+      } else {
+        const radius = g.quelle === "pinch" ? orbit.radius / g.faktor : orbit.radius + e.deltaY * 0.05;
+        orbit.radius = Math.min(200, Math.max(5, radius));
+      }
       applyCamera();
     };
 

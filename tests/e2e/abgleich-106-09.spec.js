@@ -11,6 +11,8 @@
 //      change, and when the leader tab closes another tab takes over and the next change still arrives.
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12, D-115-51): a confirmed proposal lands in the draft - "Speichern" stores it (before: the studio autosave)
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 
 const guid = (s) => s.padEnd(22, "x").slice(0, 22);
 const GA = guid("AbgleichWandA10609");
@@ -93,6 +95,7 @@ test.describe("106-09 Abgleich zwischen Geräten: Änderungen in Echtzeit, Konfl
       const vorschlagA = await befehl(page, "eigenschaft-setzen", { name: "feuerwiderstand", wert: "F90", herkunft: "sprache", befehl_text: "feuerwiderstand f neunzig" });
       expect(vorschlagA.ok, JSON.stringify(vorschlagA)).toBe(true);
       await page.getByTestId("aenderung-uebernehmen").click();
+      await speichernUndWarten(page); // 115-05c (adapted)
       await expect.poll(async () => (await gespeichert()).customWalls.find((w) => w._idx === 1).feuerwiderstand, { timeout: 20000 }).toBe("F90");
 
       // B: the wall follows without reload, the note says from where and how it was confirmed there
@@ -155,6 +158,8 @@ test.describe("106-09 Abgleich zwischen Geräten: Änderungen in Echtzeit, Konfl
       }
       const [okA, okB] = await Promise.all([befehl(page, "bestaetigen", { durch: "hand" }), befehl(b.page, "bestaetigen", { durch: "hand" })]);
       expect(okA.ok && okB.ok, `${JSON.stringify(okA)} ${JSON.stringify(okB)}`).toBe(true);
+      // 115-05c (adapted): both press "Speichern" at the same time (before: both autosaves)
+      await Promise.all([page.getByTestId("entwurf-speichern").click(), b.page.getByTestId("entwurf-speichern").click()]);
 
       // exactly one device saved first; the other gets the conflict card - which one depends on timing
       /** @type {"A"|"B"|null} */ let mitKonflikt = null;
@@ -184,6 +189,7 @@ test.describe("106-09 Abgleich zwischen Geräten: Änderungen in Echtzeit, Konfl
       // the person keeps her version: written, and the other device follows live (as a change from here)
       await karte.getByTestId("abgleich-mein").click();
       await expect(karte).toHaveCount(0);
+      await speichernUndWarten(hier); // 115-05c (adapted): "keep mine" goes into the draft, "Speichern" writes it
       await expect.poll(async () => (await gespeichert()).customWalls.find((w) => w._idx === 2).feuerwiderstand, { timeout: 20000 }).toBe(meinWert);
       await expect.poll(async () => (await wandVon(dort, 2))?.feuerwiderstand, { timeout: 20000 }).toBe(meinWert);
       // the other wall was not touched by any of this
@@ -225,6 +231,7 @@ test.describe("106-09 Abgleich zwischen Geräten: Änderungen in Echtzeit, Konfl
       expect((await befehl(page, "auswahl-guid", { guid: GA })).ok).toBe(true);
       expect((await befehl(page, "eigenschaft-setzen", { name: "feuerwiderstand", wert: "F90" })).ok).toBe(true);
       await page.getByTestId("aenderung-uebernehmen").click();
+      await speichernUndWarten(page); // 115-05c (adapted)
       for (const p of tabs) await expect.poll(async () => (await wandVon(p, 1))?.feuerwiderstand, { timeout: 20000 }).toBe("F90");
       // the leader tab closes: another tab takes over, and the next change still arrives everywhere
       const leiter = tabs[(await rollen()).indexOf("leiter")];
@@ -234,6 +241,7 @@ test.describe("106-09 Abgleich zwischen Geräten: Änderungen in Echtzeit, Konfl
       expect((await befehl(page, "auswahl-guid", { guid: GB })).ok).toBe(true);
       expect((await befehl(page, "eigenschaft-setzen", { name: "feuerwiderstand", wert: "F30" })).ok).toBe(true);
       await page.getByTestId("aenderung-uebernehmen").click();
+      await speichernUndWarten(page); // 115-05c (adapted)
       for (const p of rest) await expect.poll(async () => (await wandVon(p, 2))?.feuerwiderstand, { timeout: 20000 }).toBe("F30");
       expect(warnA, `Konsole A: ${warnA.join(" | ")}`).toEqual([]);
       warnTabs.forEach((w, i) => expect(w, `Konsole Tab ${i + 1}: ${w.join(" | ")}`).toEqual([]));

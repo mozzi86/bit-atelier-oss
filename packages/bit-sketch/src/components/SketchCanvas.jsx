@@ -14,6 +14,7 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
 import SketchGeometry, { SKETCH_FARBEN, strichPfad } from "./SketchGeometry.jsx";
 import { glaetten, kompakt } from "../lib/freihand.js";
+import { radGestenLeser } from "@core/lib/radGeste.js";
 
 const VB_W = 1000;
 const VB_H = 640;
@@ -46,10 +47,21 @@ export default function SketchCanvas({
   onAddStroke = null,
   onErase = null,
   stift = { breite: 0.05, farbe: "#1e293b" },
+  // 15.11.2026 tracing underlay: {id, linien: [{pts: [{x, y}] in m, geschlossen, dash}], bbox in m} or null — drawn behind the ink, not hittable
+  pause = null,
 }) {
   const svgRef = useRef(null);
   const [view, setView] = useState({ cx: 5, cy: 3, scale: 55 }); // Weltmitte + px/m
   const [draft, setDraft] = useState(null); // {start: {pointId}|{x,y}, x, y}
+  // a newly chosen underlay is brought into view once (10 % margin); afterwards zoom and pan belong to the person
+  const pauseIdGezeigt = pause?.id || null;
+  useEffect(() => {
+    const b = pause?.bbox;
+    if (!b) return;
+    const w = Math.max(1, b.maxX - b.minX), h = Math.max(1, b.maxY - b.minY);
+    setView({ cx: (b.minX + b.maxX) / 2, cy: (b.minY + b.maxY) / 2, scale: Math.max(8, Math.min(400, Math.min(VB_W / (w * 1.2), VB_H / (h * 1.2)))) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pauseIdGezeigt]);
   const [hoverPt, setHoverPt] = useState(null);
   const dragRef = useRef(null); // {pointId, moved}
   const dragPosRef = useRef(null); // letzte Client-Position während Drag (rAF liest hier — nie stale)
@@ -395,13 +407,23 @@ export default function SketchCanvas({
   // preventDefault ginge verloren und die Seite scrollt beim Zoomen mit.
   // Anker-Mathe komplett im setView-Callback mit frischem v — kein Drift bei
   // schnellen Wheel-Bursts durch veraltetes view in der Closure.
+  // 115-01: radGeste tells mouse wheel (one 1.15 step per event, as before), trackpad pinch (zoom in proportion to the
+  // fingers) and two-finger swipe (pans, same px → world factor as the middle-button pan) apart.
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
+    const radLesen = radGestenLeser();
     const onWheel = (e) => {
       e.preventDefault();
+      const g = radLesen(e);
+      if (g.art === "schieben") {
+        const k = VB_W / (svg.getBoundingClientRect().width || VB_W); // viewBox units per CSS px
+        setView((v) => ({ ...v, cx: v.cx + (g.dx * k) / v.scale, cy: v.cy - (g.dy * k) / v.scale })); // +y is up in the sketch
+        return;
+      }
+      if (g.art !== "zoom") return;
       const vpt = clientToView(e.clientX, e.clientY);
-      const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      const f = g.faktor;
       setView((v) => {
         const w = { x: v.cx + (vpt.x - VB_W / 2) / v.scale, y: v.cy - (vpt.y - VB_H / 2) / v.scale };
         const scale = Math.max(8, Math.min(400, v.scale * f));
@@ -428,9 +450,9 @@ export default function SketchCanvas({
     const y1 = Math.ceil(view.cy + VB_H / 2 / view.scale);
     if (view.scale > 14) {
       for (let x = x0; x <= x1; x++)
-        gitter.push(<line key={`gx${x}`} x1={X(x)} y1={0} x2={X(x)} y2={VB_H} stroke={x === 0 ? "#cbd5e1" : "#f1f5f9"} strokeWidth={x === 0 ? 1.5 : 1} />);
+        gitter.push(<line key={`gx${x}`} x1={X(x)} y1={0} x2={X(x)} y2={VB_H} stroke="currentColor" strokeOpacity={x === 0 ? 0.4 : 0.12} strokeWidth={x === 0 ? 1.5 : 1} />);
       for (let y = y0; y <= y1; y++)
-        gitter.push(<line key={`gy${y}`} x1={0} y1={Y(y)} x2={VB_W} y2={Y(y)} stroke={y === 0 ? "#cbd5e1" : "#f1f5f9"} strokeWidth={y === 0 ? 1.5 : 1} />);
+        gitter.push(<line key={`gy${y}`} x1={0} y1={Y(y)} x2={VB_W} y2={Y(y)} stroke="currentColor" strokeOpacity={y === 0 ? 0.4 : 0.12} strokeWidth={y === 0 ? 1.5 : 1} />);
     }
   }
 
@@ -448,7 +470,18 @@ export default function SketchCanvas({
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
     >
-      {gitter}
+      {/* grid in the text colour at low opacity: readable in light and dark mode (before: fixed light greys that glared on dark) */}
+      <g className="text-muted-foreground" pointerEvents="none">{gitter}</g>
+
+      {/* tracing underlay: grey hairlines behind everything, never a pointer target */}
+      {pause && (
+        <g data-testid="skizze-pause" data-pause={pause.id} className="text-muted-foreground" opacity={0.6} pointerEvents="none" fill="none" stroke="currentColor" strokeWidth={1} strokeLinejoin="round">
+          {pause.linien.map((l, i) => (
+            <polyline key={i} points={`${l.pts.map((p) => `${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join(" ")}${l.geschlossen ? ` ${X(l.pts[0].x).toFixed(1)},${Y(l.pts[0].y).toFixed(1)}` : ""}`}
+              strokeDasharray={l.dash ? "4 3" : undefined} />
+          ))}
+        </g>
+      )}
 
       {/* Geometrie + Punkte + Glyphen — gemeinsames Rendering (SketchGeometry) */}
       <SketchGeometry

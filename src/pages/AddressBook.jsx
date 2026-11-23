@@ -1,6 +1,7 @@
 import { seitenWurzel } from "@core/lib/utils";
 import React, { useState, useEffect } from "react";
 import { bitApi } from "@core/api/bitApi";
+import { lockerPasst } from "@core/lib/lockereSuche.js";
 import { Button } from "@core/components/ui/button";
 import { Input } from "@core/components/ui/input";
 import { Plus, Search } from "lucide-react";
@@ -23,10 +24,9 @@ export default function AddressBook() {
   }, []);
 
   useEffect(() => {
-    let filtered = contacts.filter(contact =>
-      contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contact.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contact.role?.toLowerCase().includes(searchTerm.toLowerCase())
+    // 111-13: the shared forgiving matcher (umlaut/ß spelling, word order, one typo); the list keeps its own order.
+    const filtered = contacts.filter((contact) =>
+      lockerPasst(searchTerm, `${contact.name || ""} ${contact.company || ""} ${contact.role || ""}`)
     );
     setFilteredContacts(filtered);
   }, [contacts, searchTerm]);

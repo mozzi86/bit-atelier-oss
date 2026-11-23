@@ -848,7 +848,7 @@ function LageplanKarte({
 // "Polygon" (frei zeichnen, Eckpunkte ziehen, Live-Fläche in m²).
 // Mit Standort (Phase 36, KARTE-03): direkt auf der MapLibre-Karte; ohne
 // Standort bleibt der bisherige SVG-Canvas als Fallback.
-export default function SiteDesigner({ complexData, onBuildingsChange, onAreasChange, onSiteAreaChange, projektTyp = null, onReestimateParcel = null, onFlurstueckImport = null, onParcelChange = null, onRiegelChange = null }) {
+export default function SiteDesigner({ complexData, onBuildingsChange, onAreasChange, onSiteAreaChange, projektTyp = null, onReestimateParcel = null, onFlurstueckImport = null, onParcelChange = null, onRiegelChange = null, verlauf = null }) {
   const { t } = useI18n();
   const svgRef = useRef(null);
   const dragRef = useRef(null);   // { areaId, idx }
@@ -950,6 +950,7 @@ export default function SiteDesigner({ complexData, onBuildingsChange, onAreasCh
   const bb = useBlockBearbeitung({
     buildings, mpp: mSite, onChange: (next) => onBuildingsChange?.(next), aktiv: mode === "auswahl",
     grenzeM, baufelderM, containerRef: planRef, zusatzDichte: riegelSumme, schluessel: complexData?.id ?? null,
+    verlauf, // 115-05d: the page's one history of the site data (plot, envelopes, blocks, bars) instead of a stack of the blocks only
   });
   const nummer = useMemo(() => Object.fromEntries(buildings.map((b, i) => [b.id, i + 1])), [buildings]);
   // 104-06: the site plan as DXF R12 (metres around the project location, y north; the

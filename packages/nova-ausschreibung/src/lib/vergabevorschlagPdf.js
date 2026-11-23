@@ -29,7 +29,8 @@ const safeName = (s) => String(s || "").replace(/[^\p{L}\p{N}_-]+/gu, "_").repla
 
 /** New A4 document with the shared page frame helpers. */
 async function neuesDokument() {
-  const { jsPDF } = await import("jspdf");
+  // W0-F6: the metadata helper is imported dynamically, so the entry's preload map does not name its chunk.
+  const [{ jsPDF }, { jsPdfMetadaten }] = await Promise.all([import("jspdf"), import("@core/lib/pdfMetadaten.js")]);
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const breite = SEITE.w - SEITE.links - SEITE.rechts;
   const st = { y: SEITE.oben };
@@ -103,7 +104,8 @@ async function neuesDokument() {
     }
     st.y += 3;
   };
-  const ausgabe = (dateiname) => { fuss(); return { bytes: new Uint8Array(pdf.output("arraybuffer")), dateiname }; };
+  // 105-19: /Lang and /Title; the title is the heading of the document (kopfblock) plus the lot.
+  const ausgabe = (dateiname, titel = "", betreff = "") => { fuss(); jsPdfMetadaten(pdf, { titel, betreff }); return { bytes: new Uint8Array(pdf.output("arraybuffer")), dateiname }; };
   return { pdf, st, platz, titel, absatz, tabelle, kopfblock, ausgabe, breite };
 }
 
@@ -165,7 +167,7 @@ export async function vergabevorschlagPdf(m) {
   pdf.setFontSize(8); pdf.text("Ort, Datum, aufgestellt (Planer)", SEITE.links, st.y + 4); pdf.text("Ort, Datum, geprüft / freigegeben (Bauherr)", SEITE.links + 95, st.y + 4);
   st.y += 8;
 
-  return d.ausgabe(`Vergabevorschlag_${safeName(k.vergabe || k.gewerk)}_${safeName(m.vorschlag?.name)}_Entwurf.pdf`);
+  return d.ausgabe(`Vergabevorschlag_${safeName(k.vergabe || k.gewerk)}_${safeName(m.vorschlag?.name)}_Entwurf.pdf`, `Vergabevorschlag ${k.vergabe || k.gewerk || ""} (Entwurf)`.replace(/\s+/g, " "), k.projekt || "");
 }
 
 /**
@@ -187,5 +189,5 @@ export async function auftragsLvPdf(m, lv) {
   zeilen.push(["", "Summe brutto", "", "", "", euro(lv.brutto)]);
   d.tabelle([{ t: "OZ", w: 24 }, { t: "Kurztext", w: 70 }, { t: "Menge", w: 18, rechts: true }, { t: "Einh.", w: 12 }, { t: "EP", w: 24, rechts: true }, { t: "GP", w: 27, rechts: true }], zeilen, { fettLetzte: 3 });
   d.absatz("Mengen nach Leistungsverzeichnis, Einheitspreise nach geprüftem Angebot. Abrechnung nach Aufmaß.", 8.5);
-  return d.ausgabe(`Auftrags-LV_${safeName(k.vergabe || k.gewerk)}_${safeName(m.vorschlag?.name)}_Entwurf.pdf`);
+  return d.ausgabe(`Auftrags-LV_${safeName(k.vergabe || k.gewerk)}_${safeName(m.vorschlag?.name)}_Entwurf.pdf`, `Auftrags-Leistungsverzeichnis ${k.vergabe || k.gewerk || ""} (Entwurf)`.replace(/\s+/g, " "), k.projekt || "");
 }

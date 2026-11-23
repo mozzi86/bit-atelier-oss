@@ -6,6 +6,8 @@
 // deleted at the end; console clean.
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -94,6 +96,7 @@ test("107-11 Räume: vier Wände zeichnen, Räume vorschlagen, übernehmen, Nett
     const zone = (await stand()).customZones[0];
     expect(zone.level).toBe(0);
     expect("messregel" in zone, "Standard innenkante wird nicht gespeichert").toBe(false);
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(async () => ((await gespeichert()).customZones || []).length, { timeout: 20000, message: "Raum gespeichert" }).toBe(1);
     // review fix: the remaining proposal is the hull room with the island — "Alle übernehmen" leaves it out, so the button is gone
     await expect(page.getByTestId("raum-vorschlaege-alle")).toHaveCount(0);

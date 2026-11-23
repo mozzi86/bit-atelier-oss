@@ -12,7 +12,7 @@
 export const ATTRIBUT_FELDER = Object.freeze(["status", "erfassung", "kg", "gewerk", "gewerk_lb", "schicht", "bauabschnitt", "bauteil_typ"]);
 
 /** Id prefixes of derived elements whose attributes live in the table. */
-const ABGELEITET = /^(wt-wall-|wt-door-|hull-)/;
+const ABGELEITET = /^(wt-wall-|wt-door-|hull-|erdbau-)/; // 108-10: earthworks of the terrain layers
 
 /**
  * @param {string} id classified element id

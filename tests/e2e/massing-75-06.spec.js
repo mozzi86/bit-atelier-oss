@@ -120,7 +120,11 @@ test.describe("75-06 — Flurstueck, Baufeld, Baukoerper (MS-06)", () => {
       // Ehrlichkeits-Satz: seit dem Autosave (95-01, B-ST3-01) wird automatisch gespeichert.
       await expect(page.getByTestId("sd-geojson-block")).toContainText("automatisch gespeichert");
       // Speichern (Pflichtfelder Name + Standort sind gesetzt).
-      await page.getByRole("button", { name: /Entwurf speichern/ }).click();
+      // 115-05c (adapted): the one "Speichern" of the draft bar replaces the button "Entwurf speichern" (same write, same check below:
+      // the studio must show the imported parcel after a fresh load)
+      const speichern = page.getByTestId("entwurf-speichern");
+      await expect(speichern).toBeEnabled({ timeout: 5000 });
+      await speichern.click();
       await page.waitForTimeout(800);
 
       // --- Zurueck ins Studio: Ebene + KPIs nach dem Import -----------------

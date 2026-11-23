@@ -11,10 +11,13 @@
 import React, { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@core/components/ui/button";
-import { useI18n } from "@core/lib/i18n";
+import { useI18n, englischErgaenzen } from "@core/lib/i18n";
+import { EN as EN_KALENDER_LAENDER } from "@core/lib/i18nTeile/kalender-laender-w1.js";
 import { feiertagLabel } from "@/lib/abwesenheit/feiertagNamen.js";
 import { monatsRaster } from "@/lib/termine/termineAnsicht.js";
 import { terminTitel } from "./TerminZeile.jsx";
+
+englischErgaenzen(EN_KALENDER_LAENDER); // lazy part: holiday names of the other federal states
 
 /** Hatching of a holiday (light and dark). */
 const SCHRAFFUR = "bg-[repeating-linear-gradient(135deg,rgba(148,163,184,0.25)_0,rgba(148,163,184,0.25)_4px,transparent_4px,transparent_8px)]";

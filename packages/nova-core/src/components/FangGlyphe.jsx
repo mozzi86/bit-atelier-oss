@@ -45,11 +45,12 @@ export function strahlDarstellung(winkel_grad, art) {
 
 /**
  * @param {{x: number, y: number, s: number, art: string, strahl?: {x1: number, y1: number, x2: number, y2: number, winkel_grad: number}|null,
- *   testid?: string, eckeTestid?: string|null}} props
+ *   testid?: string, eckeTestid?: string|null, textTransform?: string}} props
  *   x, y: snapped point (SVG units); s: SVG units per screen pixel (glyph sizes are given in screen pixels);
  *   art: snap kind (objektfang.js); eckeTestid: extra test id of the endpoint square (98-02: "mm-fang-ecke")
+ *   115-04: textTransform = SVG transform of the ray label (a host plan turned in 90° steps keeps it upright); absent = as before
  */
-export default function FangGlyphe({ x, y, s, art, strahl = null, testid = "fang", eckeTestid = null }) {
+export default function FangGlyphe({ x, y, s, art, strahl = null, testid = "fang", eckeTestid = null, textTransform = undefined }) {
   if (!Number.isFinite(x) || !Number.isFinite(y) || !(s > 0)) return null;
   const r = 6 * s;
   const linie = { fill: "none", strokeWidth: 2 * s, className: "stroke-erfolg" };
@@ -69,7 +70,7 @@ export default function FangGlyphe({ x, y, s, art, strahl = null, testid = "fang
         <line x1={strahl.x1} y1={strahl.y1} x2={strahl.x2} y2={strahl.y2} className={k.strich} strokeWidth={1.2 * s} strokeDasharray={d.strich.map((v) => v * s).join(" ")}
           data-testid={`${testid}-strahl`} data-achse={d.achse || ""} data-token={d.token} />
         <path d={`M${x - r * 0.7},${y} L${x + r * 0.7},${y} M${x},${y - r * 0.7} L${x},${y + r * 0.7}`} className={k.strich} strokeWidth={1.5 * s} />
-        <text x={x + 9 * s} y={y - 9 * s} fontSize={10 * s} className={k.text} data-testid={`${testid}-text`}>{d.text}</text>
+        <text x={x + 9 * s} y={y - 9 * s} fontSize={10 * s} className={k.text} data-testid={`${testid}-text`} transform={textTransform}>{d.text}</text>
       </>
     );
   }

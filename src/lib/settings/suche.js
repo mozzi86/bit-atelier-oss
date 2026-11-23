@@ -18,7 +18,7 @@
 //      here), kontext, an optional translator, a result cap.
 // Out: sucheEinstellungen(text, optionen), suchUmfang(sichtbare, istBereit, regelwerke).
 
-import { normalisiere } from "@core/lib/textMatch.js";
+import { lockerBewerten, suchNormal } from "@core/lib/lockereSuche.js";
 
 /**
  * One search hit.
@@ -54,11 +54,12 @@ export function suchUmfang(sichtbare, istBereit, regelwerke) {
 }
 
 /**
- * Searches the settings. Matching is case- and diacritic-insensitive substring
- * matching (@core/lib/textMatch normalisiere) over: area title, description and
- * keywords (German AND translated) for `bereiche`; rule label, id and source for
- * every rule of every VISIBLE group of `regelwerke`. Area matches sort before rule
- * matches; within each group, registry order is kept. An empty/whitespace query
+ * Searches the settings. Matching is the shared forgiving matcher (111-13,
+ * @core/lib/lockereSuche: case, umlaut/ß spelling, word order and one small typo
+ * do not matter) over: area title, description and keywords (German AND
+ * translated) for `bereiche`; rule label, id and source for every rule of every
+ * VISIBLE group of `regelwerke`. Area matches sort before rule matches; within
+ * each group the better match comes first, equal matches keep registry order. An empty/whitespace query
  * returns no matches — the settings page shows no result list, not "everything".
  * @param {string} text raw search input (as typed)
  * @param {{
@@ -72,30 +73,30 @@ export function suchUmfang(sichtbare, istBereit, regelwerke) {
  */
 export function sucheEinstellungen(text, optionen = {}) {
   const { bereiche = [], regelwerke = [], kontext = {}, uebersetzen = (s) => s, max = 8 } = optionen;
-  const anfrage = normalisiere(text);
-  if (!anfrage) return [];
+  if (!suchNormal(text)) return [];
 
-  /** @param {Array<string|undefined|null>} felder */
-  const trifft = (felder) => felder.some((f) => f && normalisiere(f).includes(anfrage));
+  // All fields of a row form one text, so the query words may come from different fields in any order (111-13).
+  /** @param {Array<string|undefined|null>} felder @returns {number} 0 = no match */
+  const wert = (felder) => lockerBewerten(text, felder.filter(Boolean).join(" "));
+  /** @param {Array<{t: Treffer, w: number}>} liste @returns {Treffer[]} best first, stable */
+  const geordnet = (liste) => liste.map((x, i) => ({ ...x, i })).sort((a, b) => b.w - a.w || a.i - b.i).map((x) => x.t);
 
-  /** @type {Treffer[]} */
+  /** @type {Array<{t: Treffer, w: number}>} */
   const bereichsTreffer = [];
   for (const b of bereiche) {
-    if (trifft([b.titel, uebersetzen(b.titel), b.beschreibung, uebersetzen(b.beschreibung), b.stichworte])) {
-      bereichsTreffer.push({ bereich: b.key, titel: b.titel, treffer: b.titel });
-    }
+    const w = wert([b.titel, uebersetzen(b.titel), b.beschreibung, uebersetzen(b.beschreibung), b.stichworte]);
+    if (w > 0) bereichsTreffer.push({ t: { bereich: b.key, titel: b.titel, treffer: b.titel }, w });
   }
 
-  /** @type {Treffer[]} */
+  /** @type {Array<{t: Treffer, w: number}>} */
   const regelTreffer = [];
   for (const gruppe of regelwerke) {
     if (gruppe.sichtbar && !gruppe.sichtbar(kontext)) continue;
     for (const r of gruppe.regeln || []) {
-      if (trifft([r.label, uebersetzen(r.label), r.id, r.quelle, r.abschnitt])) {
-        regelTreffer.push({ bereich: REGELN_BEREICH, regelId: r.id, titel: r.label, treffer: r.label });
-      }
+      const w = wert([r.label, uebersetzen(r.label), r.id, r.quelle, r.abschnitt]);
+      if (w > 0) regelTreffer.push({ t: { bereich: REGELN_BEREICH, regelId: r.id, titel: r.label, treffer: r.label }, w });
     }
   }
 
-  return [...bereichsTreffer, ...regelTreffer].slice(0, max);
+  return [...geordnet(bereichsTreffer), ...geordnet(regelTreffer)].slice(0, max);
 }

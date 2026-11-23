@@ -470,13 +470,15 @@ describe("107-02 Review-Fixes: ein Schreiber für die Geschosshöhe, OKF, Schnit
   it("Schnitt (PDF): die Geschosshöhen-Maßlinie zeigt die Höhe des EG aus dem Modell, mit Tabelle 3,60 neben der Kote +3,60 (nicht 3,00)", () => {
     const text = (/** @type {any} */ model, sh = 3) => schnittGrafik({ model, storeyHeight: sh }).elemente.filter((e) => e.ebene === "bemassung" && e.art === "text").map((e) => e.text);
     const mit = createBuildingModel({ footprintM: FP, storeys: 2, storeyHeight: 3, geschosse: [{ level: 0, hoehe_m: 3.6 }, { level: 1, hoehe_m: 3 }] });
-    assert.ok(text(mit).includes("3,60"), `Maßtexte: ${text(mit)}`);
-    assert.ok(!text(mit).includes("3,00"));
+    // 115-02: the storey chain measures every storey from the model — EG 3,60 first, then the storey above (3,00); before only the EG
+    // had a dimension, so "3,00" could only have been the wrong uniform number
+    // (the parapet piece 1,00 of the detail chain comes first, the overall chain 7,60 / 10,00 after)
+    assert.ok(text(mit).join(" ").includes("3,60 3,00"), `Maßtexte: ${text(mit)}`);
     const koten = schnittGrafik({ model: mit, storeyHeight: 3 }).elemente.filter((e) => e.ebene === "kote" && e.art === "text").map((e) => e.text);
     assert.ok(koten.some((k) => k.includes("+3,60")), `Koten: ${koten}`);
     // without a table the figure is the uniform storey height as always
     const ohne = createBuildingModel({ footprintM: FP, storeys: 2, storeyHeight: 3.2 });
-    assert.ok(text(ohne, 3.2).includes("3,20"));
+    assert.ok(text(ohne, 3.2).join(" ").includes("3,20 3,20"), `Maßtexte: ${text(ohne, 3.2)}`);
     nah(geschossHoeheAusModell(mit), 3.6); nah(geschossHoeheAusModell(mit, 1), 3);
     assert.equal(geschossHoeheAusModell(mit, 5), 0); assert.equal(geschossHoeheAusModell(null), 0);
   });

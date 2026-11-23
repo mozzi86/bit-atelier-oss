@@ -1,3 +1,4 @@
+import { verlassenPruefen } from "./verlassenWaechter.js";
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { bitApi } from "@core/api/bitApi";
 import { DATENQUELLE } from "@core/lib/umgebung";
@@ -68,9 +69,16 @@ export function ProjectProvider({ children }) {
   const [fehler, setFehler] = useState(/** @type {string|null} */ (null));
 
   const setProjectId = useCallback((id) => {
-    setProjectIdState(id);
-    try { localStorage.setItem(LS_KEY, id); } catch { /* ignore */ }
-    writeUrlProjectParam(id);
+    const wechseln = () => {
+      setProjectIdState(id);
+      try { localStorage.setItem(LS_KEY, id); } catch { /* ignore */ }
+      writeUrlProjectParam(id);
+    };
+    // 115-05c (D-115-12): a page with unsaved model changes asks first (the draft bar shows Speichern / Als Entwurf behalten /
+    // Verwerfen / Abbrechen and switches after the decision). Not asked: loadProjects correcting an invalid stored id - the draft
+    // of the project left stays in the browser and is offered again when it is opened.
+    if (verlassenPruefen(wechseln, { art: "projekt", ziel: id })) return;
+    wechseln();
   }, []);
 
   const loadProjects = useCallback(async () => {

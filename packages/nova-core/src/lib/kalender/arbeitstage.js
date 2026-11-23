@@ -1,11 +1,13 @@
 // Calendar core, part 3: working days. A tax due on a Saturday, Sunday or
-// public holiday moves to the next working day (§ 108 Abs. 3 AO). v1 uses the
-// nation-wide holidays only (./feiertage.js).
+// public holiday moves to the next working day (§ 108 Abs. 3 AO). istWerktag /
+// naechsterWerktag (v1) use the nation-wide holidays only (./feiertage.js).
 //
 // In:  'YYYY-MM-DD'. Out: boolean / 'YYYY-MM-DD'. UTC only.
 //
 // Phase 81 (81-01) adds functions that take the holiday list as a PARAMETER
-// (the office's state holidays from feiertage(jahr, einst)): istArbeitstag,
+// (the office's state holidays from feiertage(jahr, einst) — every caller in the
+// app passes the list of the configured state, kalenderEinstellung; all 16
+// states since wave 1 / B-81-04): istArbeitstag,
 // naechsterArbeitstag, zaehleTage and sollMinuten (target working time of the
 // time tracking). istWerktag/naechsterWerktag above stay unchanged — they keep
 // the nation-wide list and their cache, as phase 79 built them.

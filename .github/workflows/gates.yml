@@ -8,6 +8,10 @@
 # Unit-Tests über die Hash-Datei im Repo — die Klartextliste wird nicht gebraucht.
 #
 # E2E (Playwright, vier Shards, nachts) läuft getrennt: .github/workflows/e2e.yml.
+#
+# 105-24: GitHub Actions startet für dieses Konto derzeit nicht (Stand 19.11.2026) — maßgeblich ist bis dahin
+# der lokale Gate-Lauf `npm run gates` (scripts/gates-lokal.mjs) mit denselben Schritten inkl. Harness-pytest.
+# Beide Listen gleich halten.
 name: Gates
 
 on:
@@ -34,6 +38,13 @@ jobs:
 
       - name: Abhängigkeiten
         run: npm ci
+
+      # 105-24: Python for the harness pytest step (harness/pyproject.toml: requires-python >=3.11,<3.14).
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: harness/pyproject.toml
 
       - name: Lint
         run: npm run lint
@@ -70,3 +81,11 @@ jobs:
       # the baseline is a deliberate commit: node scripts/farb-baseline.mjs --schreiben.
       - name: Farb-Baseline (feste Farbklassen dürfen nicht steigen)
         run: node scripts/farb-baseline.mjs
+
+      # 105-24: the offline pytest suite of the Python harness, with all test extras (without [ifc]/[katalog] the
+      # IFC and catalogue tests would skip silently). Same runner as the local gate run.
+      - name: Harness-pytest
+        run: |
+          python -m venv harness/.venv
+          harness/.venv/bin/python -m pip install -e "harness[dev,ifc,katalog]"
+          node scripts/harness-pytest.mjs

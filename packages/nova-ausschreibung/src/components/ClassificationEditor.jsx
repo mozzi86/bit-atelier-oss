@@ -56,8 +56,9 @@ export default function ClassificationEditor({ elements = [], onSaveClassificati
 
   const save = async () => {
     if (changedCount === 0) return;
-    await onSaveClassification?.(draft);
-    setDraft({});
+    // 115-05b part 2: a save refused on a stale model (AVA answers false) keeps the draft for the next attempt
+    const ok = await onSaveClassification?.(draft);
+    if (ok !== false) setDraft({});
   };
 
   return (

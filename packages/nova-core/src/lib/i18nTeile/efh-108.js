@@ -22,6 +22,15 @@ export const EN = {
   "Das Gebäudemodell hat einen eigenen Umriss ({{quelle}}). Die Fläche der Baufeld-Planung wird erst nach „Übernehmen“ verwendet.": "The building model has its own outline ({{quelle}}). The area of the site planning is used only after \"Übernehmen\" (take over).",
   "Projekt gewechselt — der Umriss wurde nicht übernommen.": "Project switched — the outline was not taken over.", // review
   "Baufeld (mittig, ohne Lagebezug)": "Building envelope (centred, no position reference)", // review
+  // 115-03 (navigation of the Komplex-Designer, W-1115-02): direct views of the building model and tabs per kind of project. They live in
+  // this part because ComplexDesigner.jsx already loads it (no room in the entry chunk, no second lazy part for six texts).
+  // "Grundriss", "Schnitt" and "Gebäudemodell" exist already and are not repeated.
+  "3D": "3D",
+  "Gebäudemodell direkt öffnen": "Open the building model directly",
+  "Einfamilienhaus": "Single-family house",
+  "Alle Reiter zeigen": "Show all tabs",
+  "{art}: alle Reiter sichtbar": "{art}: all tabs visible",
+  "{art}: {n} Reiter ausgeblendet": "{art}: {n} tabs hidden",
   // 108-01 (4): entrance
   "Eigene Eingangstür vorhanden — automatischen Eingang abschalten?": "Own entrance door present — switch off the automatic entrance?",
   // 108-01 (9b): map offline
@@ -79,6 +88,8 @@ export const EN = {
   // 108-06: stairs as elements ("Treppe" lives in steckbrief-97.js, "Ergebnis"/"Hinweise"/"Geschoss" in global parts)
   "Treppen": "Stairs",
   "Treppe einfügen": "Insert stair",
+  // 115-13 review 20.11.: hint of the boundary around the lazily loaded stair rows (BitBimStudio; eager here, not in the lazy part)
+  "Treppen-Eingaben nicht verfügbar – neu laden": "Stair inputs unavailable – reload",
   "Gerade Treppe im aktuellen Geschoss einfügen": "Insert a straight flight in the current storey",
   "Antritt x / z (m)": "First riser x / z (m)",
   "Antritt x (m)": "First riser x (m)",
@@ -132,4 +143,36 @@ export const EN = {
   "Gaubenfront liegt unter dem Hauptdach — Front höher oder weiter nach außen": "The dormer front lies under the main roof — raise the front or move it outwards",
   "Fensterbrüstung liegt unter dem Hauptdach an der Gaubenfront": "The window sill lies under the main roof at the dormer front",
   "Fenster reicht bis unter 10 cm an die Gaubenoberkante": "The window reaches within 10 cm of the dormer top",
+  // 108-10: two terrain layers (existing / new ground)
+  "Gelände Bestand": "Existing ground",
+  "Gelände neu": "New ground",
+  "Dachfläche in Ansicht": "Roof face in elevation",
+  "Gelände (Höhenmodell, Annahme)": "Ground (elevation model, assumption)",
+  "Aufnahme aus dem Massing-Studio": "survey kept in the Massing studio",
+  "Demo-Höhen (offline)": "demo heights (offline)",
+  "Höhenmodell, ±0,00 = {{h}} m ü. NHN (Annahme)": "elevation model, ±0.00 = {{h}} m a.s.l. (assumption)",
+  "keine Daten": "no data",
+  "Bestand aus Höhenmodell": "Existing ground from elevation model",
+  "Bestandsgelände aus dem öffentlichen Höhenmodell anlegen (Raster etwa 90 m, nur grob). ±0,00 = {{h}} m ü. NHN — aus der Bauaufnahme oder höchster Punkt unter dem Baukörper (Annahme). Danach mit den Werkzeugen nachformen oder durch ein Aufmaß ersetzen.": "Create the existing ground from the public elevation model (grid about 90 m, coarse only). ±0.00 = {{h}} m a.s.l. — from the building survey or the highest point under the body (assumption). Then reshape it with the tools or replace it by a survey.",
+  "Unter Gelände": "Below ground",
+  "Fenster {{geschoss}}, Kante {{kante}}": "Window {{geschoss}}, edge {{kante}}",
+  "Tür {{geschoss}}, Kante {{kante}}": "Door {{geschoss}}, edge {{kante}}",
+  "Öffnung {{geschoss}}, Kante {{kante}}": "Opening {{geschoss}}, edge {{kante}}",
+  "ganz unter Gelände": "entirely below ground",
+  "Brüstung {{m}} m unter Gelände": "sill {{m}} m below ground",
+  "+{{n}} weitere": "+{{n}} more",
+  "{{geschoss}}: Decke im Mittel {{m}} m über Gelände — Vollgeschoss (1,40-m-Regel)": "{{geschoss}}: ceiling on average {{m}} m above ground — full storey (1.40 m rule)",
+  "{{geschoss}}: Decke im Mittel {{m}} m über Gelände — kein Vollgeschoss (1,40-m-Regel)": "{{geschoss}}: ceiling on average {{m}} m above ground — no full storey (1.40 m rule)",
+  "Deckenoberkante = Höhe des Geschosses darüber (Rohdecke), gemittelt entlang der Außenwände über dem maßgebenden Gelände. Vollgeschoss, wenn mehr als 1,40 m und lichte Höhe ≥ 2,30 m auf 2/3 der Fläche (MBO; Landesrecht kann abweichen). Hinweis, keine Rechtsauskunft.": "Ceiling top = level of the storey above (structural slab), averaged along the outer walls above the governing ground. Full storey when more than 1.40 m and a clear height ≥ 2.30 m over 2/3 of the area (model building code; state law may differ). A hint, no legal advice.",
+  "Öffnungen der Außenwände 50 cm vor der Wand gegen das maßgebende Gelände geprüft (neues Gelände, sonst Bestand). Lichtschacht, Abgrabung oder Außentreppe nötig — Hinweis, keine Sperre.": "Openings of the outer walls checked 50 cm in front of the wall against the governing ground (new ground, else existing). A light well, excavation or external stair is needed — a hint, not a block.",
+  "Fläche mit mindestens 2,30 m lichter Höhe bis zu den Dachebenen (ohne Dachaufbau, ab Oberkante Rohdecke), bezogen auf den Umriss. 2/3-Regel nach Landesbauordnung, Werte je Land verschieden (Annahme); die 1,40-m-Regel über Gelände ist erfüllt. Hinweis, keine Rechtsauskunft.": "Area with at least 2.30 m clear height up to the roof planes (without roof build-up, from the top of the structural slab), related to the outline. 2/3 rule of the state building code, values differ by state (assumption); the 1.40 m rule above ground is met. A hint, no legal advice.",
+  "Höhenmodell, ±0,00 = {{h}} m ü. NHN (Bauaufnahme)": "elevation model, ±0.00 = {{h}} m a.s.l. (building survey)",
+  "Gelände aus dem Massing-Studio": "terrain from the Massing studio",
+  "nicht modelliert (Massing-Studio, Werkzeug Gelände)": "not modelled (Massing studio, terrain tool)",
+  "Erdmassen KG 310": "Earthworks KG 310",
+  "Abtrag {{a}} m³, Auftrag {{b}} m³": "cut {{a}} m³, fill {{b}} m³",
+  "grob: Bestand aus dem Höhenmodell": "rough: existing ground from the elevation model",
+  "Als Bestand festhalten": "Keep as existing ground",
+  "Bestand verwerfen": "Discard existing ground",
+  "Das Gelände, wie es jetzt ist, als Bestand festhalten — danach formen Sie das neue Gelände; die Differenz sind Abtrag und Auftrag.": "Keep the terrain as it is now as the existing ground — then shape the new ground; the difference is cut and fill.",
 };

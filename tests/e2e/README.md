@@ -10,6 +10,36 @@ und Form-Specs arbeiten auf demselben Projekt „Review Testhaus“ in `server/d
   bei Site-Metern (0,17)–(70,33).
 - Es gibt **keinen Seed** dafür — `server/db.json` ist gitignored. Fehlt das Haus (frischer Klon, CI, nach `npm run seed`), legt das Global-Setup Projekt + Datensatz aus `fixtures/testhaus-record.json` an (87-03). Die Fixture ist der Datensatz vom 09.10.2026 mit drei Layern.
 
+## Frische Test-DB vor einem vollen Lauf (100-07)
+
+```
+BIT_DATA_DIR=<Testordner> PORT=5183 API_PORT=3011 API_ORIGINS=http://localhost:5183 npm run test:e2e:frisch
+```
+
+`scripts/e2e-testdaten-reset.mjs` löscht im Testordner genau diese Einträge: `db.json` (+ `.bak`/`.tmp`), `blobs/`,
+`personal.json` (+ `.bak`/`.tmp`) und `personal-blobs/` (ein Symlink verliert nur den Link), schreibt den Seed
+(`server/seed.js`) hinein und legt das Testhaus aus `fixtures/testhaus-record.json` an; danach startet `playwright test`
+den Server auf genau diesem Ordner.
+
+**Schutz (seit dem Datenvorfall vom 19.11.2026, ohne Ausnahme-Schalter):** Das Skript arbeitet nur in einem Ordner mit
+der Markierungsdatei `.bit-testdaten`, deren Inhalt der echte, absolute Pfad dieses Ordners ist.
+
+- **Neuer Ordner:** `BIT_DATA_DIR` auf einen noch nicht vorhandenen Ordner im System-Temp-Ordner setzen
+  (`node -e "console.log(require('os').tmpdir())"`). Nur dort legt das Skript ihn selbst an und schreibt die Markierung.
+- **Vorhandener Ordner:** Markierung von Hand anlegen — nur, wenn er wirklich nur Testdaten enthält:
+  `printf '%s' "$(cd <Testordner> && pwd -P)" > <Testordner>/.bit-testdaten`. Ohne gültige Markierung lehnt das Skript ab
+  und nennt den Befehl.
+- **Immer abgelehnt, auch mit Markierung:** `BIT_DATA_DIR` nicht gesetzt (dann wäre es `server/` mit echten Daten), ein
+  symbolischer Link als `BIT_DATA_DIR` oder als Markierung, eine Markierung mit anderem Pfad, das Wurzelverzeichnis,
+  das Home-Verzeichnis, das Repo, der Temp-Ordner selbst und jeder Ordner, der eines davon enthält, jeder Ordner in
+  einem Quellstand (`package.json` + `server/` oder `.git` darüber), `server/` neben einer `package.json`, und jeder
+  Ordner, in dem irgendwo `.js`/`.mjs`/`.cjs`, `package.json`, `.git` oder ein `server/`-Ordner liegt.
+- Läuft auf `API_PORT` oder `PORT` schon ein Server, lehnt es ebenfalls ab — er hält die DB im Speicher, und Playwright
+  würde ihn wiederverwenden.
+
+Die Ablehnungen prüft `tests/unit/e2eTestdatenReset-10007.test.js` ausschließlich an Wegwerf-Ordnern, die das Layout
+nachbilden. Nie mit einem echten Datenordner „ausprobieren, ob er abgelehnt wird“.
+
 ## Ablauf eines Laufs
 
 1. `global-setup.js`: zwingt die Geometrie auf das Testhaus (ein abgebrochener Lauf kann sie

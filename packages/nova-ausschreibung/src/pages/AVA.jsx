@@ -4,7 +4,7 @@ import { bitApi } from "@core/api/bitApi";
 import { motion } from "framer-motion";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@core/components/ui/tabs";
 import { useProject } from "@core/lib/ProjectContext";
-import { saveBimModel } from "@core/lib/useBimModelSync";
+import { saveBimModel, bimModelNeuLesen, loadBimModel, MODELL_ERSETZT_TEXT } from "@core/lib/useBimModelSync";
 import { useAuth } from "@core/lib/AuthContext";
 import { DATENQUELLE } from "@core/lib/umgebung";
 import { submissionLesen, zuschlagErteilen } from "@core/api/zugriff";
@@ -53,7 +53,10 @@ import { buildTedQuery, parseTedResponse, parseDoeeCsv, aggregateLots } from "@a
 import { aktiveSchicht, rangfolge } from "@core/lib/rules/priceStack";
 import { nachtraegeDesProjekts } from "@core/lib/nachtraege";
 import { useTabParam } from "@core/lib/useTabParam";
-import { useI18n } from "@core/lib/i18n";
+import { useI18n, englischErgaenzen } from "@core/lib/i18n";
+// 115-05b part 2 (A-7): the note of a classification refused on a stale copy of the model (lazy i18n part, not in the entry chunk)
+import { EN as EN_STANDWAECHTER } from "@core/lib/i18nTeile/standwaechter-115-05b.js";
+englischErgaenzen(EN_STANDWAECHTER);
 import { attributPatch, istAbgeleitet } from "@core/lib/bauteil/attribute.js";
 
 // The eight AVA tabs, addressable as #/AVA?tab=<key> (72-15, N-16). The keys are
@@ -81,6 +84,11 @@ export default function AVA() {
   const { user } = useAuth();
   const [building, setBuilding] = useState(null);
   const [bimModel, setBimModel] = useState(null);
+  // review 115-05b part 2 (finding 4): the newest copy of the model this page knows - the answer of its own last save, before the
+  // reload() after it is back (a second save built on the state copy was refused as "changed meanwhile" and its lists would have
+  // undone the first save); classification saves run one after the other (klassifizierungKette)
+  const bimModelRef = useRef(/** @type {any} */ (null));
+  const klassifizierungKette = useRef(/** @type {Promise<any>} */ (Promise.resolve()));
   // 107-03 (D-BK-22): build-ups of the project (fachlayer aufbauten_layer) must be known before the elements are classified
   // (thickness and layers of a wall with a project build-up); idempotent registry, same call as in the BIM studio.
   // (set while rendering, once per layer value, so the classification below reads it; released again on unmount)
@@ -158,6 +166,7 @@ export default function AVA() {
     setMeasurements(ms);
     setChangeOrders(cos);
     setBuilding(blds[0] || { floors: 6, area_net: 1800 });
+    bimModelRef.current = bims[0] || null;
     setBimModel(bims[0] || null);
     setFilters(flt);
     setPriceRefs(prefs);
@@ -292,7 +301,14 @@ export default function AVA() {
 
   // Klassifizierungs-Patch (element-id → {kg, gewerk, schicht, status}) per _idx
   // zurück auf die BimModel-Custom-Arrays mappen und additiv persistieren.
-  const saveClassification = async (patch) => {
+  const saveClassification = (patch) => {
+    const lauf = klassifizierungKette.current.then(() => klassifizierungSpeichern(patch));
+    klassifizierungKette.current = lauf.then(() => undefined, () => undefined);
+    return lauf;
+  };
+  /** @param {Record<string, any>} patch @returns {Promise<boolean|undefined>} false = not written (the editor keeps its draft) */
+  const klassifizierungSpeichern = async (patch) => {
+    const bimModel = bimModelRef.current;
     if (!bimModel) {
       toast.error("Kein gespeichertes Gebäudemodell — im Komplex-Designer zeichnen");
       return;
@@ -350,7 +366,31 @@ export default function AVA() {
     }
     // 97-01 (KD-17): through the ONE write path — cache, layer stamps and live listeners
     // (usePlanModel, designer) see the status change; a direct update raced the designer debounce.
-    await saveBimModel(projectId || bimModel.project_id, tabelleGeaendert ? { ...arrays, bauteil_attribute_layer: tabelle } : arrays);
+    // 115-05b part 2 (A-7): the lists come from THIS page's copy (loaded in reload()); a strict save naming that copy's updated_date
+    // refuses when the stored model is another state - before, the stale lists silently reset what another tab or device stored
+    // since. The person is told, the copy is read again; the draft of the editor stays for a second save (it returns false).
+    // The base it is compared with is the stored record NOW: a cache kept from an earlier visit of the designer (no stream any more)
+    // must not refuse a fresh copy (106-10 bimModelNeuLesen); loading makes this project the cached one (no holder is mounted here).
+    const pid = projectId || bimModel.project_id;
+    try {
+      await bimModelNeuLesen(pid);
+      await loadBimModel(pid);
+      const gespeichert = await saveBimModel(pid, tabelleGeaendert ? { ...arrays, bauteil_attribute_layer: tabelle } : arrays,
+        { streng: true, basisStand: bimModel.updated_date ?? null });
+      // the next save builds on this answer, not on the copy before it (review 115-05b part 2, finding 4)
+      if (gespeichert?.updated_date && pid === projectIdRef.current) { bimModelRef.current = gespeichert; setBimModel(gespeichert); }
+    } catch (err) {
+      const code = /** @type {any} */ (err)?.code;
+      // review 115-05b part 2 (finding 4): every refusal is told here - before, any other error went unhandled to the editor
+      if (code === "nicht_geschrieben") toast.error(t("Modell inzwischen geändert — neu laden"));
+      else if (code === "modell_ersetzt") toast.error(t(MODELL_ERSETZT_TEXT));
+      else {
+        console.error("Klassifizierung nicht gespeichert:", err);
+        toast.error(t("Speichern fehlgeschlagen"));
+      }
+      reload(projectId);
+      return false;
+    }
     toast.success(`Klassifizierung für ${applied} ${applied === 1 ? "Bauteil" : "Bauteile"} gespeichert`);
     reload(projectId);
   };

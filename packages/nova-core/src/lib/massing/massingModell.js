@@ -88,10 +88,11 @@ export const PHI = (1 + Math.sqrt(5)) / 2;
  *   openings; geometrie() hands them over translated into the normalised order (oeffnungWenden).
  * @typedef {{profil: Pkt[], hoehe: number, loecher?: Pkt[][], oeffnungen?: KoerperOeffnung[], dach?: {form: string, neigung_grad?: number, firstrichtung?: "laengs"|"quer"}}} GruppenDefinition  profile/holes
  *   in group coordinates, height m; 107-06: openings of every instance; 107-10: optional roof of every instance
- * @typedef {{v?: number, koerper: Koerper[], gruppen: Record<string, GruppenDefinition>, naechsteId: number, parametrik?: {knoten: any[], kanten: any[]}, gelaende?: import('./gelaende.js').Gelaende, bezug?: Pkt, riegel?: Array<{id: string, pfad: Pkt[], opt: Record<string, any>}>, hilfslinien?: Hilfslinie[]}} MassingLayer
+ * @typedef {{v?: number, koerper: Koerper[], gruppen: Record<string, GruppenDefinition>, naechsteId: number, parametrik?: {knoten: any[], kanten: any[]}, gelaende?: import('./gelaende.js').Gelaende, gelaendeBestand?: import('./gelaende.js').Gelaende, bezug?: Pkt, riegel?: Array<{id: string, pfad: Pkt[], opt: Record<string, any>}>, hilfslinien?: Hilfslinie[]}} MassingLayer
  *   hilfslinien (107-07, v4): optional guide lines / points of the modeller (snap targets, never printed or exported)
  *   parametrik (98-07): node graph of the parametric editor (@core/lib/massing/knoten.js), optional
- *   gelaende (98-06): sandbox height grid (./gelaende.js), optional
+ *   gelaende (98-06): sandbox height grid (./gelaende.js), optional; since 108-10 it is the NEW (planned) ground
+ *   gelaendeBestand (108-10): the existing ground kept beside it (same raster format), optional — see ./gelaendeEbenen.js
  *   bezug (98-05): site point of the main body's centre = building model origin (IFC placement)
  *   riegel (98-09): residential bars along a path (./riegel.js), units derived, not stored
  */

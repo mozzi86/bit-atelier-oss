@@ -11,6 +11,8 @@
 // window.__bitZeigen.bimAenderung.waende3d(), the IFC values from the downloaded text.
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -125,10 +127,10 @@ test.describe("107-02 Vertikale Bindung: Geschosshöhe, Oberkante, Decke, Dach",
       // the window wall on storey 1 moves up with the storey (3,2 ... 6,4) and keeps its window
       await expect.poll(async () => { const b = (await waende3d(page))[2]; return b ? Math.round(b.min[1] * 100) : null; }, { timeout: 20000, message: "3D: Wand mit Fenster auf Geschoss 1 liegt auf 3,2" }).toBe(320);
       nah((await waende3d(page))[2].max[1], 6.4, 0.01);
-      // section marks: three storeys of 3,2 m → "OK Dach +9.60", storey dimension = height of the ground floor (3,20 m)
+      // section marks: three storeys of 3,2 m → "OK Dach +9,60", storey dimensions 3,20 (115-02: decimal comma, numbers without unit)
       await page.getByRole("button", { name: "Ansicht Schnitt" }).click();
-      await expect(page.locator("svg text", { hasText: "OK Dach +9.60" })).toBeVisible({ timeout: 15000 });
-      await expect(page.locator("svg text", { hasText: "3.20 m" }).first(), "Schnitt: Maßlinie Geschosshöhe 3,20").toBeVisible();
+      await expect(page.locator("svg text", { hasText: "OK Dach +9,60" })).toBeVisible({ timeout: 15000 });
+      await expect(page.locator("[data-schnittmasse] text", { hasText: "3,20" }).first(), "Schnitt: Maßkette Geschosshöhe 3,20").toBeVisible();
       await page.getByRole("button", { name: "Ansicht 3D" }).click();
 
       const ifcLaden = async (name) => {
@@ -225,6 +227,7 @@ test.describe("107-02 Vertikale Bindung: Geschosshöhe, Oberkante, Decke, Dach",
       // ---- storey table: own height of the ground floor → the linked wall (level 0) follows, the programme field is stored ----
       await page.locator('[data-testid="geschosshoehen"] summary').click();
       await page.getByTestId("geschosshoehe-0").fill("3.6");
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).geschosse?.[0]?.hoehe_m, { timeout: 20000, message: "Geschosstabelle wird gespeichert" }).toBe(3.6);
       expect((await gespeichert()).geschosse.map((g) => g.hoehe_m)).toEqual([3.6, 3.2, 3.2]);
       await expect.poll(async () => { const b = (await waende3d(page))[neu._idx]; return b ? Math.round(b.max[1] * 100) : null; }, { timeout: 20000, message: "3D: Wand bis zur Oberkante EG 3,6" }).toBe(360);
@@ -238,17 +241,20 @@ test.describe("107-02 Vertikale Bindung: Geschosshöhe, Oberkante, Decke, Dach",
       await expect(page.getByTestId("geschosshoehe-abweichend")).toBeVisible();
       // section: the storey dimension is the height of the ground floor, 3,60 m (not the uniform number 3,20)
       await page.getByRole("button", { name: "Ansicht Schnitt" }).click();
-      await expect(page.locator("svg text", { hasText: "3.60 m" }).first(), "Schnitt: Maßlinie Geschosshöhe 3,60 mit Tabelle").toBeVisible({ timeout: 15000 });
-      await expect(page.locator("svg text", { hasText: "3.20 m" })).toHaveCount(0);
+      await expect(page.locator("[data-schnittmasse] text", { hasText: "3,60" }).first(), "Schnitt: Maßkette Geschosshöhe 3,60 mit Tabelle").toBeVisible({ timeout: 15000 });
+      // 115-02: the storey chain measures every storey — the two storeys above keep 3,20 (before only the ground floor had a dimension)
+      await expect(page.locator("[data-schnittmasse] text", { hasText: "3,20" })).toHaveCount(2);
       await page.getByRole("button", { name: "Ansicht 3D" }).click();
       // raise the storey count after the table exists: the new storey 3 is no table row yet, its edited height must be kept (it used to snap back)
       await page.getByLabel("Geschosse", { exact: true }).selectOption("4");
       await page.getByTestId("geschosshoehe-3").fill("3.4");
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).geschosse?.[3]?.hoehe_m, { timeout: 20000, message: "neues Geschoss 3 bekommt eine Zeile mit 3,4" }).toBe(3.4);
       await expect(page.getByTestId("geschosshoehe-3")).toHaveValue("3.4");
       // "alle gleich" removes the table again (asks first, because the heights differ)
       page.once("dialog", (d) => d.accept());
       await page.getByRole("button", { name: "alle gleich (zurücksetzen)" }).click();
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).geschosse ?? null, { timeout: 20000 }).toBeNull();
 
       // ---- hull slabs: thickness is an input (review: it was only reachable from a unit test) and reaches the IFC ----
@@ -256,6 +262,7 @@ test.describe("107-02 Vertikale Bindung: Geschosshöhe, Oberkante, Decke, Dach",
       expect((await befehl(page, "auswahl-guid", { guid: huellWand.guid })).ok).toBe(true);
       await expect(page.getByTestId("huelle-decke-dicke")).toHaveValue("0.25");
       await page.getByTestId("huelle-decke-dicke").fill("0.3");
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).huelle_decke_dicke_m, { timeout: 20000, message: "Hüllplatten-Dicke wird gespeichert" }).toBe(0.3);
       ifc = await ifcLaden("huellplatte-0-3.ifc");
       const hullDicken = elemente(ifc, "IFCSLAB").map((x) => Math.round(x.tiefe * 1000) / 1000);

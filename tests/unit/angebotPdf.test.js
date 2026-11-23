@@ -45,7 +45,9 @@ test("Briefbauer: nur WinAnsi, passt in 79s briefLayout (Tabelle mit Spalten)", 
   const alles = [eingabe.betreff, ...eingabe.absaetze, ...eingabe.tabelle.kopf, ...eingabe.tabelle.zeilen.flat(), ...eingabe.absender, ...eingabe.empfaenger];
   for (const s of alles) assert.equal(ersetzeNichtWinAnsi(s).ersetzt, 0, s);
   assert.equal(eingabe.tabelle.spalten.length, 3);
-  assert.equal(HONORAR_BRIEFE.honorarangebot.version, 1);
+  // 115: version 2 puts the amount table before closing text and greeting (tests/unit/briefSchluss.test.js); the sent seed offer keeps version 1.
+  // 105-19 follow-up: version 3 = wording of 2, the fixed PDF also carries /Lang (tests/unit/pdfMetadaten-nachgang.test.js).
+  assert.equal(HONORAR_BRIEFE.honorarangebot.version, 3);
   assert.deepEqual(eingabe.absender, ["Architekturbüro Beispiel", "Musterweg 2", "00000 Musterstadt"]);
 });
 

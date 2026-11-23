@@ -37,6 +37,12 @@ const ALIASES = {
 const EXTENSIONS = ["", ".js", ".jsx", ".mjs", "/index.js", "/index.jsx"];
 
 export async function resolve(specifier, context, nextResolve) {
+  if (specifier.endsWith("?url")) {
+    // Vite's "?url" import (an asset's URL as default export, e.g. the pdfjs worker in pdfTools.js): resolved like the
+    // plain file and served by load() below as `export default "<file URL>"`, so such modules load under node.
+    const ziel = await resolve(specifier.slice(0, -4), context, nextResolve);
+    return { url: `${ziel.url}?url`, shortCircuit: true };
+  }
   if (Object.prototype.hasOwnProperty.call(UMLEITUNGEN, specifier)) {
     return nextResolve(pathToFileURL(path.join(ROOT, UMLEITUNGEN[specifier])).href, context);
   }
@@ -69,6 +75,9 @@ export async function resolve(specifier, context, nextResolve) {
  * @param {(url: string, context: object) => Promise<any>} nextLoad
  */
 export async function load(url, context, nextLoad) {
+  if (url.endsWith("?url")) {
+    return { format: "module", source: `export default ${JSON.stringify(url.slice(0, -4))};`, shortCircuit: true };
+  }
   if (url.endsWith(".json")) {
     const source = `export default ${readFileSync(fileURLToPath(url), "utf8")}`;
     return { format: "module", source, shortCircuit: true };

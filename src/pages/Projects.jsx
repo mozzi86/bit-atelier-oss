@@ -23,6 +23,7 @@ import ProjectGrid from "../components/projects/ProjectGrid";
 // 72-02: Drei-Karten-Leitfaden direkt nach dem Anlegen (Review §3 B.3).
 import Startpfad from "../components/projects/Startpfad";
 import ProjectFilters from "../components/projects/ProjectFilters";
+import { lockerPasst } from "@core/lib/lockereSuche.js";
 
 /** Fills {key} placeholders after translation. */
 const fuellen = (/** @type {string} */ text, /** @type {Record<string, any>} */ werte) => text.replace(/\{(\w+)\}/g, (_, k) => String(werte[k] ?? ""));
@@ -102,12 +103,10 @@ export default function Projects() {
 
     // Search filter — 72-01 A-7: fehlende Felder (z. B. kein Auftraggeber)
     // dürfen die Suche nicht mit einem TypeError abbrechen lassen.
+    // 111-13: the shared forgiving matcher (umlaut/ß spelling, word order, one typo); grid order stays.
     if (searchTerm) {
-      const such = searchTerm.toLowerCase();
       filtered = filtered.filter((project) =>
-        String(project.name || "").toLowerCase().includes(such) ||
-        String(project.client || "").toLowerCase().includes(such) ||
-        String(project.location?.address || project.location || "").toLowerCase().includes(such)
+        lockerPasst(searchTerm, `${project.name || ""} ${project.client || ""} ${String(project.location?.address || project.location || "")}`)
       );
     }
 

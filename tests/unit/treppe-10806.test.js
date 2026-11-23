@@ -2,7 +2,12 @@
 // Test house: tests/unit/fixtures/efh-108.js (EG 2.90 m, DG 2.60 m, hull slab 0.25 m standing on the storey elevation).
 // Hand calculation EG: n = round(2.90 / 0.175) = round(16.57) = 17, s = 2.90 / 17 = 0.17059, a = 0.63 − 2 · 0.17059 = 0.28882,
 //   run = 16 · 0.28882 = 4.621 m. Slab above the EG: elevation 2.90 + 2.90 = 5.80, bezug "unten" → underside 5.80 → 2.90 m over the EG
-//   floor → k_max = floor((2.90 − 2.00) / 0.17059) = floor(5.28) = 5 → opening from 5 · 0.28882 = 1.444 m to 4.621 m = 3.177 m long.
+//   floor. 115-13 review 20.11. (user decision): headroom measured above the line of the step nosings (treppeRegeln.kopfLochBeginn,
+//   DIN 18065 [ASSUMED measuring basis]) → the slab edge may lie at d_v = a · ((UK − 2.00) / s − 1) = 0.28882 · (0.90 / 0.17059 − 1)
+//   = 0.28882 · (5.27586 − 1) = 0.28882 · 4.27586 = 1.235 m → opening from 1.235 m to 4.621 m = 3.386 m long (corners rounded to mm:
+//   x −4 + 1.235 = −2.765 … 0.621), headroom at the edge 2.90 − 0.17059 − 1.235 · 0.17059 / 0.28882 = 2.000 m.
+//   (Before, 108-06: k_max = floor(0.90 / 0.17059) = 5 → from 5 · 0.28882 = 1.444 m, 3.177 m long, "2.047 m" above the TREAD; above the
+//   nosings that edge had only 2.90 − 6 · 0.17059 = 1.876 m.)
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { treppeBerechnen, treppenLoch, mitTreppenLoechern, treppeKoerper, treppenText, neueTreppe, deckeUeber } from "@core/lib/bauteil/treppe.js";
@@ -51,14 +56,15 @@ describe("108-06 treppeBerechnen", () => {
 });
 
 describe("108-06 treppenLoch + mitTreppenLoechern", () => {
-  it("opening from 1.444 m to the austritt, 3.177 m long, 1.00 m wide, headroom ok", () => {
+  it("opening from 1.235 m to the austritt, 3.386 m long, 1.00 m wide, headroom 2.00 m above the nosings", () => {
     const e = treppeBerechnen(EG, 2.9);
     const l = treppenLoch(EG, e, 2.9);
     assert.ok(l);
-    assert.equal(l.laenge_m, 3.177);
+    assert.equal(l.laenge_m, 3.386);
     assert.equal(l.breite_m, 1);
     assert.equal(l.warnung, null);
-    assert.deepEqual(l.points[0], { x: -2.556, z: -2.5 });
+    assert.equal(l.kopfhoehe_m, 2);
+    assert.deepEqual(l.points[0], { x: -2.765, z: -2.5 });
     assert.deepEqual(l.points[1], { x: 0.621, z: -2.5 });
   });
   it("loch_breite_m override widens the opening (stringer side)", () => {
@@ -76,7 +82,7 @@ describe("108-06 treppenLoch + mitTreppenLoechern", () => {
     const { model, loecher } = mitTreppenLoechern(m, [EG], EFH_108.geschosse);
     assert.equal(loecher.length, 1);
     assert.equal(loecher[0].id, "treppe-7");
-    assert.equal(loecher[0].flaeche_m2, 3.177);
+    assert.equal(loecher[0].flaeche_m2, 3.386);
     const decke = deckeUeber(model, 0, EFH_108.geschosse);
     assert.ok(decke);
     assert.equal(decke.oeffnungen_abgeleitet.length, 1);

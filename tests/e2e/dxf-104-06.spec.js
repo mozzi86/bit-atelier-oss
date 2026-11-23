@@ -9,6 +9,8 @@
 // Eigene Projekte, Aufräumen im finally; Konsole sauber (ERLAUBT_OFFLINE).
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -82,6 +84,7 @@ test("104-06 Lageplan als DXF + Rundlauf über den eigenen Flurstück-Import", a
     await expect(page.getByTestId("sd-grenze-meldung")).toContainText("gezeichnete Grundstück bleibt");
     await page.getByTestId("sd-flurstuecke-grenze").click();
     const schluessel = (/** @type {any[]} */ pts) => (pts || []).map((p) => `${Number(p.x).toFixed(2)}|${Number(p.y).toFixed(2)}`).sort().join(";");
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(async () => {
       const r = await (await request.get(`/api/entities/BuildingComplex/${bc}`)).json();
       return `${r.site_parcel?.assumed}|${r.site_parcel?.source}|${schluessel(r.site_parcel?.points)}`;
@@ -126,6 +129,7 @@ test("101-03 DXF-Flurstücke: zwei Flurstücke → eine Grenze; Lücke → ehrli
     const zeilen = page.getByTestId("sd-flurstuecke").locator("div.flex");
     await expect(zeilen).toHaveCount(2);
     await expect(zeilen.first()).toContainText("101/");
+    await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
     await expect.poll(async () => {
       const r = await (await request.get(`/api/entities/BuildingComplex/${bc}`)).json();
       return `${r.site_parcel?.assumed}|${r.site_parcel?.source}|${r.site_parcel?.points?.length}|${r.site_area}`;

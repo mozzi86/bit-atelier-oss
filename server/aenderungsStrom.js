@@ -247,9 +247,11 @@ export function aenderungsStrom({ puffer = PUFFER_JE_PROJEKT, pufferAlterMs = PU
 /**
  * Middleware that turns every successful write of a streamed entity into one event. Mount on /api BEFORE
  * entitiesRouter: it reads the record before a PUT/DELETE, catches the route's JSON answer and reports after the
- * response finished with 2xx. Bulk writes (/entities/:e/bulk) are not streamed (imports, no device edits).
+ * response finished with 2xx. B-106-10-02: bulk writes (POST/PUT /entities/:e/bulk) are streamed as well, one event per
+ * created or updated record (bulkMelden) - every server write path on a streamed entity emits the event; the recycle bin
+ * reports its moves through papierkorbRouter's nachAenderung (server/index.js).
  * @param {ReturnType<typeof aenderungsStrom>} strom
- * @param {{get: (entity: string, id: string) => any}} db
+ * @param {{get: (entity: string, id: string) => any, list?: (entity: string) => any[]}} db  list = upsert by another key
  * @param {{entitaeten?: ReadonlyArray<string>, geraetVon?: (req: any) => {id: string, name: string}|null}} [o]
  * @returns {import('express').RequestHandler}
  */
@@ -257,9 +259,15 @@ export function aenderungenMelden(strom, db, { entitaeten = STROM_ENTITAETEN, ge
   const menge = new Set(entitaeten);
   return (req, res, next) => {
     const m = /^\/entities\/([^/]+)(?:\/([^/]+))?$/.exec(req.path);
-    if (!m || !menge.has(m[1])) return next();
-    const [, entitaet, id] = m;
+    if (!m) return next();
+    // B-106-10-02: compare the DECODED name and id, like the entity routes do - "/entities/Bim%4Dodel/<id>" writes BimModel and
+    // must be streamed like the plain spelling (lesson of B-106-10-01). An undecodable segment never reaches a route as a model.
+    let entitaet, id;
+    try { entitaet = decodeURIComponent(m[1]); id = m[2] == null ? undefined : decodeURIComponent(m[2]); } catch { return next(); }
+    if (!menge.has(entitaet)) return next();
     const methode = req.method;
+    // B-106-10-02: every server write path on a streamed entity emits the event - the bulk routes as well.
+    if (id === 'bulk' && (methode === 'POST' || methode === 'PUT')) return bulkMelden(strom, db, req, res, next, entitaet, geraetVon);
     const passt = (methode === 'POST' && !id) || ((methode === 'PUT' || methode === 'DELETE') && id && id !== 'bulk');
     if (!passt) return next();
     let vorher = null;
@@ -281,6 +289,59 @@ export function aenderungenMelden(strom, db, { entitaeten = STROM_ENTITAETEN, ge
     });
     next();
   };
+}
+
+/**
+ * B-106-10-02: events of one bulk write (POST /entities/:e/bulk = bulkCreate, PUT /entities/:e/bulk = bulkUpsert by `key`).
+ * Before the route runs it notes which existing records the PUT body will update (by its key, the last match like
+ * bulkUpsert); after a 2xx answer it reports one "geaendert" event per updated record (fields = the sent ones, several body
+ * rows on one record merged) and one "angelegt" event per created id of the answer, each with the record as stored.
+ * @param {ReturnType<typeof aenderungsStrom>} strom
+ * @param {{get: (entity: string, id: string) => any, list?: (entity: string) => any[]}} db
+ * @param {any} req @param {any} res @param {() => void} next
+ * @param {string} entitaet decoded entity name
+ * @param {(req: any) => {id: string, name: string}|null} geraetVon
+ * @returns {void}
+ */
+function bulkMelden(strom, db, req, res, next, entitaet, geraetVon) {
+  const methode = req.method;
+  const zeilen = Array.isArray(req.body?.records) ? req.body.records.filter((z) => z && typeof z === 'object') : [];
+  /** @type {Map<string, {vorher: any, body: Record<string, any>}>} updated records by id (PUT only) */
+  const geaendert = new Map();
+  if (methode === 'PUT' && zeilen.length) {
+    const key = req.body?.key || 'id';
+    /** @type {Map<any, any>} */
+    let index = new Map();
+    try {
+      if (key === 'id') for (const z of zeilen) { const r = z.id !== undefined ? db.get(entitaet, z.id) : null; if (r) index.set(z.id, r); }
+      else for (const r of (db.list ? db.list(entitaet) : [])) if (r?.[key] !== undefined) index.set(r[key], r);
+    } catch { index = new Map(); }
+    for (const z of zeilen) {
+      const r = z[key] !== undefined ? index.get(z[key]) : undefined;
+      if (!r) continue;
+      const bisher = geaendert.get(r.id);
+      geaendert.set(r.id, { vorher: bisher?.vorher ?? { ...r }, body: { ...(bisher?.body || {}), ...z } });
+    }
+  }
+  let antwort = /** @type {any} */ (null);
+  const json = res.json.bind(res);
+  res.json = (/** @type {any} */ body) => { antwort = body; return json(body); };
+  res.on('finish', () => {
+    if (res.statusCode < 200 || res.statusCode >= 300) return;
+    const geraet = geraetVon(req), client = clientAus(req);
+    const melden = (/** @type {any} */ w) => {
+      try {
+        const e = ereignisAusSchreiben({ ...w, entitaet, geraet, client });
+        if (e) strom.melden(e);
+      } catch (err) {
+        console.error(`[abgleich] event not reported: ${/** @type {any} */ (err)?.message || err}`);
+      }
+    };
+    for (const [rid, g] of geaendert) melden({ methode: 'PUT', id: rid, datensatz: db.get(entitaet, rid), vorher: g.vorher, body: g.body });
+    const ids = Array.isArray(antwort?.ids) ? antwort.ids : [];
+    for (const nid of ids) melden({ methode: 'POST', id: nid, datensatz: db.get(entitaet, nid) });
+  });
+  next();
 }
 
 /**

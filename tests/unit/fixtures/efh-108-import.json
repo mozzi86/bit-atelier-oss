@@ -1,0 +1,41 @@
+{
+  "format": "bit-modell",
+  "version": 1,
+  "einheit": "m",
+  "achsen": "x-rechts-z-sued",
+  "programm": {
+    "footprintM": [{ "x": -5.7, "z": -5.1 }, { "x": 5.7, "z": -5.1 }, { "x": 5.7, "z": 5.1 }, { "x": -5.7, "z": 5.1 }],
+    "storeys": 2,
+    "storeyHeight": 2.9,
+    "untergeschosse": 1,
+    "geschosse": [
+      { "level": -1, "name": "KG", "hoehe_m": 2.75 },
+      { "level": 0, "name": "EG", "hoehe_m": 2.9 },
+      { "level": 1, "name": "DG", "hoehe_m": 2.6, "kniestock_m": 1 }
+    ]
+  },
+  "dachform": "sattel",
+  "dachneigung": 45,
+  "entranceCfg": { "enabled": false },
+  "customWalls": [
+    { "_idx": 1, "level": 0, "a": { "x": -0.5, "z": -5.1 }, "b": { "x": -0.5, "z": 5.1 }, "thickness": 0.115 },
+    { "_idx": 2, "level": 0, "a": { "x": -0.5, "z": 0.6 }, "b": { "x": 5.7, "z": 0.6 }, "thickness": 0.115 },
+    { "_idx": 3, "level": 1, "a": { "x": 0.5, "z": -5.1 }, "b": { "x": 0.5, "z": 5.1 }, "thickness": 0.1 }
+  ],
+  "customWindows": [
+    { "_idx": 4, "wallIdx": 1, "u": 3, "kind": "door", "width": 0.885, "height": 2.01, "sill": 0, "anschlag": "links", "aufschlag": "innen" },
+    { "_idx": 5, "wallIdx": 2, "u": 2, "kind": "door", "width": 0.76, "height": 2.01, "sill": 0, "anschlag": "rechts", "aufschlag": "aussen" }
+  ],
+  "envOpenings": [
+    { "_idx": 6, "level": 0, "edge": 0, "u": 2.2, "kind": "door", "width": 1.01, "height": 2.135, "sill": 0 },
+    { "_idx": 7, "level": 0, "edge": 2, "u": 3, "kind": "window", "width": 1.26, "height": 1.385, "sill": 0.9 },
+    { "_idx": 8, "level": 1, "edge": 1, "u": 5.1, "kind": "window", "width": 1.01, "height": 1.26, "sill": 2.2 }
+  ],
+  "customZones": [
+    { "_idx": 9, "level": 0, "name": "Raum A", "points": [{ "x": -5.7, "z": -5.1 }, { "x": -0.5, "z": -5.1 }, { "x": -0.5, "z": 5.1 }, { "x": -5.7, "z": 5.1 }] },
+    { "_idx": 10, "level": 0, "name": "Raum B", "points": [{ "x": -0.5, "z": -5.1 }, { "x": 5.7, "z": -5.1 }, { "x": 5.7, "z": 0.6 }, { "x": -0.5, "z": 0.6 }] }
+  ],
+  "customStairs": [
+    { "_idx": 11, "level": 0, "art": "gerade", "start": { "x": 1, "z": 2 }, "richtung_grad": 0, "breite_m": 1 }
+  ]
+}

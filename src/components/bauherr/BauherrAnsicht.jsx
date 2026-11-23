@@ -18,6 +18,8 @@ import { flaecheAntwort, flaecheFeld, flaecheFehler, flaecheKarte, flaecheKnopf,
 
 // 110-05: the viewer (three, GLTFLoader) only loads when the client opens a model.
 const Modell3D = lazy(() => import('./Modell3D'));
+// W-1118-22: the furnishing editor is loaded only for a client who has a furnishing released
+const MoeblierungAnsicht = lazy(() => import('./MoeblierungAnsicht'));
 
 const EURO = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 const DATUM = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium' });
@@ -36,7 +38,7 @@ const knopfLeise = `rounded-md ${flaecheKnopfLeise} px-3 py-1.5 text-sm font-med
 
 /**
  * @typedef {{
- *   onRueckmeldung?: (eingabe: { art: string, bezug?: Record<string, any>|null, text?: string, option?: string }) => Promise<void>,
+ *   onRueckmeldung?: (eingabe: { art: string, bezug?: Record<string, any>|null, text?: string, option?: string, vorschlag?: string }) => Promise<void>,
  *   onDatei?: (zeile: Record<string, any>) => void,
  *   onDateiUrl?: (zeile: Record<string, any>) => Promise<string>,
  *   onHochladen?: (datei: File, text: string) => Promise<void>,
@@ -260,6 +262,12 @@ function Eintrag({ art, zeile, entscheidung, vorschau, onRueckmeldung, onDatei, 
       </div>
       {/* The model opens read-only, so also in the office preview (local copy of the studio's file). */}
       {art === 'BauherrModell' && onDateiUrl && zeile.datei && <ModellAnsicht zeile={zeile} onDateiUrl={onDateiUrl} />}
+      {/* W-1118-22: furniture can be tried out in the office preview too; only the real portal sends a proposal */}
+      {art === 'BauherrMoeblierung' && (
+        <Suspense fallback={<p className={`text-sm ${flaecheLeise}`}>{t('Wird geladen …')}</p>}>
+          <MoeblierungAnsicht zeile={zeile} vorschau={vorschau} onRueckmeldung={onRueckmeldung} />
+        </Suspense>
+      )}
       <Entscheidung zeile={zeile} entscheidung={entscheidung} vorschau={vorschau} onRueckmeldung={onRueckmeldung} />
     </li>
   );

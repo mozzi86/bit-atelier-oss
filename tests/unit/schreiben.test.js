@@ -87,7 +87,7 @@ test("kontextFuer rechnung Stufe 2 — Zinsen und Pauschale aus mahnungen[], Tex
   const mahnText = (/** @type {any} */ re, /** @type {number} */ stufe) => {
     const f = mahnTextFelder(re, stufe, { heute: "2026-09-28", einst: {}, briefkopf: {}, vertrag: null }, T);
     const b = mahnBrief(f);
-    return { betreff: b.betreff || "", absaetze: b.absaetze || [], tabelle: /** @type {any} */ (b.tabelle), offenCent: f.offenCent, zinsenCent: f.zinsenCent, pauschaleCent: f.pauschaleCent, summeCent: f.summeCent };
+    return { betreff: b.betreff || "", absaetze: b.absaetze || [], schluss: b.schluss || [], tabelle: /** @type {any} */ (b.tabelle), offenCent: f.offenCent, zinsenCent: f.zinsenCent, pauschaleCent: f.pauschaleCent, summeCent: f.summeCent };
   };
   const k = kontextFuer({ typ: "rechnung", id: "re-t", stufe: 2 }, { heute: "2026-09-28", rechnungen: [rechnung], mahnText });
   assert.equal(k.daten.mahnung.zinsen, 173.76);
@@ -97,8 +97,12 @@ test("kontextFuer rechnung Stufe 2 — Zinsen und Pauschale aus mahnungen[], Tex
   assert.equal(k.project_id, null);
   assert.equal(k.empfaenger?.firma, "Beispiel Immobilien GmbH");
   assert.equal(k.empfaenger?.plz, "90402");
-  const erwartet = mahnBrief(mahnTextFelder(rechnung, 2, { heute: "2026-09-28", einst: {}, briefkopf: {}, vertrag: null }, T)).absaetze;
+  const erwartetBrief = mahnBrief(mahnTextFelder(rechnung, 2, { heute: "2026-09-28", einst: {}, briefkopf: {}, vertrag: null }, T));
+  const erwartet = erwartetBrief.absaetze;
   assert.equal(k.text, (erwartet || []).join("\n\n"));
+  // 115: deadline sentence and greeting follow the amount table as the closing text.
+  assert.equal(k.schluss, (erwartetBrief.schluss || []).join("\n\n"));
+  assert.ok(String(k.schluss).endsWith("Mit freundlichen Grüßen"));
   assert.ok(String(k.text).includes("RE-2026-005"));
   // Without 79's builder the letter says so instead of inventing a text.
   assert.deepEqual(kontextFuer({ typ: "rechnung", id: "re-t", stufe: 2 }, { heute: "2026-09-28", rechnungen: [rechnung] }).hinweise, ["Mahntext aus der Buchhaltung nicht verfügbar"]);

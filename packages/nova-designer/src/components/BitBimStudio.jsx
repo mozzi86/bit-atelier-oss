@@ -21,7 +21,7 @@ import {
   Boxes, WifiOff, Layers, Box, Grid2x2, Scissors,
   MousePointer2, RectangleHorizontal, Columns3, Square, Triangle,
   DoorOpen, AppWindow, Frame, Eye, EyeOff, Lock, LockOpen, Ruler, Type, PenLine, Trash2, Undo2, Redo2,
-  Sparkles, Sun, Focus, Keyboard, Camera, Copy, Star, RotateCcw, SquareDashed, Footprints, Maximize, Crosshair,
+  Sparkles, Sun, Focus, Keyboard, Camera, Copy, Star, RotateCcw, RotateCw, SquareDashed, Footprints, Maximize, Crosshair,
 } from "lucide-react";
 import { FACADE_PRESETS, facadeMaterial, sunFromHour, createCityLife, updateCityLife } from "@designer/components/renderModeAssets";
 import { bodenBelag, wandOberflaechen, rahmenBaustoffe, glasBaustoffe, bodenBelaege } from "@core/lib/bauteil/erscheinung.js";
@@ -37,7 +37,9 @@ import { EN as ERSCHEINUNG_EN } from "@core/lib/i18nTeile/erscheinung-material.j
 const BAUHERR_NACHZIEHEN_MS = 4000;
 
 const DEFAULT_LAYERS = [
-  { id: "terrain", name: "Gelände", visible: true, locked: false },
+  // 108-10: two terrain layers. "terrain" keeps its id (stored layer switches of older projects still apply) and is the existing ground.
+  { id: "terrain", name: "Gelände Bestand", visible: true, locked: false },
+  { id: "terrainNeu", name: "Gelände neu", visible: true, locked: false },
   { id: "context", name: "Umgebung", visible: true, locked: false },
   { id: "shell", name: "Gebäudehülle", visible: true, locked: false },
   { id: "attika", name: "Attika", visible: true, locked: false },
@@ -51,9 +53,9 @@ const DEFAULT_LAYERS = [
 
 // Layer-Kombinationen: welche Ebenen je Kombination sichtbar sind.
 const LAYER_COMBOS = {
-  "Alle zeigen": ["terrain", "context", "shell", "attika", "walls", "columns", "zones", "openings", "dimensions", "labels"],
+  "Alle zeigen": ["terrain", "terrainNeu", "context", "shell", "attika", "walls", "columns", "zones", "openings", "dimensions", "labels"],
   "Architektur 1:100": ["shell", "attika", "walls", "columns", "zones", "openings", "dimensions", "labels"],
-  "Lageplan": ["terrain", "context", "shell", "attika"],
+  "Lageplan": ["terrain", "terrainNeu", "context", "shell", "attika"],
   "Rohbau": ["shell", "attika", "walls", "columns"],
   "Plan-Ausgabe": ["shell", "attika", "walls", "columns", "zones", "openings", "dimensions", "labels"],
 };
@@ -65,6 +67,7 @@ const SHORTCUTS = [
   { keys: "S", desc: "Werkzeug Stütze" },
   { keys: "D", desc: "Werkzeug Decke" },
   { keys: "F", desc: "Zoom auf Auswahl" },
+  { keys: "F3", desc: "Durchlaufen" }, // F-23-01: handled by the BIM-D listener (261110-mzj); label already in i18nTeile/navigation-3d.js
   { keys: "Strg+D", desc: "Auswahl duplizieren (+1 m)" },
   { keys: "Strg+Z", desc: "Rückgängig" },
   { keys: "Strg+Y", desc: "Wiederholen" },
@@ -97,7 +100,7 @@ import { steckbriefFelder } from "@designer/components/SteckbriefFelder";
 import { aufbauEditorFelder, AUFBAUTEN_LEER } from "@designer/components/AufbauEditor";
 import { useFachlayer } from "@designer/lib/useFachlayer";
 import { wandEndeVerschieben, wandLaengeSetzen, aufschlagZurKlickseite, innenSeiteVon, auswahlVerschieben, auswahlGetroffen, zugBezugspunkt, fangQuellenDerAuswahl, massEingabeLesen, punktInRichtung } from "@core/lib/bauteil/grundrissBearbeiten.js"; // Grundriss-Bedienung parts 1–3
-import { leereHistorie, vorAenderung, zieheStart, zieheEnde, zieheAbbrechen, schrittZurueck, schrittVor, historieUmbasieren } from "@designer/lib/bimHistorie";
+import { leereHistorie, historieAblegen, historieHolen, historieVergessen, vorAenderung, zieheStart, zieheEnde, zieheAbbrechen, schrittZurueck, schrittVor, historieUmbasieren, historieElementeUmbasieren, historieNaechsteIdx, altGuidsVerwerfen, relationenUmschluesseln } from "@designer/lib/bimHistorie";
 import {
   wandAnlegen, wandAusRichtung, oeffnungAnlegen, deckeAnlegen, zoneAnlegen, elementAendern, elementLoeschen, notizAnlegen,
   geschossKopieren, zaehleGeschoss, abfragen, fussabdruckNachDoppelklick, griffLoeschenErlaubt, editorKuerzel, fokusImEditor, elementFuerApi, oeffnungenOhneWaende, alleWaehlenKuerzel, alleImGeschoss, auswahlErgaenzen,
@@ -105,7 +108,7 @@ import {
 import ZeichenMasszeile from "@designer/components/ZeichenMasszeile";
 import ZahlFeld from "@designer/components/ZahlFeld";
 import { setzeProjektAufbauten, gibProjektAufbautenFrei, overridesNachEntfernen } from "@core/lib/bauteil/aufbauten.js";
-import { steckbrief, typFuerWand, guidsAnheften, bauteilGuid } from "@core/lib/bauteil/steckbrief.js";
+import { steckbrief, typFuerWand, guidsAnheften, guidsUebernehmen, bauteilGuid } from "@core/lib/bauteil/steckbrief.js";
 import { useCsgCache } from "@designer/lib/useCsgCache"; // 107-09: mesh cache of the CSG solids (cache modules load lazily)
 import { attributeVon, attributPatch, mitAttributen, werkstattMitAttributen } from "@core/lib/bauteil/attribute.js";
 import { statusFarbe } from "@core/lib/plan/statusDarstellung.js";
@@ -114,15 +117,21 @@ import { wandGeometrie, wandDicke_m, eckfueller } from "@core/lib/bauteil/refere
 import { elevationOf, unterkante, wandHoehe, stuetzenHoehe, geschosshoehe, deckenLage, oberkanteFolgtGeschoss, dachFirsthoehe_m, dachNeigung_grad, dachMigrieren, geschosseAus, MAX_NEIGUNG_GRAD, FLACHDACH_BIS_GRAD, DECKEN_STANDARD, kniestockAus, kniestockVerwaist, patchKniestock, MAX_KNIESTOCK_M } from "@core/lib/bauteil/hoehen.js";
 import { vollgeschossAusDach } from "@core/lib/bauteil/vollgeschoss.js"; // 108-02: full-storey rule of the attic from the roof geometry
 import { dachBerechnen, dachDreiecke, dachVonDachelement, globalesDach, schnittAchseQuerZumFirst, dachEbenen } from "@core/lib/bauteil/dachGeometrie.js"; // 107-10: one roof library for 3D, IFC and solid relations
-import { treppeBerechnen, mitTreppenLoechern, treppeKoerper, treppenText, neueTreppe, deckeUeber, treppenLoch } from "@core/lib/bauteil/treppe.js"; // 108-06: stairs as elements, derived slab openings
+import { gelaendeEbenen, erdmassenZwischen, gelaendeProfil, hoeheBei } from "@core/lib/massing/gelaendeEbenen.js"; // 108-10: existing and new ground
+import { oeffnungGegenGelaende, geschosseGegenGelaende, umrissUeberGelaende, UNTER_GELAENDE_TOL_M, VOLLGESCHOSS_UEBER_GELAENDE_M } from "@core/lib/massing/gelaendePruefung.js"; // 108-10: checks against the ground
+import { rasterGeometrie, gelaendeMaterial } from "@designer/lib/gelaendeEbenenNetz"; // 108-10
+import { startLageSite } from "@core/lib/massing/lage.js"; // 108-10: site position of the model origin for the sandbox terrain
+import { treppeBerechnen, mitTreppenLoechern, treppeKoerper, neueTreppe } from "@core/lib/bauteil/treppe.js"; // 108-06: stairs as elements, derived slab openings
+import { istUTreppe, treppeUBerechnen, treppeUKoerper } from "@core/lib/bauteil/treppeU.js"; // 115-13: two-flight stair with landing (3D)
 import { gaubeBerechnen, gaubenDreiecke, neueGaube, GAUBE_STANDARD } from "@core/lib/bauteil/gauben.js"; // 108-13: dormers on the global roof
+import { vordachBerechnen, quaderDreiecke, neuesVordach, VORDACH_STANDARD } from "@core/lib/bauteil/vordach.js"; // W-1118-29: canopies on a hull wall
 import { mitGiebelProfilen, mitWandProfilen } from "@core/lib/bauteil/giebel.js"; // 108-03: hull walls of the top storey up to the roof contour; drawn attic walls cut at the roof
 import { SOLIDRELATIONEN_LEER, relationenVon, relationAnlegen, relationAktivSetzen, aktiveRelationenFuer, relationWirkt, istSeoCacheSchluessel } from "@core/lib/bauteil/seoRelationen.js"; // 107-10: stored solid relations (pure; seo.js loads lazily)
 import { csgWarnungText } from "@core/lib/bauteil/csgWarnung.js";
 import { BRILLEN, brilleVon, sichtbarUnter, zeigtStatus, STANDARD_BRILLE } from "@core/lib/plan/brillen.js";
 import BrillenLeiste from "@designer/components/BrillenLeiste";
 import FehlplanungHinweise from "@designer/components/FehlplanungHinweise";
-import { planGrafik, vektorPlanPdf, schnittGrafik } from "@designer/lib/vektorPlan";
+import { planGrafik, vektorPlanPdf, schnittGrafik, plansatzPdf } from "@designer/lib/vektorPlan";
 import { objektFreigeben } from "@core/lib/threeFreigeben";
 // 106-01: one ray pick and one highlighter for every viewer (hover, click, later VR controllers).
 import { identitaetAus, pickDrossel, zeigerPick, zeigerArt, TIPP_TOLERANZ_PX, strahlPick, weltNormale } from "@core/lib/zeigen/strahlPick.js";
@@ -136,7 +145,7 @@ import { hervorhebung } from "@core/lib/zeigen/hervorheben.js";
 import { ZEIGE_ZUSTAENDE, ZEIGE_CSS_RAND } from "@core/lib/zeigen/zustaende.js";
 import { bauteilInfoAus, bauteilSchluessel, huellwandGuid } from "@designer/lib/bauteilInfo.js";
 import { auswahlBefehleRegistrieren } from "@core/lib/zeigen/auswahlBefehle.js";
-import { befehlsRegister } from "@core/lib/befehlsregister.js";
+import { befehlsRegister, registerAnmelden } from "@core/lib/befehlsregister.js";
 // 107-07: plan clicks go through the shared snap core first (no second snap mechanism), and duplicate knows typed "*n" / "/n"
 // through the shared array core of the massing modeller.
 import { fangIndex, fangPunkt, segmenteAusRingen, zeichenWinkel, QUELLE_URSPRUNG } from "@core/lib/objektfang.js";
@@ -154,7 +163,7 @@ import { planWahlText, passenderPlan, planPdfDateiname, pdfDataUrl } from "../li
 import { KENNUNG_FELDER, kiMarkierungen, modellStandUnbekannt, ungespeicherteFelder, vermerkNoetig } from "@core/lib/zeigen/planStand.js";
 // 107-12: view state (saved views, structure display, options, rules) and the export derivation with time limit
 import {
-  ANSICHT_LEER, ANSICHT_MASSSTAEBE, EIGENE_KOMBINATION, MAX_AUSSCHNITTE, STANDARD_REGELN, RUECKFALL_VERMERK, ableitungFuerAusgabe, ausschnitteWiederherstellen,
+  ANSICHT_LEER, ANSICHT_MASSSTAEBE, EIGENE_KOMBINATION, MAX_AUSSCHNITTE, STANDARD_REGELN, RUECKFALL_VERMERK, ableitungFuerAusgabe, rueckfallAnzahl, ausschnitteWiederherstellen,
   ebenenSichtbarkeit, optionenOhneStandard, strukturAufMeshAnwenden, ansichtLayerNormalisieren, ausschnittGleich, ausschnittNormalisieren,
   ebenenAnwenden, naechsteAusschnittId, optionenFuer, tragendVon, wandFunktionen, darstellungsWerte, dreiDElementDarstellung, regelnKlonen,
 } from "@core/lib/plan/ansichtszustand.js";
@@ -170,6 +179,11 @@ import { AenderungsFeld } from "@core/components/zeigen/AenderungsVorschau.jsx";
 const AbgleichHinweise = React.lazy(() => import("@core/components/abgleich/AbgleichHinweise.jsx"));
 // 107-12: the view-parameter block of the navigator, lazy so the studio chunk does not grow
 const AnsichtOptionen = React.lazy(() => import("@designer/components/AnsichtOptionen.jsx"));
+// 115-13: inspector rows of a stair (type choice with preview, U stair fields) — lazy, the designer chunk is the largest of the build
+const TreppeInspektor = React.lazy(() => import("@designer/components/TreppeInspektor.jsx"));
+// 115-13 review 20.11. (finding 7): the lazily loaded stair rows get their own boundary — a chunk that fails to load (deploy, offline)
+// shows a hint in place of the rows; the inspector frame (title, "Löschen") and the studio keep working
+import { TeilFehlergrenze } from "@core/components/ModulFehlergrenze";
 // 106-05: speech and typed sentences at the model (grammar first, model fallback, confirmation only by the person).
 import SprechFeld from "@core/components/zeigen/SprechFeld.jsx";
 // 106-08: "In VR ansehen" (only with a WebXR device; the session code loads on demand)
@@ -191,6 +205,7 @@ import { starteSteuerungsBruecke } from "@core/lib/steuerungsBruecke.js";
 import { bimBauteil, bimPerGuid, bimModellUebersicht, bimAuswahlKontext } from "@designer/lib/auswahlBim.js";
 // 104-06: floor plan as DXF R12 (own writer, no dependency).
 import { grundrissDxfDaten, dxfDatei, dxfDateiname, DXF_MIME } from "@designer/lib/dxfPlaene";
+import { ansichtDrehung, blattDrehungWirksam, drehePunktZurueck, drehungWeiter } from "@core/lib/plan/planDrehung.js"; // 115-04: plan rotation (screen) and sheet orientation (PDF / DXF)
 import { dateiAnbieten } from "@core/lib/tabellenExport";
 import { fehlplanungPruefen } from "@core/lib/bauteil/pruefregeln.js";
 // 107-04: sizes, host and height anchor of an opening come from this one file (3D hole, plan symbol, room module and IFC read the same numbers);
@@ -215,14 +230,28 @@ import { runSolve } from "@sketch/lib/solveCore.js";
 import SketchGeometry from "@sketch/components/SketchGeometry.jsx";
 import SketchEditOverlay from "./SketchEditOverlay.jsx";
 import { autoEnvOpenings, entranceOpening, ENTRANCE_DEFAULT, ENTRANCE_START, eingangWirksam, eigeneEgTuer } from "@designer/lib/autoOpenings"; // 108-01: entrance in effect (D-EFH-04)
-import { loadBimModel, saveBimModel, aufFremdenStand, aufBimModelAenderung, feldSperren, feldFreigeben, feldGesperrt, storeGehoertZu } from "@core/lib/useBimModelSync";
+import { loadBimModel, saveBimModel, bimModelNachschreiben, bimModelStandPruefen, aufFremdenStand, aufBimModelAenderung, feldSperren, feldFreigeben, feldGesperrt, felderZurueckgehalten, storeGehoertZu } from "@core/lib/useBimModelSync";
+// 115-05a (D-115-50): stand protection — a clean tab reloads a foreign state, a tab with own changes merges with the full base,
+// nothing is written before the own project is loaded, a pending change is flushed on a project switch
+import { studioSauber, standEntscheiden } from "@core/lib/abgleich/standEntscheidung.js";
+import { nachschreibenMitHinweis } from "@designer/lib/nachschreibenHinweis.js";
+import { IDX_LISTEN } from "@core/lib/abgleich/idxListen.js";
+import { studioWerteAusDatensatz, studioPatch } from "@designer/lib/studioLaden.js";
+// 115-05c (D-115-12): the draft of the model and the studio's part in it - loaded lazily (size budget of this chunk)
+const entwurfModul = () => import("@core/lib/entwurf/entwurfStand.js");
+void import("@core/lib/i18nTeile/entwurf-115-05.js").then((m) => englischErgaenzen(m.EN)).catch(() => { /* German stays */ });
+const studioEntwurfModul = () => import("@designer/lib/studioEntwurf.js");
+// fetched as soon as the designer's chunk is there (not only when the studio loads a project): the load of a model waits for the draft
+// module and the person - without the head start the model came on screen later than before 115-05c
+if (typeof window !== "undefined") void Promise.all([entwurfModul().then((E) => E.benutzerBereit()), studioEntwurfModul()]).catch(() => { /* loaded again on use */ });
+import { EN as EN_STANDSCHUTZ } from "@core/lib/i18nTeile/standschutz-115-05.js"; // lazy part (entry chunk budget)
+import { toast } from "sonner";
 // 106-09: changes of other devices (three-way per element, conflicts with both versions, note with origin)
 import { abgleichStand, abgleichZeigen } from "@core/lib/abgleich/abgleichStand";
-import { ELEMENT_FELDER, STUDIO_WERTE, fremdeElementeAbgleichen, konfliktZeilen, konfliktAufloesen, aenderungsZeilen, vorschlaegeNeuPruefen, neueKollisionenUmnummern } from "@core/lib/abgleich/modellAbgleich";
+import { ELEMENT_FELDER, STUDIO_WERTE, feldName, fremdeElementeAbgleichen, konfliktZeilen, konfliktAufloesen, aenderungsZeilen, vorschlaegeNeuPruefen, neueKollisionenUmnummern, elementDiff } from "@core/lib/abgleich/modellAbgleich";
 import { gleichWert } from "@core/lib/abgleich/dreiWege";
 import BimPlan2D from "@designer/components/BimPlan2D";
 import { usePlanHoehe } from "@designer/lib/usePlanHoehe";
-import { exportExposePng } from "@designer/components/MassingView3D";
 import { exportIFC, WARNART_GESCHOSS, WARNART_DURCHBRUCH, WARNART_MASSING, WARNART_VERSCHNEIDUNG, WARNART_DACH, WARNART_SEO } from "@designer/lib/ifcExport";
 import { useBuildingProgram, buildingProgram, fmtLen } from "@core/lib/useBuildingProgram";
 import { werkstattBauteile } from "@core/lib/werkstattBauteile";
@@ -235,6 +264,7 @@ englischErgaenzen(EN_ANSICHT_10712);
 englischErgaenzen(EN_UEB_55);
 englischErgaenzen(EN_EFH_108);
 englischErgaenzen(EN_GRUNDRISS); // Grundriss-Bedienung part 1: hints of the wall-end drag, snap names, selection
+englischErgaenzen(EN_STANDSCHUTZ); // 115-05a: labels of the lists merged live, notes of the stand protection
 
 // 107-01: effective wall thickness, reference-line offset and corner fillers come from @core
 // (bauteil/referenz.js: wandDicke_m, wandGeometrie, eckfueller) — one derivation for 3D, plan, PDF and IFC.
@@ -278,6 +308,9 @@ function buildGlazing(type, u, glassMat, frameMat, kind, leafMat) {
   }
   return g;
 }
+
+/** German decimal with two places for a height or volume ("312,67"); "—" without a number. */
+const koteZahl = (/** @type {number|null|undefined} */ v) => (Number.isFinite(v) ? Number(v).toFixed(2).replace(".", ",") : "—");
 
 // Setzt die Sichtbarkeit aller getaggten Meshes anhand der Ebenen-Liste.
 function applyLayerVisibility(t, layers) {
@@ -383,7 +416,10 @@ const HOVER_MIN_PX = 2;
 const WHEEL_PAUSE_MS = 180;
 
 // Kinds mit eigenem Material je Mesh — nur dort ist emissive gefahrlos.
-const EMISSIVE_KINDS = new Set(["wall", "column", "zone", "cslab", "croof", "stair", "gaube"]);
+// W-1118-28: editor of the exposé layer, loaded when it is opened; the empty layer (a stable object for useFachlayer)
+const ExposePanel = React.lazy(() => import("@designer/components/ExposePanel.jsx"));
+const EXPOSE_LEER = Object.freeze({});
+const EMISSIVE_KINDS = new Set(["wall", "column", "zone", "cslab", "croof", "stair", "gaube", "vordach"]);
 
 /** Layer a selection type lives on (a locked layer refuses the selection, by mouse and by command). */
 const EBENE_VON_TYP = { wall: "walls", zone: "zones", slab: "shell", roof: "attika", hullwall: "shell", autowin: "openings", opening: "openings", column: "columns" };
@@ -401,6 +437,7 @@ function auraMatches(m, sel) {
     case "roof": return u.kind === "croof" && u.id === sel.index;
     case "stair": return u.kind === "stair" && u.id === sel.index; // 108-06
     case "gaube": return u.kind === "gaube" && u.id === sel.index; // 108-13
+    case "vordach": return u.kind === "vordach" && u.id === sel.index; // W-1118-29
     case "hullwall": return u.kind === "wallShell" && (u.level ?? 0) === sel.level && (u.edge ?? 0) === sel.edge;
     case "autowin": return u.kind === sel.kind && u.scope === "auto" && (u.level ?? 0) === sel.level && (u.edge ?? 0) === sel.edge;
     default: return false;
@@ -677,9 +714,10 @@ const studioMeinStand = new Map();
 /** Sources of the conflict cards the studio shows in its view (the page-wide card shows the others). */
 const STUDIO_QUELLEN = Object.freeze(["bim", "programm", "modell"]);
 /** Fields the studio's autosave writes (a held-back one turns "saved" into "waiting for a decision"). */
-const STUDIO_SPEICHER_FELDER = Object.freeze([...Object.keys(ELEMENT_FELDER), ...Object.keys(STUDIO_WERTE)]);
+// 115-05c: + the attribute layer (a draft field like the envelope values; merged three ways, a conflict gets its card)
+const STUDIO_SPEICHER_FELDER = Object.freeze([...Object.keys(ELEMENT_FELDER), ...Object.keys(STUDIO_WERTE), "bauteil_attribute_layer"]);
 /** Layers the studio only shows (written elsewhere): they follow another device live, the field is not claimed. */
-const STUDIO_LESE_LAYER = Object.freeze(["netz_layer", "statik_layer", "massing_layer", "sketch_layer"]);
+const STUDIO_LESE_LAYER = Object.freeze(["netz_layer", "statik_layer", "massing_layer", "sketch_layer", "bauaufnahme_layer"]);
 /** 107-10 review: German names (i18n keys) of the roof forms of the roof library, for the IFC notes. */
 const DACHFORM_NAME = Object.freeze(/** @type {Record<string, string>} */ ({ flach: "Flachdach", sattel: "Satteldach", walm: "Walmdach", pult: "Pultdach" }));
 
@@ -715,10 +753,10 @@ function freieHoeheUnter(el) {
  * BIT-BIM-Studio (Welle B1): EIN 3D-Fenster, das Gelände + Entwurfsgebäude
  * gemeinsam und maßstäblich (1 Einheit = 1 m) aus einem gemeinsamen Modell zeigt.
  */
-export default function BitBimStudio({ complexData }) {
+export default function BitBimStudio({ complexData, startAnsicht = null }) {
   const { project } = useProject();
   const { t: tz } = useI18n(); // 73-07: inspector rows for condition / Erfassungsgrad
-  const { grid, min, max, offline } = useElevationGrid(project?.location, 10, 0.2); // 200 m-Patch (≤100 Punkte = Open-Meteo-Limit)
+  const { grid, offline: gelaendeOffline } = useElevationGrid(project?.location, 10, 0.2); // 200 m-Patch (≤100 Punkte = Open-Meteo-Limit)
   const osm = useOsmBuildings(project?.location, 350);
   const env = useOsmEnvironment(project?.location, 300);
   const [showContext, setShowContext] = useState(true);
@@ -851,6 +889,7 @@ export default function BitBimStudio({ complexData }) {
   const [aktiverAusschnittId, setAktiverAusschnittId] = useState(/** @type {string|null} */ (null));
   const [ausschnittName, setAusschnittName] = useState("");
   const [ausgabeLaeuft, setAusgabeLaeuft] = useState(false); // PDF/DXF export waits for the derivation: buttons locked
+  const [plansatzMassstab, setPlansatzMassstab] = useState(50); // W-1118-21: the plan set has its own scale (working drawings 1:50)
   // "PDF" at a saved view: applied first, exported once the studio shows exactly it; `runden` = renders waited (review 107-12: dropped
   // with a message when the view does not become active, never left pending)
   const [ausgabeWunsch, setAusgabeWunsch] = useState(/** @type {{id: string, art: "pdf"|"dxf", runden?: number}|null} */ (null));
@@ -879,6 +918,9 @@ export default function BitBimStudio({ complexData }) {
   const [netzLayer, setNetzLayer] = useState(null); // Phase 41: TGA-Netz (netz_layer) read-only für den IFC-Export
   const [statikLayer, setStatikLayer] = useState(null); // 97-02a: beams (statik_layer) read-only for the IFC export
   const [attributLayer, setAttributLayer] = useState(null); // 97-02: decisions on hull/workshop elements (bauteil_attribute_layer)
+  // 108-10: level of the ground floor above sea level from the building survey (bauaufnahme_layer.georeferenz.okff_eg_nhn, m) — read only
+  const [okffNHN, setOkffNHN] = useState(/** @type {number|null} */ (null));
+  const okffAus = (/** @type {any} */ l) => { const v = l?.georeferenz?.okff_eg_nhn; setOkffNHN(v != null && Number.isFinite(Number(v)) ? Number(v) : null); };
   const [massingLayer, setMassingLayer] = useState(null); // 98-05: bodies of the Massing Studio, read only for the IFC export
   const [durchbrueche, setDurchbrueche] = useState(/** @type {any[]} */ ([])); // 97-06: openings planning, read only for the checks
   const [customSlabs, setCustomSlabsRoh] = useState([]); // Decken: [{points,level,_idx}]
@@ -888,6 +930,9 @@ export default function BitBimStudio({ complexData }) {
   // additive fields: a record that never had them is not given them (pattern verschneidung/dachform_ifc) — set once a list was loaded or filled
   const hatteTreppenRef = useRef(false);
   const hatteGaubenRef = useRef(false);
+  // W-1118-29: canopies on a hull wall [{edge,u_von_m,u_bis_m,level,tiefe_m,unterkante_m,…,_idx}] (bauteil/vordach.js), additive like the dormers
+  const [vordaecher, setVordaecherRoh] = useState(/** @type {any[]} */ ([]));
+  const hatteVordaecherRef = useRef(false);
   // 261111-zs1: text notes of the plan [{x, z, level, text, _idx, guid}] (additive list like gauben) and the numbered pointing points (not stored)
   const [planNotizen, setPlanNotizenRoh] = useState(/** @type {any[]} */ ([]));
   const hatteNotizenRef = useRef(false);
@@ -952,7 +997,38 @@ export default function BitBimStudio({ complexData }) {
   // Request mit dem Hook, saveBimModel ist der einzige Schreibpfad. Dieser
   // Effekt schreibt ausschließlich die Elementfelder — die Programmfelder
   // (footprintM/storeys/storeyHeight/unit) schreibt allein der Hook.
-  const [saveState, setSaveState] = useState("idle"); // idle | loading | saving | saved | error
+  const [saveState, setSaveStateRoh] = useState("idle"); // idle | loading | saving | saved | error
+  // 115-05a: the save status as the holder of foreign changes reads it synchronously (studioSauber: "error" = not clean)
+  const saveStateRef = useRef("idle");
+  const setSaveState = useCallback((/** @type {string} */ z) => { saveStateRef.current = z; setSaveStateRoh(z); }, []);
+  // 115-05a (A-2): the stored state in the studio's representation (studioWerteAusDatensatz) — after the load, after an own save
+  // (the values the patch was built from) and after every foreign state taken over. Equal to the studio's values = nothing to write
+  // (no echo) and, with nothing pending, a "clean" tab (K1). null = not loaded. abbildFolgeRef counts the takeovers: a save that
+  // was on its way meanwhile does not put its older values over the newer image.
+  const abbildRef = useRef(/** @type {Record<string, any>|null} */ (null));
+  const abbildFolgeRef = useRef(0);
+  // 115-05c: the studio's holder of foreign changes (a draft on an older base goes through it after the load) and its save
+  const halterFnRef = useRef(/** @type {((pid: string, f: any) => any)|null} */ (null));
+  const speichernRef = useRef(async () => /** @type {"ok"|"teilweise"|"konflikt"|"leer"} */ ("ok"));
+  // 115-05a (A-3): the autosave planned and not yet sent { pid, patch } (flushed on a project switch / unmount), a save on its way,
+  // and the project whose model was loaded successfully — nothing is written before that (the twin of useBimModelSync's geladenRef)
+  const ausstehendRef = useRef(/** @type {{pid: string, patch: Record<string, any>}|null} */ (null));
+  const speichertRef = useRef(false);
+  const geladenFuerRef = useRef(/** @type {string|null} */ (null));
+  // 115-05c: the stored model is on screen before the draft store answered (geladenFuerRef is set only then). A foreign state that
+  // arrives in between moved the base already; it is kept here and brought in right after the load (else nothing would bring it in
+  // later — the gap of 115-05a A-3, a few ms in the built app, seconds on a cold dev server).
+  const modellDaFuerRef = useRef(/** @type {string|null} */ (null));
+  const verpasstRef = useRef(/** @type {any[]} */ ([]));
+  const [nichtGeladen, setNichtGeladen] = useState(false);
+  // 115-05a: counts the ends of the 50-ms load guard (loadingRef) — the autosave checks once more then, so an edit made inside that
+  // window (an agent through window.bitApi right after the load) is not left unsaved until the next edit
+  const [ladeEnde, setLadeEnde] = useState(0);
+  // 115-05c: the project whose load is over INCLUDING the 50 ms guard after it (loadingRef) - before that an edit makes no undo step
+  // (still) - exposed as data-bereit on the save chip, so a test (or a script) edits only once an edit is a normal step
+  const [bereitFuer, setBereitFuer] = useState(/** @type {string|null} */ (null));
+  // review 115-05a (K01): counts the successful autosaves — the autosave checks once more against the new image after each
+  const [speicherEnde, setSpeicherEnde] = useState(0);
   // Testlauf 26.08. (Referenzprojekt): Projekte OHNE gespeichertes Modell zeigten das
   // prozedurale Default-Klötzchen in Realitäts-Optik. Der Banner unten sagt
   // ehrlich, dass es Editor-Defaults sind, bis der Nutzer speichert.
@@ -969,8 +1045,14 @@ export default function BitBimStudio({ complexData }) {
   const [ansichtLayer, setAnsichtLayer] = useFachlayer(project?.id || null, "ansicht_layer", ANSICHT_LEER);
   const ansichtDaten = useMemo(() => ansichtLayerNormalisieren(ansichtLayer), [ansichtLayer]);
   const views = ansichtDaten.ausschnitte;
+  // 115-04 (D-115-13): the floor plan turned in 90° steps on the screen (`plan_drehung`) and the own sheet orientation of the PDF /
+  // DXF output (`blatt_drehung`, null = as on the screen) — view properties of the project in ansicht_layer (additive fields, an
+  // old blob reads 0 / null). Display only: never part of the model, the saved views or the drawing undo.
+  const planDrehungen = useMemo(() => ansichtDrehung(ansichtLayer), [ansichtLayer]);
+  const planDrehen = (/** @type {"links"|"rechts"} */ richtung) => setAnsichtLayer((alt) => ({ ...(alt || {}), plan_drehung: drehungWeiter(ansichtDrehung(alt).plan, richtung) }));
+  const blattDrehungSetzen = (/** @type {number|null} */ grad) => setAnsichtLayer((alt) => ({ ...(alt || {}), blatt_drehung: grad }));
   modellStandRef.current = {
-    customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs, customStairs, gauben, planNotizen,
+    customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs, customStairs, gauben, planNotizen, vordaecher,
     storeys, untergeschosse, footprintM: footprintEdit, footprintQuelle: bp.footprintQuelle,
     storeyHeight, geschosse,
     ausschnitte: views, // 107-12: saving / deleting a view is a step of the drawing undo
@@ -997,6 +1079,7 @@ export default function BitBimStudio({ complexData }) {
   const setCustomStairs = useCallback((/** @type {any} */ v) => { merken(); hatteTreppenRef.current = true; setCustomStairsRoh(v); }, [merken]); // 108-06
   const setGauben = useCallback((/** @type {any} */ v) => { merken(); hatteGaubenRef.current = true; setGaubenRoh(v); }, [merken]); // 108-13
   const setPlanNotizen = useCallback((/** @type {any} */ v) => { merken(); hatteNotizenRef.current = true; setPlanNotizenRoh(v); }, [merken]); // 261111-zs1
+  const setVordaecher = useCallback((/** @type {any} */ v) => { merken(); hatteVordaecherRef.current = true; setVordaecherRoh(v); }, [merken]); // W-1118-29
   const setStoreys = useCallback((/** @type {number} */ v) => { merken(); setStoreysDirekt(v); }, [merken]);
   const setUntergeschosse = useCallback((/** @type {number} */ v) => { merken(); setUntergeschosseDirekt(v); }, [merken]);
   const setStoreyHeight = useCallback((/** @type {number} */ v) => { merken(); setStoreyHeightDirekt(v); }, [merken]);
@@ -1016,6 +1099,20 @@ export default function BitBimStudio({ complexData }) {
   }, []);
   const griffEnde = useCallback(() => { historieRef.current = zieheEnde(historieRef.current); griffStandRef.current = null; }, []);
   const projectId = project?.id || null;
+  // 115-05d (C-2): the designer unmounts the tab that is not shown - the drawing undo is put away then and taken back after the next
+  // load of the same project, when the model is still the one it belongs to (bimHistorie.js historieAblegen / historieHolen)
+  const historiePidRef = useRef(projectId);
+  historiePidRef.current = projectId;
+  useEffect(() => () => {
+    const pid = historiePidRef.current;
+    if (pid && geladenFuerRef.current === pid) historieAblegen(pid, historieRef.current, modellStandRef.current);
+  }, []);
+  useEffect(() => {
+    if (!projectId || bereitFuer !== projectId) return;
+    const h = historieHolen(projectId, modellStandRef.current);
+    const leer = !historieRef.current.stack.past.length && !historieRef.current.stack.future.length;
+    if (h && leer) { historieRef.current = h; setHistorieTick((n) => n + 1); }
+  }, [bereitFuer, projectId]);
   // 108-01 review: the entrance checkbox was used in this session → the hint "abschalten?" is not shown again (a deliberate "on" cannot
   // be told from an old stored default otherwise); UI state, not saved, cleared on a project switch
   const [eingangSchalterBenutzt, setEingangSchalterBenutzt] = useState(false);
@@ -1024,6 +1121,9 @@ export default function BitBimStudio({ complexData }) {
   // handed over on every render (idempotent, module-level state outside React); `aufbautenKey` lets the memos and 3D effects that depend on layer
   // thicknesses rebuild when a project build-up is edited.
   const [aufbautenLayer, setAufbautenLayer] = useFachlayer(projectId, "aufbauten_layer", AUFBAUTEN_LEER);
+  // W-1118-28: what the exposé picture needs beyond the building elements (lib/exposeSzene.js) — ONE writer: the panel below
+  const [exposeLayer, setExposeLayer] = useFachlayer(projectId, "expose_layer", EXPOSE_LEER);
+  const [exposeOffen, setExposeOffen] = useState(false);
   // set while rendering (before the children read it), once per layer value; released again on unmount so the ids "p-1" … of this project
   // never resolve in the next one (the effect also re-sets it: React StrictMode runs effect cleanups once on mount)
   useMemo(() => setzeProjektAufbauten(aufbautenLayer), [aufbautenLayer]);
@@ -1038,16 +1138,106 @@ export default function BitBimStudio({ complexData }) {
       .catch((err) => { if (aktiv) { setDurchbrueche([]); setHint(`Durchbrüche für die Prüfregeln nicht geladen: ${err?.message || err}`); } });
     return () => { aktiv = false; };
   }, [projectId]);
+  /**
+   * 115-05a (A-2): puts a stored record into the studio — the ONE path of the load and of taking a foreign state over as a whole
+   * (a clean tab reloads instead of merging). The values come from studioWerteAusDatensatz, the same function the stored image
+   * (abbildRef) is built with, so a tab nobody touched equals its image. Raw setters (a load records no undo step); the synchronous
+   * mirrors (modellRef, studioWerteRef) follow at once, so the holder of foreign changes sees the new state in the same turn.
+   * @param {Record<string, any>|null} m stored record; null = empty editor (new project without a model, or the load failed)
+   * @param {{nurStudioFelder?: boolean}} [opt] nurStudioFelder = only the ten element lists and the STUDIO_WERTE (a foreign state
+   *   taken over): no read-only layers (the holder sets them itself), no pointing points, the counter only moves up
+   * @returns {Record<string, any>} the studio values now in the state
+   */
+  const modellLaden = (m, { nurStudioFelder = false } = {}) => {
+    const bisher = { ...(studioWerteRef.current || {}) };
+    if (!m) {
+      // new project without a model / failed load: an empty editor, nothing of the previous project carries over
+      setCustomWallsRoh([]); setCustomColumnsRoh([]); setCustomWindowsRoh([]); setEnvOpeningsRoh([]);
+      setCustomZonesRoh([]); setCustomSlabsRoh([]); setCustomRoofsRoh([]);
+      setCustomStairsRoh([]); setGaubenRoh([]); hatteTreppenRef.current = false; hatteGaubenRef.current = false; // 108-06 / 108-13
+      setPlanNotizenRoh([]); hatteNotizenRef.current = false; setZeigePunkte([]); // 261111-zs1
+      setVordaecherRoh([]); hatteVordaecherRef.current = false; // W-1118-29
+      setNetzLayer(null); setStatikLayer(null); setAttributLayer(null); setMassingLayer(null); setOkffNHN(null);
+      setHuelleBezug("center");
+      setVerschneidung(false); hatteVerschneidungRef.current = false; // 107-09
+      setDachIfc(false); hatteDachIfcRef.current = false; // 107-10 review
+      setHuelleDeckeDicke(DECKEN_STANDARD.huelle.dicke_m); setHuelleDeckeBezug(DECKEN_STANDARD.huelle.bezug);
+      setHuelleErscheinungRoh(null); // 115-05a: the previous project's envelope appearance is no value of this one
+      setSketchJson(null);
+      const leer = studioWerteAusDatensatz({}, bisher);
+      modellRef.current = { ...(modellRef.current || {}), ...Object.fromEntries(IDX_LISTEN.map((k) => [k, leer[k]])) };
+      studioWerteRef.current = { ...(studioWerteRef.current || {}), ...Object.fromEntries([...Object.keys(STUDIO_WERTE), "bauteil_attribute_layer"].map((k) => [k, leer[k]])) };
+      return leer;
+    }
+    const w = studioWerteAusDatensatz(m, bisher);
+    setCustomWallsRoh(w.customWalls); setCustomColumnsRoh(w.customColumns); setCustomWindowsRoh(w.customWindows); setEnvOpeningsRoh(w.envOpenings);
+    setCustomZonesRoh(w.customZones); setCustomSlabsRoh(w.customSlabs);
+    setCustomRoofsRoh(w.customRoofs); // 107-02: old roofs (only `pitch`, metres) get firsthoehe_m (studioWerteAusDatensatz)
+    // 108-06 / 108-13 / 261111-zs1: additive lists — a record without them stays without them until one is inserted; a list that
+    // arrives from another device makes the record carry it (a later local deletion must be written)
+    setCustomStairsRoh(w.customStairs); setGaubenRoh(w.gauben); setPlanNotizenRoh(w.planNotizen); setVordaecherRoh(w.vordaecher);
+    const hat = (/** @type {string} */ k) => m[k] !== undefined;
+    if (nurStudioFelder) {
+      hatteTreppenRef.current ||= hat("customStairs"); hatteGaubenRef.current ||= hat("gauben"); hatteNotizenRef.current ||= hat("planNotizen");
+      hatteVerschneidungRef.current ||= hat("verschneidung"); hatteDachIfcRef.current ||= hat("dachform_ifc");
+      hatteVordaecherRef.current ||= hat("vordaecher"); // W-1118-29
+    } else {
+      hatteTreppenRef.current = hat("customStairs"); hatteGaubenRef.current = hat("gauben"); hatteNotizenRef.current = hat("planNotizen");
+      hatteVerschneidungRef.current = hat("verschneidung"); hatteDachIfcRef.current = hat("dachform_ifc"); // 107-09, 107-10 review
+      hatteVordaecherRef.current = hat("vordaecher"); // W-1118-29
+    }
+    setEnvComposite(w.envComposite); setHuelleErscheinungRoh(w.huelle_erscheinung); setEnvThickness(w.envThickness);
+    setHuelleBezug(w.huelle_bezug); setVerschneidung(w.verschneidung);
+    setHuelleDeckeDicke(w.huelle_decke_dicke_m); setHuelleDeckeBezug(w.huelle_decke_bezug);
+    setParapet(w.parapet); setDachform(w.dachform); setDachneigung(w.dachneigung); setDachIfc(w.dachform_ifc);
+    setEntranceCfg(w.entranceCfg); // 108-01: a stored `enabled` stays, none is added
+    setAttributLayer(w.bauteil_attribute_layer); attributRef.current = w.bauteil_attribute_layer; // 115-05c: a studio value (draft)
+    if (!nurStudioFelder) {
+      setZeigePunkte([]);
+      // PW-05: Sketch des Projekts (BIT Sketcher, Feld sketch_layer) — read-only Anzeige im Grundriss; geschrieben wird NUR im Sketcher.
+      setSketchJson(m.sketch_layer || null);
+      // Phase 41: TGA-Netz für den IFC-Export (IfcPipe-/Duct-/CableSegment) — geschrieben wird es nur im Haustechnik-Reiter.
+      setNetzLayer(m.netz_layer || null);
+      setStatikLayer(m.statik_layer || null);
+      setMassingLayer(m.massing_layer || null); okffAus(m.bauaufnahme_layer);
+      // Programmfelder (footprintM/storeys/storeyHeight/unit) setzt der Hook useBimModelSync in die gemeinsame Quelle — hier NICHT doppelt.
+    }
+    modellRef.current = { ...(modellRef.current || {}), ...Object.fromEntries(IDX_LISTEN.map((k) => [k, w[k]])) };
+    studioWerteRef.current = { ...(studioWerteRef.current || {}), ...Object.fromEntries([...Object.keys(STUDIO_WERTE), "bauteil_attribute_layer"].map((k) => [k, w[k]])) };
+    // _idx counter behind the elements of all ten lists (no collisions); a takeover only moves it up (a local new element keeps its number)
+    idRef.current = nurStudioFelder ? Math.max(idRef.current, naechsteFreieIdx(w)) : naechsteFreieIdx(w);
+    return w;
+  };
+
   useEffect(() => {
     // A project switch must not undo into the previous model's elements.
     historieRef.current = leereHistorie();
     setHistorieTick((n) => n + 1);
+    // 115-05a (A-3): what the autosave still had pending for the previous project is written now (flush) — on THAT project's base,
+    // without moving the cache back to it (bimModelNachschreiben); before, the debounce timer simply died with the switch
+    // 115-05c (D-115-12): unsaved changes of the previous project are a draft - kept locally (written to the browser now), never
+    // flushed to the stored model without "Speichern" (before: bimModelNachschreiben of the pending autosave)
+    const pend = ausstehendRef.current;
+    if (pend && pend.pid !== projectId) {
+      ausstehendRef.current = null;
+      void entwurfModul().then((E) => E.sichernJetzt(pend.pid));
+    }
+    geladenFuerRef.current = null; // nothing is written until THIS project's model is loaded
+    modellDaFuerRef.current = null;
+    verpasstRef.current = [];
+    setBereitFuer(null);
+    abbildRef.current = null;
+    setNichtGeladen(false);
     if (!projectId) return;
     let cancelled = false;
     loadingRef.current = true;
     setSaveState("loading");
     (async () => {
       try {
+        // 115-05c: the draft of this project (this page, or the browser after a reload) is read beside the record; the stored model goes
+        // on screen as soon as it is there (as before), the draft right after - until then nothing is reported or saved (geladenFuerRef)
+        const entwurfStart = Promise.all([entwurfModul(), studioEntwurfModul()]).then(async ([E, SE]) => ({ E, SE, start: await E.starten(projectId) }));
+        entwurfStart.catch(() => { /* reported by the await below */ });
         const geladen = await loadBimModel(projectId);
         if (cancelled) return;
         // 106-09 review: a field with an open conflict shows this studio's own version again (kept when it unmounted);
@@ -1058,62 +1248,36 @@ export default function BitBimStudio({ complexData }) {
           .map((k) => [k.feld, studioMeinStand.get(k.id)]));
         const m = geladen ? { ...geladen, ...eigene } : geladen;
         setHatGespeichertesModell(!!m);
-        if (m) {
-          setCustomWalls(m.customWalls || []);
-          setCustomColumns(m.customColumns || []);
-          setCustomWindows(m.customWindows || []);
-          setEnvOpenings(m.envOpenings || []);
-          setCustomZones(m.customZones || []);
-          setCustomSlabs(m.customSlabs || []);
-          setCustomRoofs((m.customRoofs || []).map(dachMigrieren)); // 107-02: old roofs (only `pitch`, metres) get firsthoehe_m
-          // 108-06 / 108-13: additive lists — a record without them stays without them until one is inserted
-          setCustomStairsRoh(Array.isArray(m.customStairs) ? m.customStairs : []); hatteTreppenRef.current = m.customStairs !== undefined;
-          setGaubenRoh(Array.isArray(m.gauben) ? m.gauben : []); hatteGaubenRef.current = m.gauben !== undefined;
-          setPlanNotizenRoh(Array.isArray(m.planNotizen) ? m.planNotizen : []); hatteNotizenRef.current = m.planNotizen !== undefined; // 261111-zs1
-          setZeigePunkte([]);
-          if (m.envComposite !== undefined) setEnvComposite(m.envComposite);
-          setHuelleErscheinungRoh(typeof m.huelle_erscheinung === "string" && m.huelle_erscheinung ? m.huelle_erscheinung : null);
-          if (m.envThickness) setEnvThickness(m.envThickness);
-          setHuelleBezug(m.huelle_bezug === "outside" || m.huelle_bezug === "inside" ? m.huelle_bezug : "center");
-          setVerschneidung(m.verschneidung === true); hatteVerschneidungRef.current = m.verschneidung !== undefined; // 107-09
-          setHuelleDeckeDicke(Number(m.huelle_decke_dicke_m) > 0 ? Number(m.huelle_decke_dicke_m) : DECKEN_STANDARD.huelle.dicke_m);
-          setHuelleDeckeBezug(m.huelle_decke_bezug === "oben" ? "oben" : DECKEN_STANDARD.huelle.bezug);
-          if (m.parapet) setParapet(m.parapet);
-          if (m.dachform) setDachform(m.dachform);
-          if (m.dachneigung != null) setDachneigung(m.dachneigung);
-          setDachIfc(m.dachform_ifc === true); hatteDachIfcRef.current = m.dachform_ifc !== undefined; // 107-10 review
-          if (m.entranceCfg) setEntranceCfg({ ...ENTRANCE_START, ...m.entranceCfg }); // 108-01: a stored `enabled` stays, none is added
-          // PW-05: Sketch des Projekts (BIT Sketcher, Feld sketch_layer) —
-          // read-only Anzeige im Grundriss; geschrieben wird NUR im Sketcher.
-          setSketchJson(m.sketch_layer || null);
-          // Phase 41: TGA-Netz für den IFC-Export (IfcPipe-/Duct-/CableSegment) — geschrieben wird es nur im Haustechnik-Reiter.
-          setNetzLayer(m.netz_layer || null);
-          setStatikLayer(m.statik_layer || null);
-          setAttributLayer(m.bauteil_attribute_layer || null);
-          setMassingLayer(m.massing_layer || null);
-          // Programmfelder (footprintM/storeys/storeyHeight/unit) setzt der Hook
-          // useBimModelSync in die gemeinsame Quelle — hier NICHT doppelt.
-          // _idx-Zähler hinter die geladenen Elemente setzen (keine Kollisionen)
-          const maxIdx = Math.max(0, ...[...(m.customWalls || []), ...(m.customColumns || []), ...(m.customWindows || []), ...(m.envOpenings || []), ...(m.customZones || []), ...(m.customSlabs || []), ...(m.customRoofs || []), ...(m.customStairs || []), ...(m.gauben || []), ...(m.planNotizen || [])].map((x) => x._idx || 0));
-          idRef.current = maxIdx + 1;
-        } else {
-          // Neues Projekt ohne Modell: Editor leeren (kein Übertrag vom Vorprojekt)
-          setCustomWalls([]); setCustomColumns([]); setCustomWindows([]); setEnvOpenings([]); setNetzLayer(null); setStatikLayer(null); setAttributLayer(null); setMassingLayer(null);
-          setCustomZones([]); setCustomSlabs([]); setCustomRoofs([]);
-          setCustomStairsRoh([]); setGaubenRoh([]); hatteTreppenRef.current = false; hatteGaubenRef.current = false; // 108-06 / 108-13
-          setPlanNotizenRoh([]); hatteNotizenRef.current = false; setZeigePunkte([]); // 261111-zs1
-          setHuelleBezug("center");
-          setVerschneidung(false); hatteVerschneidungRef.current = false; // 107-09
-          setDachIfc(false); hatteDachIfcRef.current = false; // 107-10 review
-          setHuelleDeckeDicke(DECKEN_STANDARD.huelle.dicke_m); setHuelleDeckeBezug(DECKEN_STANDARD.huelle.bezug);
-          setSketchJson(null);
-        }
+        const bisher = { ...(studioWerteRef.current || {}) };
+        const w = modellLaden(m);
+        // the image is the STORED state (an own version of an open conflict is a change of this tab, not part of it)
+        abbildRef.current = geladen && Object.keys(eigene).length ? studioWerteAusDatensatz(geladen, bisher) : w;
+        abbildFolgeRef.current += 1;
+        modellDaFuerRef.current = projectId;
+        const { E, SE, start } = await entwurfStart;
+        if (cancelled) return;
+        geladenFuerRef.current = projectId;
         setSaveState("idle");
+        // 115-05c: an unsaved draft goes on top - on its own base, a newer stored state through the holder (studioEntwurf.js)
+        if (start.entwurf) {
+          SE.studioEinspielen({ E, pid: projectId, entwurf: start.entwurf, gespeichert: geladen, modellLaden,
+            abbildSetzen: (w) => { abbildRef.current = w; }, bild: (r) => studioWerteAusDatensatz(r, studioWerteRef.current), halter: halterFnRef.current });
+        }
+        // foreign states of the gap, in their order, as if they had arrived now (after the draft is in place)
+        const verpasst = verpasstRef.current;
+        verpasstRef.current = [];
+        for (const f of verpasst) halterFnRef.current?.(projectId, f);
       } catch {
-        if (!cancelled) setSaveState("error");
+        if (!cancelled) {
+          // 115-05a (A-3): an empty editor instead of the previous project's elements, and no autosave until a reload — before, the
+          // next save read the record afresh and wrote the elements of the previous project (or one new wall) over the stored model
+          modellLaden(null);
+          setSaveState("error");
+          setNichtGeladen(true);
+        }
       } finally {
         // erst nach dem Render-Zyklus wieder speichern erlauben
-        setTimeout(() => { loadingRef.current = false; }, 50);
+        setTimeout(() => { loadingRef.current = false; if (!cancelled) { setLadeEnde((n) => n + 1); setBereitFuer(projectId || null); } }, 50);
       }
     })();
     return () => { cancelled = true; };
@@ -1121,32 +1285,142 @@ export default function BitBimStudio({ complexData }) {
   }, [projectId]);
 
   useEffect(() => {
-    if (!projectId || loadingRef.current) return;
-    setSaveState("saving");
-    const t = setTimeout(async () => {
-      try {
-        // Nur Elementfelder — Programmfelder gehören dem Hook (EIN Schreiber je Feld).
-        // 107-08 review (lazy GUID): a real save pins the GlobalId of every wall, column, room, slab and roof in the stored lists
-        // (guidsAnheften = the derived value, the IFC export stays byte-identical). Selecting or looking at an element writes nothing.
-        const pid = projectId || null;
-        await saveBimModel(projectId, {
-          envComposite, envThickness, huelle_bezug: huelleBezug, huelle_erscheinung: huelleErscheinung || null, huelle_decke_dicke_m: huelleDeckeDicke, huelle_decke_bezug: huelleDeckeBezug, parapet, dachform, dachneigung, entranceCfg,
-          // 107-09: a record without the field stays without it until the switch is used (old projects load and save unchanged)
-          ...(verschneidung || hatteVerschneidungRef.current ? { verschneidung } : {}),
-          // 107-10 review: the same rule for the switch "Gebäudedach ins IFC"
-          ...(dachIfc || hatteDachIfcRef.current ? { dachform_ifc: dachIfc } : {}),
-          customWalls: guidsAnheften(customWalls, pid, "customWalls"), customColumns: guidsAnheften(customColumns, pid, "customColumns"), customWindows, envOpenings,
-          customZones: guidsAnheften(customZones, pid, "customZones"), customSlabs: guidsAnheften(customSlabs, pid, "customSlabs"), customRoofs: guidsAnheften(customRoofs, pid, "customRoofs"),
-          // 108-06 / 108-13: additive — written only once the record had or got the list (an emptied list is written as [] so a deletion sticks)
-          ...(hatteTreppenRef.current ? { customStairs: guidsAnheften(customStairs, pid, "customStairs") } : {}),
-          ...(hatteGaubenRef.current ? { gauben: guidsAnheften(gauben, pid, "gauben") } : {}),
-          ...(hatteNotizenRef.current ? { planNotizen } : {}), // 261111-zs1: the same additive rule for the plan notes
-        });
-        setSaveState("saved");
-      } catch { setSaveState("error"); }
-    }, 1200);
-    return () => clearTimeout(t);
-  }, [projectId, envComposite, envThickness, huelleBezug, huelleErscheinung, huelleDeckeDicke, huelleDeckeBezug, parapet, dachform, dachneigung, entranceCfg, customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs, customStairs, gauben, planNotizen, verschneidung, dachIfc]);
+    // 115-05a (A-3): never before THIS project's model was loaded (a failed load writes nothing until the page is reloaded)
+    if (!projectId || loadingRef.current || geladenFuerRef.current !== projectId) return undefined;
+    /** the studio values of this render, in the representation of the stored image (studioWerteAusDatensatz) */
+    const werte = {
+      customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs, customStairs, gauben, planNotizen, vordaecher,
+      envComposite, envThickness, huelle_bezug: huelleBezug, huelle_erscheinung: huelleErscheinung, huelle_decke_dicke_m: huelleDeckeDicke,
+      huelle_decke_bezug: huelleDeckeBezug, parapet, dachform, dachneigung, entranceCfg, verschneidung, dachform_ifc: dachIfc,
+      bauteil_attribute_layer: attributLayer,
+    };
+    // 115-05c (D-115-12): the values are a DRAFT until "Speichern" - reported to the draft (local copy after 800 ms), never written
+    // here. Equal to the stored image (just loaded, just saved, a foreign state taken over): nothing is unsaved.
+    const pid = projectId;
+    const sauber = gleichWert(werte, abbildRef.current);
+    ausstehendRef.current = sauber ? null : { pid, patch: werte }; // "own unsaved change" for studioSauber (K1)
+    if (!speichertRef.current && saveStateRef.current !== "error") {
+      if (!sauber) setSaveState("entwurf");
+      else if (saveStateRef.current === "entwurf") setSaveState("saved");
+    }
+    const bild = abbildRef.current;
+    void Promise.all([entwurfModul(), studioEntwurfModul(), loadBimModel(pid).catch(() => null)])
+      .then(([E, SE, rec]) => { if (geladenFuerRef.current === pid) SE.studioMelden(E, pid, werte, bild, rec); });
+    return undefined;
+  }, [projectId, ladeEnde, speicherEnde, envComposite, envThickness, huelleBezug, huelleErscheinung, huelleDeckeDicke, huelleDeckeBezug, parapet, dachform, dachneigung, entranceCfg, customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs, customStairs, gauben, planNotizen, vordaecher, verschneidung, dachIfc, attributLayer]);
+
+  /**
+   * 115-05a (A-3): writes a pending autosave of a project the studio left (switch) or of itself unmounting (tab switch, route
+   * change) — bimModelNachschreiben never moves the one-project cache. A flush refused on an outdated or held-back base is said
+   * in a toast: nothing is mixed, the change of the last autosave window is not saved. The undo of the pinned room GUIDs of the
+   * normal save does not apply (the studio shows another project or is gone).
+   * @type {React.MutableRefObject<(pend: {pid: string, patch: Record<string, any>}) => void>}
+   */
+  const nachschreibenMitHinweisRef = useRef((/** @type {{pid: string, patch: Record<string, any>}} */ pend) => { void pend; });
+  nachschreibenMitHinweisRef.current = (pend) => {
+    const text = tz("Letzte Änderung am Modell nicht gespeichert — es wurde inzwischen an anderer Stelle geändert.");
+    // 115-05b part 2 (E-5): the one shared way of telling a refused / failed flush (unit test nachschreibenHinweis-11505b)
+    void nachschreibenMitHinweis(bimModelNachschreiben, pend.pid, pend.patch, () => toast.warning(text));
+  };
+  // 115-05c: unmount (tab switch inside the designer, leaving the page) keeps the draft - in memory for this page and written to the
+  // browser now; nothing goes to the stored model without "Speichern" (before: the pending autosave was flushed)
+  useEffect(() => () => {
+    const pend = ausstehendRef.current;
+    if (pend) void entwurfModul().then((E) => E.sichernJetzt(pend.pid));
+  }, []);
+  /**
+   * 115-05c (§6.4): "Speichern" of the studio's part. Per round: the stored record is read and taken in through the holders first
+   * (K3, bimModelStandPruefen - never bimModelNeuLesen, which drops every holder's `vorbehalt`); then the studio's values that differ
+   * from the stored image go out on the strict base (saveBimModel: 409 → the holder merges three ways, conflicts → cards and locked
+   * fields). A round that met another writer leaves the merged values unsaved - the next round writes them (at most three, K2).
+   * A field held back by an open card stays different from the image (it remains in the draft).
+   * @returns {Promise<"ok"|"teilweise"|"konflikt"|"leer">} leer = nothing of the studio had to be written
+   */
+  speichernRef.current = async () => {
+    let geschrieben = false;
+    const pid = projectId;
+    if (!pid || geladenFuerRef.current !== pid) throw new Error(tz("Modell nicht geladen — bitte die Seite neu laden. Bis dahin wird nichts gespeichert."));
+    for (let runde = 1; runde <= 3; runde += 1) {
+      if ((await bimModelStandPruefen(pid)) === "ersetzt") throw new Error(tz("Modell wurde ersetzt — neu laden"));
+      if (geladenFuerRef.current !== pid) throw new Error(tz("Modell nicht geladen — bitte die Seite neu laden. Bis dahin wird nichts gespeichert."));
+      const werte = { ...Object.fromEntries(IDX_LISTEN.map((k) => [k, modellRef.current?.[k] ?? []])), ...studioWerteRef.current };
+      const offen = felderZurueckgehalten(pid, STUDIO_SPEICHER_FELDER);
+      // nothing left to write but the fields an open card holds back (they stay in the draft until the person decides)
+      if (Object.keys(werte).every((k) => offen.includes(k) || gleichWert(werte[k], abbildRef.current?.[k]))) {
+        // the draft learns the stored state before the save reports its result (the effect's report comes a render later)
+        const [E, SE, rec] = await Promise.all([entwurfModul(), studioEntwurfModul(), loadBimModel(pid).catch(() => null)]);
+        SE.studioMelden(E, pid, werte, abbildRef.current, rec);
+        return offen.length ? "konflikt" : geschrieben ? "ok" : "leer";
+      }
+      const { patch, zonenAngeheftet } = studioPatch(werte, pid, { verschneidung: hatteVerschneidungRef.current, dachIfc: hatteDachIfcRef.current,
+        treppen: hatteTreppenRef.current, gauben: hatteGaubenRef.current, notizen: hatteNotizenRef.current, vordaecher: hatteVordaecherRef.current });
+      const folge = abbildFolgeRef.current;
+      const alt = abbildRef.current || {};
+      speichertRef.current = true;
+      setSaveState("saving");
+      let gespeichert;
+      try { gespeichert = await saveBimModel(pid, patch); } catch (err) {
+        // review 115-05b (R-1): the studio left `pid` while this save was on its way - the refusal is told in a toast (the draft of
+        // `pid` stays in the browser); the save state of the project shown now stays untouched
+        if (geladenFuerRef.current !== pid) toast.warning(tz("Letzte Änderung am Modell nicht gespeichert — es wurde inzwischen an anderer Stelle geändert."));
+        throw err;
+      } finally { speichertRef.current = false; }
+      geschrieben = true;
+      if (geladenFuerRef.current !== pid) {
+        // the person opened another project meanwhile: what is stored now leaves the draft of `pid`; nothing touches this studio
+        void entwurfModul().then((E) => E.gespeichertMelden(pid, "bim", gespeichert));
+        return "ok";
+      }
+      // the image = what this round wrote, except fields held back by an open card (they stay unsaved) - unless a foreign state
+      // was taken over meanwhile (then the holder set the image)
+      if (geladenFuerRef.current === pid && abbildFolgeRef.current === folge) {
+        const zurueck = felderZurueckgehalten(pid, STUDIO_SPEICHER_FELDER);
+        abbildRef.current = { ...werte, ...Object.fromEntries(zurueck.map((k) => [k, alt[k]])) };
+      }
+      // W-1118-02 review (R-W111802-1): the room GUIDs pinned by this save go back into the state (no undo step)
+      const zonen = werte.customZones;
+      if (zonenAngeheftet !== zonen && geladenFuerRef.current === pid) {
+        const gesichert = new Set((Array.isArray(gespeichert?.customZones) ? gespeichert.customZones : []).map((/** @type {any} */ z) => z?.guid));
+        const uebernommen = zonenAngeheftet.map((z, i) => (gesichert.has(/** @type {any} */ (z)?.guid) ? z : zonen[i]));
+        const mitGuid = guidsUebernehmen(zonen, zonen, uebernommen);
+        modellRef.current = { ...modellRef.current, customZones: mitGuid };
+        if (abbildRef.current && !felderZurueckgehalten(pid, ["customZones"]).length) abbildRef.current = { ...abbildRef.current, customZones: mitGuid };
+        setCustomZonesRoh(mitGuid);
+      }
+      setSaveState("saved");
+      setSpeicherEnde((n) => n + 1);
+    }
+    return "teilweise";
+  };
+  // 115-05c: the studio registers its save, its "Verwerfen" and the writer of waiting proposal steps with the draft of its project
+  useEffect(() => {
+    const pid = projectId;
+    if (!pid) return undefined;
+    /** @type {Array<() => void>} */ let ab = [];
+    let weg = false;
+    void entwurfModul().then((E) => {
+      if (weg) return;
+      ab = [
+        E.speichererSetzen(pid, "studio", () => speichernRef.current()),
+        E.zuruecksetzerSetzen(pid, "studio", async () => {
+          const rec = await loadBimModel(pid);
+          if (geladenFuerRef.current !== pid) return;
+          historieStillRef.current = true;
+          try { abbildRef.current = modellLaden(rec, { nurStudioFelder: true }); } finally { historieStillRef.current = false; }
+          abbildFolgeRef.current += 1;
+          ausstehendRef.current = null;
+          historieRef.current = leereHistorie();
+          historieVergessen(pid); // 115-05d: a discard also drops a history put away for this project
+          setHistorieTick((n) => n + 1);
+          // D-115-51: the confirmed steps of this session that only waited in the draft are marked discarded (additive field)
+          for (const s of E.entwurfVon(pid)?.schritte || []) vorschlaege.verlaufMarkieren?.(s.vorschlag_id, { verworfen: new Date().toISOString() });
+        }),
+        E.schrittSchreiberSetzen(pid, (s) => protokoll.schrittBestaetigt({ pruefung: s.pruefung ?? null }, s.eintrag).then((r) => { kiStandLaden(); return r; })),
+      ];
+    });
+    return () => { weg = true; ab.forEach((f) => f()); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refs and stable module state are read at call time
+  }, [projectId]);
 
   // ---- Ebenen (Layers) ----
   const [layers, setLayers] = useState(DEFAULT_LAYERS);
@@ -1211,6 +1485,26 @@ export default function BitBimStudio({ complexData }) {
     [footprint, storeys, storeyHeight, parapet, envThickness, envComposite, huelleBezug, geschosse, huelleDeckeDicke, huelleDeckeBezug, aufbautenKey, untergeschosse, dachform, dachneigung],
   );
 
+  // 108-10: the two terrain layers in model metres — existing ground (kept in the Massing sandbox, else the elevation patch with its
+  // highest point under the footprint on ±0,00) and new ground (the terrain modelled in the Massing sandbox); their difference = earthworks
+  // The sandbox raster is in site metres: `massing_layer.bezug` maps it into the model, and where the layer never stored one (no bodies)
+  // the position of the body on the site does (stored programme field, else footprint area / block / parcel centre — lage.js)
+  const gelaendeLageSite = useMemo(() => {
+    const l = startLageSite({ footprintLageM: bp.footprintLageM || null, footprintFlaechePx: drawn ? drawn.points : null, buildings: complexData?.buildings || null, parcel: complexData?.site_parcel || null });
+    return { x: l.x, y: l.y };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bp.footprintLageM, drawn, complexData?.buildings, complexData?.site_parcel]);
+  const gelaende = useMemo(() => gelaendeEbenen({ massing: massingLayer, demGrid: grid, patch_m: 200, umriss: model.footprint, lageSite: gelaendeLageSite, okffNHN_m: okffNHN }), [massingLayer, grid, model.footprint, gelaendeLageSite, okffNHN]);
+  // the offline stand-in of the elevation model is invented terrain: shown in 3D as a backdrop, never used for numbers, sections or IFC
+  const gelaendeDemo = gelaende.quelleBestand === "hoehenmodell" && gelaendeOffline;
+  const erdmassen = useMemo(() => (gelaendeDemo ? null : erdmassenZwischen(gelaende.bestand, gelaende.neu)), [gelaende, gelaendeDemo]);
+  // 108-10: the governing ground for the checks (openings below ground, 1,40-m rule): the new ground where one is modelled, else the existing
+  // one; never the invented offline heights. Model metres, m relative to ±0,00.
+  const gelaendeFn = useMemo(() => {
+    const r = gelaende.neu || (gelaendeDemo ? null : gelaende.bestand);
+    return r ? (/** @type {{x: number, z: number}} */ p) => hoeheBei(r, p) : null;
+  }, [gelaende, gelaendeDemo]);
+
   // PW-05: Sketch des Projekts (BIT Sketcher) als read-only Grundriss-Overlay.
   // Kein Solver nötig — nur Anzeige der gespeicherten Geometrie.
   const sketchObj = useMemo(() => {
@@ -1262,9 +1556,10 @@ export default function BitBimStudio({ complexData }) {
     const sig = JSON.stringify(json);
     if (sig === lastSavedSketchRef.current) return;
     lastSavedSketchRef.current = sig;
-    saveBimModel(pid, { sketch_layer: json }).catch(() => {
-      /* offline: nächster Flush/Persist versucht es erneut */
-    });
+    // 115-05a (A-3): bimModelNachschreiben — for the open project the same as saveBimModel; on a project switch it writes on the
+    // left project's own base and no longer moves the one-project cache back to it (the new project's stream stayed deaf before)
+    // 115-05b (E-5): a refused flush ({geschrieben: false}) or a failed one is said, with the same note as the studio's own flush
+    nachschreibenMitHinweisRef.current({ pid, patch: { sketch_layer: json } });
     if (pid === projectId) setSketchJson(json);
   };
   const flushSketchRef = useRef(null);
@@ -1414,10 +1709,26 @@ export default function BitBimStudio({ complexData }) {
   // structural slab under it (eaves − knee wall) [ASSUMED: no floor build-up], area = the footprint. A hint, never a block (vollgeschoss.js).
   const vollgeschossDg = useMemo(() => {
     if (model.kniestock_m == null || !globalDach || !globalDach.ok) return null;
-    return vollgeschossAusDach({ grundriss: model.footprint, dachEbenen: dachEbenen(globalDach), boden_m: Number(model.traufhoehe_m) - Number(model.kniestock_m) });
-  }, [model, globalDach]);
+    const boden = Number(model.traufhoehe_m) - Number(model.kniestock_m);
+    // 108-10: the 1,40-m rule of the attic. Its ceiling is the roof; when already its FLOOR lies on average more than 1,40 m above the ground,
+    // the ceiling does too (sufficient condition) — only then the rule counts as met, else it stays unchecked (no false "kein Vollgeschoss")
+    const boden_ueber = gelaendeFn ? umrissUeberGelaende(model.footprint, boden, gelaendeFn) : null;
+    const ueberGelaende_m = boden_ueber && boden_ueber.mittel_m > VOLLGESCHOSS_UEBER_GELAENDE_M ? boden_ueber.mittel_m : null;
+    return vollgeschossAusDach({ grundriss: model.footprint, dachEbenen: dachEbenen(globalDach), boden_m: boden, ueberGelaende_m });
+  }, [model, globalDach, gelaendeFn]);
   /** @type {"x"|"z"} */
   const schnittAchse = schnittAchseWahl ?? schnittAchseQuerZumFirst(globalDach) ?? "x";
+  // 108-10: terrain profiles along the section line, 3 m beyond the building on both sides (the reach of the ground line). The existing
+  // ground of the elevation model goes into the drawing as an assumption; the invented offline heights never do.
+  const gelaendeSchnitt = useMemo(() => {
+    const fp = Array.isArray(model.footprint) ? model.footprint : [];
+    if (fp.length < 3) return null;
+    const werte = fp.map((/** @type {{x: number, z: number}} */ q) => (schnittAchse === "z" ? q.z : q.x));
+    const von = Math.min(...werte) - 3, bis = Math.max(...werte) + 3;
+    const bestand = gelaendeDemo ? [] : gelaendeProfil(gelaende.bestand, schnittAchse, von, bis);
+    const neu = gelaendeProfil(gelaende.neu, schnittAchse, von, bis);
+    return bestand.length || neu.length ? { bestand, neu, annahme: gelaende.quelleBestand === "hoehenmodell" } : null;
+  }, [gelaende, gelaendeDemo, model.footprint, schnittAchse]);
 
   // ---- 107-04: opening chain (host, sizes, height anchor, new opening) ----
   // The walls an opening can sit in (drawn + hull walls), for wirtVon() — the ONE host resolver (also used by the IFC export).
@@ -1437,6 +1748,26 @@ export default function BitBimStudio({ complexData }) {
     const punkt = { x: w.a.x + ((w.b.x - w.a.x) / len) * u, z: w.a.z + ((w.b.z - w.a.z) / len) * u };
     return oeffnungsMasse(o, ankerFuerWand({ level: w.level || 0, unterkante_m }, gs, { huelle: model.slabs, gezeichnet: customSlabs }, punkt));
   };
+  // 108-10: openings of the outer walls below the ground in front of them, and the 1,40-m rule per basement storey. Hull openings only (drawn
+  // walls may be inner walls — the ground inside the house is no measure); a warning in the layer panel, never a block.
+  const gelaendePruefung = useMemo(() => {
+    if (!gelaendeFn) return null;
+    /** @type {Array<{kind: string, level: number, edge: number, unter_m: number, ganz: boolean}>} */
+    const unter = [];
+    const pruefe = (/** @type {any} */ o) => {
+      const wirt = wirtVon(o, wirtModell);
+      if (!wirt || wirt.familie !== "huelle") return;
+      const m = masseAmWand(o, wirt.wand, wirt.wand.unterkante_m);
+      const sill = wirt.wand.unterkante_m + m.sill;
+      const r = oeffnungGegenGelaende({ a: wirt.wand.a, b: wirt.wand.b, u: wirt.u ?? o.u, breite_m: m.w, bruestung_m: sill, oben_m: sill + m.h, umriss: model.footprint, hoeheFn: gelaendeFn });
+      if (r && r.unter_m > UNTER_GELAENDE_TOL_M) unter.push({ kind: o.kind || "window", level: o.level, edge: o.edge, unter_m: r.unter_m, ganz: r.ganz });
+    };
+    envOpenings.forEach(pruefe);
+    autoOpenings.forEach(pruefe);
+    const geschosse = geschosseGegenGelaende(model.storeys, model.footprint, gelaendeFn).filter((g) => g.level < 0);
+    return { unter, geschosse };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gelaendeFn, envOpenings, autoOpenings, wirtModell, model, customSlabs, gs]);
   /** The type object of an opening with its own sizes laid over it (columns, rows, glass from the type) — what buildGlazing needs. */
   const typAmWand = (o, w, unterkante_m) => ({ ...openingTypeById(o.kind, o.typeId), ...masseAmWand(o, w, unterkante_m) });
   // Executed penetrations of the openings planning that lie IN their host wall (drawn or hull): a hole through all layers, like an opening without a filling.
@@ -1463,8 +1794,11 @@ export default function BitBimStudio({ complexData }) {
     return [{ nr: d.nr || d.id, x: Number(d.x), y: Number(d.z), z: Number(d.y), b, h, tiefe, ang, rund }];
   }), [durchbrueche, wirtModell]);
   // ---- 107-10: stored solid relations (Fachlayer solidrelationen_layer, version 1) — "Wand abschrägen gegen Dach" ----
-  const [seoLayer, setSeoLayer] = useFachlayer(projectId, "solidrelationen_layer", SOLIDRELATIONEN_LEER);
+  const [seoLayer, setSeoLayer] = useFachlayer(projectId, "solidrelationen_layer", SOLIDRELATIONEN_LEER, { entwurf: true }); // 115-05c: a draft field
   const seoAktiv = useMemo(() => relationenVon(seoLayer).some((r) => r.aktiv), [seoLayer]);
+  // 115-05c (K8 fallback): the live merge (holder, registered once per project) re-keys own relations of renumbered elements
+  const seoRef = useRef({ layer: seoLayer, setzen: setSeoLayer });
+  seoRef.current = { layer: seoLayer, setzen: setSeoLayer };
   // ---- 107-09: priority-based connections (switch "Wände verschneiden") ----
   // Lazy module (bands + solids + plan/section outlines); never loaded while the switch is off, so the csg chunk is not either.
   const csgCache = useCsgCache(projectId);
@@ -2149,6 +2483,7 @@ export default function BitBimStudio({ complexData }) {
     const r = ids("roof"); if (r.size) setCustomRoofs((a) => a.filter((x) => !r.has(x._idx)));
     const st = ids("stair"); if (st.size) setCustomStairs((a) => a.filter((x) => !st.has(x._idx))); // 108-06
     const ga = ids("gaube"); if (ga.size) setGauben((a) => a.filter((x) => !ga.has(x._idx))); // 108-13
+    const vd = ids("vordach"); if (vd.size) setVordaecher((a) => a.filter((x) => !vd.has(x._idx))); // W-1118-29
     setMultiSel([]);
   };
   // Polygon-Eckpunkt verschieben (Zone/Decke/Dach) — „alles hat Griffe"
@@ -2391,6 +2726,7 @@ export default function BitBimStudio({ complexData }) {
     if (h.kind === "croof" && h.id != null) setCustomRoofs((rs) => rs.filter((r) => r._idx !== h.id));
     if (h.kind === "stair" && h.id != null) setCustomStairs((ts) => ts.filter((t) => t._idx !== h.id)); // 108-06
     if (h.kind === "gaube" && h.id != null) setGauben((gs2) => gs2.filter((g) => g._idx !== h.id)); // 108-13
+    if (h.kind === "vordach" && h.id != null) setVordaecher((vs) => vs.filter((v) => v._idx !== h.id)); // W-1118-29
     setSelected(null); setCtxMenu(null);
   };
   const deleteSelected = () => {
@@ -2406,11 +2742,13 @@ export default function BitBimStudio({ complexData }) {
     if (selected.type === "roof") setCustomRoofs((rs) => rs.filter((r) => r._idx !== selected.index));
     if (selected.type === "stair") setCustomStairs((ts) => ts.filter((t) => t._idx !== selected.index)); // 108-06
     if (selected.type === "gaube") setGauben((gs2) => gs2.filter((g) => g._idx !== selected.index)); // 108-13
+    if (selected.type === "vordach") setVordaecher((vs) => vs.filter((v) => v._idx !== selected.index)); // W-1118-29
     setSelected(null);
   };
   // 108-06 / 108-13: field patches of a stair / dormer (one undo step each, through the wrapped setters)
   const patchStair = (/** @type {number} */ idx, /** @type {Record<string, any>} */ p) => setCustomStairs((ts) => ts.map((t) => (t._idx === idx ? { ...t, ...p } : t)));
   const patchGaube = (/** @type {number} */ idx, /** @type {Record<string, any>} */ p) => setGauben((gs2) => gs2.map((g) => (g._idx === idx ? { ...g, ...p } : g)));
+  const patchVordach = (/** @type {number} */ idx, /** @type {Record<string, any>} */ p) => setVordaecher((vs) => vs.map((v) => (v._idx === idx ? { ...v, ...p } : v))); // W-1118-29
   // ---- Properties: Felder des ausgewählten Objekts ändern ----
   const patchWall = (idx, p) => setCustomWalls((ws) => ws.map((w) => w._idx === idx ? { ...w, ...p } : w));
   const patchColumn = (idx, p) => setCustomColumns((cs) => cs.map((c) => c._idx === idx ? { ...c, ...p } : c));
@@ -2818,7 +3156,13 @@ export default function BitBimStudio({ complexData }) {
     werkzeug: (/** @type {string} */ id) => selectTool(id),
     alleWaehlen: () => alleWaehlen(),
     zoom: () => zoomToSelection(),
-    schieben: (/** @type {number} */ dx, /** @type {number} */ dz) => nudgeSelection(dx, dz),
+    // 115-04 (N-01): the arrow keys give a SCREEN offset (x right, y down, m); the floor plan turns it back into the model frame, so
+    // the selection moves the way the pressed arrow points on a turned plan. At 0° and in 3D / section: model axes as before.
+    schieben: (/** @type {number} */ dx, /** @type {number} */ dz) => {
+      if (view !== "grundriss") return nudgeSelection(dx, dz);
+      const m = drehePunktZurueck({ x: dx, z: dz }, planDrehungen.plan);
+      return nudgeSelection(m.x, m.z);
+    },
     laufAktiv: () => !!three.current.navigation?.laufAktiv?.(),
     // 261110-mzj: F3 starts / ends the walk-through (3D view, arrow tool). false = not handled here.
     f3: () => {
@@ -2844,7 +3188,50 @@ export default function BitBimStudio({ complexData }) {
     if (projektionRef.current === "parallel") projektionWechseln("perspektive");
     if (!nav?.laufStarten()) setHint(tz("Durchlaufen startet nicht, solange ein Werkzeug die Kamera hält"));
   };
-  const exportExpose = () => { exportExposePng(three.current); setHint("Exposé-PNG (2×) heruntergeladen."); };
+  // W-1118-28: the exposé picture is the studio scene rendered once more with the presentation look (lib/exposeBild.js: sky, sun,
+  // textures, glass, ambient occlusion) plus the parts of lib/exposeSzene.js — derived from this model (roof body, gutters, dormer
+  // details, door leaves) or read from its field `expose_layer` (chimney, outside stairs, surroundings, named views). The same
+  // model, no second house. The modules load on the first click. A failure is shown in plain words; no silent fallback.
+  /**
+   * @param {boolean} alleBlicke true: one picture per named view of expose_layer.blicke; false: the studio's current view
+   * @param {Record<string, any>|null} [einBlick] one stored view (from the panel) instead
+   */
+  const exportExpose = async (alleBlicke = false, einBlick = null) => {
+    setHint(tz("Exposé-Bild wird gerechnet …"));
+    try {
+      const { exposeBildRendern, EXPOSE_BILD } = await import("@designer/lib/exposeBild.js");
+      const layer = exposeLayer && typeof exposeLayer === "object" ? exposeLayer : null;
+      // hull openings with the sizes the 3D view cuts into the wall (masseAmWand: sill converted to the wall bottom), so the
+      // picture's frames sit exactly in the holes
+      const oeffnungen = envOpenings.map((/** @type {any} */ e) => {
+        const w = (model.walls || []).find((/** @type {any} */ x) => x.level === e.level && x.edge === e.edge);
+        if (!w) return e;
+        const ty = masseAmWand(e, w, w.elevation);
+        return { ...e, width: ty.w, height: ty.h, y_unten_m: w.elevation + ty.sill };
+      });
+      // furniture: the furnishing of the apartment planner with storey and type (exposeMoebel.js gives it bodies)
+      const [{ moebelAufloesen }, { MOEBEL_KATALOG, raumGuid }] = await Promise.all([import("@designer/lib/exposeMoebel.js"), import("@designer/lib/moebel.js")]);
+      const moebel = moebelAufloesen(complexData?.moeblierung || null, customZones.map((/** @type {any} */ z) => ({ ...z, guid: raumGuid(z) })),
+        [...MOEBEL_KATALOG.flatMap((/** @type {any} */ g) => g.typen), ...(Array.isArray(complexData?.moebel_eigene) ? complexData.moebel_eigene : [])]);
+      const daten = { model, dach: globalDach, gs, gauben, envOpenings: oeffnungen, layer, moebel, customWalls };
+      const blicke = einBlick ? [einBlick] : alleBlicke && Array.isArray(layer?.blicke) ? layer.blicke.filter((/** @type {any} */ b) => Array.isArray(b?.pos) && Array.isArray(b?.ziel)) : [];
+      if (alleBlicke && !blicke.length) { setHint(tz("Für dieses Projekt sind keine Blickpunkte gespeichert.")); return; }
+      const d = new Date(), stempel = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+      const laden = (/** @type {Blob} */ blob, /** @type {string} */ name) => {
+        const url = URL.createObjectURL(blob), a = document.createElement("a");
+        a.href = url; a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      };
+      if (blicke.length) {
+        for (const b of blicke) laden(await exposeBildRendern(three.current, { daten, blick: b }), `Expose_${String(b.name || "Blick").replace(/[^A-Za-z0-9ÄÖÜäöüß_-]+/g, "_")}_${stempel}.png`);
+      } else laden(await exposeBildRendern(three.current, { daten }), `Expose_${stempel}.png`);
+      setHint(tz("Exposé-Bild ({{b}} × {{h}}) heruntergeladen.").replace("{{b}}", String(EXPOSE_BILD.breite)).replace("{{h}}", String(EXPOSE_BILD.hoehe)));
+    } catch (e) {
+      console.error("Exposé-Bild fehlgeschlagen:", e);
+      setHint(`${tz("Exposé-Bild fehlgeschlagen:")} ${String(/** @type {any} */ (e)?.message || e)}`);
+    }
+  };
 
   // ---- BIM-F: Favoriten — {tool, composite, typeId} in localStorage nc-bim-favs (max 6, FIFO) ----
   // Ohne Argument: aktuelles Werkzeug (+ Aufbau/Typ); mit spec: vom Attribute-Panel (Stern) abgeleitet.
@@ -2906,6 +3293,16 @@ export default function BitBimStudio({ complexData }) {
   // IFC-Export: gemeinsames Modell + gezeichnete Elemente -> .ifc herunterladen.
   // autoOpenings (Auto-Fenster + Eingangstür) gehen mit — 3D, Grundriss und IFC
   // zeigen dieselben Öffnungen (KD-16).
+  // 115-05c: the export of a saved model writes the GUIDs it pinned (above); this runs after the render that put them into the state
+  // (the studio's save reads modellRef) - only if pinning changed a list, else the flag is dropped by the next export
+  const exportPinsSpeichernRef = useRef(/** @type {string|null} */ (null));
+  useEffect(() => {
+    const pid = exportPinsSpeichernRef.current;
+    exportPinsSpeichernRef.current = null;
+    if (!pid || pid !== projectId) return;
+    void entwurfModul().then((E) => { if (!E.istGesperrt(pid)) void E.speichern(pid); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the pinned lists reach the state
+  }, [customWalls, customColumns, customZones, customSlabs, customRoofs, customStairs, gauben]);
   const downloadIFC = async () => {
     const meldungen = [];
     // 107-09: with the switch the walls with a build-up go out as their cleaned bands (extruded, D-BK-08b); the module is loaded if needed
@@ -2922,16 +3319,26 @@ export default function BitBimStudio({ complexData }) {
     }
     // 107-08 (lazy GUID): the first export pins the GlobalIds of walls, columns, slabs, roofs and rooms onto the elements (the same
     // derived values, so this file is unchanged); from then on they survive a project copy. Openings keep the derived ones.
+    // 115-05c: the pinning is identity bookkeeping, no edit of the person - an export of a model WITHOUT unsaved changes must not leave
+    // it "Nicht gespeichert": the pins are written at once through the one "Speichern" (as before the draft mode, 107-08). With
+    // unsaved changes they stay in the draft and go with the next "Speichern".
+    const E = projectId ? await entwurfModul() : null;
+    const warSauber = Boolean(E && projectId && E.istSauber(projectId));
     const gepinnt = /** @type {{customWalls: any[], customColumns: any[], customZones: any[], customSlabs: any[], customRoofs: any[], customStairs: any[], gauben: any[]}} */ (projectId ? alleGuidsAnheften() : { customWalls, customColumns, customZones, customSlabs, customRoofs, customStairs, gauben });
+    const vorPins = /** @type {Record<string, any>} */ ({ customWalls, customColumns, customZones, customSlabs, customRoofs, customStairs, gauben });
+    if (warSauber && Object.entries(gepinnt).some(([k, v]) => v !== vorPins[k])) exportPinsSpeichernRef.current = projectId || null;
     const ifc = exportIFC(model, {
       customWalls: gepinnt.customWalls, customColumns: gepinnt.customColumns, customWindows, envOpenings, autoOpenings, // (drawn attic walls get their roof profile inside exportIFC)
       customZones: gepinnt.customZones, customSlabs: gepinnt.customSlabs, customRoofs: gepinnt.customRoofs.map(dachMigrieren), storeyHeight, geschosse, // 107-02: a roof with only `pitch` is read as ridge rise in m, whatever path created it
+      vordaecher, // W-1118-29: canopies (IfcRoof USERDEFINED "Vordach")
       customStairs: gepinnt.customStairs, gauben: gepinnt.gauben, // 108-06: IfcStair + derived slab openings; 108-13: dormers on the global roof (need dachGlobal)
       netz: netzLayer, // Phase 41 (NETZ-05): Leitungen als Segment-Elemente
       // 97-02a: every element with its data sheet (stable GUID, Pset_BIT_Bauteil, material, DIN 276); beams from statik_layer.
       // 107-03: schichtdetails = layer Category/Priority, LayerSetUsage, material psets
       steckbrief: { projektId: projectId || null, schichtdetails: true }, tragwerk: statikLayer, bauteilAttribute: attributLayer,
       massing: massingLayer, // 98-05: Massing-Studio bodies (proxies) and groups (assemblies)
+      // 108-10: existing and new ground with the earthworks between them; the invented offline heights never go into the file
+      gelaende: { bestand: gelaendeDemo ? null : gelaende.bestand, neu: gelaende.neu, quelleBestand: gelaende.quelleBestand, erdmassen },
       durchbrueche, // 107-04: penetrations of the openings planning (provision proxies / voids in the host wall)
       // 89-03: workshop walls/doors/rooms with stable GUIDs and Pset_BIT_Bauteil (store zones).
       werkstatt: werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight, geschosse }),
@@ -3105,6 +3512,8 @@ export default function BitBimStudio({ complexData }) {
   const ausgabeStand = async () => {
     if (saveState === "saving" || saveState === "loading") { setHint(tz("Modell wird gerade gespeichert — Plan gleich noch einmal ausgeben.")); return null; }
     if (saveState === "error") return { st: modellStandUnbekannt("Modell nicht gespeichert") };
+    // 115-05c (§6.8): an unsaved draft is printed as what it is - the sheet carries the note, its stand is never "aktuell"
+    if (saveState === "entwurf") return { st: modellStandUnbekannt("Entwurf — nicht gespeichert") };
     if (!projectId) return { st: modellStandUnbekannt("kein Projekt") };
     const bp = buildingProgram.get();
     if (bp.syncFehler === "speichern") return { st: modellStandUnbekannt("Programmfelder nicht gespeichert") };
@@ -3131,7 +3540,7 @@ export default function BitBimStudio({ complexData }) {
   // current storey with the lens applied; 106-11: plus the marks of unreleased AI changes.
   // 107-12: built from a VIEW (the applied saved one or the state), not from loose state: lens, level, scale, S/W, layers and the
   // view parameters come from `aus`.
-  const aktuelleGrafik = (/** @type {any} */ aus, /** @type {import("@core/lib/zeigen/planStand.js").ModellStand|null} */ st = null, /** @type {Map<string, any>|null} */ schichtFlaechen = null) => {
+  const aktuelleGrafik = (/** @type {any} */ aus, /** @type {import("@core/lib/zeigen/planStand.js").ModellStand|null} */ st = null, /** @type {Map<string, any>|null} */ schichtFlaechen = null, /** @type {Record<string, any>} */ zusatz = {}) => {
     const brille = brilleVon(aus.brille);
     const lvl = ebeneKlemmen(model, aus.level);
     // named combination = its set, "Eigene" = the layers stored with the view (review 107-12); only a state without either reads the switches
@@ -3139,6 +3548,7 @@ export default function BitBimStudio({ complexData }) {
     const grafik = planGrafik({ model, level: lvl, customWalls: sichtbarUnter(brille, customWalls), customColumns: sichtbarUnter(brille, customColumns),
       customSlabs: sichtbarUnter(brille, customSlabs), customRoofs: sichtbarUnter(brille, customRoofs), customZones, brille,
       customStairs, gauben, dach: globalDach, geschosse: gs, // 108-06 / 108-13: stair symbol and dormer outline on the sheet
+      vordaecher, // W-1118-29: canopy outline (dashed, above the cut plane)
       // 106-11 review: openings only locate the mark of a changed opening on its drawn host wall (the sheet draws no openings)
       customWindows, envOpenings,
       huelleStatus: zeigtStatus(brille, attributeVon(attributLayer, "hull-wall")?.status) ? attributeVon(attributLayer, "hull-wall")?.status ?? null : null, massstab: aus.scale, sw: aus.sw,
@@ -3147,7 +3557,9 @@ export default function BitBimStudio({ complexData }) {
       werkstattWaende: attributLayer?.attribute ? sichtbarUnter(brille, werkstattMitAttributen(werkstattBauteile(buildingProgram.get().zones || [], { storeyHeight, geschosse }), attributLayer).waende || []) : null,
       kiMarken: st?.guids?.length ? { guids: st.guids, projektId: projectId || null } : null, schichtFlaechen,
       ansicht: ansichtVon(aus, aus === aktiverAusschnitt),
-      eingang: eingangOeffnung }); // 108-01: no entrance symbol when the automatic entrance is off (D-EFH-04)
+      blattDrehung: blattDrehungWirksam(planDrehungen), // 115-04: sheet orientation of the floor plan (0 = the sheet as before)
+      eingang: eingangOeffnung, // 108-01: no entrance symbol when the automatic entrance is off (D-EFH-04)
+      ...zusatz }); // W-1118-21: the plan set adds the dimension chains and always a view state (opening symbols)
     return { grafik, brille, lvl, vis };
   };
   /**
@@ -3219,7 +3631,7 @@ export default function BitBimStudio({ complexData }) {
         huelleStatus: zeigtStatus(brille, huelleStatus) ? huelleStatus : null, sw: ansicht.sw, massstab: ansicht.scale,
         // 108-01: the cut layers exist for A-A only; B-B falls back to the wall rectangles (as on the screen)
         schnittFlaechen: schnittAchse === "x" ? schnittMitSeoFuer(seoSchnittFuer(sw, vSchnittExport), vSchnittExport) : null,
-        ansicht: ansichtVon(ansicht, ansicht === aktiverAusschnitt), dach: globalDach, achse: schnittAchse })
+        ansicht: ansichtVon(ansicht, ansicht === aktiverAusschnitt), dach: globalDach, achse: schnittAchse, gelaende: gelaendeSchnitt })
       : grafik;
     // 107-13: name by level; 108-01: the section names its axis ("Schnitt A-A" / "Schnitt B-B")
     const planinhalt = view === "schnitt" ? `Schnitt ${schnittAchse === "z" ? "B-B" : "A-A"}` : `Grundriss ${ebeneName(model, lvl)}`.trim();
@@ -3249,6 +3661,56 @@ export default function BitBimStudio({ complexData }) {
       setHint(`PDF 1:${pdf.scale} (${pdf.format}) erstellt${pdf.brilleHinweis || " — maßstäblich, Vektor."}${pdf.zusatz}`);
     } catch (e) { setHint("PDF-Export fehlgeschlagen: " + (e?.message || e)); } finally { setAusgabeLaeuft(false); }
   };
+  // W-1118-21: the plan set — every storey as a floor plan with dimension chains plus both sections in ONE PDF. Each sheet comes
+  // from the same graphic functions as the single sheet (aktuelleGrafik / schnittGrafik) and the same model state, so the set cannot
+  // show another building than the plan on screen. The floor plans always carry the opening symbols (the chains measure them), so a
+  // set does not depend on a saved view being applied. Scale: the set's own choice (1:50 by default), not the scale of the screen.
+  const exportPlansatz = async () => {
+    if (ausgabeLaeuft) return;
+    setAusgabeLaeuft(true);
+    try {
+      const basis = aktiverAusschnitt || zustandJetzt;
+      const aus = await ausgabeStand();
+      if (!aus) return;
+      const scale = plansatzMassstab === 100 ? 100 : 50;
+      const ebenen = [...new Set((model?.walls || []).map((/** @type {any} */ w) => Number(w.level)).filter(Number.isFinite))].sort((a, b) => a - b);
+      const abl = await ableitungFuerAusgabe(() => vSolidsFertig(), (vw) => ({ plan: new Map(ebenen.map((l) => [l, vBaender ? vPlanFlaechenFuer(l, vw) : null])), schnitt: vBaender ? vSchnittFlaechenFuer(vw) : null }),
+        { flaechenVon: (f) => f.schnitt });
+      const sw = await seoFertig();
+      const brille = brilleVon(basis.brille);
+      const ansichtP = ansichtVon(basis, basis === aktiverAusschnitt);
+      /** @type {Array<{grafik: any, planinhalt: string, massstab: number, ableitungsVermerk: string|null}>} */
+      const blaetter = [];
+      let kettenFehler = 0;
+      for (const l of ebenen) {
+        const fl = abl.flaechen.plan.get(l) || null;
+        const { grafik } = aktuelleGrafik({ ...basis, level: l, scale }, aus.st, planMitSeo(fl, seoPlanFuer(l, sw)),
+          { massketten: true, ansicht: ansichtP || { strukturdarstellung: "gesamt", optionen: null, regeln: null } });
+        kettenFehler += (grafik.kettenPruefung || []).filter((/** @type {{ok: boolean}} */ p) => !p.ok).length;
+        blaetter.push({ grafik, planinhalt: `Grundriss ${ebeneName(model, l)}`.trim(), massstab: scale, ableitungsVermerk: abl.zeitUeber || rueckfallAnzahl(fl) > 0 ? RUECKFALL_VERMERK : null });
+      }
+      const huelleStatus = attributeVon(attributLayer, "hull-wall")?.status ?? null;
+      const vis = ebenenSichtbarkeit(basis, DEFAULT_LAYERS, LAYER_COMBOS) || layerVis;
+      for (const achse of /** @type {Array<"x"|"z">} */ (["x", "z"])) {
+        blaetter.push({ grafik: schnittGrafik({ model, storeyHeight, layerVis: zeigtStatus(brille, huelleStatus) ? vis : { ...vis, shell: false }, brille,
+          huelleStatus: zeigtStatus(brille, huelleStatus) ? huelleStatus : null, sw: basis.sw, massstab: scale,
+          // as in the single sheet: cut layers exist for A-A only, the terrain profile for the section axis shown on screen
+          schnittFlaechen: achse === "x" ? schnittMitSeoFuer(seoSchnittFuer(sw, abl.flaechen.schnitt), abl.flaechen.schnitt) : null,
+          ansicht: ansichtP, dach: globalDach, achse, gelaende: achse === schnittAchse ? gelaendeSchnitt : null }),
+        planinhalt: `Schnitt ${achse === "z" ? "B-B" : "A-A"}`, massstab: scale, ableitungsVermerk: achse === "x" && abl.rueckfall ? RUECKFALL_VERMERK : null });
+      }
+      const satz = await plansatzPdf(blaetter, { projekt: project?.name || "", brille, datum: new Date().toLocaleDateString("de-DE"), modellstand: aus.st });
+      const url = URL.createObjectURL(new Blob([/** @type {any} */ (satz.bytes)], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = planPdfDateiname(project?.name || "", "Plansatz", scale);
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setHint(tz("Plansatz 1:{{m}} erstellt — {{n}} Blätter ({{liste}}), maßstäblich, Grundrisse mit Maßketten. Ansichten sind noch nicht enthalten.")
+        .replace("{{m}}", String(scale)).replace("{{n}}", String(satz.blaetter.length)).replace("{{liste}}", satz.blaetter.map((b) => `${b.planinhalt} ${b.format}`).join(", "))
+        + (kettenFehler ? ` ${tz("Achtung: {{n}} Maßkette(n) gehen nicht auf das Gesamtmaß auf.").replace("{{n}}", String(kettenFehler))}` : "")
+        + (satz.vermerk ? ` ${tz("Mit Vermerk „enthält ungeprüfte KI-Änderungen“.")}` : ""));
+    } catch (e) { setHint(`${tz("Plansatz fehlgeschlagen")}: ${e?.message || e}`); } finally { setAusgabeLaeuft(false); }
+  };
   // 110 follow-up "An Plan ablegen": the plans of the project for the picker; the sheet is filed exactly like the plan list's
   // "PDF ablegen" (dokumentAblegen with typ "Plan-PDF", then Plan.datei_ref + Plan.modellstand read back from the PDF keywords),
   // so the plan list, the model state column and the client release (BauherrPlan) see no difference.
@@ -3272,6 +3734,8 @@ export default function BitBimStudio({ complexData }) {
   const planPdfAblegen = async () => {
     if (view === "3d") { setHint("PDF-Plan nur aus Grundriss/Schnitt — bitte 2D-Ansicht wählen."); return; }
     if (!ablageZiel) { setHint(tz("Bitte zuerst einen Plan aus der Planliste wählen.")); return; }
+    // 115-05c (§6.8): a plan is filed only from a stored state
+    if (saveState === "entwurf") { setHint(tz("Erst „Speichern“, dann am Plan ablegen.")); return; }
     if (ausgabeLaeuft) return;
     setAusgabeLaeuft(true);
     try {
@@ -3356,7 +3820,8 @@ export default function BitBimStudio({ complexData }) {
       else if (e.key === "d" || e.key === "D") s.werkzeug("slab");
       else if (e.key === "f" || e.key === "F") s.zoom();
       else if (e.key.startsWith("Arrow")) {
-        const step = e.shiftKey ? 1 : 0.1;
+        const step = e.shiftKey ? 1 : 0.1; // m
+        // screen direction (x right, y down); schieben turns it into the model frame of a turned floor plan (115-04, N-01)
         const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
         if (d && s.schieben(d[0], d[1])) e.preventDefault();
       }
@@ -3443,7 +3908,7 @@ export default function BitBimStudio({ complexData }) {
   // model here at once (and into the React state), so the next command in the same tick (auswahl-lesen, a second
   // proposal) already sees it. Every render re-assigns it from the state, which by then holds the same arrays.
   const modellRef = useRef(/** @type {any} */ (null));
-  modellRef.current = { customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs, customStairs, gauben, planNotizen,
+  modellRef.current = { customWalls, customColumns, customWindows, envOpenings, customZones, customSlabs, customRoofs, customStairs, gauben, planNotizen, vordaecher,
     bauteil_attribute_layer: attributLayer, netz_layer: netzLayer };
   /** Restore one drawing-undo snapshot. Raw setters: the wrapped ones would record the restore. */
   const historieAnwenden = (/** @type {any} */ s) => {
@@ -3458,6 +3923,7 @@ export default function BitBimStudio({ complexData }) {
       setCustomRoofsRoh(s.customRoofs);
       if (Array.isArray(s.customStairs)) setCustomStairsRoh(s.customStairs); // 108-06 (older snapshots have none: the stairs stay)
       if (Array.isArray(s.gauben)) setGaubenRoh(s.gauben); // 108-13
+      if (Array.isArray(s.vordaecher)) setVordaecherRoh(s.vordaecher); // W-1118-29 (older snapshots have none: the canopies stay)
       if (Array.isArray(s.planNotizen)) setPlanNotizenRoh(s.planNotizen); // 261111-zs1 (older snapshots have none: the notes stay)
       if (s.entranceCfg) setEntranceCfg(s.entranceCfg); // 108-01 review (snapshots from before have none: the entrance stays)
       if ("huelle_erscheinung" in s) setHuelleErscheinungRoh(s.huelle_erscheinung || null);
@@ -3481,6 +3947,7 @@ export default function BitBimStudio({ complexData }) {
         envOpenings: s.envOpenings, customZones: s.customZones, customSlabs: s.customSlabs, customRoofs: s.customRoofs,
         ...(Array.isArray(s.customStairs) ? { customStairs: s.customStairs } : {}), ...(Array.isArray(s.gauben) ? { gauben: s.gauben } : {}),
         ...(Array.isArray(s.planNotizen) ? { planNotizen: s.planNotizen } : {}),
+        ...(Array.isArray(s.vordaecher) ? { vordaecher: s.vordaecher } : {}),
       };
     } finally {
       historieStillRef.current = false;
@@ -3526,6 +3993,9 @@ export default function BitBimStudio({ complexData }) {
       clearTimeout(uhr);
       uhr = setTimeout(async () => {
         if (aus) return;
+        // 115-05c (§6.8): the client's 3D file follows the STORED model only - with an unsaved draft it waits for "Speichern"
+        // (the save notifies aufBimModelAenderung) or "Verwerfen"
+        if (ausstehendRef.current) return;
         const t3 = three.current;
         t3.hoverLoeschen?.(); // hover tints live on material clones — the client gets the originals
         try {
@@ -3538,7 +4008,8 @@ export default function BitBimStudio({ complexData }) {
       }, BAUHERR_NACHZIEHEN_MS);
     };
     planen();
-    const abmelden = aufBimModelAenderung((pid) => { if (pid === projectId) planen(); });
+    // 115-05c: a draft value is no stored change (the client's file follows "Speichern")
+    const abmelden = aufBimModelAenderung((pid, _p, meta) => { if (pid === projectId && !meta?.entwurf) planen(); });
     return () => { aus = true; clearTimeout(uhr); abmelden(); };
   }, [projectId]);
   /** Everything the element resolvers need, as of this render. */
@@ -3698,7 +4169,7 @@ export default function BitBimStudio({ complexData }) {
     try {
       const alt = modellRef.current;
       const setter = { customWalls: setCustomWalls, customColumns: setCustomColumns, customWindows: setCustomWindows, envOpenings: setEnvOpenings,
-        customZones: setCustomZones, customSlabs: setCustomSlabs, customRoofs: setCustomRoofs, customStairs: setCustomStairs, gauben: setGauben, planNotizen: setPlanNotizen };
+        customZones: setCustomZones, customSlabs: setCustomSlabs, customRoofs: setCustomRoofs, customStairs: setCustomStairs, gauben: setGauben, planNotizen: setPlanNotizen, vordaecher: setVordaecher };
       const stand = { ...alt };
       for (const [k, set] of Object.entries(setter)) if (neu[k] !== alt[k]) {
         // 107-02: roofs from an agent or an undo may only carry the old `pitch`; they get the split fields here like at load, so editor and export read one meaning
@@ -3740,8 +4211,13 @@ export default function BitBimStudio({ complexData }) {
     vorschauZeigen, vorschauEntfernen,
     darfAendern: () => darfAendern, // 106-07: bestaetigen / rueckgaengig only for a role that may change the model
     // 106-10 change log; 106-11: the plan state follows each stored step
-    schrittBestaetigt: (/** @type {any} */ v, /** @type {any} */ e) => protokoll.schrittBestaetigt(v, e).then((r) => { kiStandLaden(); return r; }),
-    schrittZurueckgenommen: (/** @type {any} */ e, /** @type {any} */ o) => protokoll.schrittZurueckgenommen(e, o).then((r) => { kiStandLaden(); return r; }),
+    // 115-05c (D-115-51): a confirmed step waits in the draft and goes to the log after "Speichern"; undo of a waiting step drops it
+    schrittBestaetigt: (/** @type {any} */ v, /** @type {any} */ e) => entwurfModul().then((E) => {
+      if (projectId) E.schrittVormerken(projectId, { vorschlag_id: String(e?.vorschlag_id), eintrag: e, pruefung: v?.pruefung ?? null });
+      return null;
+    }),
+    schrittZurueckgenommen: (/** @type {any} */ e, /** @type {any} */ o) => entwurfModul().then((E) => (projectId && E.schrittEntfernen(projectId, String(e?.vorschlag_id))
+      ? null : protokoll.schrittZurueckgenommen(e, o).then((r) => { kiStandLaden(); return r; }))),
   };
   // Agent and numeric inputs share this apply: the pure operation, then the same setters a click uses
   // (those record one bimHistorie step). modellRef is updated at once so a second call in the same turn sees it.
@@ -3835,6 +4311,8 @@ export default function BitBimStudio({ complexData }) {
       ausfuehren: () => { z().wiederholen(); return true; } });
     return reg;
   }, []);
+  // 105-14: publish the register while mounted, so the shortcut help "?" lists its keys (no hand-written list).
+  useEffect(() => registerAnmelden(befehle, { bereich: "BIM-Studio" }), [befehle]);
   // 106-10: jump from the review workplace (?tab=bim&auswahl=<GUID>): select that element once it is in the loaded model, through the same
   // command a person or agent uses (106-02), then frame it. Tried again on every model change until it is found.
   const sprungRef = useRef(/** @type {string|null} */ (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("auswahl") : null));
@@ -3846,6 +4324,9 @@ export default function BitBimStudio({ complexData }) {
     sprungRef.current = null;
     befehle.ausfuehren("ansicht-auf-auswahl", {});
   }, [befehle, customWalls, customColumns, customZones, customSlabs, customRoofs]);
+  // 115-03: view asked for from outside (deep link ?tab=bim&ansicht=grundriss|schnitt|3d and the direct buttons of the designer header,
+  // prop startAnsicht = { ansicht, n } with n counting the requests) — the same as a click on the view switcher, after the mount.
+  useEffect(() => { if (startAnsicht?.ansicht) setView(startAnsicht.ansicht); }, [startAnsicht?.ansicht, startAnsicht?.n]);
   // ---- 106-09: changes another device saved (change stream, useBimModelSync) ----
   // Three ways per field against what this studio holds right now: taken over where only the other device changed
   // something, kept where only this one did, a conflict (both versions, held back from saving) where both changed the
@@ -3853,7 +4334,8 @@ export default function BitBimStudio({ complexData }) {
   // confirmed here: the change arrives as confirmed by the person on the other device, with its origin (D-IM-04).
   const studioWerteRef = useRef(/** @type {Record<string, any>} */ ({}));
   studioWerteRef.current = { envComposite, envThickness, huelle_bezug: huelleBezug, huelle_decke_dicke_m: huelleDeckeDicke, huelle_decke_bezug: huelleDeckeBezug,
-    parapet, dachform, dachneigung, entranceCfg, verschneidung, dachform_ifc: dachIfc };
+    parapet, dachform, dachneigung, entranceCfg, verschneidung, dachform_ifc: dachIfc, huelle_erscheinung: huelleErscheinung, // 115-05a: + appearance
+    bauteil_attribute_layer: attributLayer }; // 115-05c: + attribute layer
   // 106-09 review: the attribute layer and the sketch mode as they are now (read inside the holder callback)
   const attributRef = useRef(attributLayer);
   attributRef.current = attributLayer;
@@ -3865,13 +4347,22 @@ export default function BitBimStudio({ complexData }) {
     const wertSetzer = { envComposite: setEnvComposite, envThickness: setEnvThickness, huelle_bezug: setHuelleBezug, huelle_decke_dicke_m: setHuelleDeckeDicke,
       huelle_decke_bezug: setHuelleDeckeBezug, parapet: setParapet, dachform: setDachform, dachneigung: setDachneigung, entranceCfg: setEntranceCfg,
       verschneidung: (/** @type {any} */ v) => { setVerschneidung(v === true); hatteVerschneidungRef.current = true; },
-      dachform_ifc: (/** @type {any} */ v) => { setDachIfc(v === true); hatteDachIfcRef.current = true; } }; // 107-10 review
+      dachform_ifc: (/** @type {any} */ v) => { setDachIfc(v === true); hatteDachIfcRef.current = true; }, // 107-10 review
+      // 115-05a: the envelope appearance is claimed and merged like the other envelope values (before it stayed in the sync's vorbehalt)
+      huelle_erscheinung: (/** @type {any} */ v) => setHuelleErscheinungRoh(typeof v === "string" && v ? v : null),
+      // 115-05c: the attribute layer is merged three ways like the envelope values (before: taken over only while unchanged here)
+      bauteil_attribute_layer: (/** @type {any} */ v) => { setAttributLayer(v ?? null); attributRef.current = v ?? null; } };
     /** @type {Record<string, (v: any) => void>} */
-    const leseSetzer = { netz_layer: setNetzLayer, statik_layer: setStatikLayer, massing_layer: setMassingLayer, sketch_layer: setSketchJson };
+    const leseSetzer = { netz_layer: setNetzLayer, statik_layer: setStatikLayer, massing_layer: setMassingLayer, sketch_layer: setSketchJson, bauaufnahme_layer: okffAus };
     const felder = [...STUDIO_SPEICHER_FELDER];
     /** Writes new field values into the studio (lists through the synchronous mirror, single values through their setters). @param {Record<string, any>} werte */
     const anwenden = (werte) => {
       const listen = Object.fromEntries(Object.entries(werte).filter(([k]) => k in ELEMENT_FELDER));
+      // 115-05a: an additive list that arrives from outside makes the record carry it — a later local deletion must be written
+      if ("customStairs" in listen) hatteTreppenRef.current = true;
+      if ("gauben" in listen) hatteGaubenRef.current = true;
+      if ("planNotizen" in listen) hatteNotizenRef.current = true;
+      if ("vordaecher" in listen) hatteVordaecherRef.current = true; // W-1118-29
       if (Object.keys(listen).length) modellAnwenden({ ...modellRef.current, ...listen });
       for (const [k, v] of Object.entries(werte)) if (wertSetzer[k]) { wertSetzer[k](v); studioWerteRef.current = { ...studioWerteRef.current, [k]: v }; }
     };
@@ -3880,40 +4371,84 @@ export default function BitBimStudio({ complexData }) {
     studioHalter.current = halter;
     /** The studio mounted now for this project, or null (resolvers act on it, never on an unmounted one). */
     const aktuell = () => (studioHalter.current?.projectId === projectId ? studioHalter.current : null);
-    const abmelden = aufFremdenStand((pid, f) => {
-      if (pid !== projectId || loadingRef.current) return [];
+    /** @param {string} pid @param {any} f */
+    const halterFn = (pid, f) => {
+      // 115-05a (A-3): not before this project's model is in the state (after a failed load the studio holds an empty editor, not the
+      // model). Once it is, a foreign state is merged at once — before, the 50 ms after a load (loadingRef, a guard of the autosave)
+      // dropped it: the base had moved on, the state had not, and nothing brought it in later.
+      if (pid !== projectId) return [];
+      if (geladenFuerRef.current !== projectId) {
+        // model on screen, draft store not yet ready: kept and brought in by the load (see verpasstRef)
+        if (modellDaFuerRef.current === projectId) verpasstRef.current.push(f);
+        return [];
+      }
       /** @type {string[]} */
       const genommen = [];
       // layers the studio only shows follow live (written by their editors, not claimed); the sketch not while it is edited here
       for (const k of STUDIO_LESE_LAYER) {
         if (k in f.patch && !(k === "sketch_layer" && sketchEditAktivRef.current)) leseSetzer[k](f.patch[k] ?? null);
       }
-      // the attribute layer is written here too: taken over while unchanged here, else the next save shows a conflict
-      if ("bauteil_attribute_layer" in f.patch) {
-        const lokalA = attributRef.current;
-        if (gleichWert(lokalA, f.vorher.bauteil_attribute_layer) || gleichWert(lokalA, f.patch.bauteil_attribute_layer)) {
-          setAttributLayer(f.patch.bauteil_attribute_layer ?? null);
-          attributRef.current = f.patch.bauteil_attribute_layer ?? null;
-          genommen.push("bauteil_attribute_layer");
-        }
-      }
       const betroffen = felder.filter((k) => k in f.patch);
       if (!betroffen.length) return genommen;
-      // two devices drew a new element with the same number: this studio's one gets a free number first, so both stay
-      const kollision = neueKollisionenUmnummern({ vorher: f.vorher, lokal: modellRef.current, patch: f.patch });
+      // 115-05a (A-2, K1): the stored state now; a CLEAN tab (its values are the stored state it knew, nothing pending, nothing held
+      // back, no grip drag) takes it over as a whole — a merge would only meet differences of the load's normalisation (migrated
+      // roofs) as fake own changes. A tab with own changes merges per element (A-1). Without the full base: always the merge.
+      const server = f.basis ? { ...f.basis, ...f.patch, ...(f.stand?.updated_date ? { id: f.stand.id ?? f.basis.id, updated_date: f.stand.updated_date } : {}) } : null;
+      const jetzt = { ...Object.fromEntries(IDX_LISTEN.map((k) => [k, modellRef.current?.[k]])), ...studioWerteRef.current };
+      const sauber = studioSauber({ abbild: abbildRef.current, jetzt, ausstehend: ausstehendRef.current != null, imFlug: speichertRef.current,
+        fehler: saveStateRef.current === "error", gesperrt: felderZurueckgehalten(projectId, STUDIO_SPEICHER_FELDER), ziehe: historieRef.current.ziehe });
+      const historieFelder = [...IDX_LISTEN, "entranceCfg", "huelle_erscheinung"];
+      if (server && standEntscheiden({ basis: f.basis, server, sauber }) === "neu-laden") {
+        historieStillRef.current = true;
+        try { abbildRef.current = modellLaden(server, { nurStudioFelder: true }); } finally { historieStillRef.current = false; }
+        abbildFolgeRef.current += 1;
+        // A-6: the undo snapshots follow the taken-over state (no renumbering of the state in a clean tab; review K03: an own element
+        // only a snapshot holds gets a free number when the other writer handed out the same one, the counter goes above them)
+        historieRef.current = historieElementeUmbasieren(historieRef.current, { basis: f.basis, fremd: server, umbenanntJeListe: {}, felder: historieFelder, lokal: jetzt, naechsteIdx: idRef.current, projektId: projectId || null });
+        idRef.current = Math.max(idRef.current, historieNaechsteIdx(historieRef.current));
+        if (!f.entscheidung) {
+          /** @type {import("@core/lib/abgleich/modellAbgleich").Geaendert[]} */ const geaendert = [];
+          /** @type {string[]} */ const einzel = [];
+          for (const k of betroffen) {
+            if (Array.isArray(f.patch[k]) || Array.isArray(f.vorher[k])) geaendert.push(...elementDiff(k, f.vorher[k] || [], f.patch[k] || []));
+            else einzel.push(k);
+          }
+          const veraltet = vorschlaegeNeuPruefen(befehle);
+          abgleichStand.hinweisHinzu({ geraet: f.geraet, zeilen: aenderungsZeilen(geaendert, einzel, tz), veraltet });
+        }
+        return [...genommen, ...betroffen];
+      }
+      // two devices drew a new element with the same number: this studio's NEW one gets a free number first, so both stay
+      // (115-05a: measured against the full base f.basis — an element of the stored base is never renumbered, D-115-50)
+      const kollision = neueKollisionenUmnummern({ vorher: f.vorher, basis: f.basis, lokal: modellRef.current, patch: f.patch });
+      // 115-05b (E-2): a renumbered own element drops a GUID derived from its old number (the foreign element keeps that number)
+      kollision.lokal = altGuidsVerwerfen(kollision.lokal, kollision.umbenanntJeListe, projectId || null).lokal;
       if (kollision.umbenannt.length) {
+        // 115-05c (K8 fallback): an own solid relation follows its renumbered element (never the foreign element keeping the number)
+        const seo = seoRef.current;
+        const seoNeu = relationenUmschluesseln(seo.layer, kollision.umbenanntJeListe, projectId || null, [f.basis?.solidrelationen_layer, server?.solidrelationen_layer]);
+        if (seoNeu !== seo.layer) seo.setzen(seoNeu);
         modellAnwenden({ ...modellRef.current, ...Object.fromEntries(kollision.geaendert.map((k) => [k, kollision.lokal[k]])) });
       }
       const lokal = Object.fromEntries(betroffen.map((k) => [k, lokalWert(k)]));
       const r = fremdeElementeAbgleichen({ patch: f.patch, vorher: f.vorher, lokal, felder: betroffen });
       anwenden(r.setzen);
+      if (server) {
+        // the stored state moved on: the image follows it (what is left different from it is this tab's own change), and the undo
+        // snapshots take the renumbering and the other device's elements over (A-6) — Strg+Z takes back only the own step
+        abbildRef.current = studioWerteAusDatensatz(server, studioWerteRef.current);
+        abbildFolgeRef.current += 1;
+        historieRef.current = historieElementeUmbasieren(historieRef.current, { basis: f.basis, fremd: server, umbenanntJeListe: kollision.umbenanntJeListe,
+          felder: historieFelder, lokal: kollision.lokal, naechsteIdx: idRef.current, projektId: projectId || null });
+        idRef.current = Math.max(idRef.current, historieNaechsteIdx(historieRef.current));
+      }
       for (const [feld, konflikte] of Object.entries(r.konflikte)) {
         const id = `bim:${feld}`;
         studioMeinStand.delete(id);
         feldSperren(projectId, feld);
         abgleichStand.konfliktMelden({
           quelle: "bim", projektId: projectId, feld, geraet: f.geraet,
-          titel: tz(/** @type {any} */ (ELEMENT_FELDER)[feld] ?? /** @type {any} */ (STUDIO_WERTE)[feld] ?? feld),
+          titel: tz(feldName(feld)),
           zeilen: konfliktZeilen(feld, konflikte, tz),
           loesen: {
             mein: async () => {
@@ -3921,7 +4456,9 @@ export default function BitBimStudio({ complexData }) {
               const wert = h ? h.lokalWert(feld) : studioMeinStand.get(id);
               studioMeinStand.delete(id);
               feldFreigeben(projectId, feld);
-              await saveBimModel(projectId, { [feld]: wert });
+              // 115-05c: with the studio mounted the decision goes into the draft (written with "Speichern"); without one the
+              // own version kept at unmount is written as before (an explicit choice of the person on the page-wide card)
+              if (!h) await saveBimModel(projectId, { [feld]: wert });
             },
             fremd: async () => {
               const h = aktuell();
@@ -3929,7 +4466,7 @@ export default function BitBimStudio({ complexData }) {
               studioMeinStand.delete(id);
               feldFreigeben(projectId, feld);
               if (h) h.anwenden({ [feld]: neu });
-              await saveBimModel(projectId, { [feld]: neu });
+              else await saveBimModel(projectId, { [feld]: neu });
             },
           },
         });
@@ -3939,9 +4476,12 @@ export default function BitBimStudio({ complexData }) {
         abgleichStand.hinweisHinzu({ geraet: f.geraet, zeilen: aenderungsZeilen(r.geaendert, r.einzel, tz), veraltet });
       }
       return [...genommen, ...betroffen];
-    });
+    };
+    halterFnRef.current = halterFn;
+    const abmelden = aufFremdenStand(halterFn);
     return () => {
       abmelden();
+      if (halterFnRef.current === halterFn) halterFnRef.current = null;
       // the own version of every open conflict stays for the next mount and for a decision made without a studio
       for (const k of abgleichStand.stand().konflikte) {
         if (k.quelle === "bim" && k.projektId === projectId) studioMeinStand.set(k.id, lokalWert(k.feld));
@@ -4576,30 +5116,21 @@ export default function BitBimStudio({ complexData }) {
     };
   }, []);
 
-  // ---- Terrain patch from real elevation (200 m) ----
+  // ---- Terrain: existing ground (kept survey, else the 200-m elevation patch) and new ground (Massing sandbox) — 108-10 ----
   useEffect(() => {
-    const t = three.current; if (!t.terrainGroup || !grid || grid.length < 2) return;
+    const t = three.current; if (!t.terrainGroup) return;
     while (t.terrainGroup.children.length) { const c = t.terrainGroup.children.pop(); objektFreigeben(c); }
-    const size = grid.length;
-    const PATCH = 200;
-    const relief = 12; // gedämpfte Überhöhung für Lesbarkeit
-    const range = (max - min) || 1;
-    const geo = new THREE.PlaneGeometry(PATCH, PATCH, size - 1, size - 1);
-    const pos = geo.attributes.position;
-    for (let i = 0; i < size; i++) for (let j = 0; j < size; j++) {
-      const idx = i * size + j;
-      pos.setZ(idx, ((grid[i][j] - min) / range) * relief - relief / 2);
+    const beide = !!(gelaende.bestand && gelaende.neu);
+    for (const [ebene, layerId, raster] of /** @type {Array<["bestand"|"neu", string, any]>} */ ([["bestand", "terrain", gelaende.bestand], ["neu", "terrainNeu", gelaende.neu]])) {
+      if (!raster) continue;
+      const mesh = new THREE.Mesh(rasterGeometrie(raster), gelaendeMaterial({ ebene, beide, render: renderMode }));
+      // 5 cm below ±0,00: the ground floor slab and the terrain do not fight where they meet
+      mesh.position.y = -0.05; mesh.receiveShadow = true; mesh.renderOrder = ebene === "bestand" && beide ? 1 : 0;
+      mesh.userData.layer = layerId; mesh.userData.gelaende = ebene;
+      mesh.visible = layersRef.current.find((l) => l.id === layerId)?.visible ?? true;
+      t.terrainGroup.add(mesh);
     }
-    geo.computeVertexNormals();
-    // Im Render-Modus helles Wiesengrün (dunkles Editor-Grün wirkt unter hellem Himmel schwarz)
-    const mat = renderMode
-      ? new THREE.MeshStandardMaterial({ color: 0x86a05c, roughness: 0.95, side: THREE.DoubleSide })
-      : new THREE.MeshLambertMaterial({ color: 0x223524, side: THREE.DoubleSide });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2; mesh.position.y = -0.05; mesh.receiveShadow = true;
-    mesh.userData.layer = "terrain"; mesh.visible = layersRef.current.find((l) => l.id === "terrain")?.visible ?? true;
-    t.terrainGroup.add(mesh);
-  }, [grid, min, max, renderMode]);
+  }, [gelaende, renderMode]);
 
   // ---- Building from shared model ----
   useEffect(() => {
@@ -4753,10 +5284,34 @@ export default function BitBimStudio({ complexData }) {
       });
     }
 
+    // W-1118-29: canopies on a hull wall — plate and brackets from vordach.js (the same box the plan, the IFC export and the
+    // quantities read), an overlay in front of the wall and independent of the roof form. A canopy the library refuses (too narrow,
+    // edge missing) is left out; the inspector says why.
+    if (vordaecher.length) {
+      const glasPlatte = new THREE.MeshStandardMaterial({ color: 0x9fc4d6, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+      const stahl = new THREE.MeshStandardMaterial({ color: 0x6b7075, roughness: 0.4, metalness: 0.6, side: THREE.DoubleSide });
+      vordaecher.forEach((v) => {
+        const erg = vordachBerechnen(v, model, gs);
+        if (!erg.ok) return;
+        const grp = new THREE.Group();
+        const quader = (/** @type {Array<{x: number, y: number, z: number}>} */ p8, /** @type {any} */ mat, /** @type {string} */ teil) => {
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute("position", new THREE.Float32BufferAttribute(quaderDreiecke(p8), 3));
+          geo.computeVertexNormals();
+          const m = new THREE.Mesh(geo, mat); m.castShadow = teil !== "platte"; m.receiveShadow = true; // a glass plate throws no hard shadow
+          m.userData.layer = "shell"; m.userData.kind = "vordach"; m.userData.id = v._idx; m.userData.teil = teil;
+          grp.add(m);
+        };
+        quader(erg.platte, glasPlatte, "platte");
+        erg.konsolen.forEach((k) => quader(k, stahl, "konsole"));
+        t.buildingGroup.add(grp);
+      });
+    }
+
     applyLayerVisibility(t, layersRef.current);
     // Hülle wurde neu gebaut — Aura auf Hüllwand/Auto-Fenster wiederherstellen
     applyPickHighlight(t, selectedRef.current, multiSelRef.current);
-  }, [model, giebel, envOpenings, autoOpenings, renderMode, facadePreset, huelleErscheinung, dachform, dachneigung, customSlabs, customStairs, gauben, gs, durchbruchLoecher, vSolidsAktuell, seoJeSchluessel]);
+  }, [model, giebel, envOpenings, autoOpenings, renderMode, facadePreset, huelleErscheinung, dachform, dachneigung, customSlabs, customStairs, gauben, vordaecher, gs, durchbruchLoecher, vSolidsAktuell, seoJeSchluessel]);
 
   // Kamera nur bei Modelländerung neu ausrichten (nicht bei jeder Öffnung)
   useEffect(() => {
@@ -4927,8 +5482,20 @@ export default function BitBimStudio({ complexData }) {
     customStairs.forEach((st) => {
       if (!st?.start) return;
       const lvl = Math.round(Number(st.level) || 0);
-      const erg = treppeBerechnen(st, geschosshoehe(lvl, gs));
       const y0 = elevationOf(lvl, gs);
+      // 115-13: two-flight stair — treads of both flights and the landing plate as prisms over their plan rings (treppeUKoerper, m)
+      if (istUTreppe(st)) {
+        treppeUKoerper(treppeUBerechnen(st, geschosshoehe(lvl, gs))).forEach((k) => {
+          const sh = new THREE.Shape();
+          k.ring.forEach((p, i) => (i ? sh.lineTo(p.x, -p.z) : sh.moveTo(p.x, -p.z)));
+          const m = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: k.oben_m - k.unten_m, bevelEnabled: false }), stairMat);
+          m.rotation.x = -Math.PI / 2; m.position.y = y0 + k.unten_m; m.castShadow = true; m.receiveShadow = true;
+          m.userData.layer = "walls"; m.userData.kind = "stair"; m.userData.id = st._idx;
+          t.customGroup.add(m);
+        });
+        return;
+      }
+      const erg = treppeBerechnen(st, geschosshoehe(lvl, gs));
       const ang = -Math.atan2(erg.richtung.z, erg.richtung.x);
       const b = Math.max(0.1, Number(st.breite_m) || 1);
       treppeKoerper(erg).forEach((k) => {
@@ -5065,7 +5632,7 @@ export default function BitBimStudio({ complexData }) {
   useEffect(() => { applyPickHighlight(three.current, selected, multiSel); }, [selected, multiSel]);
   // 106-03: the element group was rebuilt above - draw the previews of open proposals again (before the next frame)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { vorschauAlleNeu(); }, [customWalls, customColumns, customWindows, customZones, customSlabs, customRoofs, customStairs, gauben, storeyHeight, gs, view]);
+  useEffect(() => { vorschauAlleNeu(); }, [customWalls, customColumns, customWindows, customZones, customSlabs, customRoofs, customStairs, gauben, vordaecher, storeyHeight, gs, view]);
 
   // Räume in die gemeinsame Quelle spiegeln (Massing-Studio zeigt sie dann mit an).
   // KD-18: NICHT unkonditional überschreiben. Der Store enthält auch die Zonen des
@@ -5077,8 +5644,9 @@ export default function BitBimStudio({ complexData }) {
     // Solange das Modell noch lädt, ist customZones leer — dann nicht spiegeln,
     // sonst verschwinden die eigenen Zonen kurz aus dem Store.
     if (loadingRef.current && !customZones.length) return;
-    // Phase 43: id = persistentes _idx — stabiler Raumschlüssel (Möblierung überlebt das Umbenennen).
-    const eigene = customZones.map((z) => ({ points: z.points, level: z.level, name: z.name, id: z._idx }));
+    // Phase 43: id = the record's _idx; W-1118-02: guid = its stored GUID (the furniture key; same mapping as useBimModelSync). A room
+    // drawn in this session gets it with the next save (the save effect writes the pinned GUIDs back, review R-W111802-1).
+    const eigene = customZones.map((z) => ({ points: z.points, level: z.level, name: z.name, id: z._idx, guid: z.guid }));
     const fremde = (buildingProgram.get().zones || []).filter((z) => istGeneriert(z) || istWerkstattZone(z));
     const naechste = [...eigene, ...fremde];
     // Store nur schreiben, wenn sich wirklich etwas ändert (kein Ping-Pong).
@@ -5102,6 +5670,7 @@ export default function BitBimStudio({ complexData }) {
       else if (hit && hit.kind === "croof" && hit.id != null) setSelected({ type: "roof", index: hit.id });
       else if (hit && hit.kind === "stair" && hit.id != null) setSelected({ type: "stair", index: hit.id }); // 108-06
       else if (hit && hit.kind === "gaube" && hit.id != null) setSelected({ type: "gaube", index: hit.id }); // 108-13
+      else if (hit && hit.kind === "vordach" && hit.id != null) setSelected({ type: "vordach", index: hit.id }); // W-1118-29
       else if (hit && hit.kind === "wallShell") setSelected({ type: "hullwall", level: hit.level ?? 0, edge: hit.edge ?? 0 });
       else if (hit && (hit.kind === "window" || hit.kind === "door") && hit.scope === "auto") setSelected({ type: "autowin", kind: hit.kind, level: hit.level ?? 0, edge: hit.edge ?? 0 });
       else setSelected(null);
@@ -5166,7 +5735,7 @@ export default function BitBimStudio({ complexData }) {
     // 106-01: which element is this mesh? Reads the userData tags and the element arrays (bauteilInfoAus,
     // unit-tested); null for anything that is no element of the model (context buildings, parapet,
     // corner fillers): refused. Hull walls carry the GUID the IFC export gives them.
-    bauteilInfo: (ud) => bauteilInfoAus(ud, { customWalls, customColumns, customZones, customSlabs, customRoofs, customStairs, gauben }, { projektId: projectId || null, uebersetze: tz }),
+    bauteilInfo: (ud) => bauteilInfoAus(ud, { customWalls, customColumns, customZones, customSlabs, customRoofs, customStairs, gauben, vordaecher }, { projektId: projectId || null, uebersetze: tz }),
   };
 
   // ---- Context buildings (echte OSM-Umgebung, extrudiert) ----
@@ -5310,13 +5879,20 @@ export default function BitBimStudio({ complexData }) {
               saveState === "saved" ? "text-erfolg border-erfolg-rand bg-erfolg-flaeche"
               : saveState === "saving" || saveState === "loading" ? "text-amber-600 border-amber-200 bg-amber-50"
               : saveState === "error" ? "text-rose-600 border-rose-200 bg-rose-50"
+              : saveState === "entwurf" ? "text-warnung border-warnung bg-warnung-flaeche"
               : "text-slate-400 border-slate-200"}`}
-              title="Modell wird automatisch je Projekt gespeichert (BimModel)" data-testid="bim-speicher" data-zustand={saveState}>
-              {saveState === "saved" ? "✓ gespeichert" : saveState === "saving" ? "speichert…" : saveState === "loading" ? "lädt…" : saveState === "error" ? "Speicherfehler" : "Auto-Save"}
+              title={tz("Änderungen am Modell sind ein Entwurf, bis „Speichern“ gedrückt wird")} data-testid="bim-speicher" data-zustand={saveState} data-bereit={bereitFuer && bereitFuer === projectId ? "1" : "0"}>
+              {saveState === "saved" ? "✓ gespeichert" : saveState === "saving" ? "speichert…" : saveState === "loading" ? "lädt…" : saveState === "error" ? "Speicherfehler" : saveState === "entwurf" ? `● ${tz("Nicht gespeichert")}` : "✓ gespeichert"}
             </span>
-            {!hatGespeichertesModell && saveState !== "loading" && (
+            {/* 115-05a (A-3): the load failed — the editor is empty and nothing is saved until a reload (persistent, not the hint line) */}
+            {nichtGeladen ? (
+              <span role="alert" data-testid="bim-nicht-geladen" className="text-[11px] font-normal px-2 py-0.5 rounded-full border text-fehler border-fehler-rand bg-fehler-flaeche">
+                {tz("Modell nicht geladen — bitte die Seite neu laden. Bis dahin wird nichts gespeichert.")}
+              </span>
+            ) : null}
+            {!hatGespeichertesModell && !nichtGeladen && saveState !== "loading" && (
               <span className="text-[11px] font-normal px-2 py-0.5 rounded-full border text-amber-700 border-amber-300 bg-amber-50"
-                title="Für dieses Projekt existiert kein gespeichertes Gebäudemodell. Die Ansicht zeigt die Editor-Voreinstellungen (Geschosse/Höhe/Dach) — KEIN erfasster Bestand. Erst eine Änderung speichert.">
+                title={tz("Erst „Speichern“ legt das Modell an")}>
                 ⚠ kein gespeichertes Modell — Ansicht zeigt Editor-Defaults
               </span>
             )}
@@ -5349,6 +5925,18 @@ export default function BitBimStudio({ complexData }) {
                   title={a === "x" ? tz("Schnitt A-A: entlang x durch die Gebäudemitte") : tz("Schnitt B-B: entlang z durch die Gebäudemitte")}
                   className={`px-2 py-1.5 ${schnittAchse === a ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
                   {tz("Schnitt")} {name}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* 115-04 (D-115-13): turn the floor plan view in 90° steps — display only (the model stays), stored with the project */}
+          {view === "grundriss" && (
+            <div className="flex items-center rounded-lg border border-border overflow-hidden text-xs" role="group" aria-label={tz("Plan drehen")} data-testid="plan-drehen" data-drehung={planDrehungen.plan}>
+              {/** @type {Array<["links"|"rechts", string, typeof RotateCcw]>} */ ([["links", "Plan drehen 90° links", RotateCcw], ["rechts", "Plan drehen 90° rechts", RotateCw]]).map(([richtung, name, Zeichen]) => (
+                <button key={richtung} type="button" onClick={() => planDrehen(richtung)} aria-label={tz(name)} data-testid={`plan-drehen-${richtung}`}
+                  title={`${tz(name)} — ${tz("nur die Darstellung, das Modell bleibt unverändert")} (${planDrehungen.plan}°)`}
+                  className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:bg-muted">
+                  <Zeichen className="w-4 h-4" aria-hidden="true" />
                 </button>
               ))}
             </div>
@@ -5460,7 +6048,9 @@ export default function BitBimStudio({ complexData }) {
             {/* 108-02: full-storey rule of the attic storey from the roof geometry (warning only, see vollgeschoss.js) */}
             {vollgeschossDg && vollgeschossDg.voll != null && (
               <span className="text-xs text-muted-foreground" data-testid="vollgeschoss" data-voll={vollgeschossDg.voll ? "ja" : "nein"}
-                title={tz("Fläche mit mindestens 2,30 m lichter Höhe bis zu den Dachebenen (ohne Dachaufbau, ab Oberkante Rohdecke), bezogen auf den Umriss. 2/3-Regel nach Landesbauordnung, Werte je Land verschieden (Annahme); die 1,40-m-Regel über Gelände ist nicht geprüft. Hinweis, keine Rechtsauskunft.")}>
+                title={vollgeschossDg.grund === ""
+                  ? tz("Fläche mit mindestens 2,30 m lichter Höhe bis zu den Dachebenen (ohne Dachaufbau, ab Oberkante Rohdecke), bezogen auf den Umriss. 2/3-Regel nach Landesbauordnung, Werte je Land verschieden (Annahme); die 1,40-m-Regel über Gelände ist erfüllt. Hinweis, keine Rechtsauskunft.")
+                  : tz("Fläche mit mindestens 2,30 m lichter Höhe bis zu den Dachebenen (ohne Dachaufbau, ab Oberkante Rohdecke), bezogen auf den Umriss. 2/3-Regel nach Landesbauordnung, Werte je Land verschieden (Annahme); die 1,40-m-Regel über Gelände ist nicht geprüft. Hinweis, keine Rechtsauskunft.")}>
                 {ebeneName(model, storeys - 1)} · {tz("Vollgeschoss: {{jaNein}} ({{p}} % ≥ 2,30 m)").replace("{{jaNein}}", tz(vollgeschossDg.voll ? "ja" : "nein")).replace("{{p}}", String(Math.round(vollgeschossDg.anteil * 1000) / 10).replace(".", ","))}
               </span>
             )}
@@ -5497,6 +6087,28 @@ export default function BitBimStudio({ complexData }) {
                 </>
               )}
             </label>
+            {/* W-1118-28: the editor of the exposé layer (roof overhang, chimney, outside stairs, views, surroundings) */}
+            <button type="button" className={`rounded-md border border-border px-1.5 py-0.5 text-xs hover:bg-muted ${exposeOffen ? "bg-muted text-foreground" : "bg-card text-muted-foreground"}`} data-testid="expose-oeffnen" aria-pressed={exposeOffen}
+              title={tz("Angaben für das Exposé-Bild: Dachüberstand, Kamin, Außentreppe, Blickpunkte, Umfeld")} onClick={() => setExposeOffen((o) => !o)}>{tz("Exposé-Bild")}</button>
+            {exposeOffen && (
+              <React.Suspense fallback={null}>
+                <ExposePanel layer={exposeLayer} onChange={setExposeLayer} onSchliessen={() => setExposeOffen(false)} onBild={(b) => exportExpose(false, b)}
+                  tueren={envOpenings.filter((/** @type {any} */ o) => o.kind === "door" && (o.level ?? 0) === 0)}
+                  kamera={() => {
+                    const t3 = three.current, k = t3?.kameraPersp ?? t3?.camera;
+                    if (view !== "3d" || !k || !t3.target) return null;
+                    return { pos: [k.position.x, k.position.y, k.position.z], ziel: [t3.target.x, t3.target.y, t3.target.z], fov_grad: k.fov || 45 };
+                  }} />
+              </React.Suspense>
+            )}
+            {/* W-1118-29: a new canopy over the front door of the hull (else centred on the first hull edge); the user moves and sizes it in the inspector */}
+            <button type="button" className="rounded-md border border-border px-1.5 py-0.5 bg-card text-xs text-muted-foreground hover:bg-muted" data-testid="vordach-einfuegen" title={tz("Vordach an der Hüllwand über der Haustür einfügen")}
+              onClick={() => {
+                const tuer = envOpenings.find((o) => o.kind === "door" && o.typeId === "entrance" && (o.level ?? 0) === 0) || envOpenings.find((o) => o.kind === "door" && (o.level ?? 0) === 0);
+                const v = neuesVordach(model.footprint || [], tuer ? Number(tuer.edge) || 0 : 0, idRef.current++, tuer ? Number(tuer.u) : null, 0);
+                setVordaecher((alt) => [...alt, v]);
+                setSelected({ type: "vordach", index: v._idx });
+              }}>{tz("Vordach einfügen")}</button>
             {/* 108-06: a new straight flight in the current storey (neueTreppe: in the largest room of the level, else the footprint; the user moves it) */}
             <button type="button" className="rounded-md border border-border px-1.5 py-0.5 bg-card text-xs text-muted-foreground hover:bg-muted" data-testid="treppe-einfuegen" title={tz("Gerade Treppe im aktuellen Geschoss einfügen")}
               onClick={() => {
@@ -5602,7 +6214,7 @@ export default function BitBimStudio({ complexData }) {
               </button>
             )}
             {/* 261110-vf1: the render mode switch and the exposé picture live in the "3D-Fenster" bar on the 3D view now */}
-            {view === "3d" && (offline
+            {view === "3d" && (gelaendeOffline
               ? <span className="flex items-center gap-1 text-amber-600 text-xs"><WifiOff className="w-3.5 h-3.5" /> Gelände offline</span>
               : <span className="text-erfolg text-xs">Gelände: Open-Meteo</span>)}
             {/* Layer-Kombination (wie ArchiCAD-Statusbar) */}
@@ -5753,7 +6365,8 @@ export default function BitBimStudio({ complexData }) {
                 { id: "projektion", text: "Axonometrie (Parallelprojektion)", symbol: Box, testid: "leiste-projektion", aktiv: projektion === "parallel",
                   onClick: () => projektionWechseln(projektion === "parallel" ? "perspektive" : "parallel") },
                 { id: "schnitt", text: "3D-Schnitt", symbol: Scissors, testid: "leiste-schnitt", aktiv: schnittOffen || schnitt3d.art !== "aus", onClick: () => setSchnittOffen((o) => !o) },
-                { id: "bild", text: "Exposé-Bild speichern", symbol: Camera, testid: "leiste-bild", onClick: exportExpose },
+                { id: "bild", text: "Exposé-Bild speichern", symbol: Camera, testid: "leiste-bild", onClick: () => exportExpose(false) },
+                { id: "bilder", text: tz("Exposé-Bilder der gespeicherten Blickpunkte"), symbol: Camera, testid: "leiste-bilder", onClick: () => exportExpose(true) },
                 { id: "render", text: "Render-Modus umschalten", symbol: Sparkles, testid: "leiste-render", aktiv: renderMode, onClick: () => setRenderMode((r) => !r) },
               ]} />
               <XrKnopf quelle={xrQuelle} t={tz} hook="bimXr" />
@@ -5864,8 +6477,10 @@ export default function BitBimStudio({ complexData }) {
                 ansicht={ansichtAktiv} // 107-12: structure display, options and rules of the applied view (null = the plan as before)
                 detailMassstab={scale} // review 107-12: level of detail from the chosen scale, like the PDF and the option boxes
                 schichtFlaechen={planFlaechenMitSeo} schnittFlaechen={schnittAchse === "x" ? schnittMitSeo : null} // 107-10: plus the walls cut under a roof (plan and section, review); 107-09: intersected layers (solid cut or bands), null = today's plan; 108-01: the cut layers exist for A-A only
-                dach={globalDach} achse={schnittAchse} eingang={eingangOeffnung} baufeldUmriss={baufeldUmriss} baufeldMittig={baufeldMittig} // 108-01: roof in the section, section axis, entrance in effect, building envelope
+                drehung={planDrehungen.plan} // 115-04: floor plan turned in 90° steps (display only; the section is never turned)
+                dach={globalDach} achse={schnittAchse} gelaendeSchnitt={gelaendeSchnitt} eingang={eingangOeffnung} baufeldUmriss={baufeldUmriss} baufeldMittig={baufeldMittig} // 108-01: roof in the section, section axis, entrance in effect, building envelope
                 layerVis={planLayerVis} envOpenings={huelleSichtbar ? sichtbarUnter(brille, envOpenings) : []} customZones={customZones} customSlabs={sichtbarUnter(brille, customSlabs)} customRoofs={sichtbarUnter(brille, customRoofs)} unit={unit}
+                vordaecher={vordaecher} // W-1118-29: canopy outline in its storey
                 customStairs={customStairs} gauben={gauben} geschosse={gs} // 108-06 / 108-13: stair symbol (this storey and the one above), dormer outline in the top storey
                 edit={view === "grundriss" && !sketchEdit ? { tool, draft, hover, customWalls: planWalls, customColumns: sichtbarUnter(brille, customColumns), customWindows: planWindows, selected, multiSel, onPoint, onHover: (/** @type {any} */ q, /** @type {any} */ roh, /** @type {any} */ e, /** @type {number} */ pxJeM) => {
                   const p = planFang(q, roh, e, pxJeM, true);
@@ -5912,9 +6527,9 @@ export default function BitBimStudio({ complexData }) {
                 )?.(ovArgs)}
                 {/* 106-11: marks of unreleased AI changes (dashed frame + "?"), the plan counterpart of the marks on the sheet */}
                 {view === "grundriss" && <KiVermerkPlan modell={() => modellRef.current} guids={kiStand?.guids || []} projektId={projectId || null} huellWaende={huelleSichtbar ? model.walls : []}
-                  level={ovArgs.level} X={ovArgs.X} Z={ovArgs.Z} SCALE={ovArgs.SCALE} />}
+                  level={ovArgs.level} X={ovArgs.X} Z={ovArgs.Z} SCALE={ovArgs.SCALE} drehung={ovArgs.drehung} aufrecht={ovArgs.aufrecht} />}
                 {/* 261111-zs1: numbered pointing points and the text notes of the plan */}
-                {view === "grundriss" && <ZeigePunktePlan punkte={zeigePunkte} notizen={planNotizen} level={ovArgs.level} X={ovArgs.X} Z={ovArgs.Z} px={ovArgs.px} />}
+                {view === "grundriss" && <ZeigePunktePlan punkte={zeigePunkte} notizen={planNotizen} level={ovArgs.level} X={ovArgs.X} Z={ovArgs.Z} px={ovArgs.px} aufrecht={ovArgs.aufrecht} />}
                 {/* 106-03: the open proposals in the plan (dashed outline; blocked: solid) - the plan is the main view */}
                 <PlanVorschau speicher={vorschlaege} modell={() => modellRef.current} projektId={projectId || null} geschosshoehe_m={storeyHeight}
                   level={ovArgs.level} X={ovArgs.X} Z={ovArgs.Z} SCALE={ovArgs.SCALE} />
@@ -5925,8 +6540,8 @@ export default function BitBimStudio({ complexData }) {
                   const name = /** @type {Record<string, string>} */ (FANG_LABEL)[f.art];
                   return (
                     <g data-testid="bim-fang-marke" data-art={f.art} style={{ pointerEvents: "none" }}>
-                      <FangGlyphe x={x} y={y} s={px(1)} art={f.art} strahl={st} testid="bim-fang" />
-                      {name && <text x={x + px(9)} y={y + px(18)} fontSize={px(10)} className="fill-erfolg" data-testid="bim-fang-name">{tz(name)}</text>}
+                      <FangGlyphe x={x} y={y} s={px(1)} art={f.art} strahl={st} testid="bim-fang" textTransform={ovArgs.aufrecht(x, y)} />
+                      {name && <text x={x + px(9)} y={y + px(18)} fontSize={px(10)} className="fill-erfolg" data-testid="bim-fang-name" transform={ovArgs.aufrecht(x, y)}>{tz(name)}</text>}
                     </g>
                   );
                 })()}
@@ -5934,13 +6549,13 @@ export default function BitBimStudio({ complexData }) {
                     sits down-right, FangGlyphe); the release decides */}
                 {view === "grundriss" && zugHinweis?.kopie && (
                   <text x={ovArgs.X(zugHinweis.x) - ovArgs.px(12)} y={ovArgs.Z(zugHinweis.z) - ovArgs.px(12)} textAnchor="end" fontSize={ovArgs.px(11)} fontWeight="600"
-                    className="fill-primary" style={{ pointerEvents: "none" }} data-testid="bim-zug-kopie">{tz("+ Kopie")}</text>
+                    className="fill-primary" style={{ pointerEvents: "none" }} data-testid="bim-zug-kopie" transform={ovArgs.aufrecht(ovArgs.X(zugHinweis.x), ovArgs.Z(zugHinweis.z))}>{tz("+ Kopie")}</text>
                 )}
                 {/* Grundriss-Bedienung part 3: the typed length of the wall chain beside the pointer; error state after a refused Enter */}
                 {view === "grundriss" && massEingabe && tool === "wall" && draft.length > 0 && hover && (() => {
                   const px = ovArgs.px, x = ovArgs.X(hover.x) + px(14), y = ovArgs.Z(hover.z) + px(14), text = `${massEingabe} m`;
                   return (
-                    <g style={{ pointerEvents: "none" }} data-testid="bim-mass-feld" data-fehler={massFehler ? "1" : "0"}>
+                    <g style={{ pointerEvents: "none" }} data-testid="bim-mass-feld" data-fehler={massFehler ? "1" : "0"} transform={ovArgs.aufrecht(ovArgs.X(hover.x), ovArgs.Z(hover.z))}>
                       <rect x={x} y={y} width={px(10 + text.length * 7)} height={px(18)} rx={px(3)} strokeWidth={px(1)}
                         className={massFehler ? "fill-fehler-flaeche stroke-fehler" : "fill-card stroke-border"} />
                       <text x={x + px(5)} y={y + px(13)} fontSize={px(11)} className={massFehler ? "fill-fehler" : "fill-foreground"} data-testid="bim-mass-text">{text}</text>
@@ -5987,10 +6602,10 @@ export default function BitBimStudio({ complexData }) {
                   </>
                 )}
                 {/* 108-06 / 108-13: stairs and dormers — delete only (no +1 m copy: a dormer lives on its edge, a stair in its room) */}
-                {["stair", "gaube"].includes(ctxMenu.hit.kind) && ctxMenu.hit.id != null && (
+                {["stair", "gaube", "vordach"].includes(ctxMenu.hit.kind) && ctxMenu.hit.id != null && (
                   <button onClick={ctxDelete} className="w-full text-left px-3 py-1.5 text-rose-600 hover:bg-rose-50">Löschen</button>
                 )}
-                {!["wall", "column", "zone", "cslab", "croof", "stair", "gaube"].includes(ctxMenu.hit.kind) && !((ctxMenu.hit.kind === "window" || ctxMenu.hit.kind === "door") && ctxMenu.hit.id != null) && (
+                {!["wall", "column", "zone", "cslab", "croof", "stair", "gaube", "vordach"].includes(ctxMenu.hit.kind) && !((ctxMenu.hit.kind === "window" || ctxMenu.hit.kind === "door") && ctxMenu.hit.id != null) && (
                   <div className="px-3 py-1.5 text-slate-400">Keine Optionen (Hüllen-/Umgebungselement)</div>
                 )}
               </div>
@@ -6162,27 +6777,11 @@ export default function BitBimStudio({ complexData }) {
                     onChange={(e) => patchSlab(s._idx, { composite: e.target.value || undefined })}><option value="">—</option>{aufbautenListe().filter((c) => aufbautenLayer?.aufbauten?.[c.id]).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>)] : []),
                   ...zustandFelder(s, (p) => patchSlab(s._idx, p), zfOpts), ...sbFelder(s, "decke", "customSlabs", (p) => patchSlab(s._idx, p), { verschneidung: vInfo(`decke:${s._idx}`) })];
               } else if (panelSel.type === "stair") {
-                // 108-06: straight flight — storey, antritt, direction, width, overrides; the derived values and the DIN 18065 warnings (never a block)
+                // 108-06 / 115-13: the stair rows (type with preview, straight flight or two flights with landing, derived values, DIN 18065
+                // warnings — never a block) live in the lazily loaded TreppeInspektor; every change goes through patchStair (undo + autosave)
                 const st = customStairs.find((x) => x._idx === panelSel.index); if (!st) return null;
-                const lvl = Math.round(Number(st.level) || 0);
-                const erg = treppeBerechnen(st, geschosshoehe(lvl, gs));
-                const decke = deckeUeber(model, lvl, gs);
-                const loch = decke ? treppenLoch(st, erg, deckenLage(decke, gs, "huelle").unterkante_m - elevationOf(lvl, gs)) : null;
-                const warnungen = [...erg.warnungen, ...(loch?.warnung ? [loch.warnung] : [])];
                 title = tz("Treppe");
-                body = [
-                  field("Geschoss", <select className={selCls} value={lvl} data-testid="treppe-geschoss" onChange={(e) => patchStair(st._idx, { level: +e.target.value })}>{storeyOpts}</select>),
-                  field(tz("Antritt x / z (m)"), <span className="flex gap-1"><input type="number" className="w-16 rounded border border-border px-1 py-0.5 text-right bg-card" step="0.05" value={st.start.x} aria-label={tz("Antritt x (m)")} onChange={(e) => patchStair(st._idx, { start: { ...st.start, x: +e.target.value } })} />
-                    <input type="number" className="w-16 rounded border border-border px-1 py-0.5 text-right bg-card" step="0.05" value={st.start.z} aria-label={tz("Antritt z (m)")} onChange={(e) => patchStair(st._idx, { start: { ...st.start, z: +e.target.value } })} /></span>),
-                  field(tz("Richtung (°)"), <input type="number" className={numCls} step="15" value={Number(st.richtung_grad) || 0} data-testid="treppe-richtung" aria-label={tz("Richtung (°)")} onChange={(e) => patchStair(st._idx, { richtung_grad: ((+e.target.value % 360) + 360) % 360 })} />),
-                  field(tz("Laufbreite (m)"), <input type="number" className={numCls} step="0.05" min="0.5" max="3" value={Number(st.breite_m) || 1} data-testid="treppe-breite" aria-label={tz("Laufbreite (m)")} onChange={(e) => patchStair(st._idx, { breite_m: +e.target.value })} />),
-                  field(tz("Steigungen"), <input type="number" className={numCls} step="1" min="2" max="30" value={st.steigungen ?? ""} placeholder={String(erg.n)} data-testid="treppe-steigungen" aria-label={tz("Steigungen")} onChange={(e) => patchStair(st._idx, { steigungen: e.target.value === "" ? undefined : +e.target.value })} />),
-                  field(tz("Auftritt (m)"), <input type="number" className={numCls} step="0.01" min="0.15" max="0.5" value={st.auftritt_m ?? ""} placeholder={erg.a_m.toFixed(3)} aria-label={tz("Auftritt (m)")} onChange={(e) => patchStair(st._idx, { auftritt_m: e.target.value === "" ? undefined : +e.target.value })} />),
-                  field(tz("Deckenloch Breite (m)"), <input type="number" className={numCls} step="0.01" min="0.5" max="4" value={st.loch_breite_m ?? ""} placeholder={(Number(st.breite_m) || 1).toFixed(2)} aria-label={tz("Deckenloch Breite (m)")} onChange={(e) => patchStair(st._idx, { loch_breite_m: e.target.value === "" ? undefined : +e.target.value })} />),
-                  field(tz("Ergebnis"), <span data-testid="treppe-ergebnis">{treppenText(erg)} · {tz("Schrittmaß")} {(erg.schrittmass_m * 100).toFixed(1).replace(".", ",")} cm · {tz("Lauflänge")} {erg.laufLaenge_m.toFixed(2).replace(".", ",")} m</span>),
-                  field(tz("Deckenloch"), <span data-testid="treppe-loch">{loch ? `${loch.laenge_m.toFixed(2).replace(".", ",")} × ${loch.breite_m.toFixed(2).replace(".", ",")} m` : tz("keine Decke darüber")}</span>),
-                  ...(warnungen.length ? [field(tz("Hinweise"), <ul className="list-disc pl-4 text-warnung" data-testid="treppe-warnungen">{warnungen.map((w) => <li key={w.code}>{tz(w.text)} ({(w.wert * 100).toFixed(1).replace(".", ",")} cm)</li>)}</ul>)] : []),
-                ];
+                body = [<TeilFehlergrenze key="treppe" teil="TreppeInspektor" hinweis="Treppen-Eingaben nicht verfügbar – neu laden" className="m-2"><React.Suspense fallback={null}><TreppeInspektor st={st} model={model} gs={gs} field={field} numCls={numCls} selCls={selCls} storeyOpts={storeyOpts} patch={(/** @type {Record<string, any>} */ p) => patchStair(st._idx, p)} /></React.Suspense></TeilFehlergrenze>];
               } else if (panelSel.type === "gaube") {
                 // 108-13: Schleppgaube on the global roof — edge, position, slope, setback, front height, window; derived depth/ridge and the checks
                 const g = gauben.find((x) => x._idx === panelSel.index); if (!g) return null;
@@ -6208,6 +6807,27 @@ export default function BitBimStudio({ complexData }) {
                     : field(tz("Ergebnis"), <span className="text-warnung" data-testid="gaube-fehler">{tz(/** @type {{text: string}} */ (erg).text)}</span>),
                   ...(erg.ok ? [field(tz("Abstände"), <span data-testid="gaube-abstaende">{tz("Giebel")} {erg.masse.abstandGiebel_m.toFixed(2).replace(".", ",")} m · {tz("unter First")} {erg.masse.abstandFirstVertikal_m.toFixed(2).replace(".", ",")} m</span>)] : []),
                   ...(erg.ok && erg.warnungen.length ? [field(tz("Hinweise"), <ul className="list-disc pl-4 text-warnung" data-testid="gaube-warnungen">{erg.warnungen.map((w) => <li key={w.code}>{tz(w.text)} ({w.wert.toFixed(2).replace(".", ",")} m)</li>)}</ul>)] : []),
+                ];
+              } else if (panelSel.type === "vordach") {
+                // W-1118-29: canopy on a hull wall — wall, storey, position, projection, underside, plate, brackets; derived size and the checks
+                const v = vordaecher.find((x) => x._idx === panelSel.index); if (!v) return null;
+                const erg = vordachBerechnen(v, model, gs);
+                const kanten = (model.footprint || []).map((_, i) => i);
+                const de = (/** @type {number} */ n) => n.toFixed(2).replace(".", ",");
+                title = tz("Vordach");
+                body = [
+                  field(tz("Hüllwand"), <select className={selCls} value={Number(v.edge) || 0} data-testid="vordach-kante" aria-label={tz("Hüllwand")} onChange={(e) => patchVordach(v._idx, { edge: +e.target.value })}>{kanten.map((i) => <option key={i} value={i}>{tz("Kante")} {i}</option>)}</select>),
+                  field("Geschoss", <select className={selCls} value={v.level ?? 0} aria-label="Geschoss" onChange={(e) => patchVordach(v._idx, { level: +e.target.value })}>{storeyOpts}</select>),
+                  field(tz("Lage von / bis (m)"), <span className="flex gap-1"><input type="number" className="w-16 rounded border border-border px-1 py-0.5 text-right bg-card" step="0.05" min="0" value={v.u_von_m} data-testid="vordach-von" aria-label={tz("Lage von (m)")} onChange={(e) => patchVordach(v._idx, { u_von_m: +e.target.value })} />
+                    <input type="number" className="w-16 rounded border border-border px-1 py-0.5 text-right bg-card" step="0.05" min="0" value={v.u_bis_m} data-testid="vordach-bis" aria-label={tz("Lage bis (m)")} onChange={(e) => patchVordach(v._idx, { u_bis_m: +e.target.value })} /></span>),
+                  field(tz("Ausladung (m)"), <input type="number" className={numCls} step="0.05" min="0.2" max="4" value={v.tiefe_m ?? VORDACH_STANDARD.tiefe_m} data-testid="vordach-tiefe" aria-label={tz("Ausladung (m)")} onChange={(e) => patchVordach(v._idx, { tiefe_m: +e.target.value })} />),
+                  field(tz("Unterkante über Boden (m)"), <input type="number" className={numCls} step="0.05" min="1.8" max="6" value={v.unterkante_m ?? VORDACH_STANDARD.unterkante_m} data-testid="vordach-unterkante" aria-label={tz("Unterkante über Boden (m)")} onChange={(e) => patchVordach(v._idx, { unterkante_m: +e.target.value })} />),
+                  field(tz("Plattendicke (m)"), <input type="number" className={numCls} step="0.002" min="0.008" max="0.3" value={v.dicke_m ?? VORDACH_STANDARD.dicke_m} data-testid="vordach-dicke" aria-label={tz("Plattendicke (m)")} onChange={(e) => patchVordach(v._idx, { dicke_m: +e.target.value })} />),
+                  field(tz("Konsolen (Stück)"), <input type="number" className={numCls} step="1" min="0" max="6" value={v.konsolen ?? VORDACH_STANDARD.konsolen} data-testid="vordach-konsolen" aria-label={tz("Konsolen (Stück)")} onChange={(e) => patchVordach(v._idx, { konsolen: +e.target.value })} />),
+                  erg.ok
+                    ? field(tz("Ergebnis"), <span data-testid="vordach-ergebnis">{de(erg.breite_m)} × {de(erg.tiefe_m)} m · {de(erg.flaeche_m2)} m² · {tz("Unterkante")} +{de(erg.y_unten_m)} m</span>)
+                    : field(tz("Ergebnis"), <span className="text-warnung" data-testid="vordach-fehler">{tz(/** @type {{text: string}} */ (erg).text)}</span>),
+                  ...(erg.ok && erg.warnungen.length ? [field(tz("Hinweise"), <ul className="list-disc pl-4 text-warnung" data-testid="vordach-warnungen">{erg.warnungen.map((w) => <li key={w.code}>{tz(w.text)} ({de(w.wert)} m)</li>)}</ul>)] : []),
                 ];
               } else if (panelSel.type === "roof") {
                 const rf = customRoofs.find((x) => x._idx === panelSel.index); if (!rf) return null;
@@ -6258,8 +6878,8 @@ export default function BitBimStudio({ complexData }) {
                   ...(() => {
                     const huellPatch = (p) => {
                       const neu = attributPatch(attributLayer, "hull-wall", p);
+                      // 115-05c (D-115-12): a draft change like the other values of the studio ("Speichern" writes it; before: at once)
                       setAttributLayer(neu);
-                      saveBimModel(projectId, { bauteil_attribute_layer: neu }).catch((err) => setHint(`Speichern fehlgeschlagen: ${err?.message || err}`));
                     };
                     // 107-13 review: the same record as the IFC export (huellwandDaten) - a basement wall keeps its own build-up and thickness
                     const huelle = mitAttributen(huellwandDaten(w, { composite: envComposite, thickness: envThickness }), attributeVon(attributLayer, "hull-wall"));
@@ -6411,7 +7031,28 @@ export default function BitBimStudio({ complexData }) {
               {/* Plan-Output */}
               <div className="px-2 py-2 border-t">
                 <div className="text-[10px] text-slate-400 px-1 pb-1">Pläne / Output</div>
+                {/* 115-04 (D-115-13): sheet orientation of the floor plan in PDF / DXF — an own setting, stored with the project;
+                    "wie am Bildschirm" follows the rotation of the plan view. The section is never turned. */}
+                <label className="flex items-center justify-between gap-2 px-1 pb-1.5 text-xs text-muted-foreground" title={tz("Blattausrichtung des Grundrisses in PDF und DXF — unabhängig von der Drehung am Bildschirm")}>
+                  {tz("Blattausrichtung")}
+                  <select value={planDrehungen.blatt === null ? "bild" : String(planDrehungen.blatt)} onChange={(e) => blattDrehungSetzen(e.target.value === "bild" ? null : Number(e.target.value))}
+                    className="h-8 rounded-md border border-border bg-card px-1.5 text-foreground" data-testid="bim-blatt-drehung" aria-label={tz("Blattausrichtung")}>
+                    <option value="bild">{tz("wie am Bildschirm")} ({planDrehungen.plan}°)</option>
+                    <option value="0">0°</option>
+                    <option value="90">{tz("90° links")}</option>
+                    <option value="180">180°</option>
+                    <option value="270">{tz("90° rechts")}</option>
+                  </select>
+                </label>
                 <button onClick={exportPlanPDF} disabled={ausgabeLaeuft} data-testid="bim-plan-pdf" className="w-full rounded-md bg-primary text-primary-foreground px-2 py-1.5 hover:bg-primary/90 disabled:opacity-50">{ausgabeLaeuft ? tz("Plan wird erstellt …") : tz("Aktuellen Plan als PDF")}</button>
+                <div className="mt-1 flex items-stretch gap-1">
+                  <button onClick={exportPlansatz} disabled={ausgabeLaeuft} data-testid="bim-plansatz-pdf" title={tz("Alle Geschosse als Grundriss mit Maßketten und beide Schnitte in einem PDF.")} className="min-w-0 flex-1 rounded-md border border-border text-foreground px-2 py-1.5 hover:bg-muted disabled:opacity-50">{tz("Plansatz mit Maßketten als PDF")}</button>
+                  <select value={plansatzMassstab} onChange={(e) => setPlansatzMassstab(Number(e.target.value))} disabled={ausgabeLaeuft} data-testid="bim-plansatz-massstab" aria-label={tz("Maßstab des Plansatzes")}
+                    className="rounded-md border border-border bg-card px-1.5 text-foreground disabled:opacity-50">
+                    <option value={50}>1:50</option>
+                    <option value={100}>1:100</option>
+                  </select>
+                </div>
                 <button onClick={exportPlanDXF} disabled={ausgabeLaeuft} data-testid="bim-plan-dxf" className="w-full mt-1 rounded-md border border-border text-muted-foreground px-2 py-1.5 hover:bg-muted disabled:opacity-50">{tz("Aktuellen Plan als DXF")}</button>
                 {/* 110 follow-up: file the current sheet directly on a plan of the plan list (Werkplanung) */}
                 {projectId && (
@@ -6460,6 +7101,48 @@ export default function BitBimStudio({ complexData }) {
                   <span className="truncate flex-1">{l.name}</span>
                 </div>
               ))}
+              {/* 108-10: where the two terrain layers come from and the earthworks between them (cut / fill, KG 310 of DIN 276) */}
+              <div className="px-2 py-2 mt-1 border-t text-[11px] text-muted-foreground space-y-0.5" data-testid="gelaende-ebenen-info">
+                <div data-testid="gelaende-bestand-quelle">
+                  {tz("Gelände Bestand")}: {gelaende.quelleBestand === "aufnahme" ? tz("Aufnahme aus dem Massing-Studio")
+                    : gelaende.quelleBestand === "hoehenmodell" ? (gelaendeDemo ? tz("Demo-Höhen (offline)") : tz(gelaende.bezugQuelle === "bauaufnahme" ? "Höhenmodell, ±0,00 = {{h}} m ü. NHN (Bauaufnahme)" : "Höhenmodell, ±0,00 = {{h}} m ü. NHN (Annahme)").replace("{{h}}", koteZahl(gelaende.bezugNHN_m)))
+                    : tz("keine Daten")}
+                </div>
+                <div data-testid="gelaende-neu-quelle">{tz("Gelände neu")}: {gelaende.neu ? tz("Gelände aus dem Massing-Studio") : tz("nicht modelliert (Massing-Studio, Werkzeug Gelände)")}</div>
+                {erdmassen && (
+                  <div data-testid="gelaende-erdmassen" className="text-foreground">
+                    {tz("Erdmassen KG 310")}: {tz("Abtrag {{a}} m³, Auftrag {{b}} m³").replace("{{a}}", koteZahl(erdmassen.abtrag_m3)).replace("{{b}}", koteZahl(erdmassen.auftrag_m3))}
+                    {gelaende.quelleBestand === "hoehenmodell" && <span className="text-muted-foreground"> — {tz("grob: Bestand aus dem Höhenmodell")}</span>}
+                  </div>
+                )}
+              </div>
+              {/* 108-10: openings below the ground and the 1,40-m rule of the basements (warnings, see gelaendePruefung.js) */}
+              {gelaendePruefung && (gelaendePruefung.unter.length > 0 || gelaendePruefung.geschosse.length > 0) && (
+                <div className="px-2 py-2 border-t text-[11px] space-y-1" data-testid="gelaende-pruefung">
+                  {gelaendePruefung.geschosse.map((g) => (
+                    <div key={`vg${g.level}`} data-testid="gelaende-vollgeschoss" data-voll={g.voll140 ? "ja" : "nein"} className={g.voll140 ? "text-warnung" : "text-muted-foreground"}
+                      title={tz("Deckenoberkante = Höhe des Geschosses darüber (Rohdecke), gemittelt entlang der Außenwände über dem maßgebenden Gelände. Vollgeschoss, wenn mehr als 1,40 m und lichte Höhe ≥ 2,30 m auf 2/3 der Fläche (MBO; Landesrecht kann abweichen). Hinweis, keine Rechtsauskunft.")}>
+                      {tz(g.voll140 ? "{{geschoss}}: Decke im Mittel {{m}} m über Gelände — Vollgeschoss (1,40-m-Regel)" : "{{geschoss}}: Decke im Mittel {{m}} m über Gelände — kein Vollgeschoss (1,40-m-Regel)")
+                        .replace("{{geschoss}}", ebeneName(model, g.level)).replace("{{m}}", koteZahl(g.mittel_m))}
+                    </div>
+                  ))}
+                  {gelaendePruefung.unter.length > 0 && (
+                    <div data-testid="gelaende-unter" data-anzahl={gelaendePruefung.unter.length} className="text-warnung"
+                      title={tz("Öffnungen der Außenwände 50 cm vor der Wand gegen das maßgebende Gelände geprüft (neues Gelände, sonst Bestand). Lichtschacht, Abgrabung oder Außentreppe nötig — Hinweis, keine Sperre.")}>
+                      <div className="font-medium">{tz("Unter Gelände")}</div>
+                      {gelaendePruefung.unter.slice(0, 4).map((o, i) => (
+                        <div key={i}>
+                          {tz(o.kind === "door" ? "Tür {{geschoss}}, Kante {{kante}}" : o.kind === "oeffnung" ? "Öffnung {{geschoss}}, Kante {{kante}}" : "Fenster {{geschoss}}, Kante {{kante}}")
+                            .replace("{{geschoss}}", ebeneName(model, o.level)).replace("{{kante}}", String(Number(o.edge) + 1))}
+                          {": "}
+                          {o.ganz ? tz("ganz unter Gelände") : tz("Brüstung {{m}} m unter Gelände").replace("{{m}}", koteZahl(o.unter_m))}
+                        </div>
+                      ))}
+                      {gelaendePruefung.unter.length > 4 && <div className="text-muted-foreground">{tz("+{{n}} weitere").replace("{{n}}", String(gelaendePruefung.unter.length - 4))}</div>}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="px-2 py-2 mt-1 border-t text-[10px] text-slate-400">
                 Geschosse ≠ Ebenen: Geschosse sind Stockwerke, Ebenen sortieren Bauteile.
               </div>
@@ -6482,6 +7165,7 @@ export default function BitBimStudio({ complexData }) {
                 {" "}· {tz("Räume")} <b>{z.raeume}</b> · {tz("Decken")} <b>{z.decken}</b> · {tz("Dächer")} <b>{z.daecher}</b>
                 {treppen > 0 && <> · {tz("Treppen")} <b>{treppen}</b></>}
                 {gauben.length > 0 && <> · {tz("Gauben")} <b>{gauben.length}</b></>}
+                {vordaecher.length > 0 && <> · {tz("Vordächer")} <b>{vordaecher.length}</b></>}
               </span>
             );
           })()}

@@ -375,6 +375,91 @@ export function schnittAchseQuerZumFirst(dach) {
 }
 
 /**
+ * The inclined roof faces seen in ELEVATION behind a section (user finding 15.11.2026: "im Schnitt ist das Dach nicht zu sehen" —
+ * a section along the ridge cuts the roof at its ridge and showed nothing but a thin strip there): every roof face projected onto
+ * the section plane, s = position along the section line (x for axis "x", z for axis "z"), h = height. Faces seen edge-on (a
+ * section across the ridge: the face collapses to its own cut line) are left out — there the cut roof plate is the picture.
+ * @param {DachErgebnis|DachFehler|null|undefined} dach dachBerechnen / globalesDach
+ * @param {"x"|"z"|null|undefined} achse section axis as in dachSchnittLinie
+ * @returns {Array<Array<{s_m: number, h_m: number}>>} one closed outline per visible face (m); empty for no roof / a flat roof
+ */
+export function dachAnsichtImSchnitt(dach, achse) {
+  if (!dach || !dach.ok || dach.form === "flach") return [];
+  /** @type {Array<Array<{s_m: number, h_m: number}>>} */
+  const aus = [];
+  /** @type {Set<string>} */
+  const gesehen = new Set();
+  for (const fl of dach.flaechen) {
+    if (fl.art !== "dachflaeche" && fl.art !== "walm") continue;
+    const ring = fl.punkte3d.map((q) => ({ s_m: achse === "z" ? q.z : q.x, h_m: q.y }));
+    let flaeche2 = 0;
+    for (let i = 0; i < ring.length; i += 1) { const u = ring[i], w = ring[(i + 1) % ring.length]; flaeche2 += u.s_m * w.h_m - w.s_m * u.h_m; }
+    if (Math.abs(flaeche2) / 2 <= 1e-6) continue;
+    // the face in front of the cut and the one behind it project onto the same outline (symmetric roof): one picture, not two
+    const schluessel = ring.map((q) => `${q.s_m.toFixed(3)}/${q.h_m.toFixed(3)}`).sort().join("|");
+    if (!gesehen.has(schluessel)) { gesehen.add(schluessel); aus.push(ring); }
+  }
+  return aus;
+}
+
+/** Spacing of the rafter lines drawn on a roof face in elevation, m [ASSUMED: common rafter spacing 0,6 … 0,9 m]. */
+export const SPARREN_ABSTAND_M = 0.8;
+
+/**
+ * Fall lines (rafters) of a roof face seen in elevation behind a section — what makes the face read as an INCLINED roof and not as a
+ * wall or a flat roof (user finding 15.11.2026: "Satteldach, kein Flachdach"). The faces dachAnsichtImSchnitt keeps fall at right
+ * angles to the section line, so their fall lines are vertical in the picture: one line every `abstand_m`, clipped to the outline.
+ * @param {Array<{s_m: number, h_m: number}>} ring outline of one face (dachAnsichtImSchnitt), convex
+ * @param {number} [abstand_m] spacing along the section line, m
+ * @returns {Array<[{s_m: number, h_m: number}, {s_m: number, h_m: number}]>} lines from the lower to the upper edge of the face
+ */
+export function dachFalllinienImSchnitt(ring, abstand_m = SPARREN_ABSTAND_M) {
+  if (!Array.isArray(ring) || ring.length < 3 || !(abstand_m > 0)) return [];
+  const s0 = Math.min(...ring.map((q) => q.s_m)), s1 = Math.max(...ring.map((q) => q.s_m));
+  const felder = Math.max(1, Math.round((s1 - s0) / abstand_m));
+  /** @type {Array<[{s_m: number, h_m: number}, {s_m: number, h_m: number}]>} */
+  const linien = [];
+  for (let k = 1; k < felder; k += 1) {
+    const s = s0 + ((s1 - s0) * k) / felder;
+    /** @type {number[]} */
+    const h = [];
+    for (let i = 0; i < ring.length; i += 1) {
+      const a = ring[i], b = ring[(i + 1) % ring.length];
+      if ((a.s_m - s) * (b.s_m - s) > 0 || a.s_m === b.s_m) continue;
+      h.push(a.h_m + ((b.h_m - a.h_m) * (s - a.s_m)) / (b.s_m - a.s_m));
+    }
+    if (h.length >= 2 && Math.max(...h) - Math.min(...h) > 1e-6) linien.push([{ s_m: s, h_m: Math.min(...h) }, { s_m: s, h_m: Math.max(...h) }]);
+  }
+  return linien;
+}
+
+/**
+ * Top of a cut wall under the roof: the lowest point of the roof underside over the wall's thickness, never below the eaves. A gable
+ * wall cut along the ridge reaches up to the roof there; an eaves wall keeps the eaves height.
+ * @param {{punkte: Array<{s_m: number, h_m: number}>}|null|undefined} dachUnten dachSchnittLinie(…) of the roof underside
+ * @param {number} von_m one face of the wall along the section line, m @param {number} bis_m the other face, m
+ * @param {number} traufe_m height the wall has without a roof above it (eaves), m
+ * @returns {number} m
+ */
+export function wandOberkanteUnterDach(dachUnten, von_m, bis_m, traufe_m) {
+  const pr = dachUnten?.punkte;
+  if (!Array.isArray(pr) || pr.length < 2) return traufe_m;
+  const a = Math.min(von_m, bis_m), b = Math.max(von_m, bis_m);
+  const s0 = pr[0].s_m, s1 = pr[pr.length - 1].s_m;
+  if (b < s0 - 1e-9 || a > s1 + 1e-9) return traufe_m; // the wall stands outside the roof frame
+  const bei = (/** @type {number} */ s) => {
+    const c = Math.min(s1, Math.max(s0, s));
+    for (let i = 1; i < pr.length; i += 1) {
+      const u = pr[i - 1], w = pr[i];
+      if (c <= w.s_m + 1e-9) return w.s_m === u.s_m ? w.h_m : u.h_m + ((w.h_m - u.h_m) * (c - u.s_m)) / (w.s_m - u.s_m);
+    }
+    return pr[pr.length - 1].h_m;
+  };
+  const stellen = [a, b, ...pr.map((q) => q.s_m).filter((s) => s > a && s < b)];
+  return Math.max(traufe_m, Math.min(...stellen.map(bei)));
+}
+
+/**
  * 108-01: the roof surface along a vertical section line, as a polyline in section coordinates: s = position along the line in m
  * (x for axis "x", z for axis "z"), h = height in m. The surface is the minimum of the face planes (dachHoeheAn), so it is piecewise
  * linear; the break points are computed EXACTLY (no sampling): the two points where the line enters and leaves the roof frame

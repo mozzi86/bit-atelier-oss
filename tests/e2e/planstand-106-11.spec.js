@@ -10,6 +10,8 @@
 // Own project with two drawn walls (pattern of freigabe-106-10); step records are removed as the person (session token).
 import { test, expect } from "./fixtures/base.js";
 import { ERLAUBT_OFFLINE, nurLocalhost } from "./fixtures/massing.js";
+// 115-05c (D-115-12): model changes are a draft until "Speichern"
+import { speichernUndWarten } from "./fixtures/entwurf.js";
 import { PDFDocument } from "pdf-lib";
 import fs from "node:fs";
 import path from "node:path";
@@ -99,6 +101,7 @@ test.describe("106-11 Pläne mit Modellstand: ungeprüfte KI-Änderungen stehen 
       await expect(page.getByTestId("aenderung-vorschau")).toHaveCount(1, { timeout: 15000 });
       await page.getByTestId("aenderung-uebernehmen").click();
       await expect(page.getByTestId("aenderung-vorschau")).toHaveCount(0);
+      await speichernUndWarten(page); // 115-05c (adapted): the change is a draft until "Speichern" (before: autosave)
       await expect.poll(async () => (await gespeichert()).customWalls.find((w) => w.guid === GA)?.kg, { timeout: 20000 }).toBe("341");
       await expect.poll(async () => (await schritte()).length, { timeout: 20000 }).toBe(1);
       const [s1] = await schritte();

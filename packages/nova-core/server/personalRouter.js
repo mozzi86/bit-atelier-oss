@@ -27,7 +27,7 @@
 import express from 'express';
 import { istPersonalEntitaet } from '../src/api/personalEntitaeten.js';
 // 112-01: the ONE strict-write check of 106-09 (single source; the entity route uses the same two exports).
-import { standVeraltet, veralteterStand, STAND_KONFLIKT_TEXT } from './routes.js';
+import { anlageOptionen, mitKennungsPruefung, standVeraltet, veralteterStand, STAND_KONFLIKT_TEXT } from './routes.js';
 
 /**
  * @param {ReturnType<typeof import('./db.js').createDb>} db the personal.json store
@@ -93,7 +93,9 @@ export function personalRouter(db, blobs, { lokalGebunden, anfrageEntfernt = () 
 
   r.post('/personal/:entity', (req, res) => {
     if (!pruefeEntitaet(res, req.params.entity)) return;
-    res.status(201).json(db.create(req.params.entity, req.body || {}));
+    // B-111-02-01: id / dates from the store; the deletion run and the idempotent saves keep their own id via ?kennung=uebernehmen
+    const opt = anlageOptionen(req);
+    mitKennungsPruefung(res, () => { res.status(201).json(db.create(req.params.entity, req.body || {}, opt)); });
   });
 
   r.put('/personal/:entity/:id', (req, res) => {

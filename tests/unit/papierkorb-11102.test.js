@@ -56,7 +56,7 @@ describe('111-02 Papierkorb — store functions', () => {
     const db = neueDb();
     const k = db.create('Contact', { name: 'Kontakt Muster' });
     const { eintrag } = /** @type {any} */ (inPapierkorb(db, 'Contact', k.id, { herkunft: 'mcp' }));
-    db.create('Contact', { id: k.id, name: 'Anderer Kontakt' }); // the id came back meanwhile (db.create takes a given id, B-111-02-01)
+    db.create('Contact', { id: k.id, name: 'Anderer Kontakt' }, { kennungUebernehmen: true }); // the id came back meanwhile (explicit id path, B-111-02-01)
     const r = /** @type {any} */ (ausPapierkorb(db, eintrag.id));
     assert.equal(r.ok, false);
     assert.equal(r.status, 409);
@@ -161,7 +161,7 @@ describe('111-02 Papierkorb — HTTP routes next to the generic CRUD', () => {
       assert.deepEqual(gemeldet, [`DELETE Contact ${k.id}`, `POST Contact ${k.id}`]);
 
       const rein2 = await rufe(`/papierkorb/Contact/${k.id}`, 'POST', { herkunft: 'app' });
-      db.create('Contact', { id: k.id, name: 'belegt' });
+      db.create('Contact', { id: k.id, name: 'belegt' }, { kennungUebernehmen: true });
       const nein = await rufe(`/papierkorb/${rein2.json.id}/wiederherstellen`, 'POST', {});
       assert.equal(nein.status, 409);
       assert.equal(nein.json.uebernommen, false);

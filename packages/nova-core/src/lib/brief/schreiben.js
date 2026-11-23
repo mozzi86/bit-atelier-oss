@@ -17,12 +17,33 @@
 //
 // In:  letter records, data lists, injected text builders. Out: see the exports.
 
-import { briefkopfZeilen } from "./briefkopf.js";
+import { briefkopfZeilen } from "../briefkopfBrief.js";
 import { schreibenStatusWechsel } from "./status.js";
 import { ersetzeNichtWinAnsi } from "./winAnsi.js";
 
-/** Version of the letter layout written into a fixed letter (raise when briefLayout's geometry changes). */
-export const LAYOUT_VERSION = 1;
+/**
+ * Version of the letter layout written into a fixed letter (raise when briefLayout's geometry or the PDF's
+ * metadata change — a fixed letter is rebuilt in its own version and must give its stored SHA-256).
+ * The closing block of phase 115 (`schluss`, text after the amount table) did not raise it: it only acts on a letter
+ * that carries the field, a letter without it is laid out exactly as before.
+ * 1 = layout of 79/82; 2 (105-19 follow-up) = same geometry, the PDF also carries /Lang and DisplayDocTitle.
+ */
+export const LAYOUT_VERSION = 2;
+
+/** First layout version whose fixed PDF carries the document language (/Lang, DisplayDocTitle). */
+export const LAYOUT_VERSION_MIT_SPRACHE = 2;
+
+/**
+ * The layout version a letter's PDF is built with: a draft is not fixed and gets the current one; a fixed letter keeps
+ * its stamp `layout_version` (a fixed letter without a stamp predates the stamp and is version 1).
+ * @param {{status?: string, layout_version?: number}|null|undefined} schreiben
+ * @returns {number}
+ */
+export function layoutVersionVon(schreiben) {
+  if ((schreiben?.status || "entwurf") === "entwurf") return LAYOUT_VERSION;
+  const v = Number(schreiben?.layout_version);
+  return Number.isInteger(v) && v >= 1 ? v : 1;
+}
 
 /**
  * SHA-256 of bytes as lower-case hex (Web Crypto, also in Node ≥ 20).
@@ -167,8 +188,9 @@ function bueroDaten(briefkopf) {
 
 /**
  * Text fields of a dunning letter as 79 builds them (mahnwesen.mahnTextFelder + mahnPdf.mahnBrief).
- * @typedef {{betreff: string, absaetze: string[], tabelle?: {kopf: string[], zeilen: string[][]}|null,
+ * @typedef {{betreff: string, absaetze: string[], tabelle?: {kopf: string[], zeilen: string[][]}|null, schluss?: string[],
  *   empfaenger?: string[], offenCent?: number, zinsenCent?: number, pauschaleCent?: number, summeCent?: number, frist?: string}} MahnText
+ *   schluss (115): the paragraphs after the amount table (deadline sentence, greeting); absent → everything is in absaetze
  */
 
 /**
@@ -188,9 +210,10 @@ function bueroDaten(briefkopf) {
  * @param {KontextDaten} daten
  * @returns {{
  *   daten: Record<string, any>, empfaenger: Empfaenger|null, project_id: string|null, bereich: 'projekt'|'buero'|'buchhaltung',
- *   ihr_zeichen: string, text: string|null, tabelle: {kopf: string[], zeilen: string[][]}|null, hinweise: string[],
+ *   ihr_zeichen: string, text: string|null, tabelle: {kopf: string[], zeilen: string[][]}|null, schluss: string|null, hinweise: string[],
  * }}
- *   text/tabelle: only for the dunning letter (79's wording); hinweise: plain-text notes ("Bezug nicht gefunden")
+ *   text/tabelle/schluss: only for the dunning letter (79's wording; schluss = the text after the amount table, 115);
+ *   hinweise: plain-text notes ("Bezug nicht gefunden")
  */
 export function kontextFuer(bezug, daten) {
   const finde = (/** @type {any[]|undefined} */ liste, /** @type {string|null|undefined} */ id) => (id ? (liste || []).find((x) => x && x.id === id) || null : null);
@@ -198,7 +221,7 @@ export function kontextFuer(bezug, daten) {
   /** @type {Record<string, any>} */
   const d = { buero: bueroDaten(daten.briefkopf), datum: daten.heute, unser_zeichen: "", ihr_zeichen: "", empfaenger: {}, projekt: {} };
   const aus = { daten: d, empfaenger: /** @type {Empfaenger|null} */ (null), project_id: /** @type {string|null} */ (null), bereich: /** @type {'projekt'|'buero'|'buchhaltung'} */ ("buero"),
-    ihr_zeichen: "", text: /** @type {string|null} */ (null), tabelle: /** @type {any} */ (null), hinweise: /** @type {string[]} */ ([]) };
+    ihr_zeichen: "", text: /** @type {string|null} */ (null), tabelle: /** @type {any} */ (null), schluss: /** @type {string|null} */ (null), hinweise: /** @type {string[]} */ ([]) };
   const mitProjekt = (/** @type {string|null|undefined} */ id) => {
     const p = finde(daten.projekte, id);
     if (id) { aus.project_id = id; aus.bereich = "projekt"; }
@@ -238,6 +261,11 @@ export function kontextFuer(bezug, daten) {
     if (text) {
       aus.text = text.absaetze.join("\n\n");
       aus.tabelle = text.tabelle && text.tabelle.zeilen?.length ? { kopf: text.tabelle.kopf || [], zeilen: text.tabelle.zeilen } : null;
+      // 115: the closing part only makes sense below a table — without one it stays part of the text.
+      if (Array.isArray(text.schluss) && text.schluss.length) {
+        if (aus.tabelle) aus.schluss = text.schluss.join("\n\n");
+        else aus.text = [...text.absaetze, ...text.schluss].join("\n\n");
+      }
     } else {
       aus.hinweise.push("Mahntext aus der Buchhaltung nicht verfügbar");
     }
@@ -273,14 +301,14 @@ export function kontextFuer(bezug, daten) {
 
 /**
  * Required placeholders still unfilled in a draft: the visible marks
- * `[[fehlt: pfad]]` the placeholder engine wrote into subject or text.
- * @param {{betreff?: string, text?: string}} schreiben
+ * `[[fehlt: pfad]]` the placeholder engine wrote into subject, text or closing text.
+ * @param {{betreff?: string, text?: string, schluss?: string}} schreiben
  * @returns {string[]} paths, each once
  */
 export function fehlendIn(schreiben) {
   /** @type {string[]} */
   const pfade = [];
-  for (const m of `${schreiben?.betreff || ""}\n${schreiben?.text || ""}`.matchAll(/\[\[fehlt: ([^\]]+)\]\]/g)) if (!pfade.includes(m[1])) pfade.push(m[1]);
+  for (const m of `${schreiben?.betreff || ""}\n${schreiben?.text || ""}\n${schreiben?.schluss || ""}`.matchAll(/\[\[fehlt: ([^\]]+)\]\]/g)) if (!pfade.includes(m[1])) pfade.push(m[1]);
   return pfade;
 }
 
@@ -314,6 +342,8 @@ export function umschreiben(schreiben) {
     ...schreiben,
     betreff: u(schreiben.betreff),
     text: u(schreiben.text),
+    // 115: the key only when the letter has a closing text — a letter without it stays the same object shape.
+    ...(typeof schreiben.schluss === "string" ? { schluss: u(schreiben.schluss) } : {}),
     ihr_zeichen: u(schreiben.ihr_zeichen),
     unser_zeichen: u(schreiben.unser_zeichen),
     empfaenger: e,
@@ -328,17 +358,22 @@ export function umschreiben(schreiben) {
  * Input of briefLayout() from a letter: office as sender line and footer, address
  * field from the snapshot, date in German, every text line a paragraph (blank lines
  * separate as in the editor), the TOP table of a protocol, the distribution list.
+ * Phase 115: a letter with a closing text (`schluss`, only next to an amount table — the dunning letter) hands it on
+ * as briefLayout's `schluss`, printed after the table, and the enclosures line follows the greeting there. A letter
+ * without `schluss` gives exactly the model it gave before (the table after the whole text).
  * @param {Record<string, any>} schreiben
  * @param {{briefkopf?: Record<string, any>|null, datumText: string}} optionen datumText: formatted letter date
  * @returns {Record<string, any>} argument of briefLayout()
  */
 export function briefModell(schreiben, { briefkopf, datumText }) {
-  const absaetze = String(schreiben.text || "").split("\n").map((z) => z.trimEnd()).filter((z) => z.trim() !== "");
+  const alsAbsaetze = (/** @type {unknown} */ text) => String(text || "").split("\n").map((z) => z.trimEnd()).filter((z) => z.trim() !== "");
+  const absaetze = alsAbsaetze(schreiben.text);
+  const schluss = typeof schreiben.schluss === "string" ? alsAbsaetze(schreiben.schluss) : [];
   // References (DIN 5008 "Ihr Zeichen / Unser Zeichen") as the first body line — the core has no info block.
   const zeichen = [schreiben.ihr_zeichen ? `Ihr Zeichen: ${schreiben.ihr_zeichen}` : "", schreiben.unser_zeichen ? `Unser Zeichen: ${schreiben.unser_zeichen}` : ""].filter(Boolean).join(" · ");
   if (zeichen) absaetze.unshift(zeichen);
   const anlagen = Array.isArray(schreiben.anlagen) ? schreiben.anlagen.filter(Boolean) : [];
-  if (anlagen.length) absaetze.push(`Anlagen: ${anlagen.join(", ")}`);
+  if (anlagen.length) (schluss.length ? schluss : absaetze).push(`Anlagen: ${anlagen.join(", ")}`);
   const bk = briefkopf || {};
   const fuss = [bk.office, String(bk.address || "").split("\n").join(", "), bk.contact].map((z) => String(z || "").trim()).filter(Boolean).join(" · ");
   /** @type {Record<string, any>} */
@@ -352,6 +387,7 @@ export function briefModell(schreiben, { briefkopf, datumText }) {
     seitenzahlen: true,
     fusszeileLinks: fuss,
   };
+  if (schluss.length) modell.schluss = schluss;
   if (schreiben.variante === "verteiler") {
     modell.variante = "verteiler";
     modell.verteiler = Array.isArray(schreiben.verteiler) ? schreiben.verteiler.filter(Boolean) : [];

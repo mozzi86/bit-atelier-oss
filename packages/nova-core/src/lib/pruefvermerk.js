@@ -84,6 +84,10 @@ export async function pruefvermerkAufPdf(bytes, o) {
       page.drawText(passend(fett, sicher(fett, z.wert), 7, r.w - labelW - 6), { x: r.x + labelW, y, size: 7, font: fett, color: farbe });
     });
   }
+  // 105-19: the stamped file is the user's own — only a missing /Lang (UI language) and /Title (stamp title) are added.
+  // W0-F6: dynamic import, so the entry's preload map does not name the helper's chunk.
+  const { pdfLibMetadaten, pdfSpracheAusUi } = await import("./pdfMetadaten.js");
+  pdfLibMetadaten(doc, { titel: o.titel, sprache: pdfSpracheAusUi(), nurErgaenzen: true });
   const out = await doc.save();
   const mm = (v) => Math.round((v / PT_JE_MM) * 10) / 10;
   const rr = /** @type {NonNullable<typeof r>} */ (r);

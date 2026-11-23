@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import FormModal from "@core/components/common/FormModal";
 import { buttonVariants } from "@core/components/ui/button";
 import { useI18n } from "@core/lib/i18n";
-import { bitApi } from "@core/api/bitApi";
+import { useBriefkopf } from "@core/lib/useBriefkopf.js";
 import { dokumentAblegen } from "@core/lib/ablage";
 import { mahnTextFelder } from "@/lib/accounting/mahnwesen.js";
 import { erzeugeMahnPdf, mahnDateiname } from "@/lib/accounting/mahnPdf.js";
@@ -36,19 +36,12 @@ const LABEL = "text-sm font-medium leading-none";
  */
 export default function MahnDialog({ bh, zeile, stufe, projektId, onClose }) {
   const { t } = useI18n();
-  const [briefkopf, setBriefkopf] = React.useState(/** @type {Record<string, any>} */ ({}));
   const [frist, setFrist] = React.useState(() => zeile.faelligeStufe?.frist || bh.heute);
   const [ablegen, setAblegen] = React.useState(false);
   const [speichert, setSpeichert] = React.useState(false);
 
-  // Same source as src/Layout.jsx / src/pages/Reports.jsx: Setting{key:"briefkopf"}.
-  React.useEffect(() => {
-    let aktiv = true;
-    /** @type {any} */ (bitApi).entities.Setting.filter({ key: "briefkopf" })
-      .then((zeilen) => { if (aktiv && zeilen[0]) setBriefkopf(zeilen[0].value || {}); })
-      .catch(() => { /* offline or none saved yet — mahnwesen.js falls back to office defaults */ });
-    return () => { aktiv = false; };
-  }, []);
+  // Wave 1 (B-81-05/M-2): the one letterhead read path (normalised, follows saves live).
+  const { briefkopf } = useBriefkopf();
 
   const felder = mahnTextFelder(zeile.rechnung, stufe, { heute: bh.heute, einst: bh.einst, briefkopf, vertrag: zeile.vertrag, frist }, t);
 
@@ -84,7 +77,8 @@ export default function MahnDialog({ bh, zeile, stufe, projektId, onClose }) {
         <div aria-label={t("Vorschau")} className="max-h-96 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-4 text-sm dark:border-slate-700">
           <p className="font-semibold">{felder.betreff}</p>
           <p>{felder.anrede}</p>
-          {felder.absaetze.map((absatz, i) => <p key={i}>{absatz}</p>)}
+          {/* 115: same order as the letter — the amount table before the deadline sentence and the greeting. */}
+          {felder.absaetze.slice(0, felder.schlussAb).map((absatz, i) => <p key={i}>{absatz}</p>)}
           <table className="mt-2 w-full">
             <tbody>
               {felder.tabelle.zeilen.map(([label, wert], i) => (
@@ -95,6 +89,7 @@ export default function MahnDialog({ bh, zeile, stufe, projektId, onClose }) {
               ))}
             </tbody>
           </table>
+          {felder.absaetze.slice(felder.schlussAb).map((absatz, i) => <p key={i}>{absatz}</p>)}
         </div>
 
         <div>

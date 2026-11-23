@@ -226,7 +226,8 @@ test("httpIo trifft den BULK-Endpunkt (mit /bulk-Suffix)", async () => {
     await io.putBlob("elemente-1", { elemente: [] });
     assert.deepEqual(rufe, [
       // Ohne `/bulk` träfe man die normale Create-Route und schriebe EINEN Satz.
-      ["/api/entities/LVPosition/bulk", "POST"],
+      // B-111-02-01: the bundle's ids are references, so the import names the explicit id path.
+      ["/api/entities/LVPosition/bulk?kennung=uebernehmen", "POST"],
       ["/api/entities/Project", "POST"],
       ["/api/blobs/elemente-1", "PUT"],
     ]);
@@ -242,5 +243,56 @@ test("httpIo meldet HTTP-Fehler als Fehler, nicht als Erfolg", async () => {
     await assert.rejects(() => httpIo().bulkCreate("LlmConnection", [{}]), /403.*gesperrt/);
   } finally {
     globalThis.fetch = echtesFetch;
+  }
+});
+
+// Review R1 (B-111-02-01 follow-up): catalogs are office-wide. A second project bundle from the same source carries the same
+// catalog ids; the import must keep the existing rows and go on instead of refusing the whole bundle with 409.
+test("ein zweites Bundle derselben Quelle mit gleichen Katalog-ids wird importiert, vorhandene Katalogzeilen bleiben", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { createDb } = await import("../../packages/nova-core/server/db.js");
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "import-kataloge-"));
+  const db = createDb(path.join(tmp, "db.json"));
+  const echtesFetch = globalThis.fetch;
+  // fetch → the store, with the same id rules as the routes (explicit id path on POST …/bulk?kennung=uebernehmen, 409).
+  globalThis.fetch = async (url, opt = {}) => {
+    const u = new URL(String(url), "http://x");
+    const teile = u.pathname.split("/").filter(Boolean); // api, entities, Entity, [bulk]
+    const antwort = (status, body) => ({ ok: status < 400, status, json: async () => body });
+    try {
+      if (opt.method === "GET" || !opt.method) return antwort(200, db.list(teile[2]));
+      const body = JSON.parse(opt.body || "{}");
+      const kennungUebernehmen = u.searchParams.get("kennung") === "uebernehmen";
+      if (teile[3] === "bulk") return antwort(201, { ids: db.bulkCreate(teile[2], body.records, { kennungUebernehmen }).map((r) => r.id) });
+      return antwort(201, db.create(teile[2], body, { kennungUebernehmen }));
+    } catch (e) {
+      return antwort(e?.status || 500, { error: e.message });
+    }
+  };
+  const bundle = (name, pos) => parseBundle({
+    ...minimal(),
+    project: { name },
+    kataloge: { EinheitenKatalog: [{ id: "kat-1", code: "m2" }, { id: `kat-${pos}`, code: pos }] },
+    positionen: [{ ...minimal().positionen[0], id: pos }],
+  });
+  try {
+    const a = await applyBundle(bundle("Projekt A", "a"), httpIo("/api"), { bestaetigt: true });
+    assert.equal(a.ok, true, a.fehler.join(" | "));
+    const b = await applyBundle(bundle("Projekt B", "b"), httpIo("/api"), { bestaetigt: true });
+    assert.equal(b.ok, true, b.fehler.join(" | "));
+    assert.deepEqual(db.list("Project").map((p) => p.name).sort(), ["Projekt A", "Projekt B"]);
+    // the shared row exists once; the new row of B was added
+    assert.deepEqual(db.list("EinheitenKatalog").map((r) => r.id).sort(), ["kat-1", "kat-a", "kat-b"]);
+    assert.equal(b.geschrieben.EinheitenKatalog, 1);
+    assert.deepEqual(b.uebersprungen, { EinheitenKatalog: 1 });
+    // project child rows keep the 409: the same position id again is still refused
+    const c = await applyBundle(bundle("Projekt C", "a"), httpIo("/api"), { bestaetigt: true });
+    assert.equal(c.ok, false);
+    assert.match(c.fehler.join(" "), /409.*id a /);
+  } finally {
+    globalThis.fetch = echtesFetch;
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
 });

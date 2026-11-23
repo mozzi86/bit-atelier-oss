@@ -16,6 +16,7 @@ import {
   parseProjektDatei,
 } from '@core/api/projektDatei.js';
 import { setzeSpeicher, letzteSicherungLesen } from '@core/api/demoDb.js';
+import { setzeExportZugriff } from '@core/api/exportSicht.js';
 import { exportOptionen, importOptionen } from '@/lib/exportBereiche.js';
 import { BUCHHALTUNG_ENTITAETEN, SETTING_KEY } from '@/lib/accounting/datenmodell.js';
 // 80-10 (E-07/E-14): die Registry trägt jetzt auch "personal" (separat, nie im
@@ -26,6 +27,10 @@ import { EXPORT_BEREICHE } from '@/lib/exportBereiche.js';
 import { ZEIT_HONORAR_ENTITAETEN } from '@/lib/zeitHonorar/entitaeten.js';
 // 82-01: three more rows; a backup carries their collections too.
 import { BUERO_ORGA_ENTITAETEN } from '@/lib/bueroOrga/entitaeten.js';
+
+// W1-BUERO-F1: exports are refused until an access is registered; these tests cover the area
+// options themselves, without a rights system ("frei").
+setzeExportZugriff(null);
 
 /** Every registry key checked = a backup (81-06). */
 const ALLE_HAEKCHEN = EXPORT_BEREICHE.map((b) => b.key);

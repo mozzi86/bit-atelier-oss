@@ -13,8 +13,11 @@ const fmt = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("de-DE
  * @returns {Promise<{bytes: Uint8Array, dateiname: string}>}
  */
 export async function budgetAntragPdf({ projekt = null, zeile, budget_neu, begruendung, deckung = "", jetzt = new Date() }) {
-  const { jsPDF } = await import("jspdf");
+  // W0-F6: the metadata helper is imported dynamically, so the entry's preload map does not name its chunk.
+  const [{ jsPDF }, { jsPdfMetadaten }] = await Promise.all([import("jspdf"), import("@core/lib/pdfMetadaten.js")]);
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  // 105-19: /Lang and /Title (the content is German)
+  jsPdfMetadaten(pdf, { titel: `Antrag auf Budgeterhöhung KG ${zeile.kg} ${zeile.bezeichnung || ""} (Entwurf)`.replace(/\s+/g, " "), betreff: projekt?.name || "" });
   const L = 20, B = 175;
   // Watermark first so it lies under the content (see 90-05).
   pdf.setFontSize(60); pdf.setTextColor(238); pdf.text("ENTWURF", 105, 160, { align: "center", angle: 35 }); pdf.setTextColor(0);

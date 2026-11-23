@@ -387,7 +387,7 @@ export default function SpeicherStatus({ hinweisZiel = null }) {
               <AlertTriangle className="w-4 h-4 shrink-0" />
               <span className="flex-1">
                 {t('Der letzte Schreibvorgang ist fehlgeschlagen — die Arbeit ist nicht gesichert.')}{' '}
-                {String(fehler.message || fehler)}
+                {t(String(fehler.message || fehler))}
               </span>
               <button
                 type="button"
