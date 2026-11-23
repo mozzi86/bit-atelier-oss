@@ -12,6 +12,11 @@
 //
 // In:  @core/lib/pdfMetadaten.js, @core/lib/pdf.js, @core/lib/brief, src/lib/schriftverkehr/aktionen.js, src/lib/honorar,
 //      packages/nova-pdf (lib/unveraenderbar.js, components/pdfTools.js). Out: assertions only.
+// The golden SHA-256 values below were taken in the time zone Europe/Berlin: jsPDF writes the creation date of a fixed letter in
+// LOCAL time with its UTC offset, so the bytes of the same letter differ between time zones (finding B-REL-1160-01: a letter fixed
+// in one zone and rebuilt in another does not reproduce its stored hash). Until that is decided in the product, the test pins the
+// zone it was recorded in — otherwise it is red on every machine outside it (the release run is UTC).
+process.env.TZ = "Europe/Berlin";
 import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
